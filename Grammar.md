@@ -77,6 +77,9 @@ typeModifier ::= * | [ ]
 
 ## Expressions
 
+**Divergence from reference**
+ * `\result` and `\length` are allowed as regular expressions. These are only allowed inside annotations for well-formed programs.
+
 ```
 expression ::= binaryExpression [? expression : expression]
 
@@ -92,6 +95,8 @@ atomExpression ::=
   | decimalNumberExpression
   | booleanExpression
   | nullExpression
+  | resultExpression
+  | lengthExpression
   | allocExpression
   | allocArrayExpression
   | invokeExpression
@@ -107,6 +112,10 @@ decimalNumberExpression ::= decimalNumber
 booleanExpression ::= true | false
 nullExpression ::= NULL
 
+resultExpression ::= \result
+
+lengthExpression ::= \length ( expression )
+
 allocExpression ::= alloc ( type )
 
 allocArrayExpression ::= alloc_array ( type , expression )
@@ -121,23 +130,52 @@ pointerMember ::= -> identifier
 indexMember ::= [ expression ]
 ```
 
+## Specifications
+
+**Notes**
+ * Do not allow a new-line inside a single line annotation (`//@`)
+ * Allow `@` as a valid whitespace character inside annotations
+
+```
+<specification> ::= <requiresSpecification> |
+                    <ensuresSpecification> |
+                    <loopInvariantSpecification> |
+                    <assertSpecification>;
+
+<requiresSpecification> ::= "requires" <expression> ";"
+
+<ensuresSpecification> ::= "ensures" <expression> ";"
+
+<loopInvariantSpecification> ::= "loop_invariant" <expression> ";"
+
+<assertSpecification> ::= "assert" <expression> ";"
+
+<annotations> ::= <annotation>*
+
+<annotation> ::= "//@" <specification>* "\n" |
+                 "/*@" <specification>* "@*/"
+```
+
 ## Statements
 
 **Divergence from reference:**
  * L-Values are parsed as expressions, which means that invalid statements can be successfully parsed where a complex expression is used where an L-Value is required.
  * Parsing postfix operations at this level violates the operator precedence, but since the LHS must be an L-Value, operators (except for `*`) will not be used in the LHS if it is well-formed. This means that only the precedence of the `*` operator relative to the postfix operators matters for well-formed code.
+ * Annotations are parsed at the start of a block statement. This is to avoid requiring back-tracking when parsing an empty block containing only annotations, with no statements. Allowing back-tracking after parsing annotations would require that all expression constructs would also allow back-tracking. This does, however, require patching the first statement of a block and attaching the parsed annotations to it.
 
 ```
-statement ::= blockStatement |
-              ifStatement |
-              whileStatement |
-              forStatement |
-              returnStatement |
-              assertStatement |
-              errorStatement |
-              simpleStatement ;
+statement ::= annotations concreteStatement
 
-blockStatement ::= { statement* }
+concreteStatement ::= blockStatement |
+                      ifStatement |
+                      whileStatement |
+                      forStatement |
+                      returnStatement |
+                      assertStatement |
+                      errorStatement |
+                      simpleStatement ;
+
+blockStatement ::= { annotations statement* annotations }
 
 ifStatement ::= if ( expression ) statement [else statement]
 
@@ -174,7 +212,7 @@ structField ::= typeReference identifier ;
 
 typeDefinition ::= typedef typeReference identifier ;
 
-methodDefinition ::= typeReference identifier ( [methodParameter (, methodParameter)*] ) (blockStatement | ;)
+methodDefinition ::= typeReference identifier ( [methodParameter (, methodParameter)*] ) annotations (blockStatement | ;)
 
 methodParameter ::= typeReference identifier
 

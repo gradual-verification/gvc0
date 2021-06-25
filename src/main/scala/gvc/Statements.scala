@@ -1,8 +1,15 @@
 package gvc
 import fastparse._
 
-trait Statements extends Expressions {
+trait Statements extends Specifications {
+  sealed trait ConcreteStatement;
+
   def statement[_: P]: P[AstStatement] =
+    P(annotations ~ concreteStatement).map({
+      case (annot, concrete) => concrete.withSpecifications(annot)
+    })
+
+  def concreteStatement[_: P]: P[AstStatement] =
     P(
       blockStatement |
       ifStatement |
@@ -15,7 +22,14 @@ trait Statements extends Expressions {
     )
 
   def blockStatement[_: P]: P[BlockStatement] =
-    P("{" ~ statement.rep ~ "}").map(stmts => BlockStatement(stmts.toList))
+    P("{" ~ annotations ~ (statement.rep(1) ~ annotations).? ~ "}")
+    .map({
+      case (post, None) => BlockStatement(List.empty, List.empty, post)
+      case (pre, Some((stmts, post))) => stmts.toList match {
+        case head :: tl => BlockStatement(head.withSpecifications(pre ++ head.specifications) :: tl, List.empty, post)
+        case Nil => ??? // This should be impossible since no statements would result in None
+      }
+    })
   
   def ifStatement[_: P]: P[IfStatement] =
     P("if" ~ "(" ~ expression ~ ")" ~ statement ~ ("else" ~ statement).?).map({
@@ -41,7 +55,6 @@ trait Statements extends Expressions {
   def errorStatement[_: P]: P[ErrorStatement] =
     P("error" ~ "(" ~ expression ~ ")" ~ ";").map(ErrorStatement(_))
 
-  
   def simpleStatement[_: P]: P[AstStatement] =
     P(variableStatement | expressionStatement)
 

@@ -14,17 +14,27 @@ trait Whitespace {
 
     def standard() = {
       while (input.isReachable(index) && (input(index) match {
-        case '/' if input.isReachable(index + 1) && input(index + 1) == '/' => {
+        case '/' if
+          input.isReachable(index + 1) &&
+          input(index + 1) == '/' &&
+          input.isReachable(index + 2) &&
+          input(index + 2) != '@' =>
+        {
           index += 2
           lineComment()
           true
         }
 
-        case '/' if input.isReachable(index + 1) && input(index + 1) == '*' => {
-            index += 2
-            multiLineComment()
-            true
-          }
+        case '/' if
+          input.isReachable(index + 1) &&
+          input(index + 1) == '*' &&
+          input.isReachable(index + 2) &&
+          input(index + 2) != '@' =>
+        {
+          index += 2
+          multiLineComment()
+          true
+        }
 
         case ' ' | '\t' | '\13' | '\n' | '\r' => {
           index += 1

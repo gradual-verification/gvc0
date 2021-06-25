@@ -25,10 +25,11 @@ trait Definitions extends Statements with Types {
     P(
       typeReference ~ identifier.! ~
       "(" ~ methodParameter.rep(0, ",") ~ ")" ~
+      annotations ~
       (P(";").map(_ => None) | blockStatement.map(Some(_)))
     ).map({
-      case (ret, name, args, body) =>
-        MethodDefinition(name, ret, args.toList, body)
+      case (ret, name, args, annot, body) =>
+        MethodDefinition(name, ret, args.toList, body, annot)
     })
 
   def methodParameter[_: P]: P[MemberDefinition] =

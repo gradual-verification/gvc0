@@ -252,13 +252,13 @@ class ParserSpec extends AnyFunSuite {
   }
 
   test("literal statement") {
-    val Success(ExpressionStatement(expr), _) = Parser.parseStatement("123;")
+    val Success(ExpressionStatement(expr, _), _) = Parser.parseStatement("123;")
     val IntegerExpression(_, value) = expr
     assert(value == 123)
   }
 
   test("invoke statement") {
-    val Success(ExpressionStatement(expr), _) = Parser.parseStatement("test(abc);")
+    val Success(ExpressionStatement(expr, _), _) = Parser.parseStatement("test(abc);")
     val InvokeExpression(id, args) = expr
     assert(id == "test")
 
@@ -267,7 +267,7 @@ class ParserSpec extends AnyFunSuite {
   }
 
   test("assign var") {
-    val Success(AssignmentStatement(lhs, op, rhs), _) = Parser.parseStatement("abc = 123;")
+    val Success(AssignmentStatement(lhs, op, rhs, _), _) = Parser.parseStatement("abc = 123;")
     assert(op == AssignOp.Assign)
     
     val VariableExpression(id) = lhs
@@ -278,7 +278,7 @@ class ParserSpec extends AnyFunSuite {
   }
 
   test("assign dotted member") {
-    val Success(AssignmentStatement(lhs, op, _), _) = Parser.parseStatement("abc.def = 123;")
+    val Success(AssignmentStatement(lhs, op, _, _), _) = Parser.parseStatement("abc.def = 123;")
     assert(op == AssignOp.Assign)
     val MemberExpression(VariableExpression(varId), field) = lhs
     assert(varId == "abc")
@@ -286,20 +286,20 @@ class ParserSpec extends AnyFunSuite {
   }
 
   test("add assign operator") {
-    val Success(AssignmentStatement(VariableExpression(id), op, _), _) = Parser.parseStatement("abc += 1;")
+    val Success(AssignmentStatement(VariableExpression(id), op, _, _), _) = Parser.parseStatement("abc += 1;")
     assert(op == AssignOp.Add)
     assert(id == "abc")
   }
 
   test("assign member of pointer") {
-    val Success(AssignmentStatement(lhs, AssignOp.Assign, _), _) = Parser.parseStatement("abc->def = 123;")
+    val Success(AssignmentStatement(lhs, AssignOp.Assign, _, _), _) = Parser.parseStatement("abc->def = 123;")
     val MemberDerefExpression(VariableExpression(varId), field) = lhs
     assert(varId == "abc")
     assert(field == "def")
   }
 
   test("assign array index") {
-    val Success(AssignmentStatement(lhs, AssignOp.Assign, _), _) = Parser.parseStatement("abc[0] = 123;")
+    val Success(AssignmentStatement(lhs, AssignOp.Assign, _, _), _) = Parser.parseStatement("abc[0] = 123;")
     val IndexExpression(VariableExpression(varId), idx) = lhs
     assert(varId == "abc")
     
@@ -308,7 +308,7 @@ class ParserSpec extends AnyFunSuite {
   }
   
   test("increment statement") {
-    val Success(UnaryOperationStatement(expr, op), _) = Parser.parseStatement("abc++;")
+    val Success(UnaryOperationStatement(expr, op, _), _) = Parser.parseStatement("abc++;")
     assert(op == UnaryOp.Increment)
     val VariableExpression(id) = expr
     assert(id == "abc")
@@ -319,7 +319,7 @@ class ParserSpec extends AnyFunSuite {
   }
 
   test("variable declaration") {
-    val Success(VariableStatement(typ, id, value), _) = Parser.parseStatement("int abc = 123;")
+    val Success(VariableStatement(typ, id, value, _), _) = Parser.parseStatement("int abc = 123;")
     val NamedType(typeId) = typ
     assert(typeId == "int")
     assert(id == "abc")
@@ -329,20 +329,50 @@ class ParserSpec extends AnyFunSuite {
   }
 
   test("empty block statement") {
-    val Success(BlockStatement(body), _) = Parser.parseStatement("{ }")
+    val Success(BlockStatement(body, _, _), _) = Parser.parseStatement("{ }")
     assert(body == List.empty)
   }
 
+  test("empty block with annotations") {
+    val Success(BlockStatement(body, _, post), _) =
+      Parser.parseStatement("{ /*@ assert true; @*/ }")
+    assert(body == List())
+
+    val List(AssertSpecification(value)) = post
+    val BooleanExpression(_, v) = value
+    assert(v == true)
+  }
+
   test("single statement block") {
-    val Success(BlockStatement(body), _) = Parser.parseStatement("{ a = 123; }")
+    val Success(BlockStatement(body, _, _), _) = Parser.parseStatement("{ a = 123; }")
     assert(body.length == 1)
-    val AssignmentStatement(VariableExpression(id), AssignOp.Assign, IntegerExpression(_, value)) = body(0)
+    val AssignmentStatement(VariableExpression(id), AssignOp.Assign, IntegerExpression(_, value), _) = body(0)
     assert(id == "a")
     assert(value == 123)
   }
 
+  test("single statement block with annotations") {
+    val Success(BlockStatement(body, blockPre, blockPost), _) = Parser.parseStatement("""
+      {
+        /*@ assert false; @*/
+        a = 123;
+      }
+    """)
+    assert(body.length == 1)
+    assert(blockPre == List())
+    assert(blockPost == List())
+
+    val AssignmentStatement(VariableExpression(id), AssignOp.Assign, IntegerExpression(_, value), specs) = body(0)
+    assert(id == "a")
+    assert(value == 123)
+
+    val List(AssertSpecification(assertBool)) = specs
+    val BooleanExpression(_, assertVal) = assertBool
+    assert(assertVal == false)
+  }
+
   test("multi-statement block") {
-    val Success(BlockStatement(body), _) = Parser.parseStatement("""
+    val Success(BlockStatement(body, _, _), _) = Parser.parseStatement("""
       {
         int a = 123;
         b = true ? "this" : "that";
@@ -351,45 +381,45 @@ class ParserSpec extends AnyFunSuite {
     """)
 
     assert(body.length == 3)
-    val VariableStatement(NamedType(aType), aVar, Some(IntegerExpression(_, aValue))) = body(0)
+    val VariableStatement(NamedType(aType), aVar, Some(IntegerExpression(_, aValue)), _) = body(0)
     assert(aType == "int")
     assert(aVar == "a")
     assert(aValue == 123)
 
-    val AssignmentStatement(VariableExpression(bVar), AssignOp.Assign, TernaryOperation(_, _, _)) = body(1)
+    val AssignmentStatement(VariableExpression(bVar), AssignOp.Assign, TernaryOperation(_, _, _), _) = body(1)
     assert(bVar == "b")
 
-    val ReturnStatement(Some(IntegerExpression(_, retValue))) = body(2)
+    val ReturnStatement(Some(IntegerExpression(_, retValue)), _) = body(2)
     assert(retValue == 0)
   }
 
   test("if") {
-    val Success(IfStatement(cond, body, els), _) = Parser.parseStatement("if (true) a = 2;")
+    val Success(IfStatement(cond, body, els, _), _) = Parser.parseStatement("if (true) a = 2;")
     val BooleanExpression(_, condValue) = cond
     assert(condValue == true)
-    val AssignmentStatement(_, AssignOp.Assign, _) = body
+    val AssignmentStatement(_, AssignOp.Assign, _, _) = body
     assert(els == None)
   }
 
   test("if block") {
-    val Success(IfStatement(_, body, None), _) = Parser.parseStatement("if (false) { }")
-    val BlockStatement(statements) = body
+    val Success(IfStatement(_, body, None, _), _) = Parser.parseStatement("if (false) { }")
+    val BlockStatement(statements, _, _) = body
     assert(statements == List.empty)
   }
 
   test("if else") {
-    val Success(IfStatement(_, body, els), _) = Parser.parseStatement("""
+    val Success(IfStatement(_, body, els, _), _) = Parser.parseStatement("""
       if (true)
         a = 2;
       else
         a = 3;
     """)
-    val AssignmentStatement(_, AssignOp.Assign, ifTrue) = body
+    val AssignmentStatement(_, AssignOp.Assign, ifTrue, _) = body
     val IntegerExpression(_, ifTrueValue) = ifTrue
     assert(ifTrueValue == 2)
 
     val Some(elseStmt) = els
-    val AssignmentStatement(_, AssignOp.Assign, ifFalse) = elseStmt
+    val AssignmentStatement(_, AssignOp.Assign, ifFalse, _) = elseStmt
     val IntegerExpression(_, ifFalseValue) = ifFalse
     assert(ifFalseValue == 3)
   }
@@ -405,35 +435,35 @@ class ParserSpec extends AnyFunSuite {
       }
     """)
 
-    val IfStatement(cond1, body1, else1) = if1
+    val IfStatement(cond1, body1, else1, _) = if1
     val BinaryExpression(_, IntegerExpression(_, value1), _) = cond1
-    val BlockStatement(statements1) = body1
+    val BlockStatement(statements1, _, _) = body1
     assert(value1 == 1)
     assert(statements1.length == 1)
 
-    val Some(IfStatement(cond2, body2, else2)) = else1
+    val Some(IfStatement(cond2, body2, else2, _)) = else1
     val BinaryExpression(_, IntegerExpression(_, value2), _) = cond2
-    val BlockStatement(statements2) = body2
+    val BlockStatement(statements2, _, _) = body2
     assert(value2 == 2)
     assert(statements2.length == 1)
 
-    val Some(BlockStatement(statements3)) = else2
+    val Some(BlockStatement(statements3, _, _)) = else2
     assert(statements3.length == 1)
   }
 
   test("while") {
-    val Success(WhileStatement(cond, body), _) = Parser.parseStatement("while (true) a += 2;")
+    val Success(WhileStatement(cond, body, _), _) = Parser.parseStatement("while (true) a += 2;")
     val BooleanExpression(_, true) = cond
-    val AssignmentStatement(VariableExpression(id), op, _) = body
+    val AssignmentStatement(VariableExpression(id), op, _, _) = body
     assert(id == "a")
     assert(op == AssignOp.Add)
   }
 
   test("for") {
-    val Success(ForStatement(decl, cond, inc, body), _) =
+    val Success(ForStatement(decl, cond, inc, body, _), _) =
       Parser.parseStatement("for (int i = 0; i < 1; i++) doSomething();")
     
-    val VariableStatement(NamedType(iType), iId, iInitial) = decl
+    val VariableStatement(NamedType(iType), iId, iInitial, _) = decl
     assert(iType == "int")
     assert(iId == "i")
     val Some(IntegerExpression(_, iValue)) = iInitial
@@ -444,32 +474,32 @@ class ParserSpec extends AnyFunSuite {
     val IntegerExpression(_, 1) = compare
     assert(op == BinaryOp.Less)
 
-    val UnaryOperationStatement(iRef2, UnaryOp.Increment) = inc
+    val UnaryOperationStatement(iRef2, UnaryOp.Increment, _) = inc
     val VariableExpression("i") = iRef2
 
-    val ExpressionStatement(InvokeExpression(id, args)) = body
+    val ExpressionStatement(InvokeExpression(id, args), _) = body
     assert(id == "doSomething")
     assert(args == List.empty)
   }
 
   test("return") {
-    val Success(ReturnStatement(None), _) = Parser.parseStatement("return;")
+    val Success(ReturnStatement(None, _), _) = Parser.parseStatement("return;")
   }
 
   test("return value") {
-    val Success(ReturnStatement(Some(value)), _) = Parser.parseStatement("return 123;")
+    val Success(ReturnStatement(Some(value), _), _) = Parser.parseStatement("return 123;")
     val IntegerExpression(_, intValue) = value
     assert(intValue == 123)
   }
 
   test("assert") {
-    val Success(AssertStatement(value), _) = Parser.parseStatement("assert(true);")
+    val Success(AssertStatement(value, _), _) = Parser.parseStatement("assert(true);")
     val BooleanExpression(_, bool) = value
     assert(bool == true)
   }
 
   test("error") {
-    val Success(ErrorStatement(value), _) = Parser.parseStatement("error(\"test error\");")
+    val Success(ErrorStatement(value, _), _) = Parser.parseStatement("error(\"test error\");")
     val StringExpression(_, str) = value
     assert(str == "test error")
   }
@@ -525,7 +555,7 @@ class ParserSpec extends AnyFunSuite {
 
   test("method declaration") {
     val Success(method, _) = Parser.parseDef("int addOne(int value);")
-    val MethodDefinition(name, retType, args, body) = method
+    val MethodDefinition(name, retType, args, body, _) = method
     assert(name == "addOne")
 
     val NamedType(retTypeName) = retType
@@ -538,9 +568,28 @@ class ParserSpec extends AnyFunSuite {
     assert(body == None)
   }
 
+  test("method declaration with precondition") {
+    val Success(method, _) = Parser.parseDef("""
+      int test(int a)
+      /*@ requires(a > 0); @*/;
+    """)
+
+    val MethodDefinition(_, _, _, body, spec) = method
+    assert(body == None)
+
+    val List(RequiresSpecification(value)) = spec
+    val BinaryExpression(l, r, op) = value
+    assert(op == BinaryOp.Greater)
+
+    val VariableExpression(id) = l
+    val IntegerExpression(_, i) = r
+    assert(id == "a")
+    assert(i == 0)
+  }
+
   test("method with multiple args") {
     val Success(method, _) = Parser.parseDef("int magnitude(int x, int y);")
-    val MethodDefinition(name, _, args, None) = method
+    val MethodDefinition(name, _, args, None, _) = method
     val List(
       MemberDefinition(name1, NamedType(type1)),
       MemberDefinition(name2, NamedType(type2))
@@ -552,7 +601,7 @@ class ParserSpec extends AnyFunSuite {
   }
 
   test("method with body") {
-    val Success(MethodDefinition(name, _, _, Some(body)), _) = Parser.parseDef("""
+    val Success(MethodDefinition(name, _, _, Some(body), _), _) = Parser.parseDef("""
       void test()
       {
         int a;
@@ -561,7 +610,7 @@ class ParserSpec extends AnyFunSuite {
       }
     """)
 
-    val BlockStatement(List(stmt1, stmt2, stmt3)) = body
+    val BlockStatement(List(stmt1, stmt2, stmt3), _, _) = body
     assert(stmt1.isInstanceOf[VariableStatement])
     assert(stmt2.isInstanceOf[AssignmentStatement])
     assert(stmt3.isInstanceOf[UnaryOperationStatement])
@@ -604,13 +653,13 @@ class ParserSpec extends AnyFunSuite {
       }
     """)
 
-    val List(MethodDefinition(methodName, methodReturn, methodArgs, methodBody)) = defs
+    val List(MethodDefinition(methodName, methodReturn, methodArgs, methodBody, _)) = defs
     assert(methodName == "isPrime")
 
     val List(MemberDefinition(argName, _)) = methodArgs
     assert(argName == "n")
 
-    val Some(BlockStatement(statements)) = methodBody
+    val Some(BlockStatement(statements, _, _)) = methodBody
     assert(statements.length == 5)
   }
 
