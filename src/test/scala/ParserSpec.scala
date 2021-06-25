@@ -515,6 +515,14 @@ class ParserSpec extends AnyFunSuite {
     assert(structName == "MyStruct")
   }
 
+  test("typedef with pointer") {
+    val Success(TypeDefinition(name, defType), _) = Parser.parseDef("typedef int* NumberPointer;")
+    assert(name == "NumberPointer")
+
+    val PointerType(NamedType(typeName)) = defType
+    assert(typeName == "int")
+  }
+
   test("method declaration") {
     val Success(method, _) = Parser.parseDef("int addOne(int value);")
     val MethodDefinition(name, retType, args, body) = method
