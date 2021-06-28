@@ -1,4 +1,4 @@
-package gvc
+package gvc.parser
 import fastparse._
 
 trait Definitions extends Statements with Types {

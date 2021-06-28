@@ -1,5 +1,5 @@
 import org.scalatest.funsuite._
-import gvc._
+import gvc.parser._
 import fastparse.Parsed.{Success, Failure}
 
 class ParserSpec extends AnyFunSuite {

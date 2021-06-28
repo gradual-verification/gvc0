@@ -1,4 +1,4 @@
-package gvc
+package gvc.parser
 import fastparse.Parsed.Failure
 import fastparse.Parsed.Success
 

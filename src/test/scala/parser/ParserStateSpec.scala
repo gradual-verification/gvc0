@@ -1,5 +1,5 @@
 import org.scalatest.funsuite._
-import gvc._
+import gvc.parser.{ParserState, LineColPosition}
 import fastparse.Parsed.{Success, Failure}
 
 class ParserStateSpec extends AnyFunSuite {

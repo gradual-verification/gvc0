@@ -1,4 +1,4 @@
-package gvc
+package gvc.parser
 
 sealed trait AstNode
 sealed trait AstExpression extends AstNode
