@@ -12,6 +12,7 @@ class Parser(val annotation: Boolean = false) extends Definitions {
   def expressionProgram[_: P]: P[Expression] = P(Start ~ expression ~ End)
   def statementProgram[_: P]: P[Statement] = P(Start ~ statement ~ End)
   def definitionProgram[_: P]: P[Definition] = P(Start ~ definition ~ End)
+  def specificationProgram[_: P]: P[List[Specification]] = P(Start ~ annotations ~ End)
 }
 
 object Parser {
@@ -30,6 +31,11 @@ object Parser {
   def parseDef(src: String): Parsed[Definition] = {
     val parser = new Parser()
     fastparse.parse(src, parser.definitionProgram(_))
+  }
+
+  def parseSpec(src: String): Parsed[List[Specification]] = {
+    val parser = new Parser()
+    fastparse.parse(src, parser.specificationProgram(_))
   }
 
   def parseProgram(src: String): Parsed[List[Definition]] = {
