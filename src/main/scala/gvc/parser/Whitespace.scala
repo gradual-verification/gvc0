@@ -2,7 +2,7 @@ package gvc.parser
 import fastparse._
 
 trait Whitespace {
-  val annotation: Boolean
+  val state: ParserState
 
   // Whitespace is a regular space, horizontal and vertical tab,
   // newline, formfeed and comments
@@ -17,8 +17,7 @@ trait Whitespace {
         case '/' if
           input.isReachable(index + 1) &&
           input(index + 1) == '/' &&
-          input.isReachable(index + 2) &&
-          input(index + 2) != '@' =>
+          (!input.isReachable(index + 2) || input(index + 2) != '@') =>
         {
           index += 2
           lineComment()
@@ -28,15 +27,19 @@ trait Whitespace {
         case '/' if
           input.isReachable(index + 1) &&
           input(index + 1) == '*' &&
-          input.isReachable(index + 2) &&
-          input(index + 2) != '@' =>
+          (!input.isReachable(index + 2) || input(index + 2) != '@') =>
         {
           index += 2
           multiLineComment()
           true
         }
 
-        case ' ' | '\t' | '\13' | '\n' | '\r' => {
+        case ' ' | '\t' | '\13' | '\r' => {
+          index += 1
+          true
+        }
+
+        case '\n' if !state.singleLine => {
           index += 1
           true
         }

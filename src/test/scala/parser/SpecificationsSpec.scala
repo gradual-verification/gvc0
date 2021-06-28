@@ -27,6 +27,25 @@ class SpecificationsSpec extends AnyFunSuite {
     assert(value == true)
   }
 
+  test("single-line annotation") {
+    val Success(List(EnsuresSpecification(_)), _) = Parser.parseSpec("//@ ensures true;")
+  }
+
+  test("single-line annotation followed by single-line comment") {
+    val Success(List(EnsuresSpecification(_)), _) = Parser.parseSpec("""
+      //@ ensures true;
+      // test comment
+    """)
+  }
+
+  test("do not allow multi-line expressions inside single-line annotations") {
+      val Failure(_, _, _) = Parser.parseSpec("""
+        //@ assert (
+          true
+        );
+      """)
+  }
+
   test("multiple multi-line annotations") {
     val Success(List(EnsuresSpecification(_), EnsuresSpecification(_)), _) = Parser.parseSpec("""
       /*@ensures true; @*/
@@ -40,6 +59,15 @@ class SpecificationsSpec extends AnyFunSuite {
         ensures true;
         ensures false;
       @*/
+    """)
+  }
+
+  test("comments inside multi-line annotation") {
+    val Success(List(AssertSpecification(_)), _) = Parser.parseSpec("""
+    /*@
+      assert /* comment */ true;
+      // comment
+    @*/
     """)
   }
 }

@@ -44,4 +44,11 @@ class ParserStateSpec extends AnyFunSuite {
     assert(line == 2)
     assert(col == 1)
   }
+
+  test("single line sub-parser") {
+    val state = new ParserState("test")
+    val child = state.inSingleLine()
+    assert(!state.singleLine)
+    assert(child.singleLine)
+  }
 }
