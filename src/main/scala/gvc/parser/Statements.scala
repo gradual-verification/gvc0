@@ -4,12 +4,12 @@ import fastparse._
 trait Statements extends Specifications {
   sealed trait ConcreteStatement;
 
-  def statement[_: P]: P[AstStatement] =
+  def statement[_: P]: P[Statement] =
     P(annotations ~ concreteStatement).map({
       case (annot, concrete) => concrete.withSpecifications(annot)
     })
 
-  def concreteStatement[_: P]: P[AstStatement] =
+  def concreteStatement[_: P]: P[Statement] =
     P(
       blockStatement |
       ifStatement |
@@ -55,15 +55,15 @@ trait Statements extends Specifications {
   def errorStatement[_: P]: P[ErrorStatement] =
     P("error" ~ "(" ~ expression ~ ")" ~ ";").map(ErrorStatement(_))
 
-  def simpleStatement[_: P]: P[AstStatement] =
+  def simpleStatement[_: P]: P[Statement] =
     P(variableStatement | expressionStatement)
 
   def variableStatement[_: P]: P[VariableStatement] =
-    P(typeReference ~ identifier.! ~ ("=" ~ expression).?).map({
-      case (varType, varId, value) => VariableStatement(varType, varId, value)
+    P(typeReference ~ identifier ~ ("=" ~ expression).?).map({
+      case (varType, varName, value) => VariableStatement(varType, varName, value)
     })
 
-  def expressionStatement[_: P]: P[AstStatement] = P(expression ~/ statementTail.?)
+  def expressionStatement[_: P]: P[Statement] = P(expression ~/ statementTail.?)
     .map({
       case (expr, None) => ExpressionStatement(expr)
       case (expr, Some(PostfixTail(op))) => UnaryOperationStatement(expr, op)
@@ -71,15 +71,15 @@ trait Statements extends Specifications {
     })
 
   sealed trait StatementTail
-  case class PostfixTail(op: UnaryOp.Value) extends StatementTail
-  case class AssignmentTail(op: AssignOp.Value, value: AstExpression) extends StatementTail
+  case class PostfixTail(op: UnaryOperator.Value) extends StatementTail
+  case class AssignmentTail(op: AssignOperator.Value, value: Expression) extends StatementTail
 
   def statementTail[_: P]: P[StatementTail] = P(postfixTail | assignmentTail)
 
   def postfixTail[_: P]: P[PostfixTail] = P(postfixOperator.!)
     .map({
-      case "++" => PostfixTail(UnaryOp.Increment)
-      case "--" => PostfixTail(UnaryOp.Decrement)
+      case "++" => PostfixTail(UnaryOperator.Increment)
+      case "--" => PostfixTail(UnaryOperator.Decrement)
     })
 
   def assignmentTail[_: P]: P[AssignmentTail] = P(assignmentOperator.! ~ expression)
@@ -87,8 +87,8 @@ trait Statements extends Specifications {
       case (assignOp, value) => AssignmentTail(parseAssignOperator(assignOp), value)
     })
 
-  def parseAssignOperator(op: String): AssignOp.Value = {
-    import AssignOp._
+  def parseAssignOperator(op: String): AssignOperator.Value = {
+    import AssignOperator._
     op match {
       case "=" => Assign
       case "+=" => Add

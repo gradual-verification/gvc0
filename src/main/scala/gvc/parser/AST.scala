@@ -1,90 +1,153 @@
 package gvc.parser
 
-sealed trait AstNode
-sealed trait AstExpression extends AstNode
-sealed trait AstType extends AstNode
-sealed trait Specification
-sealed trait AstStatement extends AstNode {
-  val specifications: List[Specification]
-  def withSpecifications(specs: List[Specification]): AstStatement
-}
-sealed trait AstDefinition extends AstNode
-
+sealed trait Node
 case class LineColPosition(line: Int, col: Int)
 
-sealed trait LiteralExpression extends AstExpression {
+// Identifiers
+case class Identifier(name: String) extends Node
+
+// Types
+sealed trait Type extends Node
+
+case class NamedType(id: Identifier) extends Type
+case class NamedStructType(id: Identifier) extends Type
+case class PointerType(valueType: Type) extends Type
+case class ArrayType(valueType: Type) extends Type
+
+// Expressions
+sealed trait Expression extends Node
+
+case class VariableExpression(variable: Identifier) extends Expression
+case class BinaryExpression(left: Expression, operator: BinaryOperator.Value, right: Expression) extends Expression
+case class UnaryExpression(operand: Expression, op: UnaryOperator.Value) extends Expression
+case class TernaryExpression(condition: Expression, ifTrue: Expression, ifFalse: Expression) extends Expression
+case class InvokeExpression(method: Identifier, arguments: List[Expression] = List[Expression]()) extends Expression
+case class AllocExpression(valueType: Type) extends Expression
+case class AllocArrayExpression(valueType: Type, length: Expression) extends Expression
+case class IndexExpression(parent: Expression, index: Expression) extends Expression
+case class MemberExpression(parent: Expression, field: Identifier, isArrow: Boolean) extends Expression
+
+// Literal expressions
+sealed trait LiteralExpression extends Expression {
   val raw: String
   val value: Any
 }
 
-case class TypeDefinition(name: String, value: AstType) extends AstDefinition
-case class StructDefinition(name: String, fields: Option[List[MemberDefinition]]) extends AstDefinition
-case class UseDeclaration(path: StringExpression, library: Boolean) extends AstDefinition
-case class MethodDefinition(name: String, returnType: AstType, arguments: List[MemberDefinition], body: Option[BlockStatement], specifications: List[Specification]) extends AstDefinition
-case class MemberDefinition(name: String, memberType: AstType) extends AstNode
-
-case class RequiresSpecification(value: AstExpression) extends Specification
-case class EnsuresSpecification(value: AstExpression) extends Specification
-case class LoopInvariantSpecification(value: AstExpression) extends Specification
-case class AssertSpecification(value: AstExpression) extends Specification
-
-case class ExpressionStatement(expression: AstExpression, specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): ExpressionStatement = copy(specifications = specs)
-}
-case class AssignmentStatement(left: AstExpression, op: AssignOp.Value, right: AstExpression, specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): AssignmentStatement = copy(specifications = specs)
-}
-case class UnaryOperationStatement(value: AstExpression, op: UnaryOp.Value, specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): UnaryOperationStatement = copy(specifications = specs)
-}
-case class VariableStatement(varType: AstType, varId: String, value: Option[AstExpression], specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): VariableStatement = copy(specifications = specs)
-}
-case class IfStatement(condition: AstExpression, body: AstStatement, elseStmt: Option[AstStatement], specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): IfStatement = copy(specifications = specs)
-}
-case class WhileStatement(condition: AstExpression, body: AstStatement, specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): WhileStatement = copy(specifications = specs)
-}
-case class ForStatement(declaration: AstStatement, condition: AstExpression, incrementor: AstStatement, body: AstStatement, specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): ForStatement = copy(specifications = specs)
-}
-case class ReturnStatement(value: Option[AstExpression], specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): ReturnStatement = copy(specifications = specs)
-}
-case class AssertStatement(value: AstExpression, specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): AssertStatement = copy(specifications = specs)
-}
-case class ErrorStatement(value: AstExpression, specifications: List[Specification] = List.empty) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): ErrorStatement = copy(specifications = specs)
-}
-case class BlockStatement(body: List[AstStatement], specifications: List[Specification], postSpecifications: List[Specification]) extends AstStatement {
-  def withSpecifications(specs: List[Specification]): BlockStatement = copy(specifications = specs)
-}
-
-case class VariableExpression(ident: String) extends AstExpression
 case class StringExpression(raw: String, value: String) extends LiteralExpression
 case class CharacterExpression(raw: String, value: Char) extends LiteralExpression
 case class IntegerExpression(raw: String, value: Int) extends LiteralExpression
 case class BooleanExpression(raw: String, value: Boolean) extends LiteralExpression
-case class NullExpression(raw: String = "NULL", value: Null) extends LiteralExpression
-case class BinaryExpression(left: AstExpression, right: AstExpression, op: BinaryOp.Value) extends AstExpression
-case class UnaryExpression(operand: AstExpression, op: UnaryOp.Value) extends AstExpression
-case class TernaryOperation(check: AstExpression, left: AstExpression, right: AstExpression) extends AstExpression
-case class InvokeExpression(ident: String, arguments: List[AstExpression] = List[AstExpression]()) extends AstExpression
-case class MemberExpression(parent: AstExpression, field: String) extends AstExpression
-case class MemberDerefExpression(parent: AstExpression, field: String) extends AstExpression
-case class IndexExpression(parent: AstExpression, index: AstExpression) extends AstExpression
-case class AllocExpression(memberType: AstType) extends AstExpression
-case class AllocArrayExpression(memberType: AstType, length: AstExpression) extends AstExpression
+case class NullExpression(raw: String = "NULL", value: Null = null) extends LiteralExpression
 
-case class NamedType(name: String) extends AstType
-case class NamedStructType(name: String) extends AstType
-case class PointerType(valueType: AstType) extends AstType
-case class ArrayType(valueType: AstType) extends AstType
+// Specifications
+sealed trait Specification extends Node
 
-object BinaryOp extends Enumeration {
-  type BinaryOp = Value
+case class RequiresSpecification(value: Expression) extends Specification
+case class EnsuresSpecification(value: Expression) extends Specification
+case class LoopInvariantSpecification(value: Expression) extends Specification
+case class AssertSpecification(value: Expression) extends Specification
+
+// Statements
+sealed trait Statement extends Node {
+  val specifications: List[Specification]
+  def withSpecifications(specs: List[Specification]): Statement
+}
+
+case class ExpressionStatement(
+  expression: Expression,
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): ExpressionStatement = copy(specifications = specs)
+}
+case class AssignmentStatement(
+  left: Expression,
+  operator: AssignOperator.Value,
+  right: Expression,
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): AssignmentStatement = copy(specifications = specs)
+}
+case class UnaryOperationStatement(
+  value: Expression,
+  operator: UnaryOperator.Value,
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): UnaryOperationStatement = copy(specifications = specs)
+}
+case class VariableStatement(
+  valueType: Type,
+  id: Identifier,
+  initialValue: Option[Expression],
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): VariableStatement = copy(specifications = specs)
+}
+case class IfStatement(
+  condition: Expression,
+  then: Statement,
+  els: Option[Statement],
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): IfStatement = copy(specifications = specs)
+}
+case class WhileStatement(
+  condition: Expression,
+  body: Statement,
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): WhileStatement = copy(specifications = specs)
+}
+case class ForStatement(
+  initializer: Statement,
+  condition: Expression,
+  incrementor: Statement,
+  body: Statement,
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): ForStatement = copy(specifications = specs)
+}
+case class ReturnStatement(
+  value: Option[Expression],
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): ReturnStatement = copy(specifications = specs)
+}
+case class AssertStatement(
+  value: Expression,
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): AssertStatement = copy(specifications = specs)
+}
+case class ErrorStatement(
+  value: Expression,
+  specifications: List[Specification] = List.empty
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): ErrorStatement = copy(specifications = specs)
+}
+case class BlockStatement(
+  body: List[Statement],
+  specifications: List[Specification],
+  trailingSpecifications: List[Specification]
+) extends Statement {
+  def withSpecifications(specs: List[Specification]): BlockStatement = copy(specifications = specs)
+}
+
+// Definitions
+sealed trait Definition extends Node
+case class MemberDefinition(name: String, valueType: Type) extends Node
+case class TypeDefinition(name: String, value: Type) extends Definition
+case class StructDefinition(name: String, fields: Option[List[MemberDefinition]]) extends Definition
+case class UseDeclaration(path: StringExpression, isLibrary: Boolean) extends Definition
+case class MethodDefinition(
+  id: Identifier,
+  returnType: Type,
+  arguments: List[MemberDefinition],
+  body: Option[BlockStatement],
+  specifications: List[Specification]
+) extends Definition
+
+object BinaryOperator extends Enumeration {
+  type BinaryOperator = Value
   
   val LogicalOr = Value("||")
   val LogicalAnd = Value("&&")
@@ -106,8 +169,8 @@ object BinaryOp extends Enumeration {
   val Modulus = Value("%")
 }
 
-object UnaryOp extends Enumeration {
-  type UnaryOp = Value
+object UnaryOperator extends Enumeration {
+  type UnaryOperator = Value
 
   val Not = Value("!")
   val BitwiseNot = Value("~")
@@ -118,8 +181,8 @@ object UnaryOp extends Enumeration {
   val Decrement = Value("--")
 }
 
-object AssignOp extends Enumeration {
-  type AssignmentOp = Value
+object AssignOperator extends Enumeration {
+  type AssignOperator = Value
   val Assign = Value("=")
   val Add = Value("+=")
   val Subtract = Value("-=")

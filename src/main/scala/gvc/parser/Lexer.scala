@@ -2,8 +2,11 @@ package gvc.parser
 import fastparse._
 
 trait Lexer extends Whitespace {
-  def identifier[_: P] =
+  def ident[_: P] =
     P(CharIn("A-Za-z_") ~~ CharIn("A-Za-z0-9_").repX)
+
+  def identifier[_: P] =
+    P(ident.!).map(Identifier(_))
 
   def decimalNumber[_: P] =
     P("0" | (CharIn("1-9") ~~ CharIn("0-9").repX))

@@ -2,13 +2,13 @@ package gvc.parser
 import fastparse._
 
 trait Types extends Lexer {
-  def typeReference[_: P]: P[AstType] =
+  def typeReference[_: P]: P[Type] =
     P("struct".!.? ~ identifier.! ~ typeModifier.rep)
       .map({
-        case (hasStruct, id, modifiers) => {
+        case (hasStruct, name, modifiers) => {
           var typ = hasStruct match {
-            case None => NamedType(id)
-            case Some(_) => NamedStructType(id)
+            case None => NamedType(Identifier(name))
+            case Some(_) => NamedStructType(Identifier(name))
           }
 
           modifiers.foldLeft(typ)((t, mod) => {

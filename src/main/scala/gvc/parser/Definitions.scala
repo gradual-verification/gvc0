@@ -2,7 +2,7 @@ package gvc.parser
 import fastparse._
 
 trait Definitions extends Statements with Types {
-  def definition[_: P]: P[AstDefinition] =
+  def definition[_: P]: P[Definition] =
     P(structDefinition | typeDefinition | methodDefinition | useDeclaration)
 
   def structDefinition[_: P]: P[StructDefinition] =
@@ -23,13 +23,13 @@ trait Definitions extends Statements with Types {
 
   def methodDefinition[_: P]: P[MethodDefinition] =
     P(
-      typeReference ~ identifier.! ~
+      typeReference ~ identifier ~
       "(" ~ methodParameter.rep(0, ",") ~ ")" ~
       annotations ~
       (P(";").map(_ => None) | blockStatement.map(Some(_)))
     ).map({
-      case (ret, name, args, annot, body) =>
-        MethodDefinition(name, ret, args.toList, body, annot)
+      case (ret, id, args, annot, body) =>
+        MethodDefinition(id, ret, args.toList, body, annot)
     })
 
   def methodParameter[_: P]: P[MemberDefinition] =
