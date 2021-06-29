@@ -97,7 +97,7 @@ class DeclarationsSpec extends AnyFunSuite {
   }
 
   test("method with body") {
-    val Success(MethodDefinition(name, _, _, Some(body), _), _) = Parser.parseDef("""
+    val Success(method: MethodDefinition, _) = Parser.parseDef("""
       void test()
       {
         int a;
@@ -105,8 +105,8 @@ class DeclarationsSpec extends AnyFunSuite {
         a++;
       }
     """)
-
-    val BlockStatement(List(stmt1, stmt2, stmt3), _, _) = body
+    
+    val List(stmt1, stmt2, stmt3) = method.body.get.body
     assert(stmt1.isInstanceOf[VariableStatement])
     assert(stmt2.isInstanceOf[AssignmentStatement])
     assert(stmt3.isInstanceOf[UnaryOperationStatement])

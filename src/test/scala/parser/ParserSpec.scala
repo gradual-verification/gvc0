@@ -24,14 +24,13 @@ class ParserSpec extends AnyFunSuite {
       }
     """)
 
-    val List(MethodDefinition(methodId, methodReturn, methodArgs, methodBody, _)) = defs
-    assert(methodId == "isPrime")
+    val List(method: MethodDefinition) = defs
+    assert(method.id == "isPrime")
 
-    val List(MemberDefinition(argId, _)) = methodArgs
-    assert(argId == "n")
+    val List(arg: MemberDefinition) = method.arguments
+    assert(arg.id == "n")
 
-    val Some(BlockStatement(statements, _, _)) = methodBody
-    assert(statements.length == 5)
+    assert(method.body.get.body.length == 5)
   }
 
   test("line comments") {

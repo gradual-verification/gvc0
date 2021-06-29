@@ -22,52 +22,58 @@ trait Statements extends Specifications {
     )
 
   def blockStatement[_: P]: P[BlockStatement] =
-    P("{" ~ annotations ~ (statement.rep(1) ~ annotations).? ~ "}")
+    P(span("{" ~ annotations ~ (statement.rep(1) ~ annotations).? ~ "}"))
     .map({
-      case (post, None) => BlockStatement(List.empty, List.empty, post)
-      case (pre, Some((stmts, post))) => stmts.toList match {
-        case head :: tl => BlockStatement(head.withSpecifications(pre ++ head.specifications) :: tl, List.empty, post)
+      case ((post, None), span) => BlockStatement(List.empty, span, List.empty, post)
+      case ((pre, Some((stmts, post))), span) => stmts.toList match {
+        case head :: tl => BlockStatement(head.withSpecifications(pre ++ head.specifications) :: tl, span, List.empty, post)
         case Nil => ??? // This should be impossible since no statements would result in None
       }
     })
   
   def ifStatement[_: P]: P[IfStatement] =
-    P(kw("if") ~ "(" ~ expression ~ ")" ~ statement ~ ("else" ~ statement).?).map({
-      case (condition, body, els) => IfStatement(condition, body, els)
+    P(span(kw("if") ~ "(" ~ expression ~ ")" ~ statement ~ ("else" ~ statement).?)).map({
+      case ((condition, body, els), span) => IfStatement(condition, body, els, span)
     })
   
   def whileStatement[_: P]: P[WhileStatement] =
-    P(kw("while") ~ "(" ~ expression ~ ")" ~ statement).map({
-      case (condition, body) => WhileStatement(condition, body)
+    P(span(kw("while") ~ "(" ~ expression ~ ")" ~ statement)).map({
+      case ((condition, body), span) => WhileStatement(condition, body, span)
     })
 
   def forStatement[_: P]: P[ForStatement] =
-    P(kw("for") ~ "(" ~/ simpleStatement ~ ";" ~ expression ~ ";" ~ simpleStatement ~ ")" ~ statement).map({
-      case (init, condition, next, body) => ForStatement(init, condition, next, body)
+    P(span(kw("for") ~ "(" ~/ simpleStatement ~ ";" ~ expression ~ ";" ~ simpleStatement ~ ")" ~ statement)).map({
+      case ((init, condition, next, body), span) => ForStatement(init, condition, next, body, span)
     })
 
   def returnStatement[_: P]: P[ReturnStatement] =
-    P(kw("return") ~ expression.? ~ ";").map(ReturnStatement(_))
+    P(span(kw("return") ~ expression.? ~ ";")).map({
+      case (value, span) => ReturnStatement(value, span)
+    })
 
   def assertStatement[_: P]: P[AssertStatement] =
-    P(kw("assert") ~ "(" ~ expression ~ ")" ~ ";").map(AssertStatement(_))
+    P(span(kw("assert") ~ "(" ~ expression ~ ")" ~ ";")).map({
+      case (value, span) => AssertStatement(value, span)
+    })
   
   def errorStatement[_: P]: P[ErrorStatement] =
-    P(kw("error") ~ "(" ~ expression ~ ")" ~ ";").map(ErrorStatement(_))
+    P(span(kw("error") ~ "(" ~ expression ~ ")" ~ ";")).map({
+      case (value, span) => ErrorStatement(value, span)
+    })
 
   def simpleStatement[_: P]: P[Statement] =
     P(variableStatement | expressionStatement)
 
   def variableStatement[_: P]: P[VariableStatement] =
-    P(typeReference ~ identifier ~ ("=" ~ expression).?).map({
-      case (varType, varName, value) => VariableStatement(varType, varName, value)
+    P(span(typeReference ~ identifier ~ ("=" ~ expression).?)).map({
+      case ((varType, varName, value), span) => VariableStatement(varType, varName, value, span)
     })
 
-  def expressionStatement[_: P]: P[Statement] = P(expression ~/ statementTail.?)
+  def expressionStatement[_: P]: P[Statement] = P(span(expression ~/ statementTail.?))
     .map({
-      case (expr, None) => ExpressionStatement(expr)
-      case (expr, Some(PostfixTail(op))) => UnaryOperationStatement(expr, op)
-      case (expr, Some(AssignmentTail(op, value))) => AssignmentStatement(expr, op, value)
+      case ((expr, None), span) => ExpressionStatement(expr, span)
+      case ((expr, Some(PostfixTail(op))), span) => UnaryOperationStatement(expr, op, span)
+      case ((expr, Some(AssignmentTail(op, value))), span) => AssignmentStatement(expr, op, value, span)
     })
 
   sealed trait StatementTail
