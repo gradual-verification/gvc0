@@ -121,13 +121,13 @@ trait Expressions extends Types {
   def decimalNumberExpression[_: P]: P[IntegerExpression] = P(decimalNumber.!)
     .map(raw => IntegerExpression(raw, raw.toInt))
 
-  def booleanExpression[_: P]: P[BooleanExpression] = P(StringIn("true", "false").!)
+  def booleanExpression[_: P]: P[BooleanExpression] = P(kw(StringIn("true", "false")).!)
     .map(raw => BooleanExpression(raw, raw match {
       case "true" => true
       case "false" => false
     }))
 
-  def nullExpression[_: P] : P[NullExpression] = P("NULL".!)
+  def nullExpression[_: P] : P[NullExpression] = P(kw("NULL").!)
     .map(raw => NullExpression(raw, null))
 
   def parseString(raw: String): String = {
@@ -152,10 +152,10 @@ trait Expressions extends Types {
   }
 
   def allocExpression[_: P]: P[AllocExpression] =
-    P("alloc" ~ "(" ~ typeReference ~ ")").map(AllocExpression(_))
+    P(kw("alloc") ~ "(" ~ typeReference ~ ")").map(AllocExpression(_))
   
   def allocArrayExpression[_: P]: P[AllocArrayExpression] =
-    P("alloc_array" ~ "(" ~ typeReference ~ "," ~ expression ~ ")")
+    P(kw("alloc_array") ~ "(" ~ typeReference ~ "," ~ expression ~ ")")
       .map({ case (typeRef, length) => AllocArrayExpression(typeRef, length) })
 
   def invokeExpression[_: P]: P[InvokeExpression] =

@@ -6,7 +6,7 @@ trait Definitions extends Statements with Types {
     P(structDefinition | typeDefinition | methodDefinition | useDeclaration)
 
   def structDefinition[_: P]: P[StructDefinition] =
-    P("struct" ~ identifier.! ~ structFields.? ~ ";").map({
+    P(kw("struct") ~ identifier.! ~ structFields.? ~ ";").map({
       case (id, fields) => StructDefinition(id, fields)
     })
   def structFields[_: P]: P[List[MemberDefinition]] =
@@ -17,7 +17,7 @@ trait Definitions extends Statements with Types {
     })
   
   def typeDefinition[_: P]: P[TypeDefinition] =
-    P("typedef" ~ typeReference ~ identifier.! ~ ";").map({
+    P(kw("typedef") ~ typeReference ~ identifier.! ~ ";").map({
       case (defType, defName) => TypeDefinition(defName, defType)
     })
 
@@ -37,7 +37,7 @@ trait Definitions extends Statements with Types {
       case (paramType, paramName) => MemberDefinition(paramName, paramType)
     })
   
-  def useDeclaration[_: P]: P[UseDeclaration] = P("#use" ~/ usePath)
+  def useDeclaration[_: P]: P[UseDeclaration] = P(kw("#use") ~/ usePath)
     .map(p => UseDeclaration(p.path, p.isInstanceOf[LibraryPath]))
 
   sealed trait UsePath {

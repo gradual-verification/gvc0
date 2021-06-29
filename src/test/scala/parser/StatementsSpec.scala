@@ -84,6 +84,30 @@ class StatementsSpec extends AnyFunSuite {
     assert(intValue == 123)
   }
 
+  test("pointer variable") {
+    val Success(VariableStatement(typ, _, _, _), _) = Parser.parseStatement("search_tree* tree;")
+    val PointerType(NamedType(Identifier(name))) = typ
+    assert(name == "search_tree")
+  }
+
+  test("double pointer variable") {
+    val Success(VariableStatement(typ, _, _, _), _) = Parser.parseStatement("int** value;")
+    val PointerType(PointerType(NamedType(Identifier(name)))) = typ
+    assert(name == "int")
+  }
+
+  test("struct variable") {
+    val Success(VariableStatement(typ, _, _, _), _) = Parser.parseStatement("struct node n;")
+    val NamedStructType(Identifier(name)) = typ
+    assert(name == "node");
+  }
+
+  test("variables with named types prefixed with struct") {
+    val Success(VariableStatement(typ, _, _, _), _) = Parser.parseStatement("structTest n;")
+    val NamedType(Identifier(name)) = typ
+    assert(name == "structTest");
+  }
+
   test("empty block statement") {
     val Success(BlockStatement(body, _, _), _) = Parser.parseStatement("{ }")
     assert(body == List.empty)
@@ -248,6 +272,11 @@ class StatementsSpec extends AnyFunSuite {
     assert(intValue == 123)
   }
 
+  test("require separator between return and value") {
+    val Success(ExpressionStatement(VariableExpression(Identifier(name)), _), _) = Parser.parseStatement("returntrue;")
+    assert(name == "returntrue")
+  }
+
   test("assert") {
     val Success(AssertStatement(value, _), _) = Parser.parseStatement("assert(true);")
     val BooleanExpression(_, bool) = value
@@ -259,4 +288,6 @@ class StatementsSpec extends AnyFunSuite {
     val StringExpression(_, str) = value
     assert(str == "test error")
   }
+
+  
 }

@@ -32,28 +32,28 @@ trait Statements extends Specifications {
     })
   
   def ifStatement[_: P]: P[IfStatement] =
-    P("if" ~ "(" ~ expression ~ ")" ~ statement ~ ("else" ~ statement).?).map({
+    P(kw("if") ~ "(" ~ expression ~ ")" ~ statement ~ ("else" ~ statement).?).map({
       case (condition, body, els) => IfStatement(condition, body, els)
     })
   
   def whileStatement[_: P]: P[WhileStatement] =
-    P("while" ~ "(" ~ expression ~ ")" ~ statement).map({
+    P(kw("while") ~ "(" ~ expression ~ ")" ~ statement).map({
       case (condition, body) => WhileStatement(condition, body)
     })
 
   def forStatement[_: P]: P[ForStatement] =
-    P("for" ~ "(" ~/ simpleStatement ~ ";" ~ expression ~ ";" ~ simpleStatement ~ ")" ~ statement).map({
+    P(kw("for") ~ "(" ~/ simpleStatement ~ ";" ~ expression ~ ";" ~ simpleStatement ~ ")" ~ statement).map({
       case (init, condition, next, body) => ForStatement(init, condition, next, body)
     })
 
   def returnStatement[_: P]: P[ReturnStatement] =
-    P("return" ~ expression.? ~ ";").map(ReturnStatement(_))
+    P(kw("return") ~ expression.? ~ ";").map(ReturnStatement(_))
 
   def assertStatement[_: P]: P[AssertStatement] =
-    P("assert" ~ "(" ~ expression ~ ")" ~ ";").map(AssertStatement(_))
+    P(kw("assert") ~ "(" ~ expression ~ ")" ~ ";").map(AssertStatement(_))
   
   def errorStatement[_: P]: P[ErrorStatement] =
-    P("error" ~ "(" ~ expression ~ ")" ~ ";").map(ErrorStatement(_))
+    P(kw("error") ~ "(" ~ expression ~ ")" ~ ";").map(ErrorStatement(_))
 
   def simpleStatement[_: P]: P[Statement] =
     P(variableStatement | expressionStatement)

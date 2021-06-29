@@ -47,4 +47,7 @@ trait Lexer extends Whitespace {
   def assignmentOperator[_: P] =
     P(StringIn("=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=",
                 "&=", "^=", "|="))
+
+  // Helper for keywords
+  def kw[_: P, T](p: => P[T]): P[T] = P(p ~~ !CharIn("A-Za-z0-9_"))
 }
