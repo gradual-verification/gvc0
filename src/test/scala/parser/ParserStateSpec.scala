@@ -1,6 +1,8 @@
 import org.scalatest.funsuite._
 import gvc.parser.{ParserState, LineColPosition}
 import fastparse.Parsed.{Success, Failure}
+import gvc.parser.MultiLineAnnotation
+import gvc.parser.SingleLineAnnotation
 
 class ParserStateSpec extends AnyFunSuite {
   test("start position") {
@@ -45,10 +47,15 @@ class ParserStateSpec extends AnyFunSuite {
     assert(col == 1)
   }
 
-  test("single line sub-parser") {
+  test("annotation sub-parser") {
     val state = new ParserState("test")
-    val child = state.inSingleLine()
-    assert(!state.singleLine)
-    assert(child.singleLine)
+    val child = state.inAnnotation()
+    assert(child.mode == MultiLineAnnotation)
+  }
+
+  test("single line annotation sub-parser") {
+    val state = new ParserState("test")
+    val sub = state.inSingleLineAnnotation()
+    assert(sub.mode == SingleLineAnnotation)
   }
 }

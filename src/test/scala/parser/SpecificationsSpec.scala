@@ -70,4 +70,14 @@ class SpecificationsSpec extends AnyFunSuite {
     @*/
     """)
   }
+
+  test("treat @ in annotation as whitespace") {
+    //val Success(List(AssertSpecification(_), AssertSpecification(_)), _) = 
+    val Success(specs, _) = Parser.parseSpec("""
+      //@@ assert @true@;@
+      /*@ assert@true;@@*/
+    """)
+
+    val List(AssertSpecification(_), AssertSpecification(_)) = specs
+  }
 }

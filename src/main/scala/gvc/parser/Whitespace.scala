@@ -8,84 +8,29 @@ trait Whitespace {
   // newline, formfeed and comments
   // Comments can be single-line (//) or multi-line (/* ... */)
   // Multi-line comments can be nested (/* ... /* ... */ ... */)
-  implicit val whitespace = { implicit ctx: ParsingRun[_] =>
-    var index = ctx.index
-    val input = ctx.input
+  implicit val whitespace = { implicit ctx: ParsingRun[_] => space }
 
-    def standard() = {
-      while (input.isReachable(index) && (input(index) match {
-        case '/' if
-          input.isReachable(index + 1) &&
-          input(index + 1) == '/' &&
-          (!input.isReachable(index + 2) || input(index + 2) != '@') =>
-        {
-          index += 2
-          lineComment()
-          true
-        }
+  def space[_: P] = P(state.mode match {
+    case DefaultMode => normalWhitespace.repX
+    case MultiLineAnnotation => multiLineAnnotationWhitespace.repX
+    case SingleLineAnnotation => singleLineAnnotationWhitespace.repX
+  })
 
-        case '/' if
-          input.isReachable(index + 1) &&
-          input(index + 1) == '*' &&
-          (!input.isReachable(index + 2) || input(index + 2) != '@') =>
-        {
-          index += 2
-          multiLineComment()
-          true
-        }
+  def normalWhitespace[_: P] =
+    P(normalWhitespaceChar | singleLineComment | multiLineComment)
+  def singleLineAnnotationWhitespace[_: P] =
+    P(singleLineAnnotationWhitespaceChar | singleLineComment | multiLineComment)
+  def multiLineAnnotationWhitespace[_: P] =
+    P(multiLineAnnotationWhitespaceChar | singleLineComment | multiLineComment)
 
-        case ' ' | '\t' | '\13' | '\r' => {
-          index += 1
-          true
-        }
+  def normalWhitespaceChar[_: P] =
+    P(CharIn(" \t\13\r\n"))
+  def singleLineAnnotationWhitespaceChar[_: P] =
+    P(CharIn(" \t\13\r@"))
+  def multiLineAnnotationWhitespaceChar[_: P] =
+    P(CharIn(" \t\r\n\13") | (!"@*/" ~~ "@"))
 
-        case '\n' if !state.singleLine => {
-          index += 1
-          true
-        }
+  def singleLineComment[_: P] = P("//" ~~ !"@" ~~/ (!"\n" ~~ AnyChar).repX ~~ ("\n" | End))
 
-        case _ => false
-      }))()
-    }
-
-    def lineComment() = {
-      while (input.isReachable(index) &&
-        (input(index) match {
-          case '\r' | '\n' => {
-            index += 1
-            false
-          }
-          case _ => {
-            index += 1
-            true
-          }
-        })
-      )()
-    }
-
-    def multiLineComment(): Unit = {
-      while (input.isReachable(index) &&
-        (input(index) match {
-          case '*' if input.isReachable(index + 1) && input(index + 1) == '/' => {
-            index += 2
-            false
-          }
-
-          case '/' if input.isReachable(index + 1) && input(index + 1) == '*' => {
-            index += 2
-            multiLineComment()
-            true
-          }
-
-          case _ => {
-            index += 1
-            true
-          }
-        })
-      )()
-    }
-
-    standard()
-    ctx.freshSuccessUnit(index = index)
-  }
+  def multiLineComment[_: P]: P[Unit] = P("/*" ~~ !"@" ~~/ (multiLineComment | (!"*/" ~~ AnyChar)).repX ~~ "*/")
 }

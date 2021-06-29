@@ -3,12 +3,17 @@ package gvc.parser
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Searching._
 
+sealed trait ParserMode
+object DefaultMode extends ParserMode
+object SingleLineAnnotation extends ParserMode
+object MultiLineAnnotation extends ParserMode
+
 class ParserState(
   val lines: Array[Int],
-  val singleLine: Boolean = false
+  val mode: ParserMode = DefaultMode
 ) {
   def this(source: String) {
-    this(ParserState.splitLines(source), false)
+    this(ParserState.splitLines(source))
   }
 
   def position(index: Int): LineColPosition = {
@@ -25,7 +30,15 @@ class ParserState(
     LineColPosition(lineIndex + 1, column)
   }
 
-  def inSingleLine(): ParserState = new ParserState(lines, true)
+  def inAnnotation(): ParserState = new ParserState(
+    lines = lines,
+    mode = MultiLineAnnotation
+  )
+
+  def inSingleLineAnnotation(): ParserState = new ParserState(
+    lines = lines,
+    mode = SingleLineAnnotation
+  )
 }
 
 object ParserState {

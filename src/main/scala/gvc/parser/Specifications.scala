@@ -3,19 +3,23 @@ import fastparse._
 
 trait Specifications extends Expressions {
   def specification[_: P]: P[Specification] =
-    P(requiresSpecification |
+    P(
+      requiresSpecification |
       ensuresSpecification |
       loopInvariantSpecification |
-      assertSpecification)
+      assertSpecification
+    ).opaque("<specification>")
 
+  // Explicitly add space tokens here because whitespace handling is may be different
+  // when invoked in a sub-parser
   def specifications[_: P]: P[Seq[Specification]] =
-    P(specification.rep)
+    P(space ~~ specification.rep ~~ space)
   
   def requiresSpecification[_: P]: P[RequiresSpecification] =
     P("requires" ~ expression ~ ";").map(RequiresSpecification(_))
 
   def ensuresSpecification[_: P]: P[EnsuresSpecification] =
-    P("ensures" ~ expression ~ ";").map(EnsuresSpecification(_))
+    P("ensures" ~/ expression ~ ";").map(EnsuresSpecification(_))
   
   def loopInvariantSpecification[_: P]: P[LoopInvariantSpecification] =
     P("loop_invariant" ~/ expression ~/ ";").map(LoopInvariantSpecification(_))
@@ -29,7 +33,7 @@ trait Specifications extends Expressions {
   def annotation[_: P]: P[Seq[Specification]] =
     P(singleLineAnnotation | multiLineAnnotation)
   def singleLineAnnotation[_: P]: P[Seq[Specification]] =
-    P(P("//@").flatMap(_ => new Parser(state.inSingleLine()).specifications) ~/ ("\n" | End))
+    P("//@"./.flatMapX(_ => new Parser(state.inSingleLineAnnotation()).specifications) ~~/ ("\n" | End))
   def multiLineAnnotation[_: P]: P[Seq[Specification]] =
-    P("/*@" ~/ specifications ~/ "@*/")
+    P("/*@"./.flatMapX(_ => new Parser(state.inAnnotation()).specifications) ~/ "@*/")
 }
