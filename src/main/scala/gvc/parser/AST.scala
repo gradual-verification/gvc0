@@ -72,10 +72,10 @@ case class NullExpression(raw: String = "NULL", value: Null, span: SourceSpan) e
 // Specifications
 sealed trait Specification extends Node
 
-case class RequiresSpecification(value: Expression) extends Specification
-case class EnsuresSpecification(value: Expression) extends Specification
-case class LoopInvariantSpecification(value: Expression) extends Specification
-case class AssertSpecification(value: Expression) extends Specification
+case class RequiresSpecification(value: Expression, span: SourceSpan) extends Specification
+case class EnsuresSpecification(value: Expression, span: SourceSpan) extends Specification
+case class LoopInvariantSpecification(value: Expression, span: SourceSpan) extends Specification
+case class AssertSpecification(value: Expression, span: SourceSpan) extends Specification
 
 // Statements
 sealed trait Statement extends Node {

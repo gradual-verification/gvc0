@@ -4,23 +4,23 @@ import fastparse.Parsed.{Success, Failure}
 
 class SpecificationsSpec extends AnyFunSuite {
   test("assert") {
-    val Success(List(AssertSpecification(expr)), _) = Parser.parseSpec("/*@ assert true; @*/")
-    assert(expr.asInstanceOf[BooleanExpression] == true)
+    val Success(List(spec: AssertSpecification), _) = Parser.parseSpec("/*@ assert true; @*/")
+    assert(spec.value.asInstanceOf[BooleanExpression] == true)
   }
 
   test("ensures") {
-    val Success(List(EnsuresSpecification(expr)), _) = Parser.parseSpec("/*@ ensures true; @*/")
-    assert(expr.asInstanceOf[BooleanExpression] == true)
+    val Success(List(spec: EnsuresSpecification), _) = Parser.parseSpec("/*@ ensures true; @*/")
+    assert(spec.value.asInstanceOf[BooleanExpression] == true)
   }
 
   test("requires") {
-    val Success(List(RequiresSpecification(expr)), _) = Parser.parseSpec("/*@ requires true; @*/")
-    assert(expr.asInstanceOf[BooleanExpression] == true)
+    val Success(List(spec: RequiresSpecification), _) = Parser.parseSpec("/*@ requires true; @*/")
+    assert(spec.value.asInstanceOf[BooleanExpression] == true)
   }
 
   test("loop_invariant") {
-    val Success(List(LoopInvariantSpecification(expr)), _) = Parser.parseSpec("/*@ loop_invariant true; @*/")
-    assert(expr.asInstanceOf[BooleanExpression] == true)
+    val Success(List(spec: LoopInvariantSpecification), _) = Parser.parseSpec("/*@ loop_invariant true; @*/")
+    assert(spec.value.asInstanceOf[BooleanExpression] == true)
   }
 
   test("single-line annotation") {
@@ -45,14 +45,14 @@ class SpecificationsSpec extends AnyFunSuite {
   }
 
   test("multiple multi-line annotations") {
-    val Success(List(EnsuresSpecification(_), EnsuresSpecification(_)), _) = Parser.parseSpec("""
+    val Success(List(_: EnsuresSpecification, _: EnsuresSpecification), _) = Parser.parseSpec("""
       /*@ensures true; @*/
       /*@ensures false; @*/
     """)
   }
 
   test("multiple specs in a multi-line annotation") {
-    val Success(List(EnsuresSpecification(_), EnsuresSpecification(_)), _) = Parser.parseSpec("""
+    val Success(List(_: EnsuresSpecification, _: EnsuresSpecification), _) = Parser.parseSpec("""
       /*@
         ensures true;
         ensures false;
@@ -61,7 +61,7 @@ class SpecificationsSpec extends AnyFunSuite {
   }
 
   test("comments inside multi-line annotation") {
-    val Success(List(AssertSpecification(_)), _) = Parser.parseSpec("""
+    val Success(List(_: AssertSpecification), _) = Parser.parseSpec("""
     /*@
       assert /* comment */ true;
       // comment
@@ -76,6 +76,7 @@ class SpecificationsSpec extends AnyFunSuite {
       /*@ assert@true;@@*/
     """)
 
-    val List(AssertSpecification(_), AssertSpecification(_)) = specs
+    assert(specs.length == 2)
+    assert(specs.forall(_.isInstanceOf[AssertSpecification]))
   }
 }

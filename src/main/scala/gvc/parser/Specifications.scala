@@ -16,16 +16,24 @@ trait Specifications extends Expressions {
     P(space ~~ specification.rep ~~ space)
   
   def requiresSpecification[_: P]: P[RequiresSpecification] =
-    P(kw("requires") ~/ expression ~ ";").map(RequiresSpecification(_))
+    P(span(kw("requires") ~/ expression ~ ";")).map({
+      case (e, span) => RequiresSpecification(e, span)
+    })
 
   def ensuresSpecification[_: P]: P[EnsuresSpecification] =
-    P(kw("ensures") ~/ expression ~ ";").map(EnsuresSpecification(_))
+    P(span(kw("ensures") ~/ expression ~ ";")).map({
+      case (e, span) => EnsuresSpecification(e, span)
+    })
   
   def loopInvariantSpecification[_: P]: P[LoopInvariantSpecification] =
-    P(kw("loop_invariant") ~/ expression ~/ ";").map(LoopInvariantSpecification(_))
+    P(span(kw("loop_invariant") ~/ expression ~/ ";")).map({
+      case (e, span) => LoopInvariantSpecification(e, span)
+    })
   
   def assertSpecification[_: P]: P[AssertSpecification] =
-    P(kw("assert") ~/ expression ~/ ";").map(AssertSpecification(_))
+    P(span(kw("assert") ~/ expression ~/ ";")).map({
+      case (e, span) => AssertSpecification(e, span)
+    })
   
   def annotations[_: P]: P[List[Specification]] =
     P(annotation.rep).map(a => a.flatten.toList)
