@@ -14,10 +14,10 @@ case class Identifier(name: String, span: SourceSpan) extends Node {
 // Types
 sealed trait Type extends Node
 
-case class NamedType(id: Identifier) extends Type
-case class NamedStructType(id: Identifier) extends Type
-case class PointerType(valueType: Type) extends Type
-case class ArrayType(valueType: Type) extends Type
+case class NamedType(id: Identifier, span: SourceSpan) extends Type
+case class NamedStructType(id: Identifier, span: SourceSpan) extends Type
+case class PointerType(valueType: Type, span: SourceSpan) extends Type
+case class ArrayType(valueType: Type, span: SourceSpan) extends Type
 
 // Expressions
 sealed trait Expression extends Node

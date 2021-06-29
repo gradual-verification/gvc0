@@ -86,18 +86,14 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("alloc expression") {
-    val Success(AllocExpression(valueType), _) = Parser.parseExpr("alloc(Test)")
-    val NamedType(id) = valueType
-    assert(id == "Test")
+    val Success(alloc: AllocExpression, _) = Parser.parseExpr("alloc(Test)")
+    assert(alloc.valueType.asInstanceOf[NamedType].id == "Test")
   }
 
   test("alloc_array expression") {
-    val Success(AllocArrayExpression(valueType, len: IntegerExpression), _) =
-      Parser.parseExpr("alloc_array(Test, 10)")
-
-    val NamedType(id) = valueType
-    assert(id == "Test")
-    assert(len == 10)
+    val Success(alloc: AllocArrayExpression, _) = Parser.parseExpr("alloc_array(Test, 10)")
+    assert(alloc.valueType.asInstanceOf[NamedType].id == "Test")
+    assert(alloc.length.asInstanceOf[IntegerExpression] == 10)
   }
 
   test("ternary expression") {

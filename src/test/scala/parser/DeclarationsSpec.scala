@@ -19,81 +19,68 @@ class DeclarationsSpec extends AnyFunSuite {
 
     assert(name == "Test")
     val List(field1, field2) = fields
-    val MemberDefinition(name1, NamedType(type1)) = field1
+    val MemberDefinition(name1, type1: NamedType) = field1
     assert(name1 == "field1")
-    assert(type1 == "int")
+    assert(type1.id == "int")
 
-    val MemberDefinition(name2, NamedType(type2)) = field2
+    val MemberDefinition(name2, type2: NamedType) = field2
     assert(name2 == "field2")
-    assert(type2 == "string")
+    assert(type2.id == "string")
   }
 
   test("type definition") {
-    val Success(TypeDefinition(id, typ), _) = Parser.parseDef("typedef int MyNumber;")
-    assert(id == "MyNumber")
-    
-    val NamedType(intTypeId) = typ
-    assert(intTypeId == "int")
+    val Success(d: TypeDefinition, _) = Parser.parseDef("typedef int MyNumber;")
+    assert(d.id == "MyNumber")
+    assert(d.value.asInstanceOf[NamedType].id == "int")
   }
 
   test("typedef with struct type") {
-    val Success(TypeDefinition(typeId, structType), _) = Parser.parseDef("typedef struct MyStruct MyStruct;")
-    assert(typeId == "MyStruct")
-
-    val NamedStructType(structId) = structType
-    assert(structId == "MyStruct")
+    val Success(typeDef: TypeDefinition, _) = Parser.parseDef("typedef struct MyStruct MyStruct;")
+    assert(typeDef.id == "MyStruct")
+    assert(typeDef.value.asInstanceOf[NamedStructType].id == "MyStruct")
   }
 
   test("typedef with pointer") {
-    val Success(TypeDefinition(typeId, defType), _) = Parser.parseDef("typedef int* NumberPointer;")
-    assert(typeId == "NumberPointer")
-
-    val PointerType(NamedType(ptrId)) = defType
-    assert(ptrId == "int")
+    val Success(typeDef: TypeDefinition, _) = Parser.parseDef("typedef int* NumberPointer;")
+    assert(typeDef.id == "NumberPointer")
+    assert(typeDef.value.asInstanceOf[PointerType].valueType.asInstanceOf[NamedType].id == "int")
   }
 
   test("method declaration") {
-    val Success(method, _) = Parser.parseDef("int addOne(int value);")
-    val MethodDefinition(id, retType, args, body, _) = method
-    assert(id == "addOne")
+    val Success(method: MethodDefinition, _) = Parser.parseDef("int addOne(int value);")
+    assert(method.id == "addOne")
+    assert(method.returnType.asInstanceOf[NamedType].id == "int")
 
-    val NamedType(retId) = retType
-    assert(retId == "int")
+    val List(arg: MemberDefinition) = method.arguments
+    assert(arg.id == "value")
+    assert(arg.valueType.asInstanceOf[NamedType].id == "int")
 
-    val List(MemberDefinition(argId, NamedType(argTypeId))) = args
-    assert(argId == "value")
-    assert(argTypeId == "int")
-
-    assert(body == None)
+    assert(method.body == None)
   }
 
   test("method declaration with precondition") {
-    val Success(method, _) = Parser.parseDef("""
+    val Success(method: MethodDefinition, _) = Parser.parseDef("""
       int test(int a)
       /*@ requires(a > 0); @*/;
     """)
 
-    val MethodDefinition(_, _, _, body, spec) = method
-    assert(body == None)
+    assert(method.body == None)
 
-    val List(RequiresSpecification(value)) = spec
-    val BinaryExpression(l: VariableExpression, op, r: IntegerExpression) = value
-    assert(op == BinaryOperator.Greater)
-    assert(l.variable == "a")
-    assert(r == 0)
+    val List(spec: RequiresSpecification) = method.specifications
+    val expr = spec.value.asInstanceOf[BinaryExpression]
+    assert(expr.operator == BinaryOperator.Greater)
+    assert(expr.left.asInstanceOf[VariableExpression].variable == "a")
+    assert(expr.right.asInstanceOf[IntegerExpression] == 0)
   }
 
   test("method with multiple args") {
-    val Success(method, _) = Parser.parseDef("int magnitude(int x, int y);")
+    val Success(method: MethodDefinition, _) = Parser.parseDef("int magnitude(int x, int y);")
     val MethodDefinition(name, _, args, None, _) = method
-    val List(
-      MemberDefinition(name1, NamedType(type1)),
-      MemberDefinition(name2, NamedType(type2))
-    ) = args
-    assert(name1 == "x")
-    assert(type1 == "int")
-    assert(name2 == "y")
-    assert(type2 == "int")
+    val List(arg1, arg2) = args
+    assert(arg1.id == "x")
+    assert(arg1.valueType.asInstanceOf[NamedType].id == "int")
+    assert(arg2.id == "y")
+    assert(arg2.valueType.asInstanceOf[NamedType].id == "int")
   }
 
   test("method with body") {
@@ -105,7 +92,7 @@ class DeclarationsSpec extends AnyFunSuite {
         a++;
       }
     """)
-    
+
     val List(stmt1, stmt2, stmt3) = method.body.get.body
     assert(stmt1.isInstanceOf[VariableStatement])
     assert(stmt2.isInstanceOf[AssignmentStatement])
