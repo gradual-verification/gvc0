@@ -11,10 +11,10 @@ class StatementsSpec extends AnyFunSuite {
 
   test("invoke statement") {
     val Success(ExpressionStatement(expr, _), _) = Parser.parseStatement("test(abc);")
-    val InvokeExpression(Identifier(id), args) = expr
+    val InvokeExpression(id, args) = expr
     assert(id == "test")
 
-    val VariableExpression(Identifier(argId)) = args(0)
+    val VariableExpression(argId) = args(0)
     assert(argId == "abc")
   }
 
@@ -22,7 +22,7 @@ class StatementsSpec extends AnyFunSuite {
     val Success(AssignmentStatement(lhs, op, rhs, _), _) = Parser.parseStatement("abc = 123;")
     assert(op == AssignOperator.Assign)
     
-    val VariableExpression(Identifier(id)) = lhs
+    val VariableExpression(id) = lhs
     assert(id == "abc")
 
     val IntegerExpression(_, value) = rhs
@@ -32,29 +32,29 @@ class StatementsSpec extends AnyFunSuite {
   test("assign dotted member") {
     val Success(AssignmentStatement(lhs, op, _, _), _) = Parser.parseStatement("abc.def = 123;")
     assert(op == AssignOperator.Assign)
-    val MemberExpression(VariableExpression(Identifier(varId)), Identifier(field), isArrow) = lhs
+    val MemberExpression(VariableExpression(varId), fieldId, isArrow) = lhs
     assert(varId == "abc")
-    assert(field == "def")
+    assert(fieldId == "def")
     assert(!isArrow)
   }
 
   test("add assign operator") {
-    val Success(AssignmentStatement(VariableExpression(Identifier(id)), op, _, _), _) = Parser.parseStatement("abc += 1;")
+    val Success(AssignmentStatement(VariableExpression(id), op, _, _), _) = Parser.parseStatement("abc += 1;")
     assert(op == AssignOperator.Add)
     assert(id == "abc")
   }
 
   test("assign member of pointer") {
     val Success(AssignmentStatement(lhs, AssignOperator.Assign, _, _), _) = Parser.parseStatement("abc->def = 123;")
-    val MemberExpression(VariableExpression(Identifier(varId)), Identifier(field), isArrow) = lhs
+    val MemberExpression(VariableExpression(varId), fieldId, isArrow) = lhs
     assert(varId == "abc")
-    assert(field == "def")
+    assert(fieldId == "def")
     assert(isArrow)
   }
 
   test("assign array index") {
     val Success(AssignmentStatement(lhs, AssignOperator.Assign, _, _), _) = Parser.parseStatement("abc[0] = 123;")
-    val IndexExpression(VariableExpression(Identifier(varId)), idx) = lhs
+    val IndexExpression(VariableExpression(varId), idx) = lhs
     assert(varId == "abc")
     
     val IntegerExpression(_, idxValue) = idx
@@ -64,7 +64,7 @@ class StatementsSpec extends AnyFunSuite {
   test("increment statement") {
     val Success(UnaryOperationStatement(expr, op, _), _) = Parser.parseStatement("abc++;")
     assert(op == UnaryOperator.Increment)
-    val VariableExpression(Identifier(id)) = expr
+    val VariableExpression(id) = expr
     assert(id == "abc")
   }
 
@@ -74,11 +74,10 @@ class StatementsSpec extends AnyFunSuite {
 
   test("variable declaration") {
     val Success(VariableStatement(typ, id, value, _), _) = Parser.parseStatement("int abc = 123;")
-    val NamedType(Identifier(typeId)) = typ
+    val NamedType(typeId) = typ
     assert(typeId == "int")
 
-    val Identifier(name) = id
-    assert(name == "abc")
+    assert(id == "abc")
 
     val Some(IntegerExpression(_, intValue)) = value
     assert(intValue == 123)
@@ -86,31 +85,31 @@ class StatementsSpec extends AnyFunSuite {
 
   test("pointer variable") {
     val Success(VariableStatement(typ, _, _, _), _) = Parser.parseStatement("search_tree* tree;")
-    val PointerType(NamedType(Identifier(name))) = typ
-    assert(name == "search_tree")
+    val PointerType(NamedType(id)) = typ
+    assert(id == "search_tree")
   }
 
   test("double pointer variable") {
     val Success(VariableStatement(typ, _, _, _), _) = Parser.parseStatement("int** value;")
-    val PointerType(PointerType(NamedType(Identifier(name)))) = typ
-    assert(name == "int")
+    val PointerType(PointerType(NamedType(id))) = typ
+    assert(id == "int")
   }
 
   test("struct variable") {
     val Success(VariableStatement(typ, _, _, _), _) = Parser.parseStatement("struct node n;")
-    val NamedStructType(Identifier(name)) = typ
-    assert(name == "node");
+    val NamedStructType(id) = typ
+    assert(id == "node");
   }
 
   test("variables with named types prefixed with struct") {
-    val Success(VariableStatement(typ, _, _, _), _) = Parser.parseStatement("structTest n;")
-    val NamedType(Identifier(name)) = typ
-    assert(name == "structTest");
+    val Success(v: VariableStatement, _) = Parser.parseStatement("structTest n;")
+    val NamedType(id) = v.valueType
+    assert(id == "structTest");
   }
 
   test("empty block statement") {
-    val Success(BlockStatement(body, _, _), _) = Parser.parseStatement("{ }")
-    assert(body == List.empty)
+    val Success(b: BlockStatement, _) = Parser.parseStatement("{ }")
+    assert(b.body == List.empty)
   }
 
   test("empty block with annotations") {
@@ -126,7 +125,7 @@ class StatementsSpec extends AnyFunSuite {
   test("single statement block") {
     val Success(BlockStatement(body, _, _), _) = Parser.parseStatement("{ a = 123; }")
     assert(body.length == 1)
-    val AssignmentStatement(VariableExpression(Identifier(id)), AssignOperator.Assign, IntegerExpression(_, value), _) = body(0)
+    val AssignmentStatement(VariableExpression(id), AssignOperator.Assign, IntegerExpression(_, value), _) = body(0)
     assert(id == "a")
     assert(value == 123)
   }
@@ -142,7 +141,7 @@ class StatementsSpec extends AnyFunSuite {
     assert(blockPre == List())
     assert(blockPost == List())
 
-    val AssignmentStatement(VariableExpression(Identifier(id)), AssignOperator.Assign, IntegerExpression(_, value), specs) = body(0)
+    val AssignmentStatement(VariableExpression(id), AssignOperator.Assign, IntegerExpression(_, value), specs) = body(0)
     assert(id == "a")
     assert(value == 123)
 
@@ -161,12 +160,12 @@ class StatementsSpec extends AnyFunSuite {
     """)
 
     assert(body.length == 3)
-    val VariableStatement(NamedType(Identifier(aType)), Identifier(aVar), Some(IntegerExpression(_, aValue)), _) = body(0)
+    val VariableStatement(NamedType(aType), aVar, Some(IntegerExpression(_, aValue)), _) = body(0)
     assert(aType == "int")
     assert(aVar == "a")
     assert(aValue == 123)
 
-    val AssignmentStatement(VariableExpression(Identifier(bVar)), AssignOperator.Assign, TernaryExpression(_, _, _), _) = body(1)
+    val AssignmentStatement(VariableExpression(bVar), AssignOperator.Assign, TernaryExpression(_, _, _), _) = body(1)
     assert(bVar == "b")
 
     val ReturnStatement(Some(IntegerExpression(_, retValue)), _) = body(2)
@@ -234,7 +233,7 @@ class StatementsSpec extends AnyFunSuite {
   test("while") {
     val Success(WhileStatement(cond, body, _), _) = Parser.parseStatement("while (true) a += 2;")
     val BooleanExpression(_, true) = cond
-    val AssignmentStatement(VariableExpression(Identifier(id)), op, _, _) = body
+    val AssignmentStatement(VariableExpression(id), op, _, _) = body
     assert(id == "a")
     assert(op == AssignOperator.Add)
   }
@@ -243,21 +242,21 @@ class StatementsSpec extends AnyFunSuite {
     val Success(ForStatement(decl, cond, inc, body, _), _) =
       Parser.parseStatement("for (int i = 0; i < 1; i++) doSomething();")
     
-    val VariableStatement(NamedType(Identifier(iType)), Identifier(iId), iInitial, _) = decl
+    val VariableStatement(NamedType(iType), iId, iInitial, _) = decl
     assert(iType == "int")
     assert(iId == "i")
     val Some(IntegerExpression(_, iValue)) = iInitial
     assert(iValue == 0)
 
-    val BinaryExpression(iRef, op, compare) = cond
-    val VariableExpression(Identifier("i")) = iRef
+    val BinaryExpression(iRef: VariableExpression, op, compare) = cond
+    assert(iRef.variable == "i")
     val IntegerExpression(_, 1) = compare
     assert(op == BinaryOperator.Less)
 
-    val UnaryOperationStatement(iRef2, UnaryOperator.Increment, _) = inc
-    val VariableExpression(Identifier("i")) = iRef2
+    val UnaryOperationStatement(iRef2: VariableExpression, UnaryOperator.Increment, _) = inc
+    assert(iRef2.variable == "i")
 
-    val ExpressionStatement(InvokeExpression(Identifier(id), args), _) = body
+    val ExpressionStatement(InvokeExpression(id, args), _) = body
     assert(id == "doSomething")
     assert(args == List.empty)
   }
@@ -273,7 +272,7 @@ class StatementsSpec extends AnyFunSuite {
   }
 
   test("require separator between return and value") {
-    val Success(ExpressionStatement(VariableExpression(Identifier(name)), _), _) = Parser.parseStatement("returntrue;")
+    val Success(ExpressionStatement(VariableExpression(name), _), _) = Parser.parseStatement("returntrue;")
     assert(name == "returntrue")
   }
 

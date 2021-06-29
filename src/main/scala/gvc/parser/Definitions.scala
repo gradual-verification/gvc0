@@ -6,19 +6,19 @@ trait Definitions extends Statements with Types {
     P(structDefinition | typeDefinition | methodDefinition | useDeclaration)
 
   def structDefinition[_: P]: P[StructDefinition] =
-    P(kw("struct") ~ identifier.! ~ structFields.? ~ ";").map({
+    P(kw("struct") ~ identifier ~ structFields.? ~ ";").map({
       case (id, fields) => StructDefinition(id, fields)
     })
   def structFields[_: P]: P[List[MemberDefinition]] =
     P("{" ~ structField.rep ~ "}").map(f => f.toList)
   def structField[_: P]: P[MemberDefinition] =
-    P(typeReference ~ identifier.! ~ ";").map({
-      case (typ, name) => MemberDefinition(name, typ)
+    P(typeReference ~ identifier ~ ";").map({
+      case (typ, id) => MemberDefinition(id, typ)
     })
   
   def typeDefinition[_: P]: P[TypeDefinition] =
-    P(kw("typedef") ~ typeReference ~ identifier.! ~ ";").map({
-      case (defType, defName) => TypeDefinition(defName, defType)
+    P(kw("typedef") ~ typeReference ~ identifier ~ ";").map({
+      case (defType, id) => TypeDefinition(id, defType)
     })
 
   def methodDefinition[_: P]: P[MethodDefinition] =
@@ -33,8 +33,8 @@ trait Definitions extends Statements with Types {
     })
 
   def methodParameter[_: P]: P[MemberDefinition] =
-    P(typeReference ~ identifier.!).map({
-      case (paramType, paramName) => MemberDefinition(paramName, paramType)
+    P(typeReference ~ identifier).map({
+      case (paramType, id) => MemberDefinition(id, paramType)
     })
   
   def useDeclaration[_: P]: P[UseDeclaration] = P(kw("#use") ~/ usePath)

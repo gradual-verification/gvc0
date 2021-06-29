@@ -16,7 +16,7 @@ class ParserState(
     this(ParserState.splitLines(source))
   }
 
-  def position(index: Int): LineColPosition = {
+  def position(index: Int): SourcePosition = {
     val lineIndex = lines.search(index) match {
       case Found(i) => i
       case InsertionPoint(i) => i
@@ -27,7 +27,7 @@ class ParserState(
       case _ => index - lines(lineIndex - 1)
     }
 
-    LineColPosition(lineIndex + 1, column)
+    SourcePosition(lineIndex + 1, column, index)
   }
 
   def inAnnotation(): ParserState = new ParserState(

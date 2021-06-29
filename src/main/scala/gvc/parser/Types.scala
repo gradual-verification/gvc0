@@ -3,12 +3,12 @@ import fastparse._
 
 trait Types extends Lexer {
   def typeReference[_: P]: P[Type] =
-    P(kw("struct").!.? ~ identifier.! ~ typeModifier.rep)
+    P(kw("struct").!.? ~ identifier ~ typeModifier.rep)
       .map({
-        case (hasStruct, name, modifiers) => {
+        case (hasStruct, id, modifiers) => {
           var typ = hasStruct match {
-            case None => NamedType(Identifier(name))
-            case Some(_) => NamedStructType(Identifier(name))
+            case None => NamedType(id)
+            case Some(_) => NamedStructType(id)
           }
 
           modifiers.foldLeft(typ)((t, mod) => {

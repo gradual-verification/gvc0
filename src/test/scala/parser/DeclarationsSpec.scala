@@ -19,50 +19,50 @@ class DeclarationsSpec extends AnyFunSuite {
 
     assert(name == "Test")
     val List(field1, field2) = fields
-    val MemberDefinition(name1, NamedType(Identifier(type1))) = field1
+    val MemberDefinition(name1, NamedType(type1)) = field1
     assert(name1 == "field1")
     assert(type1 == "int")
 
-    val MemberDefinition(name2, NamedType(Identifier(type2))) = field2
+    val MemberDefinition(name2, NamedType(type2)) = field2
     assert(name2 == "field2")
     assert(type2 == "string")
   }
 
   test("type definition") {
-    val Success(TypeDefinition(name, typ), _) = Parser.parseDef("typedef int MyNumber;")
-    assert(name == "MyNumber")
+    val Success(TypeDefinition(id, typ), _) = Parser.parseDef("typedef int MyNumber;")
+    assert(id == "MyNumber")
     
-    val NamedType(Identifier(typeName)) = typ
-    assert(typeName == "int")
+    val NamedType(intTypeId) = typ
+    assert(intTypeId == "int")
   }
 
   test("typedef with struct type") {
-    val Success(TypeDefinition(name, structType), _) = Parser.parseDef("typedef struct MyStruct MyStruct;")
-    assert(name == "MyStruct")
+    val Success(TypeDefinition(typeId, structType), _) = Parser.parseDef("typedef struct MyStruct MyStruct;")
+    assert(typeId == "MyStruct")
 
-    val NamedStructType(Identifier(structName)) = structType
-    assert(structName == "MyStruct")
+    val NamedStructType(structId) = structType
+    assert(structId == "MyStruct")
   }
 
   test("typedef with pointer") {
-    val Success(TypeDefinition(name, defType), _) = Parser.parseDef("typedef int* NumberPointer;")
-    assert(name == "NumberPointer")
+    val Success(TypeDefinition(typeId, defType), _) = Parser.parseDef("typedef int* NumberPointer;")
+    assert(typeId == "NumberPointer")
 
-    val PointerType(NamedType(Identifier(typeName))) = defType
-    assert(typeName == "int")
+    val PointerType(NamedType(ptrId)) = defType
+    assert(ptrId == "int")
   }
 
   test("method declaration") {
     val Success(method, _) = Parser.parseDef("int addOne(int value);")
-    val MethodDefinition(Identifier(name), retType, args, body, _) = method
-    assert(name == "addOne")
+    val MethodDefinition(id, retType, args, body, _) = method
+    assert(id == "addOne")
 
-    val NamedType(Identifier(retTypeName)) = retType
-    assert(retTypeName == "int")
+    val NamedType(retId) = retType
+    assert(retId == "int")
 
-    val List(MemberDefinition(argName, NamedType(Identifier(argType)))) = args
-    assert(argName == "value")
-    assert(argType == "int")
+    val List(MemberDefinition(argId, NamedType(argTypeId))) = args
+    assert(argId == "value")
+    assert(argTypeId == "int")
 
     assert(body == None)
   }
@@ -80,7 +80,7 @@ class DeclarationsSpec extends AnyFunSuite {
     val BinaryExpression(l, op, r) = value
     assert(op == BinaryOperator.Greater)
 
-    val VariableExpression(Identifier(id)) = l
+    val VariableExpression(id) = l
     val IntegerExpression(_, i) = r
     assert(id == "a")
     assert(i == 0)
@@ -90,8 +90,8 @@ class DeclarationsSpec extends AnyFunSuite {
     val Success(method, _) = Parser.parseDef("int magnitude(int x, int y);")
     val MethodDefinition(name, _, args, None, _) = method
     val List(
-      MemberDefinition(name1, NamedType(Identifier(type1))),
-      MemberDefinition(name2, NamedType(Identifier(type2)))
+      MemberDefinition(name1, NamedType(type1)),
+      MemberDefinition(name2, NamedType(type2))
     ) = args
     assert(name1 == "x")
     assert(type1 == "int")

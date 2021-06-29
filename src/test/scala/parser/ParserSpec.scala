@@ -24,11 +24,11 @@ class ParserSpec extends AnyFunSuite {
       }
     """)
 
-    val List(MethodDefinition(Identifier(methodName), methodReturn, methodArgs, methodBody, _)) = defs
-    assert(methodName == "isPrime")
+    val List(MethodDefinition(methodId, methodReturn, methodArgs, methodBody, _)) = defs
+    assert(methodId == "isPrime")
 
-    val List(MemberDefinition(argName, _)) = methodArgs
-    assert(argName == "n")
+    val List(MemberDefinition(argId, _)) = methodArgs
+    assert(argId == "n")
 
     val Some(BlockStatement(statements, _, _)) = methodBody
     assert(statements.length == 5)

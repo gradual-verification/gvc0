@@ -4,8 +4,14 @@ import fastparse.Parsed.{Success, Failure}
 
 class ExpressionsSpec extends AnyFunSuite {
   test("Parse variable") {
-    val Success(VariableExpression(Identifier(name)), _) = Parser.parseExpr("abc")
-    assert(name == "abc")
+    val Success(VariableExpression(id), _) = Parser.parseExpr("abc")
+    assert(id == "abc")
+  }
+
+  test("Identifier position") {
+    val Success(VariableExpression(id), _) = Parser.parseExpr("\nabc\n")
+    assert(id.span.start == SourcePosition(2, 1, 1))
+    assert(id.span.end == SourcePosition(2, 4, 4))
   }
 
   test("No whitespace in identifiers") {
@@ -61,8 +67,8 @@ class ExpressionsSpec extends AnyFunSuite {
   test("Boolean with different case are variables") {
     val cases = List("True", "TRUE", "False", "FALSE")
     for (src <- cases) {
-      val Success(VariableExpression(Identifier(name)), _) = Parser.parseExpr(src)
-      assert(name == src)
+      val Success(VariableExpression(id), _) = Parser.parseExpr(src)
+      assert(id == src)
     }
   }
 
@@ -73,23 +79,23 @@ class ExpressionsSpec extends AnyFunSuite {
   test("Null with difference case is variable") {
     val cases = List("Null", "null", "nuLL")
     for (src <- cases) {
-      val Success(VariableExpression(Identifier(name)), _) = Parser.parseExpr(src)
-      assert(name == src)
+      val Success(VariableExpression(id), _) = Parser.parseExpr(src)
+      assert(id == src)
     }
   }
 
   test("alloc expression") {
     val Success(AllocExpression(valueType), _) = Parser.parseExpr("alloc(Test)")
-    val NamedType(Identifier(name)) = valueType
-    assert(name == "Test")
+    val NamedType(id) = valueType
+    assert(id == "Test")
   }
 
   test("alloc_array expression") {
     val Success(AllocArrayExpression(valueType, lenExpr), _) =
       Parser.parseExpr("alloc_array(Test, 10)")
 
-    val NamedType(Identifier(name)) = valueType
-    assert(name == "Test")
+    val NamedType(id) = valueType
+    assert(id == "Test")
 
     val IntegerExpression(_, len) = lenExpr
     assert(len == 10)
@@ -199,13 +205,13 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("method call") {
-    val Success(InvokeExpression(Identifier(id), args), _) = Parser.parseExpr("test()")
+    val Success(InvokeExpression(id, args), _) = Parser.parseExpr("test()")
     assert(id == "test")
     assert(args.isEmpty)
   }
 
   test("call with arg") {
-    val Success(InvokeExpression(Identifier(id), args), _) = Parser.parseExpr("test(123)")
+    val Success(InvokeExpression(id, args), _) = Parser.parseExpr("test(123)")
     assert(id == "test")
 
     val IntegerExpression(_, value) = args(0)
@@ -213,7 +219,7 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("call with multiple args") {
-    val Success(InvokeExpression(Identifier(id), args), _) = Parser.parseExpr("test(1, \"abc\")")
+    val Success(InvokeExpression(id, args), _) = Parser.parseExpr("test(1, \"abc\")")
     assert(id == "test")
 
     val IntegerExpression(_, value1) = args(0)
@@ -223,43 +229,43 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("dot member") {
-    val Success(MemberExpression(parent, Identifier(fieldName), isArrow), _) = Parser.parseExpr("abc.def")
-    assert(fieldName == "def")
+    val Success(MemberExpression(parent, fieldId, isArrow), _) = Parser.parseExpr("abc.def")
+    assert(fieldId == "def")
     assert(!isArrow)
 
-    val VariableExpression(Identifier(id)) = parent
-    assert(id == "abc")
+    val VariableExpression(varId) = parent
+    assert(varId == "abc")
   }
 
   test("deref member") {
-    val Success(MemberExpression(parent, Identifier(fieldName), isArrow), _) = Parser.parseExpr("abc->def")
-    assert(fieldName == "def")
+    val Success(MemberExpression(parent, fieldId, isArrow), _) = Parser.parseExpr("abc->def")
+    assert(fieldId == "def")
     assert(isArrow)
 
-    val VariableExpression(Identifier(id)) = parent
-    assert(id == "abc")
+    val VariableExpression(valueId) = parent
+    assert(valueId == "abc")
   }
 
   test("member of method call") {
-    val Success(MemberExpression(parent, Identifier(fieldName), isArrow), _) = Parser.parseExpr("read().output")
-    assert(fieldName == "output")
+    val Success(MemberExpression(parent, fieldId, isArrow), _) = Parser.parseExpr("read().output")
+    assert(fieldId == "output")
     assert(!isArrow)
 
-    val InvokeExpression(Identifier(method), _) = parent
-    assert(method == "read")
+    val InvokeExpression(methodId, _) = parent
+    assert(methodId == "read")
   }
 
   test("array index") {
     val Success(IndexExpression(parent, IntegerExpression(_, idx)), _) = Parser.parseExpr(("arr[0]"))
     assert(idx == 0)
-    val VariableExpression(Identifier(id)) = parent
+    val VariableExpression(id) = parent
     assert(id == "arr")
   }
 
   test("unary not") {
     val Success(UnaryExpression(expr, op), _) = Parser.parseExpr("!test")
     assert(op == UnaryOperator.Not)
-    val VariableExpression(Identifier(id)) = expr
+    val VariableExpression(id) = expr
     assert(id == "test")
   }
 
@@ -268,7 +274,7 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(op1 == UnaryOperator.Not)
     val UnaryExpression(expr2, op2) = expr1
     assert(op2 == UnaryOperator.Not)
-    val VariableExpression(Identifier(id)) = expr2
+    val VariableExpression(id) = expr2
     assert(id == "abc")
   }
 }

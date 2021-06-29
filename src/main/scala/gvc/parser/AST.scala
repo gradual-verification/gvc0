@@ -1,10 +1,15 @@
 package gvc.parser
 
 sealed trait Node
-case class LineColPosition(line: Int, col: Int)
+case class SourcePosition(line: Int, column: Int, index: Int)
+case class SourceSpan(start: SourcePosition, end: SourcePosition)
 
 // Identifiers
-case class Identifier(name: String) extends Node
+case class Identifier(name: String, span: SourceSpan) extends Node {
+  def ==(value: String): Boolean = {
+    name == value
+  }
+}
 
 // Types
 sealed trait Type extends Node
@@ -134,9 +139,9 @@ case class BlockStatement(
 
 // Definitions
 sealed trait Definition extends Node
-case class MemberDefinition(name: String, valueType: Type) extends Node
-case class TypeDefinition(name: String, value: Type) extends Definition
-case class StructDefinition(name: String, fields: Option[List[MemberDefinition]]) extends Definition
+case class MemberDefinition(id: Identifier, valueType: Type) extends Node
+case class TypeDefinition(id: Identifier, value: Type) extends Definition
+case class StructDefinition(id: Identifier, fields: Option[List[MemberDefinition]]) extends Definition
 case class UseDeclaration(path: StringExpression, isLibrary: Boolean) extends Definition
 case class MethodDefinition(
   id: Identifier,
