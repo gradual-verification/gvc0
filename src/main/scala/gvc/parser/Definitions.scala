@@ -6,39 +6,41 @@ trait Definitions extends Statements with Types {
     P(structDefinition | typeDefinition | methodDefinition | useDeclaration)
 
   def structDefinition[_: P]: P[StructDefinition] =
-    P(kw("struct") ~ identifier ~ structFields.? ~ ";").map({
-      case (id, fields) => StructDefinition(id, fields)
+    P(span(kw("struct") ~ identifier ~ structFields.? ~ ";")).map({
+      case ((id, fields), span) => StructDefinition(id, fields, span)
     })
   def structFields[_: P]: P[List[MemberDefinition]] =
     P("{" ~ structField.rep ~ "}").map(f => f.toList)
   def structField[_: P]: P[MemberDefinition] =
-    P(typeReference ~ identifier ~ ";").map({
-      case (typ, id) => MemberDefinition(id, typ)
+    P(typeReference ~ identifier ~ ";" ~~ pos).map({
+      case (typ, id, end) => MemberDefinition(id, typ, SourceSpan(typ.span.start, end))
     })
   
   def typeDefinition[_: P]: P[TypeDefinition] =
-    P(kw("typedef") ~ typeReference ~ identifier ~ ";").map({
-      case (defType, id) => TypeDefinition(id, defType)
+    P(span(kw("typedef") ~ typeReference ~ identifier ~ ";")).map({
+      case ((defType, id), span) => TypeDefinition(id, defType, span)
     })
 
   def methodDefinition[_: P]: P[MethodDefinition] =
     P(
-      typeReference ~ identifier ~
-      "(" ~ methodParameter.rep(0, ",") ~ ")" ~
+      typeReference ~ identifier ~ "(" ~ methodParameter.rep(0, ",") ~ ")" ~
       annotations ~
-      (P(";").map(_ => None) | blockStatement.map(Some(_)))
+      (P(";").map(_ => None) | blockStatement.map(Some(_))) ~~
+      pos
     ).map({
-      case (ret, id, args, annot, body) =>
-        MethodDefinition(id, ret, args.toList, body, annot)
+      case (ret, id, args, annot, body, end) =>
+        MethodDefinition(id, ret, args.toList, body, annot, SourceSpan(ret.span.start, end))
     })
 
   def methodParameter[_: P]: P[MemberDefinition] =
     P(typeReference ~ identifier).map({
-      case (paramType, id) => MemberDefinition(id, paramType)
+      case (paramType, id) => MemberDefinition(id, paramType, SourceSpan(paramType.span.start, id.span.end))
     })
   
-  def useDeclaration[_: P]: P[UseDeclaration] = P(kw("#use") ~/ usePath)
-    .map(p => UseDeclaration(p.path, p.isInstanceOf[LibraryPath]))
+  def useDeclaration[_: P]: P[UseDeclaration] = P(pos ~~ kw("#use") ~/ usePath)
+    .map({
+      case(start, p) => UseDeclaration(p.path, p.isInstanceOf[LibraryPath], SourceSpan(start, p.path.span.end))
+    })
 
   sealed trait UsePath {
     val path: StringExpression

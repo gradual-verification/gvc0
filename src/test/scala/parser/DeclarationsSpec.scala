@@ -4,28 +4,26 @@ import fastparse.Parsed.{Success, Failure}
 
 class DeclarationsSpec extends AnyFunSuite {
   test("struct declaration") {
-    val Success(StructDefinition(name, fields), _) = Parser.parseDef("struct Test;")
-    assert(name == "Test")
-    assert(fields == None)
+    val Success(struct: StructDefinition, _) = Parser.parseDef("struct Test;")
+    assert(struct.id == "Test")
+    assert(struct.fields == None)
   }
 
   test("struct definition") {
-    val Success(StructDefinition(name, Some(fields)), _) = Parser.parseDef("""
+    val Success(struct: StructDefinition, _) = Parser.parseDef("""
       struct Test {
         int field1;
         string field2;
       };
     """)
 
-    assert(name == "Test")
-    val List(field1, field2) = fields
-    val MemberDefinition(name1, type1: NamedType) = field1
-    assert(name1 == "field1")
-    assert(type1.id == "int")
+    assert(struct.id == "Test")
+    val List(field1, field2) = struct.fields.get
+    assert(field1.id == "field1")
+    assert(field1.valueType.asInstanceOf[NamedType].id == "int")
 
-    val MemberDefinition(name2, type2: NamedType) = field2
-    assert(name2 == "field2")
-    assert(type2.id == "string")
+    assert(field2.id == "field2")
+    assert(field2.valueType.asInstanceOf[NamedType].id == "string")
   }
 
   test("type definition") {
@@ -75,8 +73,7 @@ class DeclarationsSpec extends AnyFunSuite {
 
   test("method with multiple args") {
     val Success(method: MethodDefinition, _) = Parser.parseDef("int magnitude(int x, int y);")
-    val MethodDefinition(name, _, args, None, _) = method
-    val List(arg1, arg2) = args
+    val List(arg1, arg2) = method.arguments
     assert(arg1.id == "x")
     assert(arg1.valueType.asInstanceOf[NamedType].id == "int")
     assert(arg2.id == "y")
@@ -100,18 +97,16 @@ class DeclarationsSpec extends AnyFunSuite {
   }
 
   test("use library declaration") {
-    val Success(UseDeclaration(path, isLibrary), _) = Parser.parseDef("#use <mylib>")
-    val StringExpression(raw, value, _) = path
-    assert(raw == "<mylib>")
-    assert(value == "mylib")
-    assert(isLibrary)
+    val Success(use: UseDeclaration, _) = Parser.parseDef("#use <mylib>")
+    assert(use.path.raw == "<mylib>")
+    assert(use.path == "mylib")
+    assert(use.isLibrary)
   }
 
   test("use path declaration") {
-    val Success(UseDeclaration(path, isLibrary), _) = Parser.parseDef("#use \"test.c0\"")
-    val StringExpression(raw, value, _) = path
-    assert(raw == "\"test.c0\"")
-    assert(value == "test.c0")
-    assert(!isLibrary)
+    val Success(use: UseDeclaration, _) = Parser.parseDef("#use \"test.c0\"")
+    assert(use.path.raw == "\"test.c0\"")
+    assert(use.path == "test.c0")
+    assert(!use.isLibrary)
   }
 }

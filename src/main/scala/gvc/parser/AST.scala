@@ -12,7 +12,9 @@ case class Identifier(name: String, span: SourceSpan) extends Node {
 }
 
 // Types
-sealed trait Type extends Node
+sealed trait Type extends Node {
+  val span: SourceSpan
+}
 
 case class NamedType(id: Identifier, span: SourceSpan) extends Type
 case class NamedStructType(id: Identifier, span: SourceSpan) extends Type
@@ -175,16 +177,17 @@ case class BlockStatement(
 
 // Definitions
 sealed trait Definition extends Node
-case class MemberDefinition(id: Identifier, valueType: Type) extends Node
-case class TypeDefinition(id: Identifier, value: Type) extends Definition
-case class StructDefinition(id: Identifier, fields: Option[List[MemberDefinition]]) extends Definition
-case class UseDeclaration(path: StringExpression, isLibrary: Boolean) extends Definition
+case class MemberDefinition(id: Identifier, valueType: Type, span: SourceSpan) extends Node
+case class TypeDefinition(id: Identifier, value: Type, span: SourceSpan) extends Definition
+case class StructDefinition(id: Identifier, fields: Option[List[MemberDefinition]], span: SourceSpan) extends Definition
+case class UseDeclaration(path: StringExpression, isLibrary: Boolean, span: SourceSpan) extends Definition
 case class MethodDefinition(
   id: Identifier,
   returnType: Type,
   arguments: List[MemberDefinition],
   body: Option[BlockStatement],
-  specifications: List[Specification]
+  specifications: List[Specification],
+  span: SourceSpan
 ) extends Definition
 
 object BinaryOperator extends Enumeration {
