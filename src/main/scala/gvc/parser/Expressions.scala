@@ -105,30 +105,30 @@ trait Expressions extends Types {
 
   def parenExpression[_: P]: P[Expression] = P("(" ~ expression ~ ")")
 
-  def stringExpression[_: P]: P[StringExpression] = P(string.!)
-    .map(raw => StringExpression(raw, parseString(raw)))
+  def stringExpression[_: P]: P[StringExpression] = P(span(string.!))
+    .map({ case(raw, span) => StringExpression(raw, parseString(raw), span) })
 
-  def libraryExpression[_: P]: P[StringExpression] = P(library.!)
-    .map(raw => StringExpression(raw, parseString(raw)))
+  def libraryExpression[_: P]: P[StringExpression] = P(span(library.!))
+    .map({ case (raw, span) => StringExpression(raw, parseString(raw), span) })
 
-  def characterExpression[_: P]: P[CharacterExpression] = P(character.!)
-    .map(raw => CharacterExpression(raw, parseChar(raw)))
+  def characterExpression[_: P]: P[CharacterExpression] = P(span(character.!))
+    .map({ case (raw, span) => CharacterExpression(raw, parseChar(raw), span) })
 
-  def hexNumberExpression[_: P]: P[IntegerExpression] = P(hexNumber.!)
+  def hexNumberExpression[_: P]: P[IntegerExpression] = P(span(hexNumber.!))
     // Trim the 0x prefix before parsing to Int
-    .map(raw => IntegerExpression(raw, Integer.parseInt(raw.substring(2), 16)))
+    .map({ case (raw, span) => IntegerExpression(raw, Integer.parseInt(raw.substring(2), 16), span) })
   
-  def decimalNumberExpression[_: P]: P[IntegerExpression] = P(decimalNumber.!)
-    .map(raw => IntegerExpression(raw, raw.toInt))
+  def decimalNumberExpression[_: P]: P[IntegerExpression] = P(span(decimalNumber.!))
+    .map({ case (raw, span) => IntegerExpression(raw, raw.toInt, span) })
 
-  def booleanExpression[_: P]: P[BooleanExpression] = P(kw(StringIn("true", "false")).!)
-    .map(raw => BooleanExpression(raw, raw match {
+  def booleanExpression[_: P]: P[BooleanExpression] = P(span(kw(StringIn("true", "false")).!))
+    .map({ case (raw, span) => BooleanExpression(raw, raw match {
       case "true" => true
       case "false" => false
-    }))
+    }, span) })
 
-  def nullExpression[_: P] : P[NullExpression] = P(kw("NULL").!)
-    .map(raw => NullExpression(raw, null))
+  def nullExpression[_: P] : P[NullExpression] = P(span(kw("NULL").!))
+    .map({ case (raw, span) => NullExpression(raw, null, span) })
 
   def parseString(raw: String): String = {
     // TODO: Replace this with a better solution that doesn't search the string

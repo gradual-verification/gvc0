@@ -77,13 +77,10 @@ class DeclarationsSpec extends AnyFunSuite {
     assert(body == None)
 
     val List(RequiresSpecification(value)) = spec
-    val BinaryExpression(l, op, r) = value
+    val BinaryExpression(l: VariableExpression, op, r: IntegerExpression) = value
     assert(op == BinaryOperator.Greater)
-
-    val VariableExpression(id) = l
-    val IntegerExpression(_, i) = r
-    assert(id == "a")
-    assert(i == 0)
+    assert(l.variable == "a")
+    assert(r == 0)
   }
 
   test("method with multiple args") {
@@ -117,7 +114,7 @@ class DeclarationsSpec extends AnyFunSuite {
 
   test("use library declaration") {
     val Success(UseDeclaration(path, isLibrary), _) = Parser.parseDef("#use <mylib>")
-    val StringExpression(raw, value) = path
+    val StringExpression(raw, value, _) = path
     assert(raw == "<mylib>")
     assert(value == "mylib")
     assert(isLibrary)
@@ -125,7 +122,7 @@ class DeclarationsSpec extends AnyFunSuite {
 
   test("use path declaration") {
     val Success(UseDeclaration(path, isLibrary), _) = Parser.parseDef("#use \"test.c0\"")
-    val StringExpression(raw, value) = path
+    val StringExpression(raw, value, _) = path
     assert(raw == "\"test.c0\"")
     assert(value == "test.c0")
     assert(!isLibrary)

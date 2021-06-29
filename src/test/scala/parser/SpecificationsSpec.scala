@@ -5,41 +5,39 @@ import fastparse.Parsed.{Success, Failure}
 class SpecificationsSpec extends AnyFunSuite {
   test("assert") {
     val Success(List(AssertSpecification(expr)), _) = Parser.parseSpec("/*@ assert true; @*/")
-    val BooleanExpression(_, value) = expr
-    assert(value == true)
+    assert(expr.asInstanceOf[BooleanExpression] == true)
   }
 
   test("ensures") {
     val Success(List(EnsuresSpecification(expr)), _) = Parser.parseSpec("/*@ ensures true; @*/")
-    val BooleanExpression(_, value) = expr
-    assert(value == true)
+    assert(expr.asInstanceOf[BooleanExpression] == true)
   }
 
   test("requires") {
     val Success(List(RequiresSpecification(expr)), _) = Parser.parseSpec("/*@ requires true; @*/")
-    val BooleanExpression(_, value) = expr
-    assert(value == true)
+    assert(expr.asInstanceOf[BooleanExpression] == true)
   }
 
   test("loop_invariant") {
     val Success(List(LoopInvariantSpecification(expr)), _) = Parser.parseSpec("/*@ loop_invariant true; @*/")
-    val BooleanExpression(_, value) = expr
-    assert(value == true)
+    assert(expr.asInstanceOf[BooleanExpression] == true)
   }
 
   test("single-line annotation") {
-    val Success(List(EnsuresSpecification(_)), _) = Parser.parseSpec("//@ ensures true;")
+    val Success(List(s), _) = Parser.parseSpec("//@ ensures true;")
+    assert(s.isInstanceOf[EnsuresSpecification])
   }
 
   test("single-line annotation followed by single-line comment") {
-    val Success(List(EnsuresSpecification(_)), _) = Parser.parseSpec("""
+    val Success(List(s), _) = Parser.parseSpec("""
       //@ ensures true;
       // test comment
     """)
+    assert(s.isInstanceOf[EnsuresSpecification])
   }
 
   test("do not allow multi-line expressions inside single-line annotations") {
-      val Failure(_, _, _) = Parser.parseSpec("""
+      val Failure(_) = Parser.parseSpec("""
         //@ assert (
           true
         );

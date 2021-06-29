@@ -48,7 +48,9 @@ trait Definitions extends Statements with Types {
   def usePath[_: P]: P[UsePath] =
     P(useLibraryPath | useLocalPath)
   def useLibraryPath[_: P]: P[LibraryPath] =
-    P(library.!).map(raw => LibraryPath(StringExpression(raw, raw.substring(1, raw.length() - 1))))
+    P(span(library.!)).map({
+      case (raw, span) => LibraryPath(StringExpression(raw, raw.substring(1, raw.length() - 1), span))
+    })
   def useLocalPath[_: P]: P[LocalPath] =
     P(stringExpression).map(LocalPath(_))
 }

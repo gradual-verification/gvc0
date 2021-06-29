@@ -6,8 +6,8 @@ trait Lexer extends Whitespace {
     P(CharIn("A-Za-z_") ~~ CharIn("A-Za-z0-9_").repX)
 
   def identifier[_: P] =
-    P(pos ~~ ident.! ~~ pos).map({
-      case (start, id, end) => Identifier(id, SourceSpan(start, end))
+    P(span(ident.!)).map({
+      case (id, span) => Identifier(id, span)
     })
 
   def decimalNumber[_: P] =
@@ -55,4 +55,8 @@ trait Lexer extends Whitespace {
 
   // Helper for position
   def pos[_: P] = P(Index).map(state.position(_))
+
+  def span[_: P, T](p: => P[T]): P[(T, SourceSpan)] = P(pos ~~ p ~~ pos).map({
+    case (start, value, end) => (value, SourceSpan(start, end))
+  })
 }

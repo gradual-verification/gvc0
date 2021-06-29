@@ -36,13 +36,36 @@ case class MemberExpression(parent: Expression, field: Identifier, isArrow: Bool
 sealed trait LiteralExpression extends Expression {
   val raw: String
   val value: Any
+  val span: SourceSpan
 }
 
-case class StringExpression(raw: String, value: String) extends LiteralExpression
-case class CharacterExpression(raw: String, value: Char) extends LiteralExpression
-case class IntegerExpression(raw: String, value: Int) extends LiteralExpression
-case class BooleanExpression(raw: String, value: Boolean) extends LiteralExpression
-case class NullExpression(raw: String = "NULL", value: Null = null) extends LiteralExpression
+case class StringExpression(raw: String, value: String, span: SourceSpan) extends LiteralExpression {
+  def ==(other: String): Boolean = {
+    value == other
+  }
+}
+
+case class CharacterExpression(raw: String, value: Char, span: SourceSpan) extends LiteralExpression {
+  def ==(other: Char): Boolean = {
+    value == other
+  }
+}
+
+case class IntegerExpression(raw: String, value: Int, span: SourceSpan) extends LiteralExpression {
+  def ==(other: Int): Boolean = {
+    value == other
+  }
+}
+
+case class BooleanExpression(raw: String, value: Boolean, span: SourceSpan) extends LiteralExpression {
+  def ==(other: Boolean): Boolean = {
+    value == other
+  }
+}
+
+case class NullExpression(raw: String = "NULL", value: Null, span: SourceSpan) extends LiteralExpression {
+  def ==(other: Null): Boolean = true
+}
 
 // Specifications
 sealed trait Specification extends Node

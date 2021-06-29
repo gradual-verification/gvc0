@@ -20,21 +20,22 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("Parse decimal number") {
-    val Success(IntegerExpression("123", 123), _) = Parser.parseExpr("123")
+    val Success(IntegerExpression("123", 123, _), _) = Parser.parseExpr("123")
   }
 
   test("Hex number") {
-    val Success(IntegerExpression("0xFF", 0xFF), _) = Parser.parseExpr("0xFF")
+    val Success(IntegerExpression("0xFF", 0xFF, _), _) = Parser.parseExpr("0xFF")
   }
 
   test("Hex casing") {
-    val Success(IntegerExpression("0XFF", 0xFF), _) = Parser.parseExpr(("0XFF"))
-    val Success(IntegerExpression("0xff", 0xFF), _) = Parser.parseExpr("0xff")
-    val Success(IntegerExpression("0Xff", 0xFF), _) = Parser.parseExpr("0Xff")
+    val Success(IntegerExpression("0XFF", 0xFF, _), _) = Parser.parseExpr(("0XFF"))
+    val Success(IntegerExpression("0xff", 0xFF, _), _) = Parser.parseExpr("0xff")
+    val Success(IntegerExpression("0Xff", 0xFF, _), _) = Parser.parseExpr("0Xff")
   }
 
   test("Ignore whitespace") {
-    val Success(IntegerExpression("123", 123), _) = Parser.parseExpr("  \t123 \n")
+    val Success(i: IntegerExpression, _) = Parser.parseExpr("  \t123 \n")
+    assert(i == 123)
   }
 
   test("Do not allow whitespace in decimal literal") {
@@ -43,7 +44,7 @@ class ExpressionsSpec extends AnyFunSuite {
 
   test("String literal") {
     val src = """"test string""""
-    val Success(StringExpression(raw, value), _) = Parser.parseExpr(src)
+    val Success(StringExpression(raw, value, _), _) = Parser.parseExpr(src)
     assert(raw == src)
     assert(value == "test string")
   }
@@ -54,14 +55,14 @@ class ExpressionsSpec extends AnyFunSuite {
 
   test("String literal escapes") {
     val src = """"test\r\n""""
-    val Success(StringExpression(raw, value), _) = Parser.parseExpr(src)
+    val Success(StringExpression(raw, value, _), _) = Parser.parseExpr(src)
     assert(raw == src)
     assert(value == "test\r\n")
   }
 
   test("Boolean literals") {
-    val Success(BooleanExpression("true", true), _) = Parser.parseExpr("true")
-    val Success(BooleanExpression("false", false), _) = Parser.parseExpr("false")
+    val Success(BooleanExpression("true", true, _), _) = Parser.parseExpr("true")
+    val Success(BooleanExpression("false", false, _), _) = Parser.parseExpr("false")
   }
 
   test("Boolean with different case are variables") {
@@ -73,7 +74,7 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("NULL literal") {
-    val Success(NullExpression("NULL", null), _) = Parser.parseExpr("NULL")
+    val Success(NullExpression("NULL", null, _), _) = Parser.parseExpr("NULL")
   }
 
   test("Null with difference case is variable") {
@@ -91,117 +92,96 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("alloc_array expression") {
-    val Success(AllocArrayExpression(valueType, lenExpr), _) =
+    val Success(AllocArrayExpression(valueType, len: IntegerExpression), _) =
       Parser.parseExpr("alloc_array(Test, 10)")
 
     val NamedType(id) = valueType
     assert(id == "Test")
-
-    val IntegerExpression(_, len) = lenExpr
     assert(len == 10)
   }
 
   test("ternary expression") {
-    val Success(TernaryExpression(condExpr, ifTrueExpr, ifFalseExpr), _) = Parser.parseExpr("true ? 1 : 2")
-    val BooleanExpression(_, cond) = condExpr
-    assert(cond == true)
-
-    val IntegerExpression(_, ifTrue) = ifTrueExpr
-    val IntegerExpression(_, ifFalse) = ifFalseExpr
-    assert(ifTrue == 1)
-    assert(ifFalse == 2)
+    val Success(TernaryExpression(cond: BooleanExpression, ifTrue, ifFalse), _) = Parser.parseExpr("true ? 1 : 2")
+    assert(cond.asInstanceOf[BooleanExpression] == true)
+    assert(ifTrue.asInstanceOf[IntegerExpression] == 1)
+    assert(ifFalse.asInstanceOf[IntegerExpression] == 2)
   }
 
-  test("nested ternaries") {
-    val Success(
-      TernaryExpression(
-        BooleanExpression(_, false),
-        IntegerExpression(_, 1),
-        TernaryExpression(
-          BooleanExpression(_, true),
-          IntegerExpression(_, 2),
-          IntegerExpression(_, 3)
-        )
-      ), _
-    ) = Parser.parseExpr("false ? 1 : true ? 2 : 3")
+  test("nested ternaries in right side") {
+    val Success(t: TernaryExpression, _) = Parser.parseExpr("false ? 1 : true ? 2 : 3")
+    assert(t.condition.asInstanceOf[BooleanExpression] == false)
+    assert(t.ifTrue.asInstanceOf[IntegerExpression] == 1)
+    val nested = t.ifFalse.asInstanceOf[TernaryExpression]
+    assert(nested.condition.asInstanceOf[BooleanExpression] == true)
+    assert(nested.ifTrue.asInstanceOf[IntegerExpression] == 2)
+    assert(nested.ifFalse.asInstanceOf[IntegerExpression] == 3)
+  }
 
-    val Success(
-      TernaryExpression(
-        BooleanExpression(_, false),
-        TernaryExpression(
-          BooleanExpression(_, true),
-          IntegerExpression(_, 1),
-          IntegerExpression(_, 2)
-        ),
-        IntegerExpression(_, 3),
-      ), _
-    ) = Parser.parseExpr("false ? true ? 1 : 2 : 3")
+  test("nested ternaries in left side") {
+    val Success(t: TernaryExpression, _) = Parser.parseExpr("false ? true ? 1 : 2 : 3")
+    assert(t.condition.asInstanceOf[BooleanExpression] == false)
+    
+    val nested = t.ifTrue.asInstanceOf[TernaryExpression]
+    assert(nested.condition.asInstanceOf[BooleanExpression] == true)
+    assert(nested.ifTrue.asInstanceOf[IntegerExpression] == 1)
+    assert(nested.ifFalse.asInstanceOf[IntegerExpression] == 2)
+    assert(t.ifFalse.asInstanceOf[IntegerExpression] == 3)
   }
 
   test("&&") {
-    val Success(BinaryExpression(BooleanExpression(_, true), op, BooleanExpression(_, false)), _) =
-      Parser.parseExpr("true && false")
-    assert(op == BinaryOperator.LogicalAnd)
+    val Success(b: BinaryExpression, _) = Parser.parseExpr("true && false")
+    assert(b.left.asInstanceOf[BooleanExpression] == true)
+    assert(b.operator == BinaryOperator.LogicalAnd)
+    assert(b.right.asInstanceOf[BooleanExpression] == false)
   }
 
   test("||") {
-    val Success(BinaryExpression(BooleanExpression(_, true), op, BooleanExpression(_, false)), _) =
-      Parser.parseExpr("true || false")
-    assert(op == BinaryOperator.LogicalOr)
+    val Success(b: BinaryExpression, _) = Parser.parseExpr("true || false")
+    assert(b.left.asInstanceOf[BooleanExpression] == true)
+    assert(b.operator == BinaryOperator.LogicalOr)
+    assert(b.right.asInstanceOf[BooleanExpression] == false)
   }
 
   test ("&& / || precedence") {
-    val Success(BinaryExpression(l1, op1, r1), _) = Parser.parseExpr("1 && 2 || 3")
-    assert(op1 == BinaryOperator.LogicalOr)
+    val Success(or: BinaryExpression, _) = Parser.parseExpr("1 && 2 || 3")
+    assert(or.operator == BinaryOperator.LogicalOr)
+    assert(or.right.asInstanceOf[IntegerExpression] == 3)
 
-    val IntegerExpression(_, r1Val) = r1
-    assert(r1Val == 3)
-
-    val BinaryExpression(l2, op2, r2) = l1
-    assert(op2 == BinaryOperator.LogicalAnd)
-    val IntegerExpression(_, l2Val) = l2
-    val IntegerExpression(_, r2Val) = r2
-    assert(l2Val == 1)
-    assert(r2Val == 2)
+    val and = or.left.asInstanceOf[BinaryExpression]
+    assert(and.operator == BinaryOperator.LogicalAnd)
+    assert(and.left.asInstanceOf[IntegerExpression] == 1)
+    assert(and.right.asInstanceOf[IntegerExpression] == 2)
   }
 
   test("&& / == precedence") {
-    val Success(BinaryExpression(l, op1, r), _) =
-      Parser.parseExpr(("1 == 2 && 3 == 4"))
+    val Success(and: BinaryExpression, _) = Parser.parseExpr(("1 == 2 && 3 == 4"))
+    assert(and.operator == BinaryOperator.LogicalAnd)
 
-    assert(op1 == BinaryOperator.LogicalAnd)
-
-    val BinaryExpression(IntegerExpression(_, ll), opL, IntegerExpression(_, lr)) = l
-    assert(opL == BinaryOperator.Equal)
-    assert(ll == 1)
-    assert(lr == 2)
+    val left = and.left.asInstanceOf[BinaryExpression]
+    assert(left.operator == BinaryOperator.Equal)
+    assert(left.left.asInstanceOf[IntegerExpression] == 1)
+    assert(left.right.asInstanceOf[IntegerExpression] == 2)
     
-    val BinaryExpression(IntegerExpression(_, rl), opR, IntegerExpression(_, rr)) = r
-    assert(opR == BinaryOperator.Equal)
-    assert(rl == 3)
-    assert(rr == 4)
+    val right = and.right.asInstanceOf[BinaryExpression]
+    assert(right.operator == BinaryOperator.Equal)
+    assert(right.left.asInstanceOf[IntegerExpression] == 3)
+    assert(right.right.asInstanceOf[IntegerExpression] == 4)
   }
 
   test("+ operator is left-associative") {
     // 1 + 2 + 3 should be the same as (1 + 2) + 3
-    val Success(BinaryExpression(l, _, r), _) =
-      Parser.parseExpr("1 + 2 + 3")
-    
-    val BinaryExpression(IntegerExpression(_, llValue), _, IntegerExpression(_, lrValue)) = l
-    assert(llValue == 1)
-    assert(lrValue == 2)
-
-    val IntegerExpression(_, rValue) = r
-    assert(rValue == 3)
+    val Success(top: BinaryExpression, _) = Parser.parseExpr("1 + 2 + 3")
+    val nested = top.left.asInstanceOf[BinaryExpression]
+    assert(nested.left.asInstanceOf[IntegerExpression] == 1)
+    assert(nested.right.asInstanceOf[IntegerExpression] == 2)
+    assert(top.right.asInstanceOf[IntegerExpression] == 3)
   }
 
   test("+ / * precedence") {
-    val Success(BinaryExpression(l, op, _), _) =
-      Parser.parseExpr("1 * 2 + 3")
-    assert(op == BinaryOperator.Add)
-
-    val BinaryExpression(ll, opL, lr) = l
-    assert(opL == BinaryOperator.Multiply)
+    val Success(add: BinaryExpression, _) = Parser.parseExpr("1 * 2 + 3")
+    assert(add.operator == BinaryOperator.Add)
+    val mult = add.left.asInstanceOf[BinaryExpression]
+    assert(mult.operator == BinaryOperator.Multiply)
   }
 
   test("method call") {
@@ -211,30 +191,23 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("call with arg") {
-    val Success(InvokeExpression(id, args), _) = Parser.parseExpr("test(123)")
-    assert(id == "test")
-
-    val IntegerExpression(_, value) = args(0)
-    assert(value == 123)
+    val Success(i: InvokeExpression, _) = Parser.parseExpr("test(123)")
+    assert(i.method == "test")
+    assert(i.arguments(0).asInstanceOf[IntegerExpression] == 123)
   }
 
   test("call with multiple args") {
-    val Success(InvokeExpression(id, args), _) = Parser.parseExpr("test(1, \"abc\")")
-    assert(id == "test")
-
-    val IntegerExpression(_, value1) = args(0)
-    val StringExpression(_, value2) = args(1)
-    assert(value1 == 1)
-    assert(value2 == "abc")
+    val Success(i: InvokeExpression, _) = Parser.parseExpr("test(1, \"abc\")")
+    assert(i.method == "test")
+    assert(i.arguments(0).asInstanceOf[IntegerExpression] == 1)
+    assert(i.arguments(1).asInstanceOf[StringExpression] == "abc")
   }
 
   test("dot member") {
-    val Success(MemberExpression(parent, fieldId, isArrow), _) = Parser.parseExpr("abc.def")
-    assert(fieldId == "def")
-    assert(!isArrow)
-
-    val VariableExpression(varId) = parent
-    assert(varId == "abc")
+    val Success(m: MemberExpression, _) = Parser.parseExpr("abc.def")
+    assert(m.field == "def")
+    assert(!m.isArrow)
+    assert(m.parent.asInstanceOf[VariableExpression].variable == "abc")
   }
 
   test("deref member") {
@@ -256,7 +229,7 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("array index") {
-    val Success(IndexExpression(parent, IntegerExpression(_, idx)), _) = Parser.parseExpr(("arr[0]"))
+    val Success(IndexExpression(parent, idx: IntegerExpression), _) = Parser.parseExpr(("arr[0]"))
     assert(idx == 0)
     val VariableExpression(id) = parent
     assert(id == "arr")
