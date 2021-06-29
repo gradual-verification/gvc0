@@ -1,6 +1,9 @@
 package gvc.parser
 
-sealed trait Node
+sealed trait Node{
+  val span: SourceSpan
+}
+
 case class SourcePosition(line: Int, column: Int, index: Int)
 case class SourceSpan(start: SourcePosition, end: SourcePosition)
 
@@ -12,20 +15,14 @@ case class Identifier(name: String, span: SourceSpan) extends Node {
 }
 
 // Types
-sealed trait Type extends Node {
-  val span: SourceSpan
-}
-
+sealed trait Type extends Node
 case class NamedType(id: Identifier, span: SourceSpan) extends Type
 case class NamedStructType(id: Identifier, span: SourceSpan) extends Type
 case class PointerType(valueType: Type, span: SourceSpan) extends Type
 case class ArrayType(valueType: Type, span: SourceSpan) extends Type
 
 // Expressions
-sealed trait Expression extends Node {
-  val span: SourceSpan
-}
-
+sealed trait Expression extends Node
 case class VariableExpression(variable: Identifier, span: SourceSpan) extends Expression
 case class BinaryExpression(left: Expression, operator: BinaryOperator.Value, right: Expression, span: SourceSpan) extends Expression
 case class UnaryExpression(operand: Expression, operator: UnaryOperator.Value, span: SourceSpan) extends Expression
@@ -40,7 +37,6 @@ case class MemberExpression(parent: Expression, field: Identifier, isArrow: Bool
 sealed trait LiteralExpression extends Expression {
   val raw: String
   val value: Any
-  val span: SourceSpan
 }
 
 case class StringExpression(raw: String, value: String, span: SourceSpan) extends LiteralExpression {
@@ -73,7 +69,6 @@ case class NullExpression(raw: String = "NULL", value: Null, span: SourceSpan) e
 
 // Specifications
 sealed trait Specification extends Node
-
 case class RequiresSpecification(value: Expression, span: SourceSpan) extends Specification
 case class EnsuresSpecification(value: Expression, span: SourceSpan) extends Specification
 case class LoopInvariantSpecification(value: Expression, span: SourceSpan) extends Specification
