@@ -26,9 +26,9 @@ trait Expressions extends Types {
   )
 
   def expression[_: P]: P[Expression] =
-    P(binaryExpression ~ ("?" ~ expression ~ ":" ~ expression).?).map {
+    P(binaryExpression ~ ("?" ~ expression ~ ":" ~ expression ~~ pos).?).map {
         case (a, None) => a
-        case (a, Some((l, r))) => TernaryExpression(a, l, r)
+        case (a, Some((l, r, end))) => TernaryExpression(a, l, r, SourceSpan(a.span.start, end))
       }
 
   def binaryExpression[_: P]: P[Expression] =
@@ -51,7 +51,7 @@ trait Expressions extends Types {
             else {
               remaining = remaining.tail
               val rhs = climb(prec + 1, next)
-              result = BinaryExpression(result, binOp, rhs)
+              result = BinaryExpression(result, binOp, rhs, SourceSpan(result.span.start, rhs.span.end))
               true
             }
         }
@@ -65,19 +65,24 @@ trait Expressions extends Types {
 
   // Expressions with concrete start and end tokens
   def basicExpression[_: P]: P[Expression] = P(
-    prefixOperator.!.rep ~ atomExpression ~ member.rep
-  ).map({ case (pre, expr, members) =>
+    prefixWithPosition.rep ~ pos ~~ atomExpression ~ member.rep
+  ).map({ case (pre, baseStart, expr, members) =>
     // TODO: Deref (*) is only allowed in L-Values
     var member = members.foldLeft(expr)((e, item) => {
+      val span = SourceSpan(baseStart, item.end)
       item match {
-        case DottedMember(id) => MemberExpression(e, id, false)
-        case PointerMember(id) => MemberExpression(e, id, true)
-        case IndexMember(index) => IndexExpression(e, index)
+        case DottedMember(id, _) => MemberExpression(e, id, false, span)
+        case PointerMember(id, _) => MemberExpression(e, id, true, span)
+        case IndexMember(index, _) => IndexExpression(e, index, span)
       }
     })
 
-    pre.foldLeft(member)((e, op) => UnaryExpression(e, parsePrefixOp(op)))
+    pre.foldLeft(member)((e, opPos) => opPos match {
+      case (pos, op) => UnaryExpression(e, parsePrefixOp(op), SourceSpan(pos, e.span.end))
+    })
   })
+
+  def prefixWithPosition[_: P]: P[(SourcePosition, String)] = P(pos ~~ prefixOperator.!)
 
   def parsePrefixOp(op: String): UnaryOperator.Value = {
     import UnaryOperator._
@@ -152,29 +157,33 @@ trait Expressions extends Types {
   }
 
   def allocExpression[_: P]: P[AllocExpression] =
-    P(kw("alloc") ~ "(" ~ typeReference ~ ")").map(AllocExpression(_))
+    P(span(kw("alloc") ~ "(" ~ typeReference ~ ")")).map({
+      case (valueType, span) => AllocExpression(valueType, span)
+    })
   
   def allocArrayExpression[_: P]: P[AllocArrayExpression] =
-    P(kw("alloc_array") ~ "(" ~ typeReference ~ "," ~ expression ~ ")")
-      .map({ case (typeRef, length) => AllocArrayExpression(typeRef, length) })
+    P(span(kw("alloc_array") ~ "(" ~ typeReference ~ "," ~ expression ~ ")"))
+      .map({ case ((valueType, length), span) => AllocArrayExpression(valueType, length, span) })
 
   def invokeExpression[_: P]: P[InvokeExpression] =
-    P(identifier ~ "(" ~ expression.rep(0, ",") ~ ")")
-      .map({ case (id, args) => InvokeExpression(id, args.toList) })
+    P(span(identifier ~ "(" ~ expression.rep(0, ",") ~ ")"))
+      .map({ case ((id, args), span) => InvokeExpression(id, args.toList, span) })
 
   def variableExpression[_: P]: P[VariableExpression] = P(identifier)
-    .map(VariableExpression(_))
+    .map(id => VariableExpression(id, id.span))
 
-  sealed trait Member
-  case class DottedMember(field: Identifier) extends Member
-  case class PointerMember(field: Identifier) extends Member
-  case class IndexMember(index: Expression) extends Member
+  sealed trait Member {
+    val end: SourcePosition
+  }
+  case class DottedMember(field: Identifier, end: SourcePosition) extends Member
+  case class PointerMember(field: Identifier, end: SourcePosition) extends Member
+  case class IndexMember(index: Expression, end: SourcePosition) extends Member
 
   def member[_: P]: P[Member] = P(dottedMember | pointerMember | indexMember)
-  def dottedMember[_: P]: P[DottedMember] = P("." ~ identifier)
-    .map(DottedMember(_))
-  def pointerMember[_: P]: P[PointerMember] = P("->" ~ identifier)
-    .map(PointerMember(_))
-  def indexMember[_: P]: P[IndexMember] = P("[" ~ expression ~ "]")
-    .map(IndexMember(_))
+  def dottedMember[_: P]: P[DottedMember] = P("." ~ identifier ~~ pos)
+    .map({ case (e, pos) => DottedMember(e, pos) })
+  def pointerMember[_: P]: P[PointerMember] = P("->" ~ identifier ~~ pos)
+    .map({ case (e, pos) => PointerMember(e, pos) })
+  def indexMember[_: P]: P[IndexMember] = P("[" ~ expression ~ "]" ~~ pos)
+    .map({ case (e, pos) => IndexMember(e, pos) })
 }

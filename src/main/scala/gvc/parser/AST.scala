@@ -20,17 +20,19 @@ case class PointerType(valueType: Type, span: SourceSpan) extends Type
 case class ArrayType(valueType: Type, span: SourceSpan) extends Type
 
 // Expressions
-sealed trait Expression extends Node
+sealed trait Expression extends Node {
+  val span: SourceSpan
+}
 
-case class VariableExpression(variable: Identifier) extends Expression
-case class BinaryExpression(left: Expression, operator: BinaryOperator.Value, right: Expression) extends Expression
-case class UnaryExpression(operand: Expression, op: UnaryOperator.Value) extends Expression
-case class TernaryExpression(condition: Expression, ifTrue: Expression, ifFalse: Expression) extends Expression
-case class InvokeExpression(method: Identifier, arguments: List[Expression] = List[Expression]()) extends Expression
-case class AllocExpression(valueType: Type) extends Expression
-case class AllocArrayExpression(valueType: Type, length: Expression) extends Expression
-case class IndexExpression(parent: Expression, index: Expression) extends Expression
-case class MemberExpression(parent: Expression, field: Identifier, isArrow: Boolean) extends Expression
+case class VariableExpression(variable: Identifier, span: SourceSpan) extends Expression
+case class BinaryExpression(left: Expression, operator: BinaryOperator.Value, right: Expression, span: SourceSpan) extends Expression
+case class UnaryExpression(operand: Expression, operator: UnaryOperator.Value, span: SourceSpan) extends Expression
+case class TernaryExpression(condition: Expression, ifTrue: Expression, ifFalse: Expression, span: SourceSpan) extends Expression
+case class InvokeExpression(method: Identifier, arguments: List[Expression], span: SourceSpan) extends Expression
+case class AllocExpression(valueType: Type, span: SourceSpan) extends Expression
+case class AllocArrayExpression(valueType: Type, length: Expression, span: SourceSpan) extends Expression
+case class IndexExpression(parent: Expression, index: Expression, span: SourceSpan) extends Expression
+case class MemberExpression(parent: Expression, field: Identifier, isArrow: Boolean, span: SourceSpan) extends Expression
 
 // Literal expressions
 sealed trait LiteralExpression extends Expression {

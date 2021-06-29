@@ -4,14 +4,15 @@ import fastparse.Parsed.{Success, Failure}
 
 class ExpressionsSpec extends AnyFunSuite {
   test("Parse variable") {
-    val Success(VariableExpression(id), _) = Parser.parseExpr("abc")
-    assert(id == "abc")
+    val Success(expr: VariableExpression, _) = Parser.parseExpr("abc")
+    assert(expr.variable == "abc")
   }
 
   test("Identifier position") {
-    val Success(VariableExpression(id), _) = Parser.parseExpr("\nabc\n")
-    assert(id.span.start == SourcePosition(2, 1, 1))
-    assert(id.span.end == SourcePosition(2, 4, 4))
+    val Success(expr: VariableExpression, _) = Parser.parseExpr("\nabc\n")
+    assert(expr.variable.span.start == SourcePosition(2, 1, 1))
+    assert(expr.variable.span.end == SourcePosition(2, 4, 4))
+    assert(expr.span == expr.variable.span)
   }
 
   test("No whitespace in identifiers") {
@@ -68,8 +69,8 @@ class ExpressionsSpec extends AnyFunSuite {
   test("Boolean with different case are variables") {
     val cases = List("True", "TRUE", "False", "FALSE")
     for (src <- cases) {
-      val Success(VariableExpression(id), _) = Parser.parseExpr(src)
-      assert(id == src)
+      val Success(expr: VariableExpression, _) = Parser.parseExpr(src)
+      assert(expr.variable == src)
     }
   }
 
@@ -80,8 +81,8 @@ class ExpressionsSpec extends AnyFunSuite {
   test("Null with difference case is variable") {
     val cases = List("Null", "null", "nuLL")
     for (src <- cases) {
-      val Success(VariableExpression(id), _) = Parser.parseExpr(src)
-      assert(id == src)
+      val Success(expr: VariableExpression, _) = Parser.parseExpr(src)
+      assert(expr.variable == src)
     }
   }
 
@@ -97,10 +98,10 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("ternary expression") {
-    val Success(TernaryExpression(cond: BooleanExpression, ifTrue, ifFalse), _) = Parser.parseExpr("true ? 1 : 2")
-    assert(cond.asInstanceOf[BooleanExpression] == true)
-    assert(ifTrue.asInstanceOf[IntegerExpression] == 1)
-    assert(ifFalse.asInstanceOf[IntegerExpression] == 2)
+    val Success(expr: TernaryExpression, _) = Parser.parseExpr("true ? 1 : 2")
+    assert(expr.condition.asInstanceOf[BooleanExpression] == true)
+    assert(expr.ifTrue.asInstanceOf[IntegerExpression] == 1)
+    assert(expr.ifFalse.asInstanceOf[IntegerExpression] == 2)
   }
 
   test("nested ternaries in right side") {
@@ -181,9 +182,9 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("method call") {
-    val Success(InvokeExpression(id, args), _) = Parser.parseExpr("test()")
-    assert(id == "test")
-    assert(args.isEmpty)
+    val Success(expr: InvokeExpression, _) = Parser.parseExpr("test()")
+    assert(expr.method == "test")
+    assert(expr.arguments.isEmpty)
   }
 
   test("call with arg") {
@@ -206,44 +207,39 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(m.parent.asInstanceOf[VariableExpression].variable == "abc")
   }
 
-  test("deref member") {
-    val Success(MemberExpression(parent, fieldId, isArrow), _) = Parser.parseExpr("abc->def")
-    assert(fieldId == "def")
-    assert(isArrow)
-
-    val VariableExpression(valueId) = parent
-    assert(valueId == "abc")
+  test("pointer member") {
+    val Success(expr: MemberExpression, _) = Parser.parseExpr("abc->def")
+    assert(expr.field == "def")
+    assert(expr.isArrow)
+    assert(expr.parent.asInstanceOf[VariableExpression].variable == "abc")
   }
 
   test("member of method call") {
-    val Success(MemberExpression(parent, fieldId, isArrow), _) = Parser.parseExpr("read().output")
-    assert(fieldId == "output")
-    assert(!isArrow)
+    val Success(expr: MemberExpression, _) = Parser.parseExpr("read().output")
+    assert(expr.field == "output")
+    assert(!expr.isArrow)
 
-    val InvokeExpression(methodId, _) = parent
-    assert(methodId == "read")
+    val invoke = expr.parent.asInstanceOf[InvokeExpression]
+    assert(invoke.method == "read")
   }
 
   test("array index") {
-    val Success(IndexExpression(parent, idx: IntegerExpression), _) = Parser.parseExpr(("arr[0]"))
-    assert(idx == 0)
-    val VariableExpression(id) = parent
-    assert(id == "arr")
+    val Success(expr: IndexExpression, _) = Parser.parseExpr(("arr[0]"))
+    assert(expr.index.asInstanceOf[IntegerExpression] == 0)
+    assert(expr.parent.asInstanceOf[VariableExpression].variable == "arr")
   }
 
   test("unary not") {
-    val Success(UnaryExpression(expr, op), _) = Parser.parseExpr("!test")
-    assert(op == UnaryOperator.Not)
-    val VariableExpression(id) = expr
-    assert(id == "test")
+    val Success(expr: UnaryExpression, _) = Parser.parseExpr("!test")
+    assert(expr.operator == UnaryOperator.Not)
+    assert(expr.operand.asInstanceOf[VariableExpression].variable == "test")
   }
 
   test("repeated unary operators") {
-    val Success(UnaryExpression(expr1, op1), _) = Parser.parseExpr("!!abc")
-    assert(op1 == UnaryOperator.Not)
-    val UnaryExpression(expr2, op2) = expr1
-    assert(op2 == UnaryOperator.Not)
-    val VariableExpression(id) = expr2
-    assert(id == "abc")
+    val Success(top: UnaryExpression, _) = Parser.parseExpr("!!abc")
+    assert(top.operator == UnaryOperator.Not)
+    val nested = top.operand.asInstanceOf[UnaryExpression]
+    assert(nested.operator == UnaryOperator.Not)
+    assert(nested.operand.asInstanceOf[VariableExpression].variable == "abc")
   }
 }
