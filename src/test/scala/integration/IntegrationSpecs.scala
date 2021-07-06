@@ -24,7 +24,7 @@ class IntegrationSpecs extends AnyFunSuite {
     "anno9.c0",
     "annoa.c0",
     "annob.c0",
-    // "annoc.c0", TODO: Debug this test
+    "annoc.c0",
     "annod.c0",
     // "annoe.c0", TODO: well-formedness check
     "annof.c0",
@@ -64,7 +64,7 @@ class IntegrationSpecs extends AnyFunSuite {
     "empty2.c0",
     "forloop1.c0",
     // "forloop2.c0", TODO: well-formedness
-    // "forloop3.c0", TODO: BUG?
+    "forloop3.c0",
     "forloop4.c0",
     "if0.c0",
     "if1.c0",
@@ -87,11 +87,11 @@ class IntegrationSpecs extends AnyFunSuite {
     "lexer08.c0",
     "lexer09.c0",
     "lexer10.c0",
-    // "lexer11.c0", TODO: BUG with escapes?
+    "lexer11.c0",
     "lexer12.c0",
     "lexer13.c0",
     // "lexer14.c0", TODO: extend whitespace
-    // "lexer15.c0", TODO: BUG with escapes?
+    "lexer15.c0",
     "lexer16.c0",
     "lexer17.c0",
     "lexer18.c0",
@@ -115,7 +115,7 @@ class IntegrationSpecs extends AnyFunSuite {
     // "multidecls16.c0", TODO: no intersecting typedefs/methods
     "null1.c0",
     "null2.c0",
-    // "overload01.c0", TODO: BUG escape handling?
+    "overload01.c0",
     // "parallel-decl.c0", TODO: big numbers
     "params1.c0",
     "params2.c0",
@@ -170,7 +170,7 @@ class IntegrationSpecs extends AnyFunSuite {
 
   def runIntegrationTest(source: String): IntegrationResult = {
     Parser.parseProgram(source) match {
-      case fail: Failure => ParseError(fail.trace().msg)
+      case fail: Failure => ParseError(fail.trace().longMsg)
       case Success(parsed, _) => {
         val sink = new ErrorSink()
         val result = Resolver.resolveProgram(parsed, sink)

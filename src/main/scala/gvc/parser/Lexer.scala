@@ -14,13 +14,13 @@ trait Lexer extends Whitespace {
     P("0" | (CharIn("1-9") ~~ CharIn("0-9").repX))
 
   def hexNumber[_: P] =
-    P("0" ~~ CharIn("xX") ~~ CharIn("0-9a-fA-F").repX(1))
+    P("0" ~~ CharIn("xX") ~~/ CharIn("0-9a-fA-F").repX(1))
 
-  def string[_: P] = P("\"" ~~ stringChar.repX ~~ "\"")
+  def string[_: P] = P("\"" ~~/ stringChar.repX ~~ "\"")
 
-  def character[_: P] = P("'" ~~ charChar.repX ~~ "'")
+  def character[_: P] = P("'" ~~/ charChar ~~ "'")
 
-  def library[_: P] = P("<" ~~ libraryChar.repX ~~ ">")
+  def library[_: P] = P("<" ~~/ libraryChar.repX ~~ ">")
 
   def stringChar[_: P] = P(normalChar | escape)
 
@@ -33,7 +33,8 @@ trait Lexer extends Whitespace {
     P(CharPred(c => c != '>' && !c.isControl))
   
   // <esc> ::= ::= \n | \t | \v | \b | \r | \f | \a | \\ | \' | \"
-  def escape[_: P] = P("\\" ~~ CharIn("ntvbrfa\\\"'"))
+  // For some reason fastparse needs the \ escaped
+  def escape[_: P] = P("\\" ~ CharIn("""ntvbrfa"'\\"""))
 
   // <unop> ::= ! | ~ | - | *
   def prefixOperator[_: P] = P(CharIn("!~\\-*"))

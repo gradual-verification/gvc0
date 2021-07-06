@@ -18,7 +18,7 @@ trait Statements extends Specifications {
       returnStatement |
       assertStatement |
       errorStatement |
-      (simpleStatement ~ ";")
+      (simpleStatement ~/ ";")
     )
 
   def blockStatement[_: P]: P[BlockStatement] =
