@@ -350,10 +350,11 @@ object Resolver {
       case unary: UnaryExpression => unary.operator match {
         case UnaryOperator.Not => ResolvedNot(unary, resolveExpression(unary.operand, scope))
         case UnaryOperator.Negate => ResolvedNegation(unary, resolveExpression(unary.operand, scope))
+        case UnaryOperator.Deref => ResolvedDereference(unary, resolveExpression(unary.operand, scope))
         case op => {
-          // Log the error and return a mock that assumes negation
+          // Log the error and return the base expression
           scope.errors.error(unary, "Unsupported operator " + op.toString())
-          ResolvedNegation(unary, resolveExpression(unary.operand, scope))
+          resolveExpression(unary.operand, scope)
         }
       }
       

@@ -31,8 +31,8 @@ class IntegrationSpecs extends AnyFunSuite {
     // "annog.c0", TODO: \length assertion
     "annoh.c0",
     "annoi.c0",
-    // "annoj.c0", TODO: dereference operator
-    // "annok.c0", TODO: deref
+    "annoj.c0",
+    "annok.c0",
     "arith01.c0",
     "arith02.c0",
     // "arith03.c0", (modulo)
@@ -46,7 +46,7 @@ class IntegrationSpecs extends AnyFunSuite {
     "arrayinit1.c0",
     "brackets0.c0",
     "brackets1.c0",
-    // "cast07.c0", TODO: deref
+    "cast07.c0",
     "compound1.c0",
     // "compound2.c0", (modulo)
     // "compound3.c0", (bit shift)
@@ -57,7 +57,7 @@ class IntegrationSpecs extends AnyFunSuite {
     // "compound8.c0",
     "cond1.c0",
     "cond2.c0",
-    // "condnull1.c0", TODO: deref
+    // "condnull1.c0", TODO: deref null check
     "condnull2.c0",
     "deref00.c0",
     // "empty.c0", TODO: how to handle empty?
@@ -66,10 +66,10 @@ class IntegrationSpecs extends AnyFunSuite {
     // "forloop2.c0", TODO: well-formedness
     // "forloop3.c0", TODO: BUG?
     "forloop4.c0",
-    // "if0.c0", TODO: deref
-    // "if1.c0", TODO: deref
-    // "if2.c0", TODO: deref
-    // "if3.c0", TODO: deref
+    "if0.c0",
+    "if1.c0",
+    "if2.c0",
+    "if3.c0",
     // "init01.c0", TODO: use-before-assign
     "init02.c0",
     // "init03.c0", TODO: use-before-assign
@@ -133,10 +133,10 @@ class IntegrationSpecs extends AnyFunSuite {
     "shadow9.c0",
     // "shadowa.c0", TODO: no calling variables
     "signed.c0",
-    // "starplusplus1.c0", TODO: deref
-    // "starplusplus2.c0", TODO: deref
-    // "starplusplus3.c0", TODO: deref
-    // "starplusplus4.c0", TODO: deref
+    // "starplusplus1.c0", TODO: precedence of ++ and *
+    "starplusplus2.c0",
+    "starplusplus3.c0",
+    // "starplusplus4.c0", TODO: precedence of -- and *
     "struct-undef1.c0",
     // "struct-undef2.c0", TODO: undeclared structs
     // "struct-undef3.c0", TODO: undeclared structs
@@ -175,7 +175,7 @@ class IntegrationSpecs extends AnyFunSuite {
         val sink = new ErrorSink()
         val result = Resolver.resolveProgram(parsed, sink)
         sink.errors match {
-          case Nil => ValidProgram(result)
+          case Nil => ValidProgram()
           case _ => ResolverError(sink.errors.map(_.message))
         }
       }
@@ -185,6 +185,6 @@ class IntegrationSpecs extends AnyFunSuite {
   sealed trait IntegrationResult
   case class ParseError(message: String) extends IntegrationResult
   case class ResolverError(messages: List[String]) extends IntegrationResult
-  case class ValidProgram(program: ResolvedProgram) extends IntegrationResult
+  case class ValidProgram() extends IntegrationResult
 }
 
