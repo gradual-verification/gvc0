@@ -1,0 +1,9 @@
+//test return 32
+
+int main () {
+  int x; int y;
+  x = 32;
+  return x;
+  x = y;
+  return y;
+}

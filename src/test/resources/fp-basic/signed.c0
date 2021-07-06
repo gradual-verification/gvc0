@@ -1,0 +1,16 @@
+//test return 2147483647
+
+/* with -O2 this (legally) optimizes i+1 > i to true
+ */
+
+int int_max () {
+  int i;
+  for (i = 0; i+1 > i; i++)
+    {}
+  return i;
+}
+
+int main () {
+  return int_max();
+}
+

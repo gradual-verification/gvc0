@@ -1,0 +1,10 @@
+//test return 37
+
+int foo (int x) {
+  return x;
+}
+
+int main () {
+  int foo = foo(37);
+  return foo;
+}

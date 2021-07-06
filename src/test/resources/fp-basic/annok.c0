@@ -1,0 +1,21 @@
+//test return 3
+
+int inc(int* p) {
+  (*p)++;
+  return *p;
+}
+
+int main () {
+  int* p = alloc(int);
+  inc(p);
+  if (*p == 0)
+    //@assert *p == 0;
+    int y = inc(p);
+  else
+    //@assert *p != 0; 
+    {
+      int w = inc(p);
+      int z = inc(p);
+    }
+  return *p;
+}

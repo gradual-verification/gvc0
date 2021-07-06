@@ -1,0 +1,10 @@
+//test error
+
+int main () {
+  //@assert true; // this should always succeed
+  //@assert !false; /* and this too */
+  //@assert 0 == 0; /* but I wonder
+about this multiline comment */
+  assert(false);
+  return 0;
+}

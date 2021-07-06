@@ -1,0 +1,19 @@
+//test return 5
+
+int log (int x)
+//@requires x > 0;
+{
+  int y = 0;
+  while (x > 0)
+    /*@ loop_invariant x >= 0; @*/
+    {
+      //@assert x > 0;
+      x = x / 2;
+      y = y + 1;
+    }
+  return y-1;
+}
+
+int main () {
+  return log(32);
+}

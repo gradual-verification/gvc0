@@ -1,0 +1,12 @@
+//test return 1
+
+int common1(int x) { return x+1; }
+int common2(int x) { return x+2; }
+
+int main() {
+  int common1 = 0;
+  int common2 = common2(3);
+  return common1 == common2 ? 0 : 1;
+}
+
+  

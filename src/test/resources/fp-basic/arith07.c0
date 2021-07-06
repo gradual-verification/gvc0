@@ -1,0 +1,10 @@
+//test return 1
+
+bool ok (int n, int k) {
+  return (n / k) * k + n % k == n;
+}
+
+int main () {
+  bool all_ok = ok(7,3) && ok(-7,3) && ok(7,-3) && ok(-7,-3);
+  return all_ok ? 1 : 0;
+}

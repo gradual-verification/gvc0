@@ -1,0 +1,72 @@
+//test return 94158417
+
+#use <conio>
+#use "usetest.c0"
+
+// int x;
+
+int* g (int x);
+
+int* g (int b) {
+  int* p = NULL;
+  return true ? p : NULL;
+}
+
+int test () {
+  int[] A = alloc_array(int,3);
+  // A[\length(A)-1] = 42;
+  return A[2];
+}
+
+struct s {
+  int x;
+  int y;
+  int z;
+};
+
+int f (int x)
+// //@assert x > 1;
+  ;
+
+int f (int x)
+//@requires x > 1; /* or >= 2 */ // nothing more and nothing less
+{
+  return x+1;
+}
+
+struct list_node {
+  int data;
+  struct list_node* next;
+};
+
+int main ()
+//@requires true;
+{
+  // int[] A = alloc_array(10,int);
+  // int[3] A;
+  { /*@ @*/ } /* this fails in parse1 and parse2 */
+  {
+    //@assert true;
+    {}
+  }
+  int x = 0;
+  // x = x++;
+  // if (x = 4) return 0;
+  // if (x == 0) { return 1; };
+  // list q;
+  // list p = NULL;
+  // list[] A;
+  printint(test()); print("\n");
+  for (int i = 0; i < 10; i++)
+    //@loop_invariant 0 <= i;
+    {
+      x = (3+4)*x;
+      x = inc(x);
+     }
+  //@assert x > 0;
+  int y = x+1;
+  //@assert y > 0;
+  return x+y;
+  //@assert false;
+  {}
+}

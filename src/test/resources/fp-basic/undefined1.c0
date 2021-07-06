@@ -1,0 +1,4 @@
+//test error
+int Main () {
+  return 1;
+}

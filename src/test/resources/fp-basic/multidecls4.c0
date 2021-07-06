@@ -1,0 +1,7 @@
+//test error
+int id (int x);
+int id (int x, int y);
+
+int main () {
+  return id(3,4);
+}

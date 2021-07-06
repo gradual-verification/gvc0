@@ -1,0 +1,13 @@
+//test error
+
+/* we cannot define another type to be void */
+
+typedef void empty;
+typedef void* generic;
+
+int main () {
+  void* p = NULL;
+  generic q = NULL;
+  empty* p = NULL;
+  return 0;
+}

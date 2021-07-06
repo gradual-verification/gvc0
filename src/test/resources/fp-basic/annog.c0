@@ -1,0 +1,13 @@
+//test return 0
+
+int[] rotate(int[] quadrant1, int width, int height) 
+{
+  int j;
+  //@assert \length(quadrant1) == width*height;
+  int[] quadrant4 = alloc_array(int,width*height); 
+  return quadrant4;
+}
+
+int main() {
+  return 0;
+}

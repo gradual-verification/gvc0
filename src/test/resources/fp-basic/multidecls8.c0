@@ -1,0 +1,13 @@
+//test error
+// clashing typedef and function name
+
+int integer(int x) {
+  return x/0;
+}
+
+typedef int integer;
+
+int main () {
+  integer x = 3;
+  return 3;
+}

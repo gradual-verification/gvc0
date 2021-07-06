@@ -1,0 +1,6 @@
+//test error
+
+int main () {
+  int x = \result;
+  return x;
+}

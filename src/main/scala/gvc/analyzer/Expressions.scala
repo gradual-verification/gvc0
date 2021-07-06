@@ -74,6 +74,7 @@ case class ResolvedArithmetic(
 sealed trait ComparisonOperation
 object ComparisonOperation {
   case object EqualTo extends ComparisonOperation
+  case object NotEqualTo extends ComparisonOperation
   case object LessThan extends ComparisonOperation
   case object GreaterThan extends ComparisonOperation
   case object GreaterThanOrEqualTo extends ComparisonOperation

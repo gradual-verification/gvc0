@@ -1,0 +1,15 @@
+//test error
+
+// we cannot assign to variables mentioned in postcondition
+// outside \old guards
+
+int f (int x)
+//@ensures \result == x+1;
+{
+  x = 0;
+  return 1;
+}
+
+int main () {
+  return f(3);
+}

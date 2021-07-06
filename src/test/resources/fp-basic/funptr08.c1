@@ -1,0 +1,36 @@
+//test return 54
+
+typedef
+int i2i(int x)
+//@requires x >= 0;
+  ;
+
+typedef
+int ii2i(int x, int y)
+//@requires x >= 0 && y >= 0;
+//@ensures \result >= 0;
+;
+
+int succ(int x) {
+  return x+1;
+}
+
+int plus(int x, int y) {
+  return x+y;
+}
+
+int times(int x, int y) {
+  return x*y;
+}
+
+int apply2(ii2i* f, int x, int y) {
+  return (*f)(x,y);
+}
+
+int main() {
+  i2i* s = &succ;
+  ii2i* add = &plus;
+  ii2i* mult = &times;
+  int x = (*mult)(3,apply2(&times,2,(*add)(succ(6),(*s)(1))));
+  return x;
+}

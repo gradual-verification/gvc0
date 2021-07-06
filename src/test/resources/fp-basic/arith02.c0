@@ -1,0 +1,5 @@
+//test safe => div-by-zero
+
+int main () {
+  return 2/0;
+}

@@ -1,0 +1,31 @@
+//test return 0
+
+int exp (int x, int y)
+{
+int r = 1;
+int b = x; /* base */
+int e = y; /* exponent */
+while (e > 0)
+{
+if (e % 2 == 1) r = b * r;
+b = b * b;
+e = e / 2;
+}
+return r;
+}
+
+int main() {
+  assert(exp(0,0) == 1);
+  assert(exp(0,1) == 0);
+  assert(exp(1,0) == 1);
+  assert(exp(1,17) == 1);
+  assert(exp(2,7) == 128);
+  assert(exp(-2,7) == -128);
+  assert(exp(3,4) == 81);
+  assert(exp(-3,4) == 81);
+  assert(exp(2,30) == (1<<30));
+  assert(exp(2,31) == (1<<31));
+  assert(exp(2,31) == -2147483648);
+  assert(exp(2,31) == -(2147483648*1)+0);
+  return 0;
+}

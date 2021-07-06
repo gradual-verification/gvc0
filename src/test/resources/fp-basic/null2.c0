@@ -1,0 +1,11 @@
+//test return 0
+
+struct s {
+  int x;
+};
+
+int main () {
+  // NULL;
+  bool b = NULL == NULL;
+  return b ? 0 : 1;
+}

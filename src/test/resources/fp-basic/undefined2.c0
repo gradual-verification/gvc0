@@ -1,0 +1,12 @@
+//test error
+// No definition of f
+
+int f (int x);
+
+int g (int x) {
+  return f(f(x));
+}
+
+int main () {
+  return 1;
+}

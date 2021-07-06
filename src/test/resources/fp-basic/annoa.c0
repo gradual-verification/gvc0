@@ -1,0 +1,9 @@
+//test error
+
+int f (int x) {
+  return (\hastag(int,x));
+}
+
+int main () {
+  return f(3);
+}

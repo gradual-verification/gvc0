@@ -1,0 +1,9 @@
+//test return 1
+
+bool is_maxint(int n) {
+  return !(n+1 > n);
+}
+
+int main () {
+  return is_maxint(0x7fffffff) ? 1 : 0;
+}

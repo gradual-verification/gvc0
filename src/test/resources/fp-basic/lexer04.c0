@@ -1,0 +1,7 @@
+//test return 2147483647
+
+int main () {
+  int x = 0x80000000;
+  int y = 0xFFFFFFFF;
+  return x+y;
+}

@@ -1,0 +1,7 @@
+//test resolve_error
+
+int main() {
+  int i;
+  int i;
+  return 1;
+}

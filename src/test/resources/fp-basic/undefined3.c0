@@ -1,0 +1,15 @@
+//test return 5
+
+int f (int x);
+
+int g (int x) {
+  return f(f(x));
+}
+
+int f (int x) {
+  return x+1;
+}
+
+int main () {
+  return g(3);
+}

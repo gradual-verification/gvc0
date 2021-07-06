@@ -1,0 +1,12 @@
+//test return 0
+
+typedef int* elem;
+
+elem g() {
+  return alloc(int);
+}
+
+int main() {
+  int* i = true ? g() : NULL;
+  return 0;
+}

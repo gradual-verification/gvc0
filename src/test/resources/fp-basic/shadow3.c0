@@ -1,0 +1,9 @@
+//test error
+
+typedef int int32;
+
+int main () {
+  int x = 3;
+  int32 int32 = 0;
+  return x;
+}

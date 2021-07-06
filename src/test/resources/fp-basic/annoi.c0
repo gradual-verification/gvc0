@@ -1,0 +1,11 @@
+//test return 1
+
+int main () {
+  int x = 0;
+  if (true)
+    //@assert 0 == 0;
+    x = 1;
+  else
+    x = 2;
+  return x;
+}

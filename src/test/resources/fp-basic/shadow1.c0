@@ -1,0 +1,7 @@
+//test return 9
+int f(int x);
+
+int main() {
+  bool f = true;
+  return 9;
+}

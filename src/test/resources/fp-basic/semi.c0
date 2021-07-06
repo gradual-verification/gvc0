@@ -1,0 +1,9 @@
+//test error
+/* as of Jan 30, 2011, semicolon is no longer
+ * an empty statement; use {} instead
+ */
+
+int main () {
+  while (false);
+  return 0;
+}

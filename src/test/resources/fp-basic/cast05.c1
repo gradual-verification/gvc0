@@ -1,0 +1,16 @@
+//test return 42
+
+/* checking that typedefs are expanded
+ * for tagging/untagging purposes
+ */
+typedef int int32 ;
+typedef int32* int32_ptr;
+
+int main () {
+  int* p = alloc(int);
+  *p = 42;
+  void* data = (void*) p;
+  int32_ptr q = (int32_ptr) data;
+  return *q;
+}
+  

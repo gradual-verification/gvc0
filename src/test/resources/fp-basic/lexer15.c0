@@ -1,0 +1,6 @@
+//test return 0
+
+int main () {
+  char null = '\0';
+  return 0;
+}

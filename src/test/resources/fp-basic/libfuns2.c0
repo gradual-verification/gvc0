@@ -1,0 +1,10 @@
+//test return 0
+#use <conio>
+
+void printchar(char c)
+//@requires true;
+  ;
+
+int main() {
+   return 0;
+}

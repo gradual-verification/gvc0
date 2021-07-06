@@ -1,0 +1,11 @@
+//test return 1
+
+bool flse () {
+  return false;
+}
+
+int main () {
+  bool b = ((true ? (flse() ? NULL : NULL) : NULL) == NULL);
+  int* p = (true ? (flse() ? NULL : NULL) : NULL);
+  return (b && p == NULL) ? 1 : 0;
+}

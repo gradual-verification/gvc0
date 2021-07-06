@@ -1,0 +1,15 @@
+//test return 7
+
+int add (int x, int y);
+
+int add (int j, int k);
+
+int add (int one, int theother) { return one + theother; }
+
+int add (int q, int p);
+
+int add (int a, int n);
+
+int main () {
+  return add (3,4);
+}

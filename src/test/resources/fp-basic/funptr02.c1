@@ -1,0 +1,31 @@
+//test return 27
+
+typedef int int32;
+
+typedef
+int i2i(int32 x);
+
+typedef
+int32 ii2i(int x, int y);
+
+typedef ii2i ii2ialias;
+
+int succ(int x) {
+  return x+1;
+}
+
+int plus(int32 x, int y) {
+  return x+y;
+}
+
+int times(int x, int32 y) {
+  return x*y;
+}
+
+int main() {
+  i2i* s = &succ;
+  ii2i* add = &plus;
+  ii2ialias* mult = &times;
+  int x = (*mult)(3,(*add)(succ(6),(*s)(1)));
+  return x;
+}

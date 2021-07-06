@@ -1,0 +1,15 @@
+//test return 2
+int main()
+{
+       int ret = 0xffffffff;
+       {
+               int x = 0;
+               x++;
+               ret += x;
+       }
+       {
+               int x = 0X2;
+               ret += x;
+       }
+       return ret;
+}

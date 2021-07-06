@@ -1,0 +1,9 @@
+//test resolve_error
+
+int bogoderef(struct bogo *b) {
+  return b->nonexistent;
+}
+
+int main () {
+  return 0;
+}

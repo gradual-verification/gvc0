@@ -1,0 +1,8 @@
+//test error
+
+// make sure illegal string escapes fail
+
+int main () {
+  string x = "\?";
+  return 0;
+}

@@ -1,0 +1,8 @@
+//test resolve_error
+
+int main () {
+  int x1 = 1;
+  int x2 = x1+2;
+  int x1 = x2+3;
+  return x1;
+}

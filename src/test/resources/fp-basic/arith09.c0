@@ -1,0 +1,6 @@
+//test safe => div-by-zero
+
+int main () {
+  int x = 1<<31;
+  return x/-1;
+}

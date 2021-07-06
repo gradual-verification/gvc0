@@ -1,0 +1,11 @@
+//test resolve_error
+
+struct bogo* f(struct bogo* s) {
+  struct bogo* s2;
+  s2 = alloc(struct bogo);
+  return s2;
+}
+
+int main () {
+  return 0;
+}

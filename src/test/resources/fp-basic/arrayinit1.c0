@@ -1,0 +1,25 @@
+//test return 0
+
+struct default_array {
+  int[] default_array;
+};
+
+int[] default_array1() {
+  struct default_array* A = alloc(struct default_array);
+  return A->default_array;
+}
+
+int[] default_array2() {
+  int[][] A = alloc_array(int[], 1);
+  return A[0];
+}
+
+int main () {
+  int[] A = alloc_array(int, 0); // empty array, allocated explicitly
+  int[] B = default_array1();
+  int[] C = default_array2();
+  if (B == C && A != B && A != C)
+    return 0;
+  else 
+    return -1;
+}

@@ -1,0 +1,18 @@
+//test return 1
+
+int main () {
+  bool a = NULL == NULL;
+  bool b = NULL == alloc(int);
+  bool c = alloc(int) == NULL;
+  bool d = NULL != NULL;
+  bool e = NULL != alloc(int);
+  bool f = alloc(int) != NULL;
+  bool g = 'a' != '1';
+  bool h = ' ' != '\n';
+  bool i = 'a' < 'b';
+  bool j = 'a' <= 'b';
+  bool k = 'a' > '@';
+  bool l = '\t' < '\n';
+  bool m = 'f' == 'f';
+  return ((a && !b && !c && !d && e && f && g && h && i && j && k && l && m) ? 1 : 0);
+}

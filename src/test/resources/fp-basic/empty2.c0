@@ -1,0 +1,6 @@
+//test return 0
+
+int main() {return 0;}
+
+typedef int elem;
+

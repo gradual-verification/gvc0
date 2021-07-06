@@ -1,0 +1,8 @@
+//test segfault
+
+int main() {
+  bool* p = alloc(bool);
+  void* q = (void*) p;
+  *(int*)q = 1/0;
+  return 27;
+}

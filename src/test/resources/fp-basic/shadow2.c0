@@ -1,0 +1,7 @@
+//test resolve_error
+
+int main () {
+  int x = 0;
+  if (x == 0) { int x; x = 2; }
+  return x;
+}

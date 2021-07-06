@@ -1,0 +1,8 @@
+//test return 17
+
+int main() {
+  int* p = alloc(int);
+  void* q = (void*) p;
+  *(int*)q = 17;
+  return *p;
+}

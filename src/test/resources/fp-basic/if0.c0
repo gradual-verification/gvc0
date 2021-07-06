@@ -1,0 +1,9 @@
+//test return 32
+
+int main () {
+  int* x = alloc(int);
+  int[] A = alloc_array(int, 37);
+  if (0 == 0)
+    *x = 32;
+  return *x;
+}

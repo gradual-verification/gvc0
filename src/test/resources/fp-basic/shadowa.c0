@@ -1,0 +1,9 @@
+//test error
+
+int f (int x) { return x+1; }
+
+int main () {
+  int f = 33;
+  int g = f(18);
+  return g;
+}

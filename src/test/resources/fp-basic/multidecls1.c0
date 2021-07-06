@@ -1,0 +1,18 @@
+//test return 3
+int id (int x);
+int id (int x);
+int id (int x) {
+  return x;
+}
+int id (int x);
+
+struct s;
+struct s;
+struct s {int the;};
+struct s;
+
+int main () {
+  struct s* s = alloc(struct s);
+  s->the = id(3);
+  return 3;
+}

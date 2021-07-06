@@ -1,0 +1,8 @@
+//test return 0
+#use <conio>
+
+void printchar(char c);
+
+int main() {
+   return 0;
+}

@@ -332,13 +332,16 @@ object Resolver {
           case BinaryOperator.Divide => ResolvedArithmetic(binary, left, right, ArithmeticOperation.Divide)
           case BinaryOperator.Multiply => ResolvedArithmetic(binary, left, right, ArithmeticOperation.Multiply)
           case BinaryOperator.Equal => ResolvedComparison(binary, left, right, ComparisonOperation.EqualTo)
+          case BinaryOperator.NotEqual => ResolvedComparison(binary, left, right, ComparisonOperation.NotEqualTo)
           case BinaryOperator.Greater => ResolvedComparison(binary, left, right, ComparisonOperation.GreaterThan)
           case BinaryOperator.GreaterEqual => ResolvedComparison(binary, left, right, ComparisonOperation.GreaterThanOrEqualTo)
           case BinaryOperator.Less => ResolvedComparison(binary, left, right, ComparisonOperation.LessThan)
           case BinaryOperator.LessEqual => ResolvedComparison(binary, left, right, ComparisonOperation.LessThanOrEqualTo)
+          case BinaryOperator.LogicalAnd => ResolvedLogical(binary, left, right, LogicalOperation.And)
+          case BinaryOperator.LogicalOr => ResolvedLogical(binary, left, right, LogicalOperation.Or)
           case _ => {
             // Log the error and return a mock that assumes add
-            scope.errors.error(binary, "Unsupported operator")
+            scope.errors.error(binary, "Unsupported operator " + binary.operator.toString())
             ResolvedArithmetic(binary, left, right, ArithmeticOperation.Add)
           }
         }
@@ -347,9 +350,9 @@ object Resolver {
       case unary: UnaryExpression => unary.operator match {
         case UnaryOperator.Not => ResolvedNot(unary, resolveExpression(unary.operand, scope))
         case UnaryOperator.Negate => ResolvedNegation(unary, resolveExpression(unary.operand, scope))
-        case _ => {
+        case op => {
           // Log the error and return a mock that assumes negation
-          scope.errors.error(unary, "Unsupported operator")
+          scope.errors.error(unary, "Unsupported operator " + op.toString())
           ResolvedNegation(unary, resolveExpression(unary.operand, scope))
         }
       }
@@ -363,9 +366,14 @@ object Resolver {
 
       case invoke: InvokeExpression => {
         val name = invoke.method.name
+        val method = scope.methodDeclarations.get(name)
+        if (!method.isDefined) {
+          scope.errors.error(invoke, "'" + name + "' is not declared")
+        }
+
         ResolvedInvoke(
           parsed = invoke,
-          method = scope.methodDeclarations.get(name),
+          method = method,
           methodName = name,
           arguments = invoke.arguments.map(resolveExpression(_, scope)),
         )
@@ -441,7 +449,12 @@ object Resolver {
   }
 
   def resolveVariable(id: Identifier, scope: Scope): ResolvedExpression = {
-    ResolvedVariableRef(id, scope.variables.get(id.name))
+    val variable = scope.variables.get(id.name)
+    if (!variable.isDefined) {
+      scope.errors.error(id, "'" + id.name + "' is not defined")
+    }
+
+    ResolvedVariableRef(id, variable)
   }
 
   def resolveSpecs(specs: List[Specification], scope: Scope): Option[ResolvedAssert] = {
@@ -453,8 +466,8 @@ object Resolver {
       }
     })
 
-    specs match {
-      case head :: _ => Some(ResolvedAssert(head, combineBooleans(asserts).get))
+    asserts match {
+      case head :: _ => Some(ResolvedAssert(head.parsed, combineBooleans(asserts).get))
       case _ => None
     }
   }
@@ -487,20 +500,23 @@ object Resolver {
     val retType = resolveType(input.returnType, scope)
     val parameters = input.arguments.map(arg => ResolvedVariable(arg, arg.id.name, resolveType(arg.valueType, scope)))
 
+    // Parameters may be referenced in method specifications
+    val specScope = scope.declareVariables(parameters)
+
     val preconditions = ListBuffer[ResolvedExpression]()
     val postconditions = ListBuffer[ResolvedExpression]()
     for (spec <- input.specifications) {
       spec match {
-        case requires: RequiresSpecification => preconditions += resolveExpression(requires.value, scope)
-        case ensures: EnsuresSpecification => postconditions += resolveExpression(ensures.value, scope)
+        case requires: RequiresSpecification => preconditions += resolveExpression(requires.value, specScope)
+        case ensures: EnsuresSpecification => postconditions += resolveExpression(ensures.value, specScope)
         case invariant: LoopInvariantSpecification => {
           // TODO: Should invalid invariants be type-checked?
-          resolveExpression(invariant.value, scope) // To check for resolving errors
+          resolveExpression(invariant.value, specScope) // To check for resolving errors
           scope.errors.error(invariant, "Invalid loop_invariant")
         }
         case assert: AssertSpecification => {
           // TODO: Should invalid asserts be type-checked?
-          resolveExpression(assert.value, scope) // To check for resolving errors
+          resolveExpression(assert.value, specScope) // To check for resolving errors
           scope.errors.error(assert, "Invalid assert")
         }
       }

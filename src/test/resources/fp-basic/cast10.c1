@@ -1,0 +1,9 @@
+//test return 1
+
+/* checking pointer inequality on different types */
+
+int main () {
+  int* p = alloc(int);
+  bool* q = alloc(bool);
+  return (void*)p != (void*)q ? 1 : 0;
+}

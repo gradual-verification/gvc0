@@ -1,0 +1,8 @@
+//test resolve_error
+typedef int integer;
+typedef int integer;
+
+int main () {
+  integer x = 3;
+  return 3;
+}

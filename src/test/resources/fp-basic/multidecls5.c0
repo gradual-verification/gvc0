@@ -1,0 +1,11 @@
+//test error
+
+int id (int x, int y) {
+  return x+y;
+}
+
+int id (int x);
+
+int main () {
+  return id(3,4);
+}

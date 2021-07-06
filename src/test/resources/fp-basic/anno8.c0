@@ -1,0 +1,6 @@
+//test error
+
+int main () {
+  int[] A = alloc_array(int,2);
+  return(\length(A));
+}

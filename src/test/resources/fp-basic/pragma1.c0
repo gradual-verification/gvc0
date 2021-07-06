@@ -1,0 +1,20 @@
+//test return 1
+// this tests multi-line pragmas,
+// #use pragmas with standard libraries
+// #use pragmas with simple files, interpreted
+// relative to the directory
+
+#include <lib>\
+more than\
+one\
+line
+
+#use <conio> 
+// using a file more than once would create an error here
+#use "pragma1_aux.c0"
+#use "pragma1_aux.c0"
+
+int main () {
+  print("This should return 1!\n"); /* this tests #use <conio> */
+  return inc(0);		/* this tests #use "pragma1_aux.c0" */
+}

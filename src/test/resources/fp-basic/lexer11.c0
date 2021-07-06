@@ -1,0 +1,8 @@
+//test return 0
+
+// make sure string escapes work properly
+
+int main () {
+  string x = "\"\t\r\f\a\b\n\v\\'";
+  return 0;
+}

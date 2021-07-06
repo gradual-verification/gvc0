@@ -1,0 +1,10 @@
+//test error
+
+void f() { return; }
+
+int main() {
+  void* x = NULL;
+  f();                          /* this is okay */
+  *x;                           /* this is not okay */
+  return 5;
+}

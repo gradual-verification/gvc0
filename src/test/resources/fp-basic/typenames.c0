@@ -1,0 +1,16 @@
+//test return 0
+
+/* checks that the return type name Integer
+ * is not used out of scope, in main
+ */
+
+int f();
+
+int main() {
+  return f();
+}
+
+typedef int Integer;
+Integer f() {
+  return 0;
+}

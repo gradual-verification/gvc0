@@ -1,0 +1,6 @@
+//test return 0
+typedef int t;
+int foo (t x);
+typedef t x;
+t foo (x y) {return y;}
+int main () {return foo (0);}

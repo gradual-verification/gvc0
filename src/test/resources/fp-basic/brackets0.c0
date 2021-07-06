@@ -1,0 +1,6 @@
+//test error
+
+int main () {
+  int[] A = [];
+  return 0;
+}

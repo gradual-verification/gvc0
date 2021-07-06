@@ -1,0 +1,26 @@
+//test error
+
+/* testing interaction between void* and function pointers */
+/* cannot cast a function pointer '&f' directly, since it
+ * does not have a named type
+ */
+
+#use <string>
+
+typedef
+string s2s(string s);
+
+string to_lower(string s) {
+  return string_tolower(s);
+}
+
+string id(string s) {
+  return s;
+}
+
+int main() {
+  s2s* f = &to_lower;
+  void* v = (void*)(&id);
+  s2s* g = (s2s*) v;
+  return (f == g) ? 1 : 0;
+}

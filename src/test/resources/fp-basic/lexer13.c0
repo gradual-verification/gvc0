@@ -1,0 +1,10 @@
+//test return 0
+// this file
+int /* tests */
+main /* nested /* comments */ which /* are /* ok */*/ in C0 */
+() // and also put comments
+{ /* at every */
+  return /* legal */
+    0 /* position */
+    ; // even though
+} // this is not /* good style */

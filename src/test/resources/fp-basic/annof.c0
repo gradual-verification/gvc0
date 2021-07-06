@@ -1,0 +1,18 @@
+//test return 1
+
+// we can assign to parameter variables that
+// occur in the postcondition only inside \old guards
+// contract violation would occur with -d
+
+int f (int x, int y)
+/* \old no longer supported */
+// //@ensures \result == \old(x)+1;
+{
+  x = 0;
+  y = 1;
+  return y;
+}
+
+int main () {
+  return f(3, 4);
+}

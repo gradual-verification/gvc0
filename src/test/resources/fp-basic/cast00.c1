@@ -1,0 +1,9 @@
+//test return 37
+
+int main () {
+  int* p = alloc(int);
+  *p = 37;
+  void* q = (void*) p;
+  int* r = (int*) q;
+  return *r;
+}

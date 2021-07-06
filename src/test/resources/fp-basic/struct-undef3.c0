@@ -1,0 +1,10 @@
+//test return 0
+
+struct bogo* f(struct bogo* s) {
+  struct bogo* s2 = s;
+  return s2;
+}
+
+int main () {
+  return 0;
+}

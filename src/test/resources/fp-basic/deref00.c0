@@ -1,0 +1,19 @@
+//test return 0
+
+struct list {
+  int data;
+  struct list* next;
+};
+
+typedef struct list* list;
+
+list list_new() {
+  return alloc(struct list);
+}
+
+int main () {
+  int x = list_new()->data;
+  list l = list_new()->next;
+  return 0;
+}
+

@@ -1,0 +1,7 @@
+//test error
+
+int main () {
+  int x = 3;
+  int y = (int)x;
+  return y;
+}

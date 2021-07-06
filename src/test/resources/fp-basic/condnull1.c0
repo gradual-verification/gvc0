@@ -1,0 +1,12 @@
+//test error
+
+bool flse () {
+  return false;
+}
+
+int main () {
+  bool b = ((true ? (flse() ? NULL : NULL) : NULL) == NULL);
+  int* p = (true ? (flse() ? NULL : NULL) : NULL);
+  int x = *(true ? (flse() ? NULL : NULL) : NULL);
+  return b ? 1 : 0;
+}

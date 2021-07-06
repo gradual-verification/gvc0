@@ -1,0 +1,5 @@
+//test error
+int main () {
+  string x = "ab\cd";
+  return 0;
+}

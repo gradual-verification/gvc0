@@ -1,0 +1,20 @@
+//
+// quarantined this test, since we will now allow multiple
+// declarations -fp Jan 2, 2011
+
+//test error
+
+// Currently, multiple contracts are not allowed
+// Eventually, they might be combined conjunctively
+
+int sqrt (int x)
+//@requires x >= 0;
+  ;
+
+int sqrt (int x)
+//@ensures \result >= 0;
+  ;
+
+int main () {
+  return 0;
+}

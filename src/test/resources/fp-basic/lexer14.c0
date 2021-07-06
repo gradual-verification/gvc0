@@ -1,0 +1,14 @@
+//test return 0
+// check that all whitespace character are accepted
+// according to C:
+// \t (tab = 9 [dec] = \t [mllex] = 0x09 [hex] = ctrl-i = ^I)
+// \n (newline = 10 [dex] = \n [mllex] = 0x0A [hex] = ctrl-j = ^J)
+// \v (vertical tab = 11 [dec] = \011 [mllex] = 0x0B [hex] = ctrl-k = ^K)
+// \f (form feed = 12 [dec] = \012 [mllex] = 0x0C [hex] = ctrl-l = ^L)
+// \r (carriage return = 13 [dec] = \r [mllex] = 0x0D [hex] = ctrl-m = ^M)
+// \ (space = 32 [dec] = \ [mllex] = 0x20 [hex] = )
+
+
+int main() {
+  return 0;
+}

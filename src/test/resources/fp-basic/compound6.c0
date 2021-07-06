@@ -1,0 +1,13 @@
+//test return 2
+
+struct s {
+  int x;
+};
+
+int main () {
+  struct s* q = alloc(struct s);
+  q->x = 17;
+  q->x %= 5;
+
+  return q->x;
+}

@@ -1,0 +1,25 @@
+//test return 0
+
+/* test function pointers interacting with conditional
+ * expressions */
+
+#use <string>
+
+typedef
+string s2s(string s);
+
+string to_lower(string s) {
+  return string_tolower(s);
+}
+
+string id(string s) {
+  return s;
+}
+
+int main() {
+  bool b = false;
+  s2s* f = &to_lower;
+  s2s* h = &id;
+  s2s* g = b ? f : !b ? h : &id;
+  return (f == g) ? 1 : 0;
+}

@@ -1,0 +1,10 @@
+//test resolve_error
+
+int main () {
+  int x;
+  while (true) {
+    x = 1;
+    break;
+  }
+  return x;
+}

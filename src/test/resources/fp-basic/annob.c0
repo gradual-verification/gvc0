@@ -1,0 +1,7 @@
+//test abort
+
+int main () {
+  //@assert true; // this should always succeed
+  assert(false);
+  return 0;
+}
