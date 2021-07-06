@@ -12,14 +12,62 @@ case class ResolvedProgram(
 )
 
 case class Scope(
-  variables: HashMap[String, ResolvedVariable],
-  methodDeclarations: HashMap[String, ResolvedMethodDeclaration],
-  methodDefinitions: HashMap[String, ResolvedMethodDefinition],
-  structDeclarations: HashMap[String, ResolvedStructDeclaration],
-  structDefinitions: HashMap[String, ResolvedStructDefinition],
-  typeDefs: HashMap[String, ResolvedTypeDef],
+  variables: Map[String, ResolvedVariable],
+  methodDeclarations: Map[String, ResolvedMethodDeclaration],
+  methodDefinitions: Map[String, ResolvedMethodDefinition],
+  structDeclarations: Map[String, ResolvedStructDeclaration],
+  structDefinitions: Map[String, ResolvedStructDefinition],
+  typeDefs: Map[String, ResolvedTypeDef],
   errors: ErrorSink
-)
+) {
+  def declareStruct(struct: ResolvedStructDeclaration): Scope = {
+    if (structDeclarations.contains(struct.name)) {
+      this
+    } else {
+      copy(structDeclarations = structDeclarations + (struct.name -> struct))
+    }
+  }
+
+  def defineStruct(struct: ResolvedStructDefinition): Scope = {
+    if (structDefinitions.contains(struct.name)) {
+      errors.error(struct.parsed, "'struct " + struct.name + "' is already defined")
+      this
+    } else {
+      copy(structDefinitions = structDefinitions + (struct.name -> struct))
+    }
+  }
+
+  def declareMethod(method: ResolvedMethodDeclaration): Scope = {
+    if (methodDeclarations.contains(method.name)) {
+      this
+    } else {
+      copy(methodDeclarations = methodDeclarations + (method.name -> method))
+    }
+  }
+
+  def defineMethod(method: ResolvedMethodDefinition): Scope = {
+    if (methodDefinitions.contains(method.name)) {
+      errors.error(method.parsed, "'" + method.name + "' is already defined")
+      this
+    } else {
+      copy(methodDefinitions = methodDefinitions + (method.name -> method))
+    }
+  }
+
+  def declareVariable(variable: ResolvedVariable): Scope = {
+    if (variables.contains(variable.name)) {
+      errors.error(variable.parsed, "'" + variable.name + "' is already declared")
+      this
+    } else {
+      copy(variables = variables + (variable.name -> variable))
+    }
+  }
+
+  def declareVariables(variables: Seq[ResolvedVariable]) = {
+    // Add one-by-one to check for already defined variables
+    variables.foldLeft(this) { _.declareVariable(_) }
+  }
+}
 
 object Resolver {
   val reservedWords = Set(
@@ -60,16 +108,22 @@ object Resolver {
     }
   }
 
-  def resolveStructDefinition(input: StructDefinition, decl: ResolvedStructDeclaration, scope: Scope): ResolvedStructDefinition = {
-    ResolvedStructDefinition(
-      parsed = input,
-      declaration = decl,
-      fields = input.fields.get.map(field => ResolvedStructField(
+  def resolveStructDefinition(input: StructDefinition, scope: Scope): ResolvedStructDefinition = {
+    val fields = ListBuffer[ResolvedStructField]()
+    for (field <- input.fields.get) {
+      if (fields.exists(_.name == field.id.name)) {
+        scope.errors.error(field, "Field '" + field.id.name + "' is already defined")
+      }
+
+      fields += ResolvedStructField(
         parsed = field,
         name = field.id.name,
         valueType = resolveType(field.valueType, scope)
-      ))
-    )
+      )
+    }
+
+    val initialDeclaration = scope.structDeclarations(input.id.name)
+    ResolvedStructDefinition(input, initialDeclaration, fields.toList)
   }
 
   def resolveStructDeclaration(input: StructDefinition, scope: Scope): ResolvedStructDeclaration = {
@@ -232,12 +286,7 @@ object Resolver {
             }
           }
           
-          if (blockScope.variables.contains(varDef.name)) {
-            // TODO: Check method names?
-            blockScope.errors.error(v, "'" + varDef.name + "' is already defined")
-          } else {
-            blockScope = blockScope.copy(variables = blockScope.variables + (varDef.name -> varDef))
-          }
+          blockScope = blockScope.declareVariable(varDef)
         }
 
         case _ => {
@@ -343,6 +392,7 @@ object Resolver {
               } 
             }
           } else {
+            // TODO: Are dotted members ever valid in C0?
             parent.valueType match {
               case ResolvedStructType(struct) => Some(struct)
               case _ => {
@@ -466,8 +516,21 @@ object Resolver {
     )
   }
 
-  def resolveMethodDefinition(input: MethodDefinition, decl: ResolvedMethodDeclaration, scope: Scope): ResolvedMethodDefinition = {
-    ???
+  def resolveMethodDefinition(input: MethodDefinition, localDecl: ResolvedMethodDeclaration, scope: Scope): ResolvedMethodDefinition = {
+    // Add method parameters to variable scope
+    val methodScope = scope.declareVariables(localDecl.arguments)
+
+    val block = input.body.get
+    val resolvedBlock = resolveBlock(
+      parsed = block,
+      scope = methodScope,
+      body = block.body,
+      specifications = block.specifications,
+      trailingSpecifications = block.trailingSpecifications
+    )
+
+    val initialDecl = scope.methodDeclarations(input.id.name)
+    ResolvedMethodDefinition(input, initialDecl, resolvedBlock)
   }
 
   def resolveProgram(program: List[Definition], errors: ErrorSink): ResolvedProgram = {
@@ -478,12 +541,12 @@ object Resolver {
     val types = ListBuffer[ResolvedTypeDef]()
 
     var scope = Scope(
-      variables = HashMap.empty,
-      methodDeclarations = HashMap.empty,
-      methodDefinitions = HashMap.empty,
-      structDeclarations = HashMap.empty,
-      structDefinitions = HashMap.empty,
-      typeDefs = HashMap.empty,
+      variables = Map.empty,
+      methodDeclarations = Map.empty,
+      methodDefinitions = Map.empty,
+      structDeclarations = Map.empty,
+      structDefinitions = Map.empty,
+      typeDefs = Map.empty,
       errors = errors
     )
 
@@ -504,18 +567,16 @@ object Resolver {
         }
 
         case s: StructDefinition => {
-          var decl = resolveStructDeclaration(s, scope)
+          val decl = resolveStructDeclaration(s, scope)
           structDeclarations += decl
           if (!scope.structDeclarations.contains(decl.name)) {
             scope = scope.copy(structDeclarations = scope.structDeclarations + (decl.name -> decl))
           }
 
-          val struct = resolveStructDefinition(s, decl, scope)
-          structDefinitions += struct
-          if (scope.structDefinitions.contains(decl.name)) {
-            scope.errors.error(s, "'struct " + decl.name + "' is already defined")
-          } else {
-            scope = scope.copy(structDefinitions = scope.structDefinitions + (decl.name -> struct))
+          if (s.fields.isDefined) {
+            val definition = resolveStructDefinition(s, scope)
+            structDefinitions += definition
+            scope = scope.defineStruct(definition)
           }
         }
 
@@ -527,13 +588,9 @@ object Resolver {
           }
 
           if (m.body.isDefined) {
-            val method = resolveMethodDefinition(m, decl, scope)
-            methodDefinitions += method
-            if (scope.methodDefinitions.contains(method.name)) {
-              scope.errors.error(m, "'" + decl.name + "' is already defined")
-            } else {
-              scope = scope.copy(methodDefinitions = scope.methodDefinitions + (decl.name -> method))
-            }
+            val definition = resolveMethodDefinition(m, decl, scope)
+            methodDefinitions += definition
+            scope = scope.defineMethod(definition)
           }
         }
       }

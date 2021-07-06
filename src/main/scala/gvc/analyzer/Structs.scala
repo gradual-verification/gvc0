@@ -11,6 +11,8 @@ case class ResolvedStructDefinition(
   declaration: ResolvedStructDeclaration,
   fields: List[ResolvedStructField]
 ) {
+  def name = declaration.name
+
   def lookupField(name: String): Option[ResolvedStructField] =
     fields.find(_.name == name)
 }

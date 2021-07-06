@@ -13,7 +13,7 @@ case class ResolvedMethodDeclaration(
 case class ResolvedMethodDefinition(
   parsed: MethodDefinition,
   declaration: ResolvedMethodDeclaration,
-  body: BlockStatement
+  body: ResolvedBlock
 ) {
   def name = declaration.name
 }
