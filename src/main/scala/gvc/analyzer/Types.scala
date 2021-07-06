@@ -14,15 +14,6 @@ case object UnknownType extends ResolvedType {
   def isEquivalent(other: ResolvedType): Boolean = true
 }
 
-case class MissingStructType(name: String) extends ResolvedType {
-  // Assume that structs with the same name are equivalent, even if they have
-  // not been defined
-  def isEquivalent(other: ResolvedType): Boolean = other match {
-    case _: MissingStructType => other.name == name
-    case _ => false
-  }
-}
-
 case class MissingNamedType(name: String) extends ResolvedType {
   // Assome that types with the same name are equivalent, even if they have
   // not been defined
@@ -33,14 +24,10 @@ case class MissingNamedType(name: String) extends ResolvedType {
 }
 
 case class ResolvedStructType(
-  struct: ResolvedStructDeclaration
+  name: String
 ) extends ResolvedType {
-  def name = struct.name
-
   def isEquivalent(other: ResolvedType): Boolean = other match {
-    // Assume that if a missing struct has the same name it is a problem with the definition order
-    // i.e. the struct was used before it was defined
-    case _: MissingStructType | _: ResolvedStructType => other.name == name
+    case struct: ResolvedStructType => struct.name == name
     case _ => false
   }
 }

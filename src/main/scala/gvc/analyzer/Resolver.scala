@@ -6,7 +6,6 @@ import scala.collection.immutable.HashMap
 case class ResolvedProgram(
   methodDeclarations: List[ResolvedMethodDeclaration],
   methodDefinitions: List[ResolvedMethodDefinition],
-  structDeclarations: List[ResolvedStructDeclaration],
   structDefinitions: List[ResolvedStructDefinition],
   types: List[ResolvedTypeDef]
 )
@@ -15,19 +14,10 @@ case class Scope(
   variables: Map[String, ResolvedVariable],
   methodDeclarations: Map[String, ResolvedMethodDeclaration],
   methodDefinitions: Map[String, ResolvedMethodDefinition],
-  structDeclarations: Map[String, ResolvedStructDeclaration],
   structDefinitions: Map[String, ResolvedStructDefinition],
   typeDefs: Map[String, ResolvedTypeDef],
   errors: ErrorSink
 ) {
-  def declareStruct(struct: ResolvedStructDeclaration): Scope = {
-    if (structDeclarations.contains(struct.name)) {
-      this
-    } else {
-      copy(structDeclarations = structDeclarations + (struct.name -> struct))
-    }
-  }
-
   def defineStruct(struct: ResolvedStructDefinition): Scope = {
     if (structDefinitions.contains(struct.name)) {
       errors.error(struct.parsed, "'struct " + struct.name + "' is already defined")
@@ -84,14 +74,8 @@ object Resolver {
   }
 
   def resolveStruct(id: Identifier, scope: Scope): ResolvedType = {
-    val name = id.name
-    scope.structDeclarations.get(name) match {
-      case None => {
-        scope.errors.error(id, "Undeclared struct " + name)
-        MissingStructType(name)
-      }
-      case Some(struct) => ResolvedStructType(struct)
-    }
+    // Structs may be used before they are declared or defined
+    ResolvedStructType(id.name)
   }
 
   def resolveNamedType(id: Identifier, scope: Scope): ResolvedType = {
@@ -122,15 +106,7 @@ object Resolver {
       )
     }
 
-    val initialDeclaration = scope.structDeclarations(input.id.name)
-    ResolvedStructDefinition(input, initialDeclaration, fields.toList)
-  }
-
-  def resolveStructDeclaration(input: StructDefinition, scope: Scope): ResolvedStructDeclaration = {
-    ResolvedStructDeclaration(
-      parsed = input,
-      name = input.id.name
-    )
+    ResolvedStructDefinition(input, input.id.name, fields.toList)
   }
 
   def resolveTypeDef(input: TypeDefinition, scope: Scope): ResolvedTypeDef = {
@@ -380,11 +356,17 @@ object Resolver {
         )
       }
 
-      case alloc: AllocExpression =>
-        ResolvedAlloc(alloc, resolveType(alloc.valueType, scope))
+      case alloc: AllocExpression => {
+        val valueType = resolveType(alloc.valueType, scope)
+        verifyDefinedType(valueType, alloc, scope)
+        ResolvedAlloc(alloc, valueType)
+      }
 
-      case alloc: AllocArrayExpression =>
-        ResolvedAllocArray(alloc, resolveType(alloc.valueType, scope), resolveExpression(alloc.length, scope))
+      case alloc: AllocArrayExpression => {
+        val valueType = resolveType(alloc.valueType, scope)
+        verifyDefinedType(valueType, alloc, scope)
+        ResolvedAllocArray(alloc, valueType, resolveExpression(alloc.length, scope))
+      }
 
       case index: IndexExpression =>
         ResolvedArrayIndex(index, resolveExpression(index.parent, scope), resolveExpression(index.index, scope))
@@ -415,9 +397,9 @@ object Resolver {
         val field = struct match {
           case None => None
 
-          case Some(struct) => scope.structDefinitions.get(struct.name) match {
+          case Some(struct) => scope.structDefinitions.get(struct) match {
             case None => {
-              scope.errors.error(member, "'" + struct.toString() + "' declared but not defined")
+              scope.errors.error(member, "'struct " + struct + "' is not defined")
               None
             }
 
@@ -456,6 +438,20 @@ object Resolver {
     }
 
     ResolvedVariableRef(id, variable)
+  }
+
+  def verifyDefinedType(t: ResolvedType, node: Node, scope: Scope): Unit = {
+    t match {
+      case ResolvedStructType(name) => {
+        if (!scope.structDefinitions.contains(name)) {
+          scope.errors.error(node, "'struct " + name + "' is not defined")
+        }
+      }
+
+      case ResolvedPointer(valueType) => verifyDefinedType(valueType, node, scope)
+      case ResolvedArray(valueType) => verifyDefinedType(valueType, node, scope)
+      case _ => ()
+    }
   }
 
   def resolveSpecs(specs: List[Specification], scope: Scope): Option[ResolvedAssert] = {
@@ -553,7 +549,6 @@ object Resolver {
   def resolveProgram(program: List[Definition], errors: ErrorSink): ResolvedProgram = {
     val methodDeclarations = ListBuffer[ResolvedMethodDeclaration]()
     val methodDefinitions = ListBuffer[ResolvedMethodDefinition]()
-    val structDeclarations = ListBuffer[ResolvedStructDeclaration]()
     val structDefinitions = ListBuffer[ResolvedStructDefinition]()
     val types = ListBuffer[ResolvedTypeDef]()
 
@@ -561,7 +556,6 @@ object Resolver {
       variables = Map.empty,
       methodDeclarations = Map.empty,
       methodDefinitions = Map.empty,
-      structDeclarations = Map.empty,
       structDefinitions = Map.empty,
       typeDefs = Map.empty,
       errors = errors
@@ -584,12 +578,6 @@ object Resolver {
         }
 
         case s: StructDefinition => {
-          val decl = resolveStructDeclaration(s, scope)
-          structDeclarations += decl
-          if (!scope.structDeclarations.contains(decl.name)) {
-            scope = scope.copy(structDeclarations = scope.structDeclarations + (decl.name -> decl))
-          }
-
           if (s.fields.isDefined) {
             val definition = resolveStructDefinition(s, scope)
             structDefinitions += definition
@@ -616,7 +604,6 @@ object Resolver {
     ResolvedProgram(
       methodDeclarations = methodDeclarations.toList,
       methodDefinitions = methodDefinitions.toList,
-      structDeclarations = structDeclarations.toList,
       structDefinitions = structDefinitions.toList,
       types = types.toList
     )

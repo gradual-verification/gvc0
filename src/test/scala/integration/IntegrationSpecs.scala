@@ -138,8 +138,8 @@ class IntegrationSpecs extends AnyFunSuite {
     "starplusplus3.c0",
     // "starplusplus4.c0", TODO: precedence of -- and *
     "struct-undef1.c0",
-    // "struct-undef2.c0", TODO: undeclared structs
-    // "struct-undef3.c0", TODO: undeclared structs
+    "struct-undef2.c0",
+    "struct-undef3.c0",
     "struct-undef4.c0",
     "typenames.c0",
     // "typenames2.c0", TODO: no intersecting type/method names
