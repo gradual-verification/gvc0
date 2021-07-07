@@ -41,8 +41,6 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/usetest0.c0",
 
     // TYPE CHECKING
-    // TODO: Don't allow void pointers
-    "fp-basic/cast07.c0",
     // TODO: Don't allow returning void
     "fp-basic/void.c0",
 

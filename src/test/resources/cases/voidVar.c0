@@ -1,0 +1,5 @@
+//test type_error
+int main() {
+  void test;
+  return 0;
+}

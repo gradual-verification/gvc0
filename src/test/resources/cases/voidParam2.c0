@@ -1,0 +1,3 @@
+//test type_error
+
+void doTest(void* value);
