@@ -1,0 +1,10 @@
+
+void doTest()
+{
+}
+
+int main()
+{
+  doTest();
+  return 0;
+}

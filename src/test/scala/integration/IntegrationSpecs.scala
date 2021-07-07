@@ -13,7 +13,8 @@ class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
     // The test files are copied with some modifications in the test header
     // from tests/fp-basic in the cc0 repository
-    "fp-basic/"
+    "fp-basic/",
+    "cases/"
   )
 
   val exclusions = Set(
@@ -35,8 +36,6 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/multidecls15.c0",
 
     // RESOLVING
-    // TODO: Implement void type
-    "fp-basic/void.c0",
     // TODO: implement #use
     "fp-basic/libfuns1.c0",
     "fp-basic/libfuns2.c0",
@@ -49,6 +48,10 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/multidecls4.c0",
     "fp-basic/multidecls5.c0",
     "fp-basic/multidecls13.c0",
+    // TODO: Don't allow void pointers
+    "fp-basic/cast07.c0",
+    // TODO: Don't allow returning void
+    "fp-basic/void.c0",
 
     // WELL-FORMEDNESS
     // TODO: check for deref NULL

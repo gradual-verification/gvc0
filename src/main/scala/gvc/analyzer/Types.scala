@@ -24,10 +24,12 @@ case class MissingNamedType(name: String) extends ResolvedType {
 }
 
 case class ResolvedStructType(
-  name: String
+  structName: String
 ) extends ResolvedType {
+  def name = "struct " + structName
+
   def isEquivalent(other: ResolvedType): Boolean = other match {
-    case struct: ResolvedStructType => struct.name == name
+    case ResolvedStructType(otherName) => structName == otherName
     case _ => false
   }
 }
@@ -63,11 +65,12 @@ sealed trait BuiltinType extends ResolvedType {
 }
 
 object BuiltinType {
-  val lookup: Map[String, BuiltinType] = HashMap[String, BuiltinType](
+  val lookup = Map(
     "int" -> IntType,
     "string" -> StringType,
     "bool" -> BoolType,
-    "char" -> CharType
+    "char" -> CharType,
+    "void" -> VoidType
   )
 }
 
@@ -92,6 +95,13 @@ case object NullType extends BuiltinType {
     case NullType => true
     case _ => false
   }
+}
+
+case object VoidType extends BuiltinType {
+  def name = "void"
+
+  // void can never be used as a value of any type
+  override def isEquivalent(other: ResolvedType): Boolean = false
 }
 
 case class ResolvedTypeDef(

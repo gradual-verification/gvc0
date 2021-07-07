@@ -415,7 +415,6 @@ object Resolver {
               } 
             }
           } else {
-            // TODO: Are dotted members ever valid in C0?
             parent.valueType match {
               case ResolvedStructType(struct) => Some(struct)
               case _ => {
