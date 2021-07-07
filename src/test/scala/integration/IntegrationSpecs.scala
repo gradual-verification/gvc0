@@ -10,152 +10,93 @@ import gvc.analyzer.ErrorSink
 import gvc.analyzer.ResolvedProgram
 
 class IntegrationSpecs extends AnyFunSuite {
-  // The test files are copied with some modifications in the test header
-  // from tests/fp-basic in the cc0 repository
-  val testFiles = List(
-    "anno1.c0",
-    "anno2.c0",
-    "anno3.c0",
-    "anno4.c0",
-    "anno5.c0",
-    "anno6.c0",
-    "anno7.c0",
-    "anno8.c0",
-    "anno9.c0",
-    "annoa.c0",
-    "annob.c0",
-    "annoc.c0",
-    "annod.c0",
-    // "annoe.c0", TODO: well-formedness check
-    "annof.c0",
-    // "annog.c0", TODO: \length assertion
-    "annoh.c0",
-    "annoi.c0",
-    "annoj.c0",
-    "annok.c0",
-    "arith01.c0",
-    "arith02.c0",
-    // "arith03.c0", (modulo)
-    // "arith04.c0",
-    // "arith05.c0",
-    // "arith06.c0",
-    // "arith07.c0",
-    // "arith08.c0", (bit shift)
-    // "arith09.c0",
-    // "arith10.c0",
-    "arrayinit1.c0",
-    "brackets0.c0",
-    "brackets1.c0",
-    "cast07.c0",
-    "compound1.c0",
-    // "compound2.c0", (modulo)
-    // "compound3.c0", (bit shift)
-    // "compound4.c0",
-    "compound5.c0",
-    // "compound6.c0", (modulo)
-    // "compound7.c0", (bit shift)
-    // "compound8.c0",
-    "cond1.c0",
-    "cond2.c0",
-    // "condnull1.c0", TODO: deref null check
-    "condnull2.c0",
-    "deref00.c0",
-    // "empty.c0", TODO: how to handle empty?
-    "empty2.c0",
-    "forloop1.c0",
-    // "forloop2.c0", TODO: well-formedness
-    "forloop3.c0",
-    "forloop4.c0",
-    "if0.c0",
-    "if1.c0",
-    "if2.c0",
-    "if3.c0",
-    // "init01.c0", TODO: use-before-assign
-    "init02.c0",
-    // "init03.c0", TODO: use-before-assign
-    "init04.c0",
-    "init05.c0",
-    "init06.c0",
-    "init07.c0",
-    "lexer01.c0",
-    // "lexer02.c0", TODO: big numbers
-    // "lexer03.c0", TODO: big numbers
-    // "lexer04.c0", TODO: big numbers
-    "lexer05.c0",
-    // "lexer06.c0", TODO: single-line comment cannot end at EOF?
-    "lexer07.c0",
-    "lexer08.c0",
-    "lexer09.c0",
-    "lexer10.c0",
-    "lexer11.c0",
-    "lexer12.c0",
-    "lexer13.c0",
-    // "lexer14.c0", TODO: extend whitespace
-    "lexer15.c0",
-    "lexer16.c0",
-    "lexer17.c0",
-    "lexer18.c0",
-    // "libfuns1.c0", TODO: #use
-    // "libfuns2.c0", TODO: #use
-    "multidecls1.c0",
-    "multidecls2.c0",
-    // "multidecls3.c0", TODO: type check args
-    // "multidecls4.c0", TODO: type check args
-    // "multidecls5.c0", TODO: type check args
-    "multidecls6.c0",
-    // "multidecls7.c0", TODO: no intersecting typedefs/methods
-    // "multidecls8.c0", TODO: no intersecting typedefs/methods
-    "multidecls9.c0",
-    "multidecls10.c0",
-    "multidecls11.c0",
-    "multidecls12.c0",
-    // "multidecls13.c0", TODO: type check args
-    "multidecls14.c0",
-    // "multidecls15.c0", TODO: \result
-    // "multidecls16.c0", TODO: no intersecting typedefs/methods
-    "null1.c0",
-    "null2.c0",
-    "overload01.c0",
-    // "parallel-decl.c0", TODO: big numbers
-    "params1.c0",
-    "params2.c0",
-    // "pragma1.c0", TODO: #use
-    // "safediv.c0", (modulo)
-    // "semi.c0", TODO: parse while(true); as a parse error
-    "shadow1.c0",
-    "shadow2.c0",
-    "shadow3.c0",
-    "shadow4.c0",
-    "shadow5.c0",
-    "shadow6.c0",
-    "shadow7.c0",
-    "shadow8.c0",
-    "shadow9.c0",
-    "shadowa.c0",
-    "signed.c0",
-    // "starplusplus1.c0", TODO: precedence of ++ and *
-    "starplusplus2.c0",
-    "starplusplus3.c0",
-    // "starplusplus4.c0", TODO: precedence of -- and *
-    "struct-undef1.c0",
-    "struct-undef2.c0",
-    "struct-undef3.c0",
-    "struct-undef4.c0",
-    "typenames.c0",
-    "typenames2.c0",
-    // "undefined1.c0", TODO: how to handle no main method?
-    // "undefined2.c0", TODO: how to handle undefined methods?
-    "undefined3.c0",
-    "unsafeopt.c0",
-    "unsafeopt2.c0",
-    "usetest.c0",
-    // "usetest0.c0", TODO: #use
-    // "void.c0", TODO: void
+  val testDirs = List(
+    // The test files are copied with some modifications in the test header
+    // from tests/fp-basic in the cc0 repository
+    "fp-basic/"
   )
 
-  for (file <- testFiles) {
-    test("test " + file) {
-      val src = Source.fromResource("fp-basic/" + file).mkString
+  val exclusions = Set(
+    // PARSING
+    // TODO: single-line comment cannot end at EOF
+    "fp-basic/lexer06.c0",
+    // TODO: extend whitespace
+    "fp-basic/lexer14.c0",
+    // TODO: fix big number handling
+    "fp-basic/lexer02.c0",
+    "fp-basic/lexer03.c0",
+    "fp-basic/lexer04.c0",
+    "fp-basic/parallel-decl.c0",
+    // TODO: while(true); should be a parse error
+    "fp-basic/semi.c0",
+    // TODO: Fix precedence of ++ and *
+    "fp-basic/starplusplus1.c0",
+    // TODO: Fix precedence of -- and *
+    "fp-basic/starplusplus4.c0",
+    //TODO: \length assertions
+    "fp-basic/annog.c0",
+    // TODO: \result assertions
+    "fp-basic/multidecls15.c0",
+
+    // RESOLVING
+    // TODO: Implement void type
+    "fp-basic/void.c0",
+    // TODO: implement #use
+    "fp-basic/libfuns1.c0",
+    "fp-basic/libfuns2.c0",
+    "fp-basic/pragma1.c0",
+    "fp-basic/usetest0.c0",
+
+    // TYPE CHECKING
+    // TODO: Type check arguments of declarations
+    "fp-basic/multidecls3.c0",
+    "fp-basic/multidecls4.c0",
+    "fp-basic/multidecls5.c0",
+    "fp-basic/multidecls13.c0",
+
+    // WELL-FORMEDNESS
+    // TODO: check for deref NULL
+    "fp-basic/condnull1.c0",
+    // TODO: don't assign to variables in post-conditions (without \old)
+    "fp-basic/annoe.c0",
+    // TODO: don't declare variable in incrementor (maybe resolver?)
+    "fp-basic/forloop2.c0",
+    // TODO: check for use-before-assign
+    "fp-basic/init01.c0",
+    "fp-basic/init03.c0",
+    
+    // UNSUPPORTED STUFF
+    // Modulus operator
+    "fp-basic/arith03.c0",
+    "fp-basic/arith04.c0",
+    "fp-basic/arith05.c0",
+    "fp-basic/arith06.c0",
+    "fp-basic/arith07.c0",
+    "fp-basic/compound2.c0",
+    "fp-basic/compound6.c0",
+    "fp-basic/safediv.c0",
+    // Bit shifts
+    "fp-basic/arith08.c0",
+    "fp-basic/arith09.c0",
+    "fp-basic/arith10.c0",
+    "fp-basic/compound3.c0",
+    "fp-basic/compound4.c0",
+    "fp-basic/compound5.c0",
+    "fp-basic/compound7.c0",
+    "fp-basic/compound8.c0",
+    "fp-basic/undefined1.c0", // we don't error on undefined main
+    "fp-basic/undefined2.c0", // we don't error on undefined functions
+    "fp-basic/empty.c0", // we don't error on empty file
+  )
+
+  val testFiles = testDirs.flatMap(dir =>
+    new File(getClass().getResource("/" + dir).getFile()).listFiles()
+      map { file => (dir + file.getName().toLowerCase(), file) }
+      filterNot { case (name, _) => exclusions.contains(name) })
+
+  for ((name, file) <- testFiles) {
+    test("test " + name) {
+      val src = Source.fromFile(file).mkString
       val result = runIntegrationTest(src)
       
       if (src.startsWith("//test error")) {

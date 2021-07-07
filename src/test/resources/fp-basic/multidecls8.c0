@@ -1,4 +1,4 @@
-//test error
+//test resolve_error
 // clashing typedef and function name
 
 int integer(int x) {

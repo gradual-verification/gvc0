@@ -1,4 +1,4 @@
-//test error
+//test resolve_error
 typedef int integer;
 
 int integer(int x) {
