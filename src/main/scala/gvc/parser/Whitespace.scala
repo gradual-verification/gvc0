@@ -24,13 +24,13 @@ trait Whitespace {
     P(multiLineAnnotationWhitespaceChar | singleLineComment | multiLineComment)
 
   def normalWhitespaceChar[_: P] =
-    P(CharIn(" \t\13\r\n"))
+    P(CharIn(" \t\13\f\r\n"))
   def singleLineAnnotationWhitespaceChar[_: P] =
-    P(CharIn(" \t\13\r@"))
+    P(CharIn(" \t\13\f\r@"))
   def multiLineAnnotationWhitespaceChar[_: P] =
-    P(CharIn(" \t\r\n\13") | (!"@*/" ~~ "@"))
+    P(CharIn(" \t\13\f\r\n") | (!"@*/" ~~ "@"))
 
-  def singleLineComment[_: P] = P("//" ~~ !"@" ~~/ (!"\n" ~~ AnyChar).repX ~~ &("\n" | End))
+  def singleLineComment[_: P] = P("//" ~~ !"@" ~~/ (!"\n" ~~ AnyChar).repX ~~ &("\n"))
 
   def multiLineComment[_: P]: P[Unit] = P("/*" ~~ !"@" ~~/ (multiLineComment | multiLineCommentChar).repX ~~ "*/")
 

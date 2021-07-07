@@ -18,10 +18,6 @@ class IntegrationSpecs extends AnyFunSuite {
 
   val exclusions = Set(
     // PARSING
-    // TODO: single-line comment cannot end at EOF
-    "fp-basic/lexer06.c0",
-    // TODO: extend whitespace
-    "fp-basic/lexer14.c0",
     // TODO: fix big number handling
     "fp-basic/lexer02.c0",
     "fp-basic/lexer03.c0",
