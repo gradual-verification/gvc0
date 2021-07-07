@@ -1,7 +1,0 @@
-//test error
-
-int main () {
-  int* p = alloc(int);
-  bool* q = (bool*) p;
-  return 0;
-}

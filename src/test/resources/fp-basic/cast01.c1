@@ -1,9 +1,0 @@
-//test safe => segfault
-
-int main () {
-  int* p = alloc(int);
-  *p = 37;
-  void* q = (void*) p;
-  bool* r = (bool*) q;
-  return *r ? 1 : 0;
-}

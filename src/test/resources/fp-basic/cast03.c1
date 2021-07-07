@@ -1,8 +1,0 @@
-//test error
-
-int main () {
-  char* p = alloc(char);
-  void* q = (void*) p;
-  void* r = (void*) q;
-  return 0;
-}
