@@ -124,14 +124,14 @@ class IntegrationSpecs extends AnyFunSuite {
     // "semi.c0", TODO: parse while(true); as a parse error
     "shadow1.c0",
     "shadow2.c0",
-    // "shadow3.c0", TODO: no intersecting type/variable names
+    "shadow3.c0",
     "shadow4.c0",
     "shadow5.c0",
-    // "shadow6.c0", TODO: no calling variables
+    "shadow6.c0",
     "shadow7.c0",
     "shadow8.c0",
     "shadow9.c0",
-    // "shadowa.c0", TODO: no calling variables
+    "shadowa.c0",
     "signed.c0",
     // "starplusplus1.c0", TODO: precedence of ++ and *
     "starplusplus2.c0",
@@ -142,7 +142,7 @@ class IntegrationSpecs extends AnyFunSuite {
     "struct-undef3.c0",
     "struct-undef4.c0",
     "typenames.c0",
-    // "typenames2.c0", TODO: no intersecting type/method names
+    "typenames2.c0",
     // "undefined1.c0", TODO: how to handle no main method?
     // "undefined2.c0", TODO: how to handle undefined methods?
     "undefined3.c0",

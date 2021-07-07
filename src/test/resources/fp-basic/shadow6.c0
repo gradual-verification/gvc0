@@ -1,4 +1,4 @@
-//test error
+//test resolve_error
 
 int foo (int y, int x);
 int foo (int x, int y) {return x;}

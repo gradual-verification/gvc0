@@ -27,6 +27,20 @@ case class Scope(
     }
   }
 
+  def defineType(typeDef: ResolvedTypeDef): Scope = {
+    if (typeDefs.contains(typeDef.name)) {
+      errors.error(typeDef.parsed, "'" + typeDef.name + "' is already defined")
+      this
+    } else {
+      if (methodDeclarations.contains(typeDef.name)) {
+        // Log error but add to scope
+        errors.error(typeDef.parsed, "Type name '" + typeDef.name + "' already used as a method")
+      }
+
+      copy(typeDefs = typeDefs + (typeDef.name -> typeDef))
+    }
+  }
+
   def declareMethod(method: ResolvedMethodDeclaration): Scope = {
     if (methodDeclarations.contains(method.name)) {
       this
@@ -40,6 +54,10 @@ case class Scope(
       errors.error(method.parsed, "'" + method.name + "' is already defined")
       this
     } else {
+      if (typeDefs.contains(method.name)) {
+        // Log error but add to scope
+        errors.error(method.parsed, "Method '" + method.name + "' already used as a type name")
+      }
       copy(methodDefinitions = methodDefinitions + (method.name -> method))
     }
   }
@@ -49,6 +67,12 @@ case class Scope(
       errors.error(variable.parsed, "'" + variable.name + "' is already declared")
       this
     } else {
+      // If it shadows a type name, log an error but add it to the scope to avoid
+      // extra undeclared-variable errors
+      if (typeDefs.contains(variable.name)) {
+        errors.error(variable.parsed, "Type name '" + variable.name + "' used as a variable")
+      }
+
       copy(variables = variables + (variable.name -> variable))
     }
   }
@@ -343,10 +367,18 @@ object Resolver {
 
       case invoke: InvokeExpression => {
         val name = invoke.method.name
-        val method = scope.methodDeclarations.get(name)
-        if (!method.isDefined) {
-          scope.errors.error(invoke, "'" + name + "' is not declared")
-        }
+
+        val method =
+          if (scope.variables.contains(name)) {
+            scope.errors.error(invoke, "'" + name + "' is a variable, not a function")
+            None
+          } else {
+            val decl = scope.methodDeclarations.get(name)
+            if (!decl.isDefined) {
+              scope.errors.error(invoke, "'" + name + "' is not declared")
+            }
+            decl
+          }
 
         ResolvedInvoke(
           parsed = invoke,
@@ -569,12 +601,7 @@ object Resolver {
         case t: TypeDefinition => {
           val typeDef = resolveTypeDef(t, scope)
           types += typeDef
-
-          if (scope.typeDefs.contains(typeDef.name)) {
-            scope.errors.error(t, "'" + typeDef.name + "' is already defined")
-          } else {
-            scope = scope.copy(typeDefs = scope.typeDefs + (typeDef.name -> typeDef))
-          }
+          scope = scope.defineType(typeDef)
         }
 
         case s: StructDefinition => {

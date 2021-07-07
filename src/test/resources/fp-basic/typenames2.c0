@@ -1,4 +1,4 @@
-//test error
+//test resolve_error
 int foo();
 
 typedef int foo;

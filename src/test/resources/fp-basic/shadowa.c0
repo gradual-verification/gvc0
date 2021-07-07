@@ -1,4 +1,4 @@
-//test error
+//test resolve_error
 
 int f (int x) { return x+1; }
 
