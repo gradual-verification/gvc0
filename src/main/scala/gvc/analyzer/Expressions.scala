@@ -95,7 +95,13 @@ case class ResolvedTernary(
   ifTrue: ResolvedExpression,
   ifFalse: ResolvedExpression
 ) extends ResolvedExpression {
-  def valueType = ifTrue.valueType
+  def valueType = {
+    // Avoid propagating NULL if possible
+    val trueType = ifTrue.valueType
+    val falseType = ifFalse.valueType
+    if (trueType == NullType) falseType
+    else trueType
+  }
 }
 
 sealed trait LogicalOperation

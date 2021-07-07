@@ -1,0 +1,9 @@
+//test type_error
+string condition();
+
+int main() {
+  for (int i = 0; condition(); i++) {
+  }
+
+  return 0;
+}

@@ -1,0 +1,9 @@
+//test type_error
+
+void test(int* value);
+bool condition();
+
+int main() {
+  string* stringValue = alloc(string);
+  test(condition() ? NULL : stringValue);
+}

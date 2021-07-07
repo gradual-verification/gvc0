@@ -1,0 +1,9 @@
+//test type_error
+
+void test(int x, int y);
+
+int main()
+{
+  test(1, 2, 3);
+  return 0;
+}

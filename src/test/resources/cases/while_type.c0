@@ -1,0 +1,11 @@
+//test type_error
+
+int condition();
+
+int main() {
+  while (condition()) {
+    return 1;
+  }
+
+  return 0;
+}
