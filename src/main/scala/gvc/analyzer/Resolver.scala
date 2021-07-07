@@ -576,8 +576,7 @@ object Resolver {
       trailingSpecifications = block.trailingSpecifications
     )
 
-    val initialDecl = scope.methodDeclarations(input.id.name)
-    ResolvedMethodDefinition(input, initialDecl, resolvedBlock)
+    ResolvedMethodDefinition(input, localDecl, resolvedBlock)
   }
 
   def resolveProgram(program: List[Definition], errors: ErrorSink): ResolvedProgram = {

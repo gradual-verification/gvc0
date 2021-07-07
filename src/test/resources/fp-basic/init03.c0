@@ -1,4 +1,4 @@
-//test error
+//test validation_error
 
 int main () {
   int x; int y;

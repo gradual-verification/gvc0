@@ -1,0 +1,11 @@
+//test validation_error
+
+struct test {
+  int value;
+};
+
+struct test* getTest();
+
+int main() {
+  getTest()->value = 1;
+}

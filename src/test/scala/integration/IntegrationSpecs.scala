@@ -5,7 +5,7 @@ import org.scalatest.funsuite._
 import java.io.File
 import scala.io.Source
 import fastparse.Parsed.{Success, Failure}
-import gvc.analyzer.{Resolver, ErrorSink, ResolvedProgram, TypeChecker}
+import gvc.analyzer.{Resolver, ErrorSink, ResolvedProgram, TypeChecker, AssignmentValidator}
 
 class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
@@ -51,9 +51,6 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/annoe.c0",
     // TODO: don't declare variable in incrementor (maybe resolver?)
     "fp-basic/forloop2.c0",
-    // TODO: check for use-before-assign
-    "fp-basic/init01.c0",
-    "fp-basic/init03.c0",
     
     // UNSUPPORTED STUFF
     // Modulus operator
@@ -95,6 +92,8 @@ class IntegrationSpecs extends AnyFunSuite {
         assert(result.isInstanceOf[ResolverError])
       } else if (src.startsWith("//test type_error")) {
         assert(result.isInstanceOf[TypeError])
+      } else if (src.startsWith("//test validation_error")) {
+        assert(result.isInstanceOf[ValidationError])
       } else {
         assert(result == ValidProgram)
       }
@@ -114,7 +113,12 @@ class IntegrationSpecs extends AnyFunSuite {
           if (!sink.errors.isEmpty) {
             TypeError(sink.errors.map(_.message))
           } else {
-            ValidProgram
+            AssignmentValidator.validate(result, sink)
+            if (!sink.errors.isEmpty) {
+              ValidationError(sink.errors.map(_.message))
+            } else {
+              ValidProgram
+            }
           }
         }
       }
@@ -125,6 +129,7 @@ class IntegrationSpecs extends AnyFunSuite {
   case class ParseError(message: String) extends IntegrationResult
   case class ResolverError(messages: List[String]) extends IntegrationResult
   case class TypeError(messages: List[String]) extends IntegrationResult
+  case class ValidationError(messages: List[String]) extends IntegrationResult
   case object ValidProgram extends IntegrationResult
 }
 
