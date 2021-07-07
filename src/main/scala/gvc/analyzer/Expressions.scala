@@ -1,8 +1,7 @@
 package gvc.analyzer
 import gvc.parser._
 
-sealed trait ResolvedExpression {
-  val parsed: Node
+sealed trait ResolvedExpression extends ResolvedNode {
   def valueType: ResolvedType
 }
 

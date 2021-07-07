@@ -1,6 +1,5 @@
 package gvc.analyzer
 import gvc.parser._
-import scala.collection.immutable.HashMap
 
 sealed trait ResolvedType {
   def name: String
@@ -99,9 +98,6 @@ case object NullType extends BuiltinType {
 
 case object VoidType extends BuiltinType {
   def name = "void"
-
-  // void can never be used as a value of any type
-  override def isEquivalent(other: ResolvedType): Boolean = false
 }
 
 case class ResolvedTypeDef(

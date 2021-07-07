@@ -1,9 +1,7 @@
 package gvc.analyzer
 import gvc.parser._
 
-sealed trait ResolvedStatement {
-  val parsed: Node
-}
+sealed trait ResolvedStatement extends ResolvedNode
 
 case class ResolvedExpressionStatement (
   parsed: Statement,

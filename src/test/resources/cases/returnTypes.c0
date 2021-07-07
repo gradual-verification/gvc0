@@ -1,0 +1,7 @@
+//test type_error
+
+int doTest();
+
+void doTest()
+{
+}

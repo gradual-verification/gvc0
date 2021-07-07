@@ -14,4 +14,8 @@ class ErrorSink {
   def error(node: Node, message: String): Unit = {
     errorList += Error(node, message)
   }
+
+  def error(resolved: ResolvedNode, message: String): Unit = {
+    errorList += Error(resolved.parsed, message)
+  }
 }

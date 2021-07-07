@@ -7,4 +7,4 @@ case class ResolvedVariable(
   parsed: Node,
   name: String,
   valueType: ResolvedType,
-)
+) extends ResolvedNode

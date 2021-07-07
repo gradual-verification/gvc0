@@ -1,4 +1,4 @@
-//test resolve_error
+//test type_error
 
 int main() {
   void* x = NULL;

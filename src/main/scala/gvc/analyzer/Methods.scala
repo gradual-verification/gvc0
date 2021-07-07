@@ -8,12 +8,12 @@ case class ResolvedMethodDeclaration(
   arguments: List[ResolvedVariable],
   precondition: Option[ResolvedExpression],
   postcondition: Option[ResolvedExpression]
-)
+) extends ResolvedNode
 
 case class ResolvedMethodDefinition(
   parsed: MethodDefinition,
   declaration: ResolvedMethodDeclaration,
   body: ResolvedBlock
-) {
+) extends ResolvedNode {
   def name = declaration.name
 }

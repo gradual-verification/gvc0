@@ -1,4 +1,4 @@
-//test error
+//test type_error
 int id (int x);
 int id (int x, int y);
 

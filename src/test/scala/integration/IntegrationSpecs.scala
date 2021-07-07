@@ -5,9 +5,7 @@ import org.scalatest.funsuite._
 import java.io.File
 import scala.io.Source
 import fastparse.Parsed.{Success, Failure}
-import gvc.analyzer.Resolver
-import gvc.analyzer.ErrorSink
-import gvc.analyzer.ResolvedProgram
+import gvc.analyzer.{Resolver, ErrorSink, ResolvedProgram, TypeChecker}
 
 class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
@@ -43,11 +41,6 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/usetest0.c0",
 
     // TYPE CHECKING
-    // TODO: Type check arguments of declarations
-    "fp-basic/multidecls3.c0",
-    "fp-basic/multidecls4.c0",
-    "fp-basic/multidecls5.c0",
-    "fp-basic/multidecls13.c0",
     // TODO: Don't allow void pointers
     "fp-basic/cast07.c0",
     // TODO: Don't allow returning void
@@ -102,8 +95,10 @@ class IntegrationSpecs extends AnyFunSuite {
         assert(result.isInstanceOf[ParseError])
       } else if (src.startsWith("//test resolve_error")) {
         assert(result.isInstanceOf[ResolverError])
+      } else if (src.startsWith("//test type_error")) {
+        assert(result.isInstanceOf[TypeError])
       } else {
-        assert(result.isInstanceOf[ValidProgram])
+        assert(result == ValidProgram)
       }
     }
   }
@@ -114,9 +109,15 @@ class IntegrationSpecs extends AnyFunSuite {
       case Success(parsed, _) => {
         val sink = new ErrorSink()
         val result = Resolver.resolveProgram(parsed, sink)
-        sink.errors match {
-          case Nil => ValidProgram()
-          case _ => ResolverError(sink.errors.map(_.message))
+        if (!sink.errors.isEmpty) {
+          ResolverError(sink.errors.map(_.message))
+        } else {
+          TypeChecker.check(result, sink)
+          if (!sink.errors.isEmpty) {
+            TypeError(sink.errors.map(_.message))
+          } else {
+            ValidProgram
+          }
         }
       }
     }
@@ -125,6 +126,7 @@ class IntegrationSpecs extends AnyFunSuite {
   sealed trait IntegrationResult
   case class ParseError(message: String) extends IntegrationResult
   case class ResolverError(messages: List[String]) extends IntegrationResult
-  case class ValidProgram() extends IntegrationResult
+  case class TypeError(messages: List[String]) extends IntegrationResult
+  case object ValidProgram extends IntegrationResult
 }
 

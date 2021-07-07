@@ -1,7 +1,10 @@
 package gvc.analyzer
 import gvc.parser._
 import scala.collection.mutable.ListBuffer
-import scala.collection.immutable.HashMap
+
+trait ResolvedNode {
+  val parsed: Node
+}
 
 case class ResolvedProgram(
   methodDeclarations: List[ResolvedMethodDeclaration],
