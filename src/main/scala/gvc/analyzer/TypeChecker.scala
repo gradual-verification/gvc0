@@ -1,6 +1,12 @@
 package gvc.analyzer
 import scala.collection.mutable.HashMap
 import gvc.parser.ArrayType
+import gvc.analyzer.ComparisonOperation.EqualTo
+import gvc.analyzer.ComparisonOperation.NotEqualTo
+import gvc.analyzer.ComparisonOperation.LessThan
+import gvc.analyzer.ComparisonOperation.GreaterThan
+import gvc.analyzer.ComparisonOperation.GreaterThanOrEqualTo
+import gvc.analyzer.ComparisonOperation.LessThanOrEqualTo
 
 object TypeChecker {
   def check(program: ResolvedProgram, errors: ErrorSink): Unit = {
@@ -148,7 +154,12 @@ object TypeChecker {
       case comp: ResolvedComparison => {
         checkExpression(errors, comp.left)
         checkExpression(errors, comp.right)
-        assertEquivalent(errors, comp.left, comp.right)
+        comp.operation match {
+          case EqualTo | NotEqualTo =>
+            assertEquality(errors, comp.left, comp.right)
+          case NotEqualTo | LessThan | GreaterThan | GreaterThanOrEqualTo | LessThanOrEqualTo =>
+            assertComparison(errors, comp.left, comp.right)
+        }
       }
 
       case ternary: ResolvedTernary => {
@@ -222,6 +233,38 @@ object TypeChecker {
   def assertEquivalent(errors: ErrorSink, left: ResolvedExpression, right: ResolvedExpression) = {
     assertNonVoid(errors, left)
     assertType(errors, right, left.valueType)
+  }
+
+  def assertEquality(errors: ErrorSink, left: ResolvedExpression, right: ResolvedExpression) = {
+    // "Operators == and != apply to types int, bool, char, t [], and t *"
+    if (assertValidEquality(errors, left) && assertValidEquality(errors, right))
+      assertEquivalent(errors, left, right)
+  }
+
+  def assertValidEquality(errors: ErrorSink, value: ResolvedExpression): Boolean = {
+    value.valueType match {
+      case UnknownType | IntType | BoolType | CharType | NullType | ResolvedArray(_) | ResolvedPointer(_) => true
+      case other => {
+        errors.error(value, "Invalid value, expected int, bool, char, array, or pointer, but encountered '" + other.name + "'")
+        false
+      }
+    }
+  }
+
+  def assertComparison(errors: ErrorSink, left: ResolvedExpression, right: ResolvedExpression) = {
+    // "Operators <, <=, >=, and > apply to types int and char"
+    if (assertValidComparison(errors, left) && assertValidComparison(errors, right))
+      assertEquivalent(errors, left, right)
+  }
+
+  def assertValidComparison(errors: ErrorSink, value: ResolvedExpression) = {
+    value.valueType match {
+      case UnknownType | IntType | CharType => true
+      case other => {
+        errors.error(value, "Invalid value, expected int or char but encountered '" + other.name + "'")
+        false
+      }
+    }
   }
 
   def assertNonVoid(errors: ErrorSink, expr: ResolvedExpression): Unit = {

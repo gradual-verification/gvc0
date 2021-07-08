@@ -1,0 +1,13 @@
+//test type_error
+
+struct box {
+  int value;
+};
+
+int main()
+{
+  struct box* ptr1 = alloc(struct box);
+  struct box* ptr2 = NULL;
+  assert(*ptr1 == *ptr2);
+  return 0;
+}

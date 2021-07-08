@@ -1,0 +1,9 @@
+//test type_error
+
+int main()
+{
+  int[] arr1 = alloc_array(int, 2);
+  int[] arr2 = alloc_array(int, 3);
+  assert(arr1 < arr2);
+  return 0;
+}

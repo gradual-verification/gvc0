@@ -1,0 +1,35 @@
+//test
+
+struct box {
+  int value;
+};
+
+int main()
+{
+  int x = 1;
+  int y = 2;
+  char c = 'c';
+  char d = 'd';
+
+  assert(x == y);
+  assert(x != y);
+  assert(x < y);
+  assert(x >= y);
+  assert(c == d);
+  assert(c != d);
+  assert(c > d);
+  assert(c <= d);
+
+  struct box* ptr1 = alloc(struct box);
+  struct box* ptr2 = NULL;
+  assert(ptr1 != NULL);
+  assert(ptr1 == ptr2);
+  assert(ptr1 != ptr2);
+
+  int[] arr1 = alloc_array(int, 2);
+  int[] arr2 = alloc_array(int, 3);
+  assert(arr1 == arr2);
+  assert(arr1 != arr2);
+
+  return 1;
+}
