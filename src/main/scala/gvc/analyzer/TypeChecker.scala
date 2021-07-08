@@ -21,7 +21,7 @@ object TypeChecker {
 
       val invalidParams = decl.arguments.filterNot(arg => validDefinitionType(arg.valueType))
       for (arg <- invalidParams) {
-        errors.error(arg, "Invalid parameter type: " + arg.valueType.toString())
+        errors.error(arg, "Invalid parameter type: " + arg.valueType.name)
       }
     }
   }
@@ -98,7 +98,7 @@ object TypeChecker {
       case block: ResolvedBlock => {
         val invalidVars = block.variableDefs.filterNot(v => validDefinitionType(v.valueType))
         for (variable <- invalidVars) {
-          errors.error(variable, "Invalid variable type: " + variable.valueType.toString())
+          errors.error(variable, "Invalid variable type: " + variable.valueType.name)
         }
 
         for (stmt <- block.statements)
@@ -137,7 +137,7 @@ object TypeChecker {
 
         index.array.valueType match {
           case _: ResolvedArray => ()
-          case t => errors.error(index.array, "Expected array type, encountered '" + t.toString() + "'")
+          case t => errors.error(index.array, "Expected array type, encountered '" + t.name + "'")
         }
 
         assertType(errors, index.index, IntType)
@@ -177,7 +177,7 @@ object TypeChecker {
         checkExpression(errors, deref.value)
         deref.value.valueType match {
           case ResolvedPointer(_) => ()
-          case typ => errors.error(deref, "Dereferencing non-pointer type '" + typ.toString() + "'")
+          case typ => errors.error(deref, "Dereferencing non-pointer type '" + typ.name + "'")
         }
       }
 
@@ -209,7 +209,7 @@ object TypeChecker {
 
   def checkAlloc(errors: ErrorSink, stmt: ResolvedExpression, typ: ResolvedType): Unit = {
     if (!validDefinitionType(typ)) {
-      errors.error(stmt, "Invalid type: " + typ.toString())
+      errors.error(stmt, "Invalid type: " + typ.name)
     }
   }
 
@@ -226,7 +226,7 @@ object TypeChecker {
 
   def assertType(errors: ErrorSink, expr: ResolvedExpression, expectedType: ResolvedType): Unit = {
     if (!expectedType.isEquivalent(expr.valueType)) {
-      errors.error(expr, "Invalid value: expected type '" + expectedType.toString() + "' but encountered '" + expr.valueType.toString() + "'")
+      errors.error(expr, "Invalid value: expected type '" + expectedType.name + "' but encountered '" + expr.valueType.name + "'")
     }
   }
 

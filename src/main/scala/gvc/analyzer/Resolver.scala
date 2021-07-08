@@ -439,7 +439,7 @@ object Resolver {
 
             case Some(definition) => definition.fields.find(_.name == fieldName) match {
               case None => {
-                scope.errors.error(member, "'" + fieldName + "' is not defined in '" + parent.valueType.toString())
+                scope.errors.error(member, "'" + fieldName + "' is not defined in '" + parent.valueType.name)
                 None
               }
 
