@@ -1,0 +1,12 @@
+//test type_error
+
+struct test {
+  int value;
+};
+
+void doSomething(struct test value);
+
+int main()
+{
+  return 0;
+}
