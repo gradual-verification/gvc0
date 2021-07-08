@@ -1,0 +1,16 @@
+//test
+
+struct inner {
+  int value;
+};
+
+struct outer {
+  struct inner inner;
+};
+
+int main() {
+  struct outer* item = alloc(struct outer);
+  item->inner.value = 1;
+  (*item).inner.value = 2;
+  return 0;
+}

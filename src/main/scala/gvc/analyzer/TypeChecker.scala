@@ -43,10 +43,14 @@ object TypeChecker {
 
   def checkStatement(errors: ErrorSink,  method: ResolvedMethodDeclaration, statement: ResolvedStatement): Unit = {
     statement match {
-      case expr: ResolvedExpressionStatement => checkExpression(errors, expr.value)
+      case expr: ResolvedExpressionStatement => {
+        checkExpression(errors, expr.value)
+        assertSmall(errors, expr.value)
+      }
 
       case assign: ResolvedAssignment => {
         checkExpression(errors, assign.value)
+        assertSmall(errors, assign.value)
         assertEquivalent(errors, assign.left, assign.value)
       }
 
@@ -168,7 +172,8 @@ object TypeChecker {
         checkExpression(errors, ternary.ifFalse)
         assertType(errors, ternary.condition, BoolType)
 
-        // TODO: Narrow type from null?
+        assertSmall(errors, ternary.ifTrue)
+        assertSmall(errors, ternary.ifFalse)
         assertEquivalent(errors, ternary.ifTrue, ternary.ifFalse)
       }
 
@@ -197,11 +202,11 @@ object TypeChecker {
         assertType(errors, negate, IntType)
       }
 
-      case alloc: ResolvedAlloc => checkAlloc(errors, alloc, alloc.memberType)
+      case alloc: ResolvedAlloc => assertAlloc(errors, alloc, alloc.memberType)
 
       case alloc: ResolvedAllocArray => {
         checkExpression(errors, alloc.length)
-        checkAlloc(errors, alloc, alloc.memberType)
+        assertAlloc(errors, alloc, alloc.memberType)
         assertType(errors, alloc.length, IntType)
       }
 
@@ -224,18 +229,23 @@ object TypeChecker {
     }
   }
 
-  def checkAlloc(errors: ErrorSink, stmt: ResolvedExpression, typ: ResolvedType): Unit = {
-    if (!validDefinitionType(typ)) {
+  def assertAlloc(errors: ErrorSink, stmt: ResolvedExpression, typ: ResolvedType): Unit = {
+    if (!nonVoidType(typ)) {
       errors.error(stmt, "Invalid type: " + typ.name)
     }
   }
 
-  def assertEquivalent(errors: ErrorSink, left: ResolvedExpression, right: ResolvedExpression) = {
+  def assertSmall(errors: ErrorSink, value: ResolvedExpression): Unit = {
+    if (!smallType(value.valueType))
+      errors.error(value, "Type '" + value.valueType.name + "' is not small")
+  }
+
+  def assertEquivalent(errors: ErrorSink, left: ResolvedExpression, right: ResolvedExpression): Unit = {
     assertNonVoid(errors, left)
     assertType(errors, right, left.valueType)
   }
 
-  def assertEquality(errors: ErrorSink, left: ResolvedExpression, right: ResolvedExpression) = {
+  def assertEquality(errors: ErrorSink, left: ResolvedExpression, right: ResolvedExpression): Unit = {
     // "Operators == and != apply to types int, bool, char, t [], and t *"
     if (assertValidEquality(errors, left) && assertValidEquality(errors, right))
       assertEquivalent(errors, left, right)
@@ -285,10 +295,19 @@ object TypeChecker {
       initial.arguments.zip(current.arguments).forall { case (iArg, cArg) => iArg.valueType.isEquivalent(cArg.valueType) }
   }
 
-  def validDefinitionType(t: ResolvedType): Boolean = {
+  def validDefinitionType(t: ResolvedType): Boolean = smallType(t) && nonVoidType(t)
+
+  def smallType(t: ResolvedType): Boolean = {
     t match {
-      case ResolvedPointer(valueType) => validDefinitionType(valueType)
-      case ResolvedArray(valueType) => validDefinitionType(valueType)
+      case _: ResolvedStructType => false
+      case _ => true
+    }
+  }
+
+  def nonVoidType(t: ResolvedType): Boolean = {
+    t match {
+      case ResolvedPointer(valueType) => nonVoidType(valueType)
+      case ResolvedArray(valueType) => nonVoidType(valueType)
       case NullType | VoidType => false
       case _ => true
     }

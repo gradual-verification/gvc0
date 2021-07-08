@@ -1,0 +1,11 @@
+//test type_error
+struct test
+{
+  int value;
+};
+
+int main()
+{
+  struct test a;
+  return 0;
+}

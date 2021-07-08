@@ -1,0 +1,15 @@
+//test type_error
+struct box {
+  int value;
+};
+
+struct test {
+  struct box box;
+};
+
+int main() {
+  struct test *a = alloc(struct test);
+  struct test *b = alloc(struct test);
+  a->box = b->box;
+  return 1;
+}

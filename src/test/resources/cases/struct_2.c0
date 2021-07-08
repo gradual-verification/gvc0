@@ -1,0 +1,9 @@
+//test type_error
+struct test {
+  int value;
+};
+
+int main() {
+  struct test* value = alloc(struct test);
+  return (true ? *value : *value).value;
+}

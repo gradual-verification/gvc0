@@ -1,0 +1,16 @@
+//test type_error
+
+struct inner {
+  int value;
+};
+
+struct outer {
+  struct inner inside;
+};
+
+int main()
+{
+  struct outer* out = alloc(struct outer);
+  out->inside;
+  return 0;
+}
