@@ -29,10 +29,6 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/starplusplus1.c0",
     // TODO: Fix precedence of -- and *
     "fp-basic/starplusplus4.c0",
-    //TODO: \length assertions
-    "fp-basic/annog.c0",
-    // TODO: \result assertions
-    "fp-basic/multidecls15.c0",
 
     // RESOLVING
     // TODO: implement #use

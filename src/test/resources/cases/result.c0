@@ -1,0 +1,12 @@
+//test
+
+int test()
+  /*@ ensures \result == 1; @*/
+{
+  return 1;
+}
+
+int main()
+{
+  return test();
+}

@@ -1,0 +1,12 @@
+//test resolve_error
+
+int test()
+/*@ requires \result == 0; @*/
+{
+  return 0;
+}
+
+int main()
+{
+  return test();
+}

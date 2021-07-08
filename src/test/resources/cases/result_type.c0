@@ -1,0 +1,12 @@
+//test type_error
+
+int test()
+/*@ ensures \result == NULL; @*/
+{
+  return 0;
+}
+
+int main()
+{
+  return test();
+}

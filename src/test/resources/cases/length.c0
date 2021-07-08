@@ -1,0 +1,14 @@
+//test
+
+void test(int[] values)
+  /*@ requires \length(values) > 0; @*/
+  /*@ ensures \length(values) > 0; @*/
+{
+}
+
+int main()
+{
+  int[] values = alloc_array(int, 2);
+  test(values);
+  return 0;
+}

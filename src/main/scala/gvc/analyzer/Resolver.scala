@@ -91,6 +91,13 @@ object Resolver {
     "int", "string", "char", "bool", "\result", "struct", "typedef"
   )
 
+  sealed trait Context
+  case object MethodContext extends Context
+  case object LoopInvariantContext extends Context
+  case object AssertContext extends Context
+  case object MethodPreconditionContext extends Context
+  case class MethodPostconditionContext(returnType: ResolvedType) extends Context
+
   def resolveType(input: Type, scope: Scope): ResolvedType = {
     input match {
       case ArrayType(valueType, _) => ResolvedArray(resolveType(valueType, scope))
@@ -152,21 +159,21 @@ object Resolver {
       case expr: ExpressionStatement =>
         ResolvedExpressionStatement(
           parsed = expr,
-          value = resolveExpression(expr.expression, scope)
+          value = resolveExpression(expr.expression, scope, MethodContext)
         )
 
       case assign: AssignmentStatement =>
         ResolvedAssignment(
           parsed = assign,
-          left = resolveExpression(assign.left, scope),
-          value = resolveExpression(assign.right, scope),
+          left = resolveExpression(assign.left, scope, MethodContext),
+          value = resolveExpression(assign.right, scope, MethodContext),
           operation = convertAssignOp(assign, scope)
         )
 
       case unary: UnaryOperationStatement =>
         ResolvedIncrement(
           parsed = unary,
-          value = resolveExpression(unary.value, scope),
+          value = resolveExpression(unary.value, scope, MethodContext),
           operation = unary.operator match {
             case UnaryOperator.Increment => IncrementOperation.Increment
             case UnaryOperator.Decrement => IncrementOperation.Decrement
@@ -180,7 +187,7 @@ object Resolver {
       case iff: IfStatement =>
         ResolvedIf(
           parsed = iff,
-          condition = resolveExpression(iff.condition, scope),
+          condition = resolveExpression(iff.condition, scope, MethodContext),
           ifTrue = resolveScopedStatement(iff.then, scope),
           ifFalse = iff.els.map(resolveScopedStatement(_, scope))
         )
@@ -189,7 +196,7 @@ object Resolver {
         val (invariant, body) = resolveLoopInvariants(w.body, scope)
         ResolvedWhile(
           parsed = w,
-          condition = resolveExpression(w.condition, scope),
+          condition = resolveExpression(w.condition, scope, MethodContext),
           body = resolveScopedStatement(body, scope),
           invariant = invariant
         )
@@ -227,14 +234,14 @@ object Resolver {
       case r: ReturnStatement =>
         ResolvedReturn(
           parsed = r,
-          value = r.value.map(resolveExpression(_, scope))
+          value = r.value.map(resolveExpression(_, scope, MethodContext))
         )
       
       case a: AssertStatement =>
-        ResolvedAssert(a, resolveExpression(a.value, scope))
+        ResolvedAssert(a, resolveExpression(a.value, scope, MethodContext))
 
       case e: ErrorStatement =>
-        ResolvedError(e, resolveExpression(e.value, scope))
+        ResolvedError(e, resolveExpression(e.value, scope, MethodContext))
 
       case b: BlockStatement => resolveBlock(b, scope, b.body)
     }
@@ -284,7 +291,7 @@ object Resolver {
               resolved += ResolvedAssignment(
                 parsed = v,
                 left = ResolvedVariableRef(v.id, Some(varDef)),
-                value = resolveExpression(value, blockScope),
+                value = resolveExpression(value, blockScope, MethodContext),
                 operation = None)
             }
           }
@@ -321,13 +328,13 @@ object Resolver {
     resolveBlock(input, scope, body, input.specifications, trailing)
   }
 
-  def resolveExpression(input: Expression, scope: Scope): ResolvedExpression = {
+  def resolveExpression(input: Expression, scope: Scope, context: Context): ResolvedExpression = {
     input match {
       case variable: VariableExpression => resolveVariable(variable.variable, scope)
 
       case binary: BinaryExpression => {
-        val left = resolveExpression(binary.left, scope)
-        val right = resolveExpression(binary.right, scope)
+        val left = resolveExpression(binary.left, scope, context)
+        val right = resolveExpression(binary.right, scope, context)
 
         binary.operator match {
           case BinaryOperator.Add => ResolvedArithmetic(binary, left, right, ArithmeticOperation.Add)
@@ -351,22 +358,22 @@ object Resolver {
       }
 
       case unary: UnaryExpression => unary.operator match {
-        case UnaryOperator.Not => ResolvedNot(unary, resolveExpression(unary.operand, scope))
-        case UnaryOperator.Negate => ResolvedNegation(unary, resolveExpression(unary.operand, scope))
-        case UnaryOperator.Deref => ResolvedDereference(unary, resolveExpression(unary.operand, scope))
+        case UnaryOperator.Not => ResolvedNot(unary, resolveExpression(unary.operand, scope, context))
+        case UnaryOperator.Negate => ResolvedNegation(unary, resolveExpression(unary.operand, scope, context))
+        case UnaryOperator.Deref => ResolvedDereference(unary, resolveExpression(unary.operand, scope, context))
         case op => {
           // Log the error and return the base expression
           scope.errors.error(unary, "Unsupported operator " + op.toString())
-          resolveExpression(unary.operand, scope)
+          resolveExpression(unary.operand, scope, context)
         }
       }
       
       case ternary: TernaryExpression =>
         ResolvedTernary(
           ternary,
-          resolveExpression(ternary.condition, scope),
-          resolveExpression(ternary.ifTrue, scope),
-          resolveExpression(ternary.ifFalse, scope))
+          resolveExpression(ternary.condition, scope, context),
+          resolveExpression(ternary.ifTrue, scope, context),
+          resolveExpression(ternary.ifFalse, scope, context))
 
       case invoke: InvokeExpression => {
         val name = invoke.method.name
@@ -387,7 +394,7 @@ object Resolver {
           parsed = invoke,
           method = method,
           methodName = name,
-          arguments = invoke.arguments.map(resolveExpression(_, scope)),
+          arguments = invoke.arguments.map(resolveExpression(_, scope, context)),
         )
       }
 
@@ -400,14 +407,32 @@ object Resolver {
       case alloc: AllocArrayExpression => {
         val valueType = resolveType(alloc.valueType, scope)
         verifyDefinedType(valueType, alloc, scope)
-        ResolvedAllocArray(alloc, valueType, resolveExpression(alloc.length, scope))
+        ResolvedAllocArray(alloc, valueType, resolveExpression(alloc.length, scope, context))
       }
 
       case index: IndexExpression =>
-        ResolvedArrayIndex(index, resolveExpression(index.parent, scope), resolveExpression(index.index, scope))
+        ResolvedArrayIndex(index, resolveExpression(index.parent, scope, context), resolveExpression(index.index, scope, context))
+
+      case result: ResultExpression => {
+        val retType = context match {
+          case MethodPostconditionContext(returnType) => returnType
+          case _ => {
+            scope.errors.error(result, "\\result expressions can only be used in 'ensures'")
+            UnknownType
+          }
+        }
+
+        ResolvedResult(result, retType)
+      }
+
+      case length: LengthExpression => {
+        if (context == MethodContext)
+          scope.errors.error(length, "\\length expressions can only be used in specifications")
+        ResolvedLength(length, resolveExpression(length.value, scope, context))
+      }
 
       case member: MemberExpression => {
-        val parent = resolveExpression(member.parent, scope)
+        val parent = resolveExpression(member.parent, scope, context)
         val struct =
           if (member.isArrow) {
             parent.valueType match {
@@ -490,7 +515,7 @@ object Resolver {
 
   def resolveSpecs(specs: List[Specification], scope: Scope): Option[ResolvedAssert] = {
     val asserts = specs.flatMap({
-      case assert: AssertSpecification => Some(resolveExpression(assert.value, scope))
+      case assert: AssertSpecification => Some(resolveExpression(assert.value, scope, AssertContext))
       case other => {
         scope.errors.error(other, "Invalid specification")
         None
@@ -522,7 +547,7 @@ object Resolver {
     val loopInvariants = stmt.specifications.collect {
       case li: LoopInvariantSpecification => li
     }
-    val invariant = combineBooleans(loopInvariants.map(spec => resolveExpression(spec.value, scope)))
+    val invariant = combineBooleans(loopInvariants.map(spec => resolveExpression(spec.value, scope, LoopInvariantContext)))
     val otherSpecs = stmt.specifications.filterNot(_.isInstanceOf[LoopInvariantSpecification])
     (invariant, stmt.withSpecifications(otherSpecs))
   }
@@ -538,16 +563,16 @@ object Resolver {
     val postconditions = ListBuffer[ResolvedExpression]()
     for (spec <- input.specifications) {
       spec match {
-        case requires: RequiresSpecification => preconditions += resolveExpression(requires.value, specScope)
-        case ensures: EnsuresSpecification => postconditions += resolveExpression(ensures.value, specScope)
+        case requires: RequiresSpecification => preconditions += resolveExpression(requires.value, specScope, MethodPreconditionContext)
+        case ensures: EnsuresSpecification => postconditions += resolveExpression(ensures.value, specScope, MethodPostconditionContext(retType))
         case invariant: LoopInvariantSpecification => {
           // TODO: Should invalid invariants be type-checked?
-          resolveExpression(invariant.value, specScope) // To check for resolving errors
+          resolveExpression(invariant.value, specScope, LoopInvariantContext) // To check for resolving errors
           scope.errors.error(invariant, "Invalid loop_invariant")
         }
         case assert: AssertSpecification => {
           // TODO: Should invalid asserts be type-checked?
-          resolveExpression(assert.value, specScope) // To check for resolving errors
+          resolveExpression(assert.value, specScope, AssertContext) // To check for resolving errors
           scope.errors.error(assert, "Invalid assert")
         }
       }

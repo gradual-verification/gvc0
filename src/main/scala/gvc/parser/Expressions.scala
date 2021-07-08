@@ -102,6 +102,8 @@ trait Expressions extends Types {
     decimalNumberExpression |
     booleanExpression |
     nullExpression |
+    resultExpression |
+    lengthExpression |
     allocExpression |
     allocArrayExpression |
     invokeExpression |
@@ -134,6 +136,12 @@ trait Expressions extends Types {
 
   def nullExpression[_: P] : P[NullExpression] = P(span(kw("NULL").!))
     .map({ case (raw, span) => NullExpression(raw, null, span) })
+
+  def resultExpression[_: P]: P[ResultExpression] = P(span(kw("\\result")))
+    .map({ case (_, span) => ResultExpression(span) })
+
+  def lengthExpression[_: P]: P[LengthExpression] = P(span(kw("\\length") ~ "(" ~ expression ~ ")"))
+    .map { case (expr, span) => LengthExpression(expr, span) }
 
   def parseString(raw: String): String = {
     // TODO: Replace this with a better solution that doesn't search the string

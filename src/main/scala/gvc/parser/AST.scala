@@ -32,6 +32,8 @@ case class AllocExpression(valueType: Type, span: SourceSpan) extends Expression
 case class AllocArrayExpression(valueType: Type, length: Expression, span: SourceSpan) extends Expression
 case class IndexExpression(parent: Expression, index: Expression, span: SourceSpan) extends Expression
 case class MemberExpression(parent: Expression, field: Identifier, isArrow: Boolean, span: SourceSpan) extends Expression
+case class ResultExpression(span: SourceSpan) extends Expression
+case class LengthExpression(value: Expression, span: SourceSpan) extends Expression
 
 // Literal expressions
 sealed trait LiteralExpression extends Expression {

@@ -1,0 +1,6 @@
+//test type_error
+
+void test(int value)
+  /*@ requires \length(value) == 0; @*/
+{
+}

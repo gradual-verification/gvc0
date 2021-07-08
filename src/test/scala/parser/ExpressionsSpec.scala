@@ -242,4 +242,15 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(nested.operator == UnaryOperator.Not)
     assert(nested.operand.asInstanceOf[VariableExpression].variable == "abc")
   }
+
+  test("\\result") {
+    val Success(result, _) = Parser.parseExpr("\\result")
+    assert(result.isInstanceOf[ResultExpression])
+  }
+
+  test("\\length") {
+    val Success(length: LengthExpression, _) = Parser.parseExpr("\\length(a)")
+    val varRef = length.value.asInstanceOf[VariableExpression]
+    assert(varRef.variable.name === "a")
+  }
 }

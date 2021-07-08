@@ -53,6 +53,20 @@ case class ResolvedArrayIndex(
   }
 }
 
+case class ResolvedResult(
+  parsed: Node,
+  returnType: ResolvedType
+) extends ResolvedExpression {
+  def valueType = returnType
+}
+
+case class ResolvedLength(
+  parsed: Node,
+  array: ResolvedExpression
+) extends ResolvedExpression {
+  def valueType = IntType
+}
+
 sealed trait ArithmeticOperation
 object ArithmeticOperation {
   case object Add extends ArithmeticOperation

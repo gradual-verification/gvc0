@@ -1,5 +1,6 @@
 package gvc.analyzer
 import scala.collection.mutable.HashMap
+import gvc.parser.ArrayType
 
 object TypeChecker {
   def check(program: ResolvedProgram, errors: ErrorSink): Unit = {
@@ -28,6 +29,8 @@ object TypeChecker {
 
   def checkMethods(program: ResolvedProgram, errors: ErrorSink): Unit = {
     for (method <- program.methodDefinitions) {
+      method.declaration.precondition.foreach(checkExpression(errors, _))
+      method.declaration.postcondition.foreach(checkExpression(errors, _))
       checkStatement(errors, method.declaration, method.body)
     }
   }
@@ -54,15 +57,7 @@ object TypeChecker {
       case whil: ResolvedWhile => {
         checkExpression(errors, whil.condition)
         assertType(errors, whil.condition, BoolType)
-
-        whil.invariant match {
-          case None => ()
-          case Some(invariant) => {
-            checkExpression(errors, invariant)
-            assertType(errors, invariant, BoolType)
-          }
-        }
-
+        whil.invariant.foreach(checkExpression(errors, _))
         checkStatement(errors, method, whil.body)
       }
 
@@ -199,7 +194,18 @@ object TypeChecker {
         assertType(errors, alloc.length, IntType)
       }
 
-      case _: ResolvedString |
+      case length: ResolvedLength => {
+        checkExpression(errors, length.array)
+        length.array.valueType match {
+          case _: ResolvedArray => ()
+          case other => {
+            errors.error(length, "Expected array type, encountered '" + other.name + "'")
+          }
+        }
+      }
+
+      case _: ResolvedResult |
+        _: ResolvedString |
         _: ResolvedChar |
         _: ResolvedInt |
         _: ResolvedBool |
