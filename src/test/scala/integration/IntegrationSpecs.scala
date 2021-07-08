@@ -44,8 +44,6 @@ class IntegrationSpecs extends AnyFunSuite {
     // TYPE CHECKING
 
     // WELL-FORMEDNESS
-    // TODO: check for deref NULL
-    "fp-basic/condnull1.c0",
     // TODO: don't assign to variables in post-conditions (without \old)
     "fp-basic/annoe.c0",
     // TODO: don't declare variable in incrementor (maybe resolver?)

@@ -1,4 +1,4 @@
-//test error
+//test type_error
 
 bool flse () {
   return false;
