@@ -6,6 +6,7 @@ import java.io.File
 import scala.io.Source
 import fastparse.Parsed.{Success, Failure}
 import gvc.analyzer.{Resolver, ErrorSink, ResolvedProgram, TypeChecker, AssignmentValidator}
+import gvc.analyzer.ReturnValidator
 
 class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
@@ -41,8 +42,6 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/usetest0.c0",
 
     // TYPE CHECKING
-    // TODO: Don't allow returning void
-    "fp-basic/void.c0",
 
     // WELL-FORMEDNESS
     // TODO: check for deref NULL
@@ -114,6 +113,7 @@ class IntegrationSpecs extends AnyFunSuite {
             TypeError(sink.errors.map(_.message))
           } else {
             AssignmentValidator.validate(result, sink)
+            ReturnValidator.validate(result, sink)
             if (!sink.errors.isEmpty) {
               ValidationError(sink.errors.map(_.message))
             } else {

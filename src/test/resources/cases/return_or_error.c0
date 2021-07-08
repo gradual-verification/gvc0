@@ -1,0 +1,12 @@
+//test
+bool condition();
+
+// Methods must return a value *or* encounter an error
+
+int main() {
+  if (condition()) {
+    return 1;
+  } else {
+    error("test");
+  }
+}

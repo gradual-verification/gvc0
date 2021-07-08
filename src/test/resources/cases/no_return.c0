@@ -1,0 +1,8 @@
+//test validation_error
+
+bool condition();
+
+int main() {
+  if (condition())
+    return 1;
+}

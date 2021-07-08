@@ -74,6 +74,10 @@ object TypeChecker {
             }
           }
 
+          case Some(value) if method.returnType == VoidType => {
+            errors.error(ret, "Cannot return a value from a void method")
+          }
+
           case Some(value) => {
             checkExpression(errors, value)
             assertType(errors, value, method.returnType)
