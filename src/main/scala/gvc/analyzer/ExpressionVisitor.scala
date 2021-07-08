@@ -21,4 +21,17 @@ object ExpressionVisitor {
         | _: ResolvedInt | _: ResolvedString | _: ResolvedChar | _: ResolvedBool | _: ResolvedNull => true
     })
   }
+
+  def collectVariables(expr: ResolvedExpression): Set[String] = {
+    var vars = Set[String]()
+    visit(expr, {
+      case ref: ResolvedVariableRef => {
+        ref.variable.foreach(vars += _.name)
+        true
+      }
+      case _ => true
+    })
+
+    vars
+  }
 }

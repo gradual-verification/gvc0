@@ -1,4 +1,4 @@
-//test error
+//test validation_error
 
 // we cannot assign to variables mentioned in postcondition
 // outside \old guards

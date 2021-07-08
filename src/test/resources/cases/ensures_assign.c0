@@ -1,0 +1,13 @@
+//test validation_error
+
+int test(int value)
+  /*@ ensures \result == value; @*/
+{
+  value++;
+  return value;
+}
+
+int main()
+{
+  return test(0);
+}

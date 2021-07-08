@@ -3,7 +3,11 @@ package gvc.analyzer
 // Validates that LHS of assignments are L-Values and that
 // variables are assigned before they are used
 object AssignmentValidator {
-  type VariableBag = Set[String]
+  case class Scope(errors: ErrorSink, assignedVars: Set[String], postArgs: Set[String]) {
+    def assign(ref: ResolvedVariableRef) = ref.variable.map(v => copy(assignedVars = assignedVars + v.name)).getOrElse(this)
+    def isAssigned(ref: ResolvedVariableRef) = ref.variable.forall(v => assignedVars.contains(v.name))
+    def join(scope: Scope) = copy(assignedVars = assignedVars.intersect(scope.assignedVars))
+  }
 
   def validate(program: ResolvedProgram, errors: ErrorSink): Unit = {
     for (method <- program.methodDefinitions) {
@@ -12,107 +16,108 @@ object AssignmentValidator {
   }
 
   def validateMethod(errors: ErrorSink, method: ResolvedMethodDefinition): Unit = {
-    val variables = method.declaration.arguments.map(_.name).toSet
-    validateStatement(errors, variables, method.body)
+    val scope = Scope(
+      errors,
+      method.declaration.arguments.map(_.name).toSet,
+      method.declaration.postcondition.map(ExpressionVisitor.collectVariables(_)).getOrElse(Set.empty)
+    )
+
+    validateStatement(scope, method.body)
   }
 
-  def validateStatement(errors: ErrorSink, assignedVars: VariableBag, stmt: ResolvedStatement): VariableBag = {
-    var vars = assignedVars
-
+  def validateStatement(scope: Scope, stmt: ResolvedStatement): Scope = {
     stmt match {
       case expr: ResolvedExpressionStatement => {
-        validateExpression(errors, assignedVars, expr.value)
-        assignedVars
+        validateExpression(scope, expr.value)
+        scope
       }
 
       case assign: ResolvedAssignment => {
+        validateCanAssign(scope, assign.left)
+
         val newVars = assign.left match {
-          case ref: ResolvedVariableRef if assign.operation.isEmpty => {
-            ref.variable match {
-              case None => assignedVars
-              case Some(value) => assignedVars + value.name
-            }
-          }
+          case ref: ResolvedVariableRef if assign.operation.isEmpty => scope.assign(ref)
           case _ => {
-            validateLValue(errors, assign.left)
-            validateExpression(errors, assignedVars, assign.left)
-            assignedVars
+            validateExpression(scope, assign.left)
+            scope
           }
         }
 
-        validateExpression(errors, assignedVars, assign.value)
+        validateExpression(scope, assign.value)
         newVars
       }
 
       case inc: ResolvedIncrement => {
-        validateExpression(errors, assignedVars, inc.value)
-        assignedVars
+        validateCanAssign(scope, inc.value)
+        validateExpression(scope, inc.value)
+        scope
       }
 
       case iff: ResolvedIf => {
-        validateExpression(errors, assignedVars, iff.condition)
-        val trueVars = validateStatement(errors, assignedVars, iff.ifTrue)
-        iff.ifFalse match {
-          case None => assignedVars
-          case Some(falseStmt) => {
-            // Add variables that are assigned in both the true and false statement
-            val falseVars = validateStatement(errors, assignedVars, falseStmt)
-            trueVars.intersect(falseVars)
-          }
-        }
+        validateExpression(scope, iff.condition)
+        val trueVars = validateStatement(scope, iff.ifTrue)
+        iff.ifFalse.map(f => trueVars.join(validateStatement(scope, f))).getOrElse(scope)
       }
 
       case whil: ResolvedWhile => {
-        validateExpression(errors, assignedVars, whil.condition)
-        whil.invariant.map(validateExpression(errors, assignedVars, _))
-        validateStatement(errors, assignedVars, whil.body)
-        assignedVars
+        validateExpression(scope, whil.condition)
+        whil.invariant.map(validateExpression(scope, _))
+        validateStatement(scope, whil.body)
+        scope
       }
 
       case ret: ResolvedReturn => {
-        ret.value.map(validateExpression(errors, assignedVars, _))
-        assignedVars
+        ret.value.foreach(validateExpression(scope, _))
+        scope
       }
 
       case assert: ResolvedAssert => {
-        validateExpression(errors, assignedVars, assert.value)
-        assignedVars
+        validateExpression(scope, assert.value)
+        scope
       }
 
       case error: ResolvedError => {
-        validateExpression(errors, assignedVars, error.value)
-        assignedVars
+        validateExpression(scope, error.value)
+        scope
       }
 
       case block: ResolvedBlock => {
-        var vars = assignedVars
-        var returned = false
-        for (stmt <- block.statements) {
-          if (!returned) {
-            vars = validateStatement(errors, vars, stmt)
-            returned = stmt.isInstanceOf[ResolvedReturn] || stmt.isInstanceOf[ResolvedError]
+        var blockScope = scope
+        block.statements.takeWhile { stmt =>
+          blockScope = validateStatement(blockScope, stmt)
+          stmt match {
+            case _: ResolvedReturn | _: ResolvedError => false
+            case _ => true
           }
         }
 
-        vars
+        blockScope
       }
     }
   }
 
-  def validateExpression(errors: ErrorSink, assignedVars: VariableBag, expr: ResolvedExpression): Unit = {
+  def validateExpression(scope: Scope, expr: ResolvedExpression): Unit = {
     ExpressionVisitor.visit(expr, {
-      case ref: ResolvedVariableRef => {
-        ref.variable match {
-          case Some(variable) if !assignedVars.contains(variable.name) => {
-            errors.error(ref, "Uninitialized variable '" + variable.name + "'")
-          }
-          case _ => ()
-        }
+      case ref: ResolvedVariableRef if !scope.isAssigned(ref) => {
+        scope.errors.error(ref, "Uninitialized variable '" + ref.variable.map(_.name).getOrElse("") + "'")
         true
       }
 
       case _ => true
     })
+  }
+
+  def validateCanAssign(scope: Scope, expr: ResolvedExpression): Unit = {
+    expr match {
+      case ref: ResolvedVariableRef =>
+        ref.variable
+          .map(v => v.name)
+          .filter(scope.postArgs.contains(_))
+          .foreach(v => scope.errors.error(ref, "Cannot assign to variable '" + v + "' used in @ensures annotation"))
+      case _ => ()
+    }
+
+    validateLValue(scope.errors, expr)
   }
 
   def validateLValue(errors: ErrorSink, expr: ResolvedExpression): Unit = {

@@ -1,9 +1,10 @@
 # Checks for validation
 
 [X] Check that every assignment left-hand side is an L-Value
-[ ] Ensure that every non-void method terminates in either a return or error
+[X] Ensure that every non-void method terminates in either a return or error
 [ ] Ensure that reserved words are not used for any identifier
-[ ] Ensure that `\result` and `\length` are only used inside annotations
+[X] Ensure that arguments used in a postcondition are not assigned
+[X] Ensure that `\result` and `\length` are only used inside annotations
 [X] Ensure variables are assigned before they are used
 [ ] RESOLVER: Ensure that `#use` directives precede all other definitions
 [X] RESOLVER: Ensure that `requires` and `ensures` are only used in method annotations
