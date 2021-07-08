@@ -202,7 +202,13 @@ object Resolver {
         )
       }
 
-      case f: ForStatement =>
+      case f: ForStatement => {
+        // Parse does not allow blocks in the incrementor, but does allow variable declarations,
+        // which are disallowed by the spec
+        if (f.incrementor.isInstanceOf[VariableStatement]) {
+          scope.errors.error(f.incrementor, "Invalid declaration in for loop step")
+        }
+
         // Rewrite for into a while loop
         // For loops introduce their own scope, so wrap it all in a block
         // The spans get a little jumbled; for example, the incrementor is outside the block span
@@ -230,6 +236,7 @@ object Resolver {
           ),
           specifications = f.specifications
         )
+      }
 
       case r: ReturnStatement =>
         ResolvedReturn(

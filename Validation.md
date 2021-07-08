@@ -34,7 +34,7 @@
 [X] `TypeChecker`: Expressions, used as statements, must have a small type or void.
 [X] `Resolver`: Undefined structs cannot be allocated.
 [X] (Only used in C1) continue and break statements can only be used inside loops.
-[ ] (TODO) The step statement in a for loop may not be a declaration.
+[X] `Resolver`: The step statement in a for loop may not be a declaration.
 [ ] Integer constants are in the range from 0 to 2^31.
 [ ] `* <lv> ++` and `* <lv> --` must be be explicitly parenthesized to override the right-to-left associative interpretation of ++ and --.
 [X] `Resolver`: `\result` is only legal in `@ensures` clauses.

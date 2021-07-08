@@ -40,8 +40,6 @@ class IntegrationSpecs extends AnyFunSuite {
     // TYPE CHECKING
 
     // WELL-FORMEDNESS
-    // TODO: don't declare variable in incrementor (maybe resolver?)
-    "fp-basic/forloop2.c0",
     
     // UNSUPPORTED STUFF
     // Modulus operator

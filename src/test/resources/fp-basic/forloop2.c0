@@ -1,4 +1,4 @@
-//test error
+//test resolve_error
 // step case may not be declaration
 
 int main() {
