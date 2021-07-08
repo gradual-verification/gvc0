@@ -1,0 +1,12 @@
+//test validation_error
+
+void test(int x, int y);
+
+int main() {
+  int x = 1;
+  int y;
+
+  test(x, y);
+
+  return 0;
+}

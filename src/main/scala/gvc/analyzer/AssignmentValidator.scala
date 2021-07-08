@@ -100,7 +100,7 @@ object AssignmentValidator {
   }
 
   def validateExpression(errors: ErrorSink, assignedVars: VariableBag, expr: ResolvedExpression): Unit = {
-    expr match {
+    ExpressionVisitor.visit(expr, {
       case ref: ResolvedVariableRef => {
         ref.variable match {
           case Some(variable) if !assignedVars.contains(variable.name) => {
@@ -108,43 +108,11 @@ object AssignmentValidator {
           }
           case _ => ()
         }
+        true
       }
 
-      case invoke: ResolvedInvoke => {
-        for (arg <- invoke.arguments) {
-          validateExpression(errors, assignedVars, arg)
-        }
-      }
-      case member: ResolvedMember => {
-        validateExpression(errors, assignedVars, member.parent)
-      }
-      case index: ResolvedArrayIndex => {
-        validateExpression(errors, assignedVars, index.array)
-        validateExpression(errors, assignedVars, index.index)
-      }
-      case ar: ResolvedArithmetic => {
-        validateExpression(errors, assignedVars, ar.left)
-        validateExpression(errors, assignedVars, ar.right)
-      }
-      case comp: ResolvedComparison => {
-        validateExpression(errors, assignedVars, comp.left)
-        validateExpression(errors, assignedVars, comp.right)
-      }
-      case ternary: ResolvedTernary => {
-        validateExpression(errors, assignedVars, ternary.condition)
-        validateExpression(errors, assignedVars, ternary.ifTrue)
-        validateExpression(errors, assignedVars, ternary.ifFalse)
-      }
-      case logical: ResolvedLogical => {
-        validateExpression(errors, assignedVars, logical.left)
-        validateExpression(errors, assignedVars, logical.right)
-      }
-      case deref: ResolvedDereference => validateExpression(errors, assignedVars, deref.value)
-      case not: ResolvedNot => validateExpression(errors, assignedVars, not.value)
-      case negate: ResolvedNegation => validateExpression(errors, assignedVars, negate.value)
-      case alloc: ResolvedAllocArray => validateExpression(errors, assignedVars, alloc.length)
-      case _: ResolvedAlloc | _: ResolvedInt | _: ResolvedString | _: ResolvedChar | _: ResolvedBool | _: ResolvedNull => ()
-    }
+      case _ => true
+    })
   }
 
   def validateLValue(errors: ErrorSink, expr: ResolvedExpression): Unit = {
