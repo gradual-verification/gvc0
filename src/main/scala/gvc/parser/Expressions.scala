@@ -65,10 +65,10 @@ trait Expressions extends Types {
 
   // Expressions with concrete start and end tokens
   def basicExpression[_: P]: P[Expression] = P(
-    prefixWithPosition.rep ~ pos ~~ atomExpression ~ member.rep
-  ).map({ case (pre, baseStart, expr, members) =>
+    prefixWithPosition.rep ~ pos ~~ atomExpression ~ member.rep ~~ postfixWithPosition.?
+  ).map({ case (pre, baseStart, expr, members, post) =>
     // TODO: Deref (*) is only allowed in L-Values
-    var member = members.foldLeft(expr)((e, item) => {
+    val exp1 = members.foldLeft(expr)((e, item) => {
       val span = SourceSpan(baseStart, item.end)
       item match {
         case DottedMember(id, _) => MemberExpression(e, id, false, span)
@@ -77,7 +77,13 @@ trait Expressions extends Types {
       }
     })
 
-    pre.foldLeft(member)((e, opPos) => opPos match {
+    val exp2 = post.foldLeft(exp1) { (exp, posOp) => {
+      posOp match {
+        case (end, op) => IncrementExpression(exp, op, SourceSpan(exp.span.start, end))
+      }
+    }}
+
+    pre.foldRight(exp2)((opPos, e) => opPos match {
       case (pos, op) => UnaryExpression(e, parsePrefixOp(op), SourceSpan(pos, e.span.end))
     })
   })
@@ -93,6 +99,12 @@ trait Expressions extends Types {
       case "~" => BitwiseNot
     }
   }
+
+  def postfixWithPosition[_: P]: P[(SourcePosition, IncrementOperator)] = P(postfixOperator.! ~~ pos)
+    .map { case (op, pos) => (pos, op match {
+      case "++" => IncrementOperator.Increment
+      case "--" => IncrementOperator.Decrement
+    }) }
 
   def atomExpression[_: P]: P[Expression] = P(
     parenExpression |

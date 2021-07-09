@@ -243,6 +243,14 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(nested.operand.asInstanceOf[VariableExpression].variable == "abc")
   }
 
+  test("unary operators right-associative") {
+    val Success(outer: UnaryExpression, _) = Parser.parseExpr("~-1")
+    assert(outer.operator == UnaryOperator.BitwiseNot)
+    val inner = outer.operand.asInstanceOf[UnaryExpression]
+    assert(inner.operator == UnaryOperator.Negate)
+    assert(inner.operand.asInstanceOf[IntegerExpression] == 1)
+  }
+
   test("\\result") {
     val Success(result, _) = Parser.parseExpr("\\result")
     assert(result.isInstanceOf[ResultExpression])

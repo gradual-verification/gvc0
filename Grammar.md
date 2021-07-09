@@ -79,13 +79,14 @@ typeModifier ::= * | [ ]
 
 **Divergence from reference**
  * `\result` and `\length` are allowed as regular expressions. These are only allowed inside annotations for well-formed programs.
+ * Increment operations (`++` and `--`) are defined as expressions. A separate pass must check that they are only used in `expressionStatement` constructs, not as a part of another expression.
 
 ```
 expression ::= binaryExpression [? expression : expression]
 
 binaryExpression ::= basicExpression (binaryOperator basicExpression)*
 
-basicExpression ::= prefixOperator* atomExpression member*
+basicExpression ::= prefixOperator* atomExpression member* postfixOperator?
 
 atomExpression ::=
   | parenExpression
@@ -192,7 +193,7 @@ errorStatement ::= error ( expression ) ;
 simpleStatement ::= variableStatement |
                     expressionStatement
 variableStatement ::= typeReference identifier [= expression]
-expressionStatement ::= expression [postfixOperator | (assignmentOperator expression)]
+expressionStatement ::= expression [assignmentOperator expression]
 ```
 
 ## Definitions

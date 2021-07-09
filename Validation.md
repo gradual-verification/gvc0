@@ -36,7 +36,7 @@
 * [X] (Only used in C1) `continue` and `break` statements can only be used inside loops.
 * [X] `Resolver`: The step statement in a for loop may not be a declaration.
 * [ ] Integer constants are in the range from 0 to 2^31.
-* [ ] `* <lv> ++` and `* <lv> --` must be be explicitly parenthesized to override the right-to-left associative interpretation of `++` and `--`.
+* [X] `Resolver`: `* <lv> ++` and `* <lv> --` must be be explicitly parenthesized to override the right-to-left associative interpretation of `++` and `--`.
 * [X] `Resolver`: `\result` is only legal in `@ensures` clauses.
 * [X] `Resolver`: `@requires` and `@ensures` can only annotate functions.
 * [X] `Resolver`: `@loop_invariant` can only precede loop bodies.

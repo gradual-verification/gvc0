@@ -69,28 +69,15 @@ trait Statements extends Specifications {
       case ((varType, varName, value), span) => VariableStatement(varType, varName, value, span)
     })
 
-  def expressionStatement[_: P]: P[Statement] = P(span(expression ~/ statementTail.?))
+  def expressionStatement[_: P]: P[Statement] = P(span(expression ~/ assignmentTail.?))
     .map({
       case ((expr, None), span) => ExpressionStatement(expr, span)
-      case ((expr, Some(PostfixTail(op))), span) => UnaryOperationStatement(expr, op, span)
-      case ((expr, Some(AssignmentTail(op, value))), span) => AssignmentStatement(expr, op, value, span)
+      case ((expr, Some((op, value))), span) => AssignmentStatement(expr, op, value, span)
     })
 
-  sealed trait StatementTail
-  case class PostfixTail(op: UnaryOperator.Value) extends StatementTail
-  case class AssignmentTail(op: AssignOperator.Value, value: Expression) extends StatementTail
-
-  def statementTail[_: P]: P[StatementTail] = P(postfixTail | assignmentTail)
-
-  def postfixTail[_: P]: P[PostfixTail] = P(postfixOperator.!)
+  def assignmentTail[_: P]: P[(AssignOperator.Value, Expression)] = P(assignmentOperator.! ~ expression)
     .map({
-      case "++" => PostfixTail(UnaryOperator.Increment)
-      case "--" => PostfixTail(UnaryOperator.Decrement)
-    })
-
-  def assignmentTail[_: P]: P[AssignmentTail] = P(assignmentOperator.! ~ expression)
-    .map({
-      case (assignOp, value) => AssignmentTail(parseAssignOperator(assignOp), value)
+      case (assignOp, value) => (parseAssignOperator(assignOp), value)
     })
 
   def parseAssignOperator(op: String): AssignOperator.Value = {

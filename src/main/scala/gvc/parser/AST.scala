@@ -24,6 +24,7 @@ case class ArrayType(valueType: Type, span: SourceSpan) extends Type
 // Expressions
 sealed trait Expression extends Node
 case class VariableExpression(variable: Identifier, span: SourceSpan) extends Expression
+case class IncrementExpression(value: Expression, operator: IncrementOperator, span: SourceSpan) extends Expression
 case class BinaryExpression(left: Expression, operator: BinaryOperator.Value, right: Expression, span: SourceSpan) extends Expression
 case class UnaryExpression(operand: Expression, operator: UnaryOperator.Value, span: SourceSpan) extends Expression
 case class TernaryExpression(condition: Expression, ifTrue: Expression, ifFalse: Expression, span: SourceSpan) extends Expression
@@ -97,14 +98,6 @@ case class AssignmentStatement(
   specifications: List[Specification] = List.empty
 ) extends Statement {
   def withSpecifications(specs: List[Specification]): AssignmentStatement = copy(specifications = specs)
-}
-case class UnaryOperationStatement(
-  value: Expression,
-  operator: UnaryOperator.Value,
-  span: SourceSpan,
-  specifications: List[Specification] = List.empty
-) extends Statement {
-  def withSpecifications(specs: List[Specification]): UnaryOperationStatement = copy(specifications = specs)
 }
 case class VariableStatement(
   valueType: Type,
@@ -212,14 +205,16 @@ object BinaryOperator extends Enumeration {
 
 object UnaryOperator extends Enumeration {
   type UnaryOperator = Value
-
   val Not = Value("!")
   val BitwiseNot = Value("~")
   val Negate = Value("-")
   val Deref = Value("*")
+}
 
-  val Increment = Value("++")
-  val Decrement = Value("--")
+sealed trait IncrementOperator
+object IncrementOperator {
+  case object Increment extends IncrementOperator
+  case object Decrement extends IncrementOperator
 }
 
 object AssignOperator extends Enumeration {

@@ -58,9 +58,10 @@ class StatementsSpec extends AnyFunSuite {
   }
   
   test("increment statement") {
-    val Success(stmt: UnaryOperationStatement, _) = Parser.parseStatement("abc++;")
-    assert(stmt.operator == UnaryOperator.Increment)
-    assert(stmt.value.asInstanceOf[VariableExpression].variable == "abc")
+    val Success(stmt: ExpressionStatement, _) = Parser.parseStatement("abc++;")
+    val expr = stmt.expression.asInstanceOf[IncrementExpression]
+    assert(expr.operator == IncrementOperator.Increment)
+    assert(expr.value.asInstanceOf[VariableExpression].variable == "abc")
   }
 
   test("no prefix increment") {
@@ -227,8 +228,8 @@ class StatementsSpec extends AnyFunSuite {
     assert(cond.operator == BinaryOperator.Less)
     assert(cond.right.asInstanceOf[IntegerExpression] == 1)
 
-    val inc = f.incrementor.asInstanceOf[UnaryOperationStatement]
-    assert(inc.operator == UnaryOperator.Increment)
+    val inc = f.incrementor.asInstanceOf[ExpressionStatement].expression.asInstanceOf[IncrementExpression]
+    assert(inc.operator == IncrementOperator.Increment)
     assert(inc.value.asInstanceOf[VariableExpression].variable == "i")
 
     val invoke = f.body.asInstanceOf[ExpressionStatement].expression.asInstanceOf[InvokeExpression]

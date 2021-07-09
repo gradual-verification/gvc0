@@ -157,10 +157,26 @@ object Resolver {
       case variable: VariableStatement => ???
 
       case expr: ExpressionStatement =>
-        ResolvedExpressionStatement(
-          parsed = expr,
-          value = resolveExpression(expr.expression, scope, MethodContext)
-        )
+        expr.expression match {
+          // Special-case increment inside an ExpressionStatement since that is the only
+          // valid position to encounter an increment expression
+          case increment: IncrementExpression => {
+            ResolvedIncrement(
+              parsed = expr,
+              value = resolveExpression(increment.value, scope, MethodContext),
+              operation = increment.operator match {
+                case IncrementOperator.Increment => IncrementOperation.Increment
+                case IncrementOperator.Decrement => IncrementOperation.Decrement
+              }
+            )
+          }
+
+          case _ => ResolvedExpressionStatement(
+            parsed = expr,
+            value = resolveExpression(expr.expression, scope, MethodContext)
+          )
+        }
+        
 
       case assign: AssignmentStatement =>
         ResolvedAssignment(
@@ -168,20 +184,6 @@ object Resolver {
           left = resolveExpression(assign.left, scope, MethodContext),
           value = resolveExpression(assign.right, scope, MethodContext),
           operation = convertAssignOp(assign, scope)
-        )
-
-      case unary: UnaryOperationStatement =>
-        ResolvedIncrement(
-          parsed = unary,
-          value = resolveExpression(unary.value, scope, MethodContext),
-          operation = unary.operator match {
-            case UnaryOperator.Increment => IncrementOperation.Increment
-            case UnaryOperator.Decrement => IncrementOperation.Decrement
-            case _ => {
-              scope.errors.error(unary, "Unsupported unary operation")
-              IncrementOperation.Increment
-            }
-          }
         )
 
       case iff: IfStatement =>
@@ -338,6 +340,11 @@ object Resolver {
   def resolveExpression(input: Expression, scope: Scope, context: Context): ResolvedExpression = {
     input match {
       case variable: VariableExpression => resolveVariable(variable.variable, scope)
+
+      case increment: IncrementExpression => {
+        scope.errors.error(increment, "Increment/decrement operators cannot be used as an expression")
+        return resolveExpression(increment.value, scope, context)
+      }
 
       case binary: BinaryExpression => {
         val left = resolveExpression(binary.left, scope, context)

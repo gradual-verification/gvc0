@@ -25,10 +25,6 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/parallel-decl.c0",
     // TODO: while(true); should be a parse error
     "fp-basic/semi.c0",
-    // TODO: Fix precedence of ++ and *
-    "fp-basic/starplusplus1.c0",
-    // TODO: Fix precedence of -- and *
-    "fp-basic/starplusplus4.c0",
 
     // RESOLVING
     // TODO: implement #use

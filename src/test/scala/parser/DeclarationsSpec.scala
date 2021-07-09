@@ -93,7 +93,7 @@ class DeclarationsSpec extends AnyFunSuite {
     val List(stmt1, stmt2, stmt3) = method.body.get.body
     assert(stmt1.isInstanceOf[VariableStatement])
     assert(stmt2.isInstanceOf[AssignmentStatement])
-    assert(stmt3.isInstanceOf[UnaryOperationStatement])
+    assert(stmt3.isInstanceOf[ExpressionStatement])
   }
 
   test("use library declaration") {

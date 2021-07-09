@@ -24,7 +24,7 @@ object IncrementOperation {
 }
 
 case class ResolvedIncrement(
-  parsed: UnaryOperationStatement,
+  parsed: Statement,
   value: ResolvedExpression,
   operation: IncrementOperation,
 ) extends ResolvedStatement
