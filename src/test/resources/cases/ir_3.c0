@@ -1,0 +1,9 @@
+bool condition()
+{
+  return true;
+}
+
+int main()
+{
+  return condition() ? 0 : 1;
+}

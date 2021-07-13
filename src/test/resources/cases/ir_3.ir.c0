@@ -1,0 +1,20 @@
+bool condition()
+{
+  return true;
+}
+
+int main()
+{
+  bool _1;
+  int _2;
+  _1 = condition();
+  if (_1)
+  {
+    _2 = 0;
+  }
+  else
+  {
+    _2 = 1;
+  }
+  return _2;
+}

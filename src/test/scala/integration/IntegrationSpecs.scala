@@ -7,6 +7,8 @@ import scala.io.Source
 import fastparse.Parsed.{Success, Failure}
 import gvc.analyzer.{Resolver, ErrorSink, ResolvedProgram, TypeChecker, AssignmentValidator}
 import gvc.analyzer.ReturnValidator
+import gvc.transformer.Transformer
+import gvc.transformer.CNaughtPrinter
 
 class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
@@ -17,6 +19,8 @@ class IntegrationSpecs extends AnyFunSuite {
   )
 
   val exclusions = Set(
+    "cases/struct_5.c0", // TODO: Struct flattening
+
     // PARSING
     // TODO: fix big number handling
     "fp-basic/lexer02.c0",
@@ -64,12 +68,16 @@ class IntegrationSpecs extends AnyFunSuite {
   val testFiles = testDirs.flatMap(dir =>
     new File(getClass().getResource("/" + dir).getFile()).listFiles()
       map { file => (dir + file.getName().toLowerCase(), file) }
-      filterNot { case (name, _) => exclusions.contains(name) })
+      filterNot { case (name, _) => exclusions.contains(name) }
+      filterNot { case (name, _) => name.endsWith(".ir.c0") })
 
   for ((name, file) <- testFiles) {
     test("test " + name) {
+      val irFile = new File(file.getParentFile(), file.getName().replace(".c0", ".ir.c0"))
+
       val src = Source.fromFile(file).mkString
-      val result = runIntegrationTest(src)
+      val irSrc = if (irFile.exists()) Some(Source.fromFile(irFile).mkString) else None
+      val result = runIntegrationTest(src, irSrc)
       
       if (src.startsWith("//test error")) {
         assert(result.isInstanceOf[ParseError])
@@ -85,7 +93,7 @@ class IntegrationSpecs extends AnyFunSuite {
     }
   }
 
-  def runIntegrationTest(source: String): IntegrationResult = {
+  def runIntegrationTest(source: String, expectedIR: Option[String]): IntegrationResult = {
     Parser.parseProgram(source) match {
       case fail: Failure => ParseError(fail.trace().longMsg)
       case Success(parsed, _) => {
@@ -103,6 +111,12 @@ class IntegrationSpecs extends AnyFunSuite {
             if (!sink.errors.isEmpty) {
               ValidationError(sink.errors.map(_.message))
             } else {
+              val ir = result.methodDefinitions.map(Transformer.methodToIR(_, result))
+                .map(CNaughtPrinter.printMethod(_))
+                .mkString("\n")
+
+              if (expectedIR.isDefined)
+                assert(expectedIR.get == ir)
               ValidProgram
             }
           }
