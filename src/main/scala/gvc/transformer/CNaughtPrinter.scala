@@ -1,29 +1,5 @@
 package gvc.transformer
 import scala.collection.mutable
-import gvc.transformer.IR.Var
-import gvc.transformer.IR.Literal.Bool
-import gvc.transformer.IR.Expr.Arithmetic
-import gvc.transformer.IR.Expr.Comparison
-import gvc.transformer.IR.Expr.Logical
-import gvc.transformer.IR.Expr.ArrayAccess
-import gvc.transformer.IR.Expr.ArrayFieldAccess
-import gvc.transformer.IR.Expr.Deref
-import gvc.transformer.IR.Expr.Negation
-import gvc.transformer.IR.Expr.Not
-import gvc.transformer.IR.Expr.Member
-import gvc.transformer.IR.Expr.Alloc
-import gvc.transformer.IR.Expr.AllocArray
-import gvc.transformer.IR.Expr.Invoke
-import gvc.transformer.IR.ArithmeticOp.Add
-import gvc.transformer.IR.ArithmeticOp.Subtract
-import gvc.transformer.IR.ArithmeticOp.Multiply
-import gvc.transformer.IR.ArithmeticOp.Divide
-import gvc.transformer.IR.ComparisonOp.Equal
-import gvc.transformer.IR.ComparisonOp.NotEqual
-import gvc.transformer.IR.ComparisonOp.LessThan
-import gvc.transformer.IR.ComparisonOp.LessThanEqual
-import gvc.transformer.IR.ComparisonOp.GreaterThan
-import gvc.transformer.IR.ComparisonOp.GreaterThanEqual
 
 object CNaughtPrinter {
   def typeName(t: IR.Type): String = {
@@ -207,7 +183,7 @@ object CNaughtPrinter {
           printer.print("'")
         }
 
-        case bool: Bool => printer.print(bool.value match {
+        case bool: IR.Literal.Bool => printer.print(bool.value match {
           case true => "true"
           case false => "false"
         })
@@ -219,7 +195,7 @@ object CNaughtPrinter {
     def printExpr(expr: IR.Expr, printer: Printer) = {
       expr match {
         case value: IR.Value => printer.print(value, printValue)
-        case a: Arithmetic => {
+        case a: IR.Expr.Arithmetic => {
           printer.print(a.left, printValue)
           printer.print(" ")
           printer.print(a.op match {
@@ -232,7 +208,7 @@ object CNaughtPrinter {
           printer.print(a.right, printValue)
         }
 
-        case c: Comparison => {
+        case c: IR.Expr.Comparison => {
           printer.print(c.left, printValue)
           printer.print(" ")
           printer.print(c.op match {
@@ -247,7 +223,7 @@ object CNaughtPrinter {
           printer.print(c.right, printValue)
         }
 
-        case l: Logical => {
+        case l: IR.Expr.Logical => {
           printer.print(l.left, printValue)
           printer.print(" ")
           printer.print(l.op match {
@@ -258,48 +234,48 @@ object CNaughtPrinter {
           printer.print(l.right, printValue)
         }
 
-        case arr: ArrayAccess => {
+        case arr: IR.Expr.ArrayAccess => {
           printer.print(varNames(arr.subject))
           printer.print("[")
           printer.print(arr.index, printValue)
           printer.print("]")
         }
 
-        case arrField: ArrayFieldAccess => {
+        case arrField: IR.Expr.ArrayFieldAccess => {
           printer.print(varNames(arrField.subject))
           printer.print("[")
           printer.print(arrField.index, printValue)
           printer.print("]")
         }
 
-        case deref: Deref => {
+        case deref: IR.Expr.Deref => {
           printer.print("*")
           printer.print(varNames(deref.subject))
         }
 
-        case negate: Negation => {
+        case negate: IR.Expr.Negation => {
           printer.print("-")
           printer.print(negate.value, printValue)
         }
 
-        case not: Not => {
+        case not: IR.Expr.Not => {
           printer.print("!")
           printer.print(not.value, printValue)
         }
 
-        case member: Member => {
+        case member: IR.Expr.Member => {
           printer.print(varNames(member.subject))
           printer.print("->")
           printer.print(member.fieldName)
         }
 
-        case alloc: Alloc => {
+        case alloc: IR.Expr.Alloc => {
           printer.print("alloc(")
           printer.print(typeName(alloc.memberType))
           printer.print(")")
         }
 
-        case allocArray: AllocArray => {
+        case allocArray: IR.Expr.AllocArray => {
           printer.print("alloc_array(")
           printer.print(typeName(allocArray.memberType))
           printer.print(", ")
@@ -307,7 +283,7 @@ object CNaughtPrinter {
           printer.print(")")
         }
 
-        case invoke: Invoke => {
+        case invoke: IR.Expr.Invoke => {
           printer.print(invoke.methodName)
           printer.print("(")
           var first = true

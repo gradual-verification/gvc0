@@ -1,0 +1,16 @@
+bool test(int value)
+{
+  return value > 0;
+}
+
+int main()
+{
+  bool b = test(1);
+  if (b || test(2))
+  {
+    return 1;
+  }
+
+  b = !b;
+  return 1;
+}

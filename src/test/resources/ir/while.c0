@@ -1,0 +1,17 @@
+bool test(int value)
+{
+  return value < 10;
+}
+
+int main()
+{
+  bool cond = true;
+  int value = 0;
+  while (cond)
+  {
+    value++;
+    cond = test(value);
+  }
+
+  return 0;
+}

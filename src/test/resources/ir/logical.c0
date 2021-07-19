@@ -1,0 +1,13 @@
+bool test(int value)
+{
+  return value > 0;
+}
+
+int main()
+{
+  if (test(1) || test(2)) {
+    return 0;
+  }
+
+  return 1;
+}

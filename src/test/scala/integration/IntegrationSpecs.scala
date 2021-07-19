@@ -15,7 +15,8 @@ class IntegrationSpecs extends AnyFunSuite {
     // The test files are copied with some modifications in the test header
     // from tests/fp-basic in the cc0 repository
     "fp-basic/",
-    "cases/"
+    "cases/",
+    "ir/",
   )
 
   val exclusions = Set(
