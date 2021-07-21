@@ -110,8 +110,8 @@ case class VariableStatement(
 }
 case class IfStatement(
   condition: Expression,
-  then: Statement,
-  els: Option[Statement],
+  ifTrue: Statement,
+  ifFalse: Option[Statement],
   span: SourceSpan,
   specifications: List[Specification] = List.empty
 ) extends Statement {

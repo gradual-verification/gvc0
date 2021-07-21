@@ -1,6 +1,6 @@
 import org.scalatest.funsuite._
 import gvc.parser._
-import fastparse.Parsed.{Success, Failure}
+import fastparse.Parsed.Success
 
 class ParserSpec extends AnyFunSuite {
   test("empty program") {

@@ -190,8 +190,8 @@ object Resolver {
         ResolvedIf(
           parsed = iff,
           condition = resolveExpression(iff.condition, scope, MethodContext),
-          ifTrue = resolveScopedStatement(iff.then, scope),
-          ifFalse = iff.els.map(resolveScopedStatement(_, scope))
+          ifTrue = resolveScopedStatement(iff.ifTrue, scope),
+          ifFalse = iff.ifFalse.map(resolveScopedStatement(_, scope))
         )
     
       case w: WhileStatement => {

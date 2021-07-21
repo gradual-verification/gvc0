@@ -37,7 +37,7 @@ class SpecificationsSpec extends AnyFunSuite {
   }
 
   test("do not allow multi-line expressions inside single-line annotations") {
-      val Failure(_) = Parser.parseSpec("""
+      val Failure(_, _, _) = Parser.parseSpec("""
         //@ assert (
           true
         );

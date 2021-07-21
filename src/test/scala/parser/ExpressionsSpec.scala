@@ -16,8 +16,8 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("No whitespace in identifiers") {
-    val Failure(_) = Parser.parseExpr("a b")
-    val Failure(_) = Parser.parseExpr("ab c")
+    val Failure(_, _, _) = Parser.parseExpr("a b")
+    val Failure(_, _, _) = Parser.parseExpr("ab c")
   }
 
   test("Parse decimal number") {
@@ -40,7 +40,7 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("Do not allow whitespace in decimal literal") {
-    val Failure(_) = Parser.parseExpr("123 456")
+    val Failure(_, _, _) = Parser.parseExpr("123 456")
   }
 
   test("String literal") {
@@ -51,7 +51,7 @@ class ExpressionsSpec extends AnyFunSuite {
   }
 
   test("Do not allow new lines inside string literals") {
-    val Failure(_) = Parser.parseExpr("\"test\nstring\"")
+    val Failure(_, _, _) = Parser.parseExpr("\"test\nstring\"")
   }
 
   test("String literal escapes") {

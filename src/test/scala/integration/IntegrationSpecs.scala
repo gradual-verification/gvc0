@@ -5,7 +5,7 @@ import org.scalatest.funsuite._
 import java.io.File
 import scala.io.Source
 import fastparse.Parsed.{Success, Failure}
-import gvc.analyzer.{Resolver, ErrorSink, ResolvedProgram, TypeChecker, AssignmentValidator}
+import gvc.analyzer.{Resolver, ErrorSink, TypeChecker, AssignmentValidator}
 import gvc.analyzer.ReturnValidator
 import gvc.transformer.Transformer
 import gvc.transformer.CNaughtPrinter

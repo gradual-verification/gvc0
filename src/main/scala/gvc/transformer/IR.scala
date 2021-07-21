@@ -1,7 +1,5 @@
 package gvc.transformer
 
-import gvc.parser.SourceSpan
-
 object IR {
   class Method(val name: String, val returnType: Option[Type], val arguments: List[Var])
 
@@ -141,19 +139,22 @@ object IR {
   }
 
   sealed trait Op
+  sealed trait SimpleOp extends Op
+  sealed trait FlowOp extends Op
+
   object Op {
-    class AssignVar(val subject: Var, val value: Expr) extends Op
-    class AssignMember(val subject: Var, val fieldName: String, val value: Value) extends Op
-    class AssignArray(val subject: Var, val index: Value, val value: Value) extends Op
+    class AssignVar(val subject: Var, val value: Expr) extends SimpleOp
+    class AssignMember(val subject: Var, val fieldName: String, val value: Value) extends SimpleOp
+    class AssignArray(val subject: Var, val index: Value, val value: Value) extends SimpleOp
     // arr[i].field needs to be encoded differently in Viper and C0 so make a special-case for it
-    class AssignArrayMember(val subject: Var, val index: Value, val fieldName: String, val value: Value) extends Op
-    class AssignPtr(val subject: Var, val value: Value) extends Op
-    class While(val condition: Value, val body: Block) extends Op
-    class If(val condition: Value, val ifTrue: Block, val ifFalse: Block) extends Op
-    class Assert(val value: Value) extends Op
-    class Error(val value: Value) extends Op
-    class Return(val value: Option[Value]) extends Op
-    class Noop(val value: Expr) extends Op
+    class AssignArrayMember(val subject: Var, val index: Value, val fieldName: String, val value: Value) extends SimpleOp
+    class AssignPtr(val subject: Var, val value: Value) extends SimpleOp
+    class While(val condition: Value, val body: Block) extends FlowOp
+    class If(val condition: Value, val ifTrue: Block, val ifFalse: Block) extends FlowOp
+    class Assert(val value: Value) extends SimpleOp
+    class Error(val value: Value) extends SimpleOp
+    class Return(val value: Option[Value]) extends SimpleOp
+    class Noop(val value: Expr) extends SimpleOp
   }
 
   class Block(val operations: List[Op])

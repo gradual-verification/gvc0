@@ -161,15 +161,15 @@ trait Expressions extends Types {
     raw.substring(1, raw.length() - 1)
       .replace("\\n", "\n")
       .replace("\\t", "\t")
-      .replace("\\v", "\13")
+      .replace("\\v", "\u000b")
       .replace("\\b", "\b")
       .replace("\\r", "\r")
       .replace("\\f", "\f")
-      .replace("\\a", "\07")
+      .replace("\\a", "\u0007")
       .replace("\\\"", "\"")
       .replace("\\'", "'")
       .replace("\\\\", "\\")
-      .replace("\\0", "\0")
+      .replace("\\0", "\u0000")
   }
 
   def parseChar(raw: String): Char = {

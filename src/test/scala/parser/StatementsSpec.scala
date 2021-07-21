@@ -65,7 +65,7 @@ class StatementsSpec extends AnyFunSuite {
   }
 
   test("no prefix increment") {
-    val Failure(_) = Parser.parseStatement("++abc;")
+    val Failure(_, _, _) = Parser.parseStatement("++abc;")
   }
 
   test("variable declaration") {
@@ -160,14 +160,14 @@ class StatementsSpec extends AnyFunSuite {
   test("if") {
     val Success(stmt: IfStatement, _) = Parser.parseStatement("if (true) a = 2;")
     assert(stmt.condition.asInstanceOf[BooleanExpression] == true)
-    assert(stmt.then.asInstanceOf[AssignmentStatement].operator == AssignOperator.Assign)
-    assert(stmt.els == None)
+    assert(stmt.ifTrue.asInstanceOf[AssignmentStatement].operator == AssignOperator.Assign)
+    assert(stmt.ifFalse == None)
   }
 
   test("if block") {
     val Success(stmt: IfStatement, _) = Parser.parseStatement("if (false) { }")
-    assert(stmt.then.asInstanceOf[BlockStatement].body.isEmpty)
-    assert(stmt.els == None)
+    assert(stmt.ifTrue.asInstanceOf[BlockStatement].body.isEmpty)
+    assert(stmt.ifFalse == None)
   }
 
   test("if else") {
@@ -178,11 +178,11 @@ class StatementsSpec extends AnyFunSuite {
         a = 3;
     """)
 
-    val thenStmt = stmt.then.asInstanceOf[AssignmentStatement]
+    val thenStmt = stmt.ifTrue.asInstanceOf[AssignmentStatement]
     assert(thenStmt.operator == AssignOperator.Assign)
     assert(thenStmt.right.asInstanceOf[IntegerExpression] == 2)
 
-    val elseStmt = stmt.els.get.asInstanceOf[AssignmentStatement]
+    val elseStmt = stmt.ifFalse.get.asInstanceOf[AssignmentStatement]
     assert(elseStmt.operator == AssignOperator.Assign)
     assert(elseStmt.right.asInstanceOf[IntegerExpression] == 3)
   }
@@ -199,12 +199,12 @@ class StatementsSpec extends AnyFunSuite {
     """)
 
     assert(if1.condition.asInstanceOf[BinaryExpression].right.asInstanceOf[IntegerExpression] == 1)
-    assert(if1.then.asInstanceOf[BlockStatement].body.length == 1)
+    assert(if1.ifTrue.asInstanceOf[BlockStatement].body.length == 1)
     
-    val Some(if2: IfStatement) = if1.els
+    val Some(if2: IfStatement) = if1.ifFalse
     assert(if2.condition.asInstanceOf[BinaryExpression].right.asInstanceOf[IntegerExpression] == 2)
-    assert(if2.then.asInstanceOf[BlockStatement].body.length == 1)
-    assert(if2.els.get.asInstanceOf[BlockStatement].body.length == 1)
+    assert(if2.ifTrue.asInstanceOf[BlockStatement].body.length == 1)
+    assert(if2.ifFalse.get.asInstanceOf[BlockStatement].body.length == 1)
   }
 
   test("while") {

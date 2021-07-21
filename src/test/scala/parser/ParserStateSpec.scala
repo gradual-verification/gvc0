@@ -1,6 +1,5 @@
 import org.scalatest.funsuite._
 import gvc.parser.{ParserState, SourcePosition}
-import fastparse.Parsed.{Success, Failure}
 import gvc.parser.MultiLineAnnotation
 import gvc.parser.SingleLineAnnotation
 

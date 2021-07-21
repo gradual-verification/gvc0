@@ -1,6 +1,5 @@
 package gvc.analyzer
 import scala.collection.mutable.HashMap
-import gvc.parser.ArrayType
 import gvc.analyzer.ComparisonOperation.EqualTo
 import gvc.analyzer.ComparisonOperation.NotEqualTo
 import gvc.analyzer.ComparisonOperation.LessThan
