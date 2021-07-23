@@ -1,0 +1,9 @@
+int deref(int* ptr)
+{
+  return *ptr;
+}
+
+int main()
+{
+  return deref(NULL);
+}

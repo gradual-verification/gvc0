@@ -10,6 +10,7 @@ import gvc.analyzer.ReturnValidator
 import gvc.transformer.Transformer
 import gvc.transformer.CNaughtPrinter
 import gvc.transformer.IR
+import gvc.transformer.SilverOutput
 
 class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
@@ -18,11 +19,10 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/",
     "cases/",
     "ir/",
+    "viper/"
   )
 
   val exclusions = Set(
-    //"cases/struct_5.c0", // TODO: Struct flattening
-
     // PARSING
     // TODO: fix big number handling
     "fp-basic/lexer02.c0",
@@ -70,16 +70,17 @@ class IntegrationSpecs extends AnyFunSuite {
   val testFiles = testDirs.flatMap(dir =>
     new File(getClass().getResource("/" + dir).getFile()).listFiles()
       map { file => (dir + file.getName().toLowerCase(), file) }
-      filterNot { case (name, _) => exclusions.contains(name) }
-      filterNot { case (name, _) => name.endsWith(".ir.c0") })
+      filterNot { case (name, _) => exclusions.contains(name) || name.endsWith(".ir.c0") || name.endsWith(".vpr") })
 
   for ((name, file) <- testFiles) {
     test("test " + name) {
       val irFile = new File(file.getParentFile(), file.getName().replace(".c0", ".ir.c0"))
+      val silverFile = new File(file.getParentFile(), file.getName().replace(".c0", ".vpr"))
 
       val src = Source.fromFile(file).mkString
       val irSrc = if (irFile.exists()) Some(Source.fromFile(irFile).mkString) else None
-      val result = runIntegrationTest(src, irSrc)
+      val silverSrc = if (silverFile.exists()) Some(Source.fromFile(silverFile).mkString) else None
+      val result = runIntegrationTest(src, irSrc, silverSrc)
       
       if (src.startsWith("//test error")) {
         assert(result.isInstanceOf[ParseError])
@@ -95,7 +96,7 @@ class IntegrationSpecs extends AnyFunSuite {
     }
   }
 
-  def runIntegrationTest(source: String, expectedIR: Option[String]): IntegrationResult = {
+  def runIntegrationTest(source: String, expectedIR: Option[String], expectedSilver: Option[String]): IntegrationResult = {
     Parser.parseProgram(source) match {
       case fail: Failure => ParseError(fail.trace().longMsg)
       case Success(parsed, _) => {
@@ -120,6 +121,11 @@ class IntegrationSpecs extends AnyFunSuite {
 
               if (expectedIR.isDefined)
                 assert(expectedIR.get == methods)
+
+              if (expectedSilver.isDefined) {
+                val silver = SilverOutput.program(ir).toString
+                assert(expectedSilver.get == silver)
+              }
               ValidProgram
             }
           }

@@ -1,0 +1,15 @@
+field $int_value: Int
+
+method $method_deref(ptr: Ref) returns ($return: Int)
+{
+  var _: Int
+  _ := ptr.$int_value
+  $return := _
+}
+
+method $method_main() returns ($return: Int)
+{
+  var _: Int
+  _ := $method_deref(null)
+  $return := _
+}

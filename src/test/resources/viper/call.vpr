@@ -1,0 +1,11 @@
+method $method_test() returns ($return: Int)
+{
+  $return := 1
+}
+
+method $method_main() returns ($return: Int)
+{
+  var _: Int
+  _ := $method_test()
+  $return := _
+}

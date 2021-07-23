@@ -1,0 +1,4 @@
+method $method_main() returns ($return: Int)
+{
+  $return := 0
+}
