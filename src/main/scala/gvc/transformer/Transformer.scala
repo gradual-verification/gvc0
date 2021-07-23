@@ -7,22 +7,174 @@ import scala.collection.mutable
 class TransformerException(val message: String) extends RuntimeException
 
 object Transformer {
-  class Scope(
-    val variables: ListBuffer[IR.Var],
-    val namedVariables: mutable.Map[String, IR.Var],
-    val nameHint: Option[String]
-  ) {
-    def this() = this(ListBuffer(), mutable.Map(), None)
-    def withName(newName: Option[String]) = new Scope(variables, namedVariables, newName)
+
+  // Struct flattening data structures
+  class StructTree(val children: List[StructNode], val struct: StructDefImpl) {
+    def fields = children.flatMap(_.fields)
+  }
+
+  sealed trait StructNode {
+    val name: String
+    def fields: Seq[IR.StructField]
+  }
+  class EmbedNode(val name: String, val children: List[StructNode]) extends StructNode {
+    def fields = children.flatMap(_.fields)
+  }
+  class ValueNode(val name: String, val field: IR.StructField) extends StructNode {
+    def fields = Seq(field)
+  }
+
+  def createStructTree(
+    defn: ResolvedStructDefinition,
+    definitions: Map[String, ResolvedStructDefinition],
+    structs: Map[String, IR.StructDefinition]
+  ): StructTree = {
+    val impl = new StructDefImpl(defn.name)
+
+    def resolveType(t: ResolvedType): IR.Type = t match {
+      case UnknownType | MissingNamedType(_) | NullType | VoidType => throw new TransformerException("Invalid field type")
+      case ResolvedStructType(structName) => throw new TransformerException("Unexpected struct type encountered")
+
+      case ResolvedPointer(valueType) => valueType match {
+        case ResolvedStructType(structName) => IR.Type.StructReference(structName, structs.get(structName))
+        case _ => IR.Type.Pointer(resolveType(valueType))
+      }
+
+      case ResolvedArray(valueType) => valueType match {
+        case ResolvedStructType(structName) => IR.Type.Array(IR.Type.StructValue(structs(structName)))
+        case _ => IR.Type.Array(resolveType(valueType))
+      }
+
+      case IntType => IR.Type.Int
+      case StringType => IR.Type.String
+      case CharType => IR.Type.Char
+      case BoolType => IR.Type.Bool
+    }
+
+    def resolveField(field: ResolvedStructField, base: Option[String]): StructNode = {
+      val fullName = base.map(_ + "_" + field.name).getOrElse(field.name) // TODO: Avoid conflicting names
+
+      field.valueType match {
+        case ResolvedStructType(structName) => {
+          new EmbedNode(field.name, definitions(structName).fields.map(fieldDef => resolveField(fieldDef, Some(fullName))))
+        }
+
+        case other => new ValueNode(field.name, new IR.StructField(fullName, impl, resolveType(other)))
+      }
+    }
+
+    val tree = new StructTree(defn.fields.map(resolveField(_, None)), impl)
+    impl.updateFields(tree.fields)
+    tree
+  }
+
+  def createStructMap(definitions: List[ResolvedStructDefinition]): Map[String, StructTree] = {
+    val definitionsMap = definitions.map(d => d.name -> d).toMap
+    val structMap = definitionsMap.mapValues(d => new StructDefImpl(d.name))
+    definitionsMap.mapValues(createStructTree(_, definitionsMap, structMap))
+  }
+
+  class GlobalScope(val structs: Map[String, StructTree]) {
+    def this(program: ResolvedProgram) = this(createStructMap(program.structDefinitions))
+
+    private def getStructNode(member: ResolvedMember): (ResolvedMember, StructNode) = {
+      member.field match {
+        case None => throw new TransformerException("Invalid field reference")
+        case Some(field) => {
+          member.parent match {
+            case parent: ResolvedMember if !member.isArrow => {
+              val (root, node) = getStructNode(parent)
+              node match {
+                case embed: EmbedNode => (root, embed.children.find(_.name == field.name).get)
+                // Dotted member, but there is no corresponding embedded field
+                case _: ValueNode => throw new TransformerException("Invalid dotted field")
+              }
+            }
+
+            case _ => {
+              (member, structs(field.structName).children.find(_.name == field.name).get)
+            }
+          }
+        }
+      }
+    }
+
+    // Applies struct flattening, returning the "actual" parent expression after flattening
+    // and the flattened struct field that is accessed.
+    def structMember(member: ResolvedMember): (ResolvedMember, IR.StructField) = {
+      val (root, node) = getStructNode(member)
+      node match {
+        case _: EmbedNode => throw new TransformerException("Cannot directly access embedded struct")
+        case value: ValueNode => (root, value.field)
+      }
+    }
+
+    def varType(resolved: ResolvedType): IR.Type = {
+      mapType(resolved) match {
+        case Some(t: IR.Type) => t
+        case _ => throw new TransformerException("Cannot declare variable of type '" + resolved.name + "'")
+      }
+    }
+
+    def valueType(resolved: ResolvedType): IR.ValueType = {
+      mapType(resolved) match {
+        case None => throw new TransformerException("Cannot alloc type '" + resolved.name + "'")
+        case Some(typ) => typ
+      }
+    }
+
+    def returnType(resolved: ResolvedType): Option[IR.Type] = {
+      resolved match {
+        case VoidType => None
+        case _ => Some(varType(resolved))
+      }
+    }
+
+    def mapType(resolved: ResolvedType): Option[IR.ValueType] = {
+      resolved match {
+        case UnknownType | MissingNamedType(_) | VoidType | NullType => None
+        case ResolvedPointer(ResolvedStructType(structName)) => Some(IR.Type.StructReference(structName, structs.get(structName).map(_.struct)))
+        case ResolvedStructType(structName) => structs.get(structName).map(t => IR.Type.StructValue(t.struct))
+        case ResolvedPointer(value) => mapType(value).collect { case t: IR.Type => IR.Type.Pointer(t) }
+        case ResolvedArray(value) => mapType(value).map(IR.Type.Array(_))
+        case IntType => Some(IR.Type.Int)
+        case StringType => Some(IR.Type.String)
+        case CharType => Some(IR.Type.Char)
+        case BoolType => Some(IR.Type.Bool)
+      }
+    }
+
+    def local() = new LocalScope(structs)
+  }
+
+  class LocalScope(
+    structs: Map[String, StructTree],
+    val variables: ListBuffer[IR.Var] = ListBuffer(),
+    val namedVariables: mutable.Map[String, IR.Var] = mutable.Map(),
+    val usedNames: mutable.Map[String, Int] = mutable.Map(),
+    val nameHint: Option[String] = None
+  ) extends GlobalScope(structs) {
+    def withName(newName: Option[String]) = new LocalScope(structs, variables, namedVariables, usedNames, newName)
+
+    def varName(hint: Option[String] = nameHint): String = {
+      val base = hint.getOrElse("_")
+      val (name, number) = usedNames.get(base) match {
+        case None => (base, 1)
+        case Some(n) => (base + n, n + 1)
+      }
+
+      usedNames.update(base, number)
+      name
+    }
 
     def allocateTemp(typ: IR.Type) = {
-      val variable = new IR.Var(typ, nameHint)
+      val variable = new IR.Var(typ, varName())
       variables += variable
       variable
     }
 
     def allocateNamed(name: String, typ: IR.Type) = {
-      val variable = new IR.Var(typ, Some(name))
+      val variable = new IR.Var(typ, varName(Some(name)))
       variables += variable
       if (namedVariables.contains(name))
         throw new TransformerException("Duplicate variable name declared")
@@ -38,43 +190,8 @@ object Transformer {
     }
   }
 
-  def getField(member: ResolvedMember): (String, IR.Type) = {
-    member.field match {
-      case None => throw new TransformerException("Unresolved struct field")
-      case Some(field) => (field.name, getVarType(field.valueType))
-    }
-  }
-
-  def getVarType(resolved: ResolvedType): IR.Type = {
-    getType(resolved) match {
-      case None => throw new TransformerException("Cannot declare variable of type '" + resolved.name + "'")
-      case Some(IR.Type.Struct(_)) => throw new TransformerException("Cannot declare variable of struct type")
-      case Some(typ) => typ
-    }
-  }
-
-  def getAllocType(resolved: ResolvedType): IR.Type = {
-    getType(resolved) match {
-      case None => throw new TransformerException("Cannot alloc type '" + resolved.name + "'")
-      case Some(typ) => typ
-    }
-  }
-  
-  def getType(resolved: ResolvedType): Option[IR.Type] = {
-    resolved match {
-      case UnknownType | MissingNamedType(_) | VoidType | NullType => None
-      case ResolvedStructType(structName) => Some(IR.Type.Struct(structName))
-      case ResolvedPointer(valueType) => getType(valueType).map(IR.Type.Pointer(_))
-      case ResolvedArray(valueType) => getType(valueType).map(IR.Type.Array(_))
-      case IntType => Some(IR.Type.Int)
-      case StringType => Some(IR.Type.String)
-      case CharType => Some(IR.Type.Char)
-      case BoolType => Some(IR.Type.Bool)
-    }
-  }
-
   // Wraps expression by creating a temp and assigning the value to it
-  def wrapExpr(expr: IR.Expr, ops: List[IR.Op], scope: Scope): (IR.Var, List[IR.Op]) = {
+  def wrapExpr(expr: IR.Expr, ops: List[IR.Op], scope: LocalScope): (IR.Var, List[IR.Op]) = {
     val value = expr.valueType match {
       case None => throw new TransformerException("Cannot assign untyped value to variable")
       case Some(valueType) => scope.allocateTemp(valueType)
@@ -83,21 +200,21 @@ object Transformer {
     (value, ops :+ new IR.Op.AssignVar(value, expr))
   }
 
-  def lowerVar(expr: ResolvedExpression, scope: Scope): (IR.Var, List[IR.Op]) = {
+  def lowerVar(expr: ResolvedExpression, scope: LocalScope): (IR.Var, List[IR.Op]) = {
     lowerValue(expr, scope) match {
       case (v: IR.Var, ops) => (v, ops)
       case (value, ops) => wrapExpr(value, ops, scope)
     }
   }
 
-  def lowerValue(expr: ResolvedExpression, scope: Scope): (IR.Value, List[IR.Op]) = {
+  def lowerValue(expr: ResolvedExpression, scope: LocalScope): (IR.Value, List[IR.Op]) = {
     lowerExpression(expr, scope) match {
       case (value: IR.Value, ops) => (value, ops)
       case (expr, ops) => wrapExpr(expr, ops, scope)
     }
   }
 
-  def lowerExpression(expr: ResolvedExpression, scope: Scope): (IR.Expr, List[IR.Op]) = {
+  def lowerExpression(expr: ResolvedExpression, scope: LocalScope): (IR.Expr, List[IR.Op]) = {
     expr match {
       case ref: ResolvedVariableRef => (scope.getVar(ref.variable), Nil)
 
@@ -106,18 +223,18 @@ object Transformer {
         val argOps = argExprs.flatMap { case (_, ops) => ops }
         val args = argExprs.map { case (value, _) => value }
         invoke.method match {
-          case Some(method) => (new IR.Expr.Invoke(method.name, args, getType(method.returnType)), argOps)
+          case Some(method) => (new IR.Expr.Invoke(method.name, args, scope.returnType(method.returnType)), argOps)
           case None => throw new TransformerException("Unresolved method")
         }
       }
 
-      case member: ResolvedMember => {
-        val (fieldName, fieldType) = getField(member)
+      case _m: ResolvedMember => {
+        val (member, field) = scope.structMember(_m)
         member.parent match {
           case arr: ResolvedArrayIndex if !member.isArrow => {
             val (index, indexOps) = lowerValue(arr.index, scope)
             val (array, arrayOps) = lowerVar(arr.array, scope)
-            (new IR.Expr.ArrayFieldAccess(array, index, fieldName, fieldType), indexOps ++ arrayOps)
+            (new IR.Expr.ArrayFieldAccess(array, index, field), indexOps ++ arrayOps)
           }
 
           case parent => {
@@ -128,7 +245,7 @@ object Transformer {
             }
 
             val (subject, subjectOps) = lowerVar(ptr, scope)
-            (new IR.Expr.Member(subject, fieldName, fieldType), subjectOps)
+            (new IR.Expr.Member(subject, field), subjectOps)
           }
         }
       }
@@ -185,7 +302,7 @@ object Transformer {
             (IR.Literal.Null, conditionOps :+ new IR.Op.If(condition, new IR.Block(ifTrue), new IR.Block(ifFalse)))
           }
           case _ => {
-            val result = scope.allocateTemp(getVarType(ternary.valueType))
+            val result = scope.allocateTemp(scope.varType(ternary.valueType))
             val (trueVal, ifTrue) = lowerExpression(ternary.ifTrue, scope)
             val (falseVal, ifFalse) = lowerExpression(ternary.ifFalse, scope)
             val trueBlock = new IR.Block(ifTrue :+ new IR.Op.AssignVar(result, trueVal))
@@ -228,9 +345,9 @@ object Transformer {
         case (value, ops) => (new IR.Expr.Negation(value), ops)
       }
       case alloc: ResolvedAllocArray => lowerValue(alloc.length, scope) match {
-        case (length, ops) => (new IR.Expr.AllocArray(getAllocType(alloc.memberType), length), ops)
+        case (length, ops) => (new IR.Expr.AllocArray(scope.valueType(alloc.memberType), length), ops)
       }
-      case alloc: ResolvedAlloc => (new IR.Expr.Alloc(getAllocType(alloc.memberType)), Nil)
+      case alloc: ResolvedAlloc => (new IR.Expr.Alloc(scope.valueType(alloc.memberType)), Nil)
       case str: ResolvedString => (new IR.Literal.String(str.value), Nil)
       case char: ResolvedChar => (new IR.Literal.Char(char.value), Nil)
       case int: ResolvedInt => (new IR.Literal.Int(int.value), Nil)
@@ -239,7 +356,7 @@ object Transformer {
     }
   }
 
-  def lowerStatement(stmt: ResolvedStatement, scope: Scope): List[IR.Op] = {
+  def lowerStatement(stmt: ResolvedStatement, scope: LocalScope): List[IR.Op] = {
     stmt match {
       case expr: ResolvedExpressionStatement => lowerExpression(expr.value, scope) match {
         case (_: IR.Value, ops) => ops // Simple values can be dropped
@@ -258,8 +375,9 @@ object Transformer {
             }
           }
 
-          case member: ResolvedMember => {
-            val namedScope = scope.withName(Some(member.fieldName))
+          case _member: ResolvedMember => {
+            val (member, field) = scope.structMember(_member)
+            val namedScope = scope.withName(Some(_member.fieldName))
             val (value, valueOps) = lowerValue(assign.value, namedScope)
 
             member.parent match {
@@ -269,7 +387,7 @@ object Transformer {
                 val (index, indexOps) = lowerValue(arr.index, namedScope)
                 val (array, arrayOps) = lowerVar(arr.array, namedScope)
                 // Evaluation order: RHS -> Index -> Array -> Assign
-                valueOps ++ indexOps ++ arrayOps :+ new IR.Op.AssignArrayMember(array, index, member.fieldName, value)
+                valueOps ++ indexOps ++ arrayOps :+ new IR.Op.AssignArrayMember(array, index, field, value)
               }
 
               case nonArray => {
@@ -281,7 +399,7 @@ object Transformer {
 
                 val (parent, parentOps) = lowerVar(ptr, namedScope)
                 // Evaluation order: RHS -> Parent -> Assign
-                valueOps ++ parentOps :+ new IR.Op.AssignMember(parent, member.fieldName, value)
+                valueOps ++ parentOps :+ new IR.Op.AssignMember(parent, field, value)
               }
             }
           }
@@ -325,17 +443,17 @@ object Transformer {
             ops += new IR.Op.AssignVar(variable, new IR.Expr.Arithmetic(variable, one, operator))
           }
 
-          case member: ResolvedMember => {
-            val (fieldName, fieldType) = getField(member)
+          case _member: ResolvedMember => {
+            val (member, field) = scope.structMember(_member)
 
             member.parent match {
               // arr[i].field
               case arr: ResolvedArrayIndex if !member.isArrow => {
                 val index = resolve(lowerValue(arr.index, scope))
                 val array = resolve(lowerVar(arr.array, scope))
-                val value = resolve(wrapExpr(new IR.Expr.ArrayFieldAccess(array, index, fieldName, fieldType), Nil, scope))
+                val value = resolve(wrapExpr(new IR.Expr.ArrayFieldAccess(array, index, field), Nil, scope))
                 val incremented = resolve(wrapExpr(new IR.Expr.Arithmetic(value, one, operator), Nil, scope))
-                ops += new IR.Op.AssignArrayMember(array, index, fieldName, incremented)
+                ops += new IR.Op.AssignArrayMember(array, index, field, incremented)
               }
 
               case nonArray => {
@@ -348,9 +466,9 @@ object Transformer {
                 }
 
                 val irPtr = resolve(lowerVar(ptr, scope))
-                val value = resolve(wrapExpr(new IR.Expr.Member(irPtr, fieldName, fieldType), Nil, scope))
+                val value = resolve(wrapExpr(new IR.Expr.Member(irPtr, field), Nil, scope))
                 val incremented = resolve(wrapExpr(new IR.Expr.Arithmetic(value, one, operator), Nil, scope))
-                ops += new IR.Op.AssignMember(irPtr, fieldName, incremented)
+                ops += new IR.Op.AssignMember(irPtr, field, incremented)
               }
             }
           }
@@ -416,7 +534,7 @@ object Transformer {
         // must be unique across a method, so the named variables can be mutated
         // while transforming a method.
         for (decl <- block.variableDefs) {
-          scope.allocateNamed(decl.name, getVarType(decl.valueType))
+          scope.allocateNamed(decl.name, scope.varType(decl.valueType))
         }
 
         block.statements.flatMap(lowerStatement(_, scope))
@@ -424,19 +542,36 @@ object Transformer {
     }
   }
 
-  def methodToIR(method: ResolvedMethodDefinition, program: ResolvedProgram): IR.MethodImplementation = {
-    val scope = new Scope()
-    val args = method.declaration.arguments.map(v => new IR.Var(getVarType(v.valueType), Some(v.name)))
-    for (arg <- args) scope.namedVariables += (arg.nameHint.get -> arg)
+  def methodToIR(method: ResolvedMethodDefinition, scope: LocalScope): IR.MethodImplementation = {
+    val args = method.declaration.arguments.map(v => new IR.Var(scope.varType(v.valueType), scope.varName(Some(v.name))))
+    for (arg <- args) scope.namedVariables.put(arg.name, arg)
     
     val body = new IR.Block(lowerStatement(method.body, scope))
 
     // TODO: Implement pre/post-condition rewriting
     new IR.MethodImplementation(
       method.name,
-      getType(method.declaration.returnType),
+      scope.returnType(method.declaration.returnType),
       args,
       scope.variables.toList,
       body)
+  }
+
+  def programToIR(program: ResolvedProgram): IR.Program = {
+    val scope = new GlobalScope(program)
+    val methods = program.methodDefinitions.map(d => methodToIR(d, scope.local()))
+    val structs = program.structDefinitions.map(s => scope.structs(s.name).struct)
+    new IR.Program(methods, structs)
+  }
+
+  class StructDefImpl(val name: String) extends IR.StructDefinition
+  {
+    var _fields: Option[List[IR.StructField]] = None
+
+    def updateFields(fields: List[IR.StructField]): Unit = {
+      _fields = Some(fields)
+    }
+
+    def fields = _fields.get
   }
 }

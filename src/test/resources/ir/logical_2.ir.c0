@@ -1,26 +1,26 @@
-bool test(int value1)
+bool test(int value)
 {
-  bool _1;
-  _1 = value1 > 0;
-  return _1;
+  bool _;
+  _ = value > 0;
+  return _;
 }
 
 int main()
 {
-  bool b1;
+  bool b;
+  bool _;
   bool _1;
-  bool _2;
-  b1 = test(1);
-  _1 = b1;
-  _2 = !_1;
-  if (_2)
-  {
-    _1 = test(2);
-  }
+  b = test(1);
+  _ = b;
+  _1 = !_;
   if (_1)
+  {
+    _ = test(2);
+  }
+  if (_)
   {
     return 1;
   }
-  b1 = !b1;
+  b = !b;
   return 1;
 }

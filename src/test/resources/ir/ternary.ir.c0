@@ -5,16 +5,16 @@ bool condition()
 
 int main()
 {
-  bool _1;
-  int _2;
-  _1 = condition();
-  if (_1)
+  bool _;
+  int _1;
+  _ = condition();
+  if (_)
   {
-    _2 = 0;
+    _1 = 0;
   }
   else
   {
-    _2 = 1;
+    _1 = 1;
   }
-  return _2;
+  return _1;
 }

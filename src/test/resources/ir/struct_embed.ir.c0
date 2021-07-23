@@ -1,0 +1,8 @@
+int main()
+{
+  struct outer* test;
+  int _;
+  test = alloc(struct outer);
+  _ = test->innerValue_value;
+  return _;
+}

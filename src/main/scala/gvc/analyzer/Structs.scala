@@ -13,5 +13,6 @@ case class ResolvedStructDefinition(
 case class ResolvedStructField(
   parsed: MemberDefinition,
   name: String,
+  structName: String,
   valueType: ResolvedType,
 ) extends ResolvedNode

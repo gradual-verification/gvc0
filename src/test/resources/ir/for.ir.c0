@@ -1,18 +1,18 @@
-void print(int value1)
+void print(int value)
 {
 }
 
 int main()
 {
-  int i1;
-  bool _1;
-  i1 = 0;
-  _1 = i1 < 5;
-  while (_1)
+  int i;
+  bool _;
+  i = 0;
+  _ = i < 5;
+  while (_)
   {
-    print(i1);
-    i1 = i1 + 1;
-    _1 = i1 < 5;
+    print(i);
+    i = i + 1;
+    _ = i < 5;
   }
   return 0;
 }

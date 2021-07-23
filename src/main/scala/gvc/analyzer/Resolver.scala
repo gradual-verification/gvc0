@@ -136,6 +136,7 @@ object Resolver {
       fields += ResolvedStructField(
         parsed = field,
         name = field.id.name,
+        structName = input.id.name,
         valueType = resolveType(field.valueType, scope)
       )
     }

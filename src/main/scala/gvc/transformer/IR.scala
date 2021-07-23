@@ -1,24 +1,57 @@
 package gvc.transformer
 
 object IR {
-  class Method(val name: String, val returnType: Option[Type], val arguments: List[Var])
+  class Program(
+    val methods: List[Method],
+    val structs: List[StructDefinition]
+  )
+
+  sealed trait Method {
+    val name: String;
+    val returnType: Option[Type]
+    val arguments: List[Var]
+  }
+
+  class LibraryMethod(val name: String, val returnType: Option[Type], val arguments: List[Var]) extends Method
 
   class MethodImplementation(
-    name: String,
-    returnType: Option[Type],
-    arguments: List[Var],
+    val name: String,
+    val returnType: Option[Type],
+    val arguments: List[Var],
     val variables: List[Var],
     val body: Block
-  ) extends Method(name, returnType, arguments)
+  ) extends Method
 
-  sealed trait Type {
+  // Make this a trait to hide some of the mutability necessary to create
+  // circular links between field types and struct definitions
+  trait StructDefinition {
+    val name: String
+    def fields: List[StructField]
+
+    // Could make use of hash table, but we do need an ordered list for determinate C0 output
+    def field(name: String): StructField = fields.find(_.name == name) match {
+      case None => throw new TransformerException("Invalid struct field")
+      case Some(value) => value
+    }
+  }
+
+  class StructField(
+    val name: String,
+    val struct: StructDefinition,
+    val valueType: Type,
+  )
+
+  sealed trait ValueType {
     def name: String
   }
 
+  sealed trait Type extends ValueType
+
   object Type {
-    case class Array(memberType: Type) extends Type { def name = memberType.name + "[]" }
+    case class Array(memberType: ValueType) extends Type { def name = memberType.name + "[]" }
     case class Pointer(memberType: Type) extends Type { def name = memberType.name + "*" }
-    case class Struct(val name: String) extends Type
+    case class StructReference(structName: String, definition: Option[StructDefinition]) extends Type { def name = "struct " + structName + "*" }
+    case class StructValue(definition: StructDefinition) extends ValueType { def name = "struct " + definition.name }
     case object Int extends Type { val name = "int" }
     case object Char extends Type { val name = "char" }
     case object String extends Type { val name = "string" }
@@ -31,7 +64,7 @@ object IR {
 
   sealed trait Value extends Expr
 
-  class Var(val varType: Type, val nameHint: Option[String] = None) extends Value {
+  class Var(val varType: Type, val name: String) extends Value {
     def valueType: Option[Type] = Some(varType)
   }
 
@@ -97,13 +130,13 @@ object IR {
 
     class ArrayAccess(val subject: Var, val index: Value) extends Expr {
       def valueType = subject.valueType match {
-        case Some(Type.Array(memberType)) => Some(memberType)
+        case Some(Type.Array(memberType: IR.Type)) => Some(memberType)
         case _ => None
       }
     }
 
-    class ArrayFieldAccess(val subject: Var, val index: Value, val fieldName: String, val fieldType: Type) extends Expr {
-      def valueType = Some(fieldType)
+    class ArrayFieldAccess(val subject: Var, val index: Value, val field: StructField) extends Expr {
+      def valueType = Some(field.valueType)
     }
 
     class Deref(val subject: Var) extends Expr {
@@ -121,16 +154,19 @@ object IR {
       def valueType = Some(Type.Bool)
     }
 
-    class Member(val subject: Var, val fieldName: String, val fieldType: Type) extends Expr {
-      def valueType = Some(fieldType)
+    class Member(val subject: Var, val field: StructField) extends Expr {
+      def valueType = Some(field.valueType)
     }
 
-    class Alloc(val memberType: Type) extends Expr {
-      def valueType = Some(Type.Pointer(memberType))
+    class Alloc(val memberType: ValueType) extends Expr {
+      def valueType = memberType match {
+        case Type.StructValue(struct) => Some(Type.StructReference(struct.name, Some(struct)))
+        case t: IR.Type => Some(Type.Pointer(t))
+      }
     }
 
-    class AllocArray(val memberType: Type, val length: Value) extends Expr {
-      def valueType = Some(Type.Pointer(memberType))
+    class AllocArray(val memberType: ValueType, val length: Value) extends Expr {
+      def valueType = Some(Type.Array(memberType))
     }
 
     class Invoke(val methodName: String, val arguments: List[Value], val returnType: Option[Type]) extends Expr {
@@ -144,10 +180,10 @@ object IR {
 
   object Op {
     class AssignVar(val subject: Var, val value: Expr) extends SimpleOp
-    class AssignMember(val subject: Var, val fieldName: String, val value: Value) extends SimpleOp
+    class AssignMember(val subject: Var, val field: StructField, val value: Value) extends SimpleOp
     class AssignArray(val subject: Var, val index: Value, val value: Value) extends SimpleOp
     // arr[i].field needs to be encoded differently in Viper and C0 so make a special-case for it
-    class AssignArrayMember(val subject: Var, val index: Value, val fieldName: String, val value: Value) extends SimpleOp
+    class AssignArrayMember(val subject: Var, val index: Value, val field: StructField, val value: Value) extends SimpleOp
     class AssignPtr(val subject: Var, val value: Value) extends SimpleOp
     class While(val condition: Value, val body: Block) extends FlowOp
     class If(val condition: Value, val ifTrue: Block, val ifFalse: Block) extends FlowOp

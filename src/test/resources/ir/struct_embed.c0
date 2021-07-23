@@ -1,0 +1,13 @@
+struct inner {
+  int value;
+};
+
+struct outer {
+  struct inner innerValue;
+};
+
+int main()
+{
+  struct outer *test = alloc(struct outer);
+  return test->innerValue.value;
+}

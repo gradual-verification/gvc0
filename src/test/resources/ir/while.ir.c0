@@ -1,20 +1,20 @@
-bool test(int value1)
+bool test(int value)
 {
-  bool _1;
-  _1 = value1 < 10;
-  return _1;
+  bool _;
+  _ = value < 10;
+  return _;
 }
 
 int main()
 {
-  bool cond1;
-  int value1;
-  cond1 = true;
-  value1 = 0;
-  while (cond1)
+  bool cond;
+  int value;
+  cond = true;
+  value = 0;
+  while (cond)
   {
-    value1 = value1 + 1;
-    cond1 = test(value1);
+    value = value + 1;
+    cond = test(value);
   }
   return 0;
 }

@@ -9,6 +9,7 @@ import gvc.analyzer.{Resolver, ErrorSink, TypeChecker, AssignmentValidator}
 import gvc.analyzer.ReturnValidator
 import gvc.transformer.Transformer
 import gvc.transformer.CNaughtPrinter
+import gvc.transformer.IR
 
 class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
@@ -20,7 +21,7 @@ class IntegrationSpecs extends AnyFunSuite {
   )
 
   val exclusions = Set(
-    "cases/struct_5.c0", // TODO: Struct flattening
+    //"cases/struct_5.c0", // TODO: Struct flattening
 
     // PARSING
     // TODO: fix big number handling
@@ -112,12 +113,13 @@ class IntegrationSpecs extends AnyFunSuite {
             if (!sink.errors.isEmpty) {
               ValidationError(sink.errors.map(_.message))
             } else {
-              val ir = result.methodDefinitions.map(Transformer.methodToIR(_, result))
+              var ir = Transformer.programToIR(result)
+              val methods = ir.methods.collect { case m: IR.MethodImplementation => m }
                 .map(CNaughtPrinter.printMethod(_))
                 .mkString("\n")
 
               if (expectedIR.isDefined)
-                assert(expectedIR.get == ir)
+                assert(expectedIR.get == methods)
               ValidProgram
             }
           }

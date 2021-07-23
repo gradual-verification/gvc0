@@ -1,31 +1,17 @@
 package gvc.transformer
-import scala.collection.mutable
 
 object CNaughtPrinter {
-  def typeName(t: IR.Type): String = {
+  def typeName(t: IR.ValueType): String = {
     t match {
       case IR.Type.Array(memberType) => typeName(memberType) + "[]"
       case IR.Type.Pointer(memberType) => typeName(memberType) + "*"
-      case IR.Type.Struct(name) => "struct " + name
+      case IR.Type.StructValue(struct) => "struct " + struct.name
+      case IR.Type.StructReference(name, _) => "struct " + name + "*"
       case IR.Type.Int => "int"
       case IR.Type.Char => "char"
       case IR.Type.String => "string"
       case IR.Type.Bool => "bool"
     }
-  }
-
-  def nameVariables(variables: Seq[IR.Var]): Map[IR.Var, String] = {
-    val used = mutable.Set[String]()
-    variables.map({ variable =>
-      val baseName = variable.nameHint.getOrElse("_")
-      var num = 1
-      while (used.contains(baseName + num))
-        num += 1
-      
-      val name = baseName + num
-      used += name
-      (variable, name)
-    }).toMap
   }
 
   def printMethod(method: IR.MethodImplementation): String = {
@@ -35,20 +21,19 @@ object CNaughtPrinter {
   }
 
   def printMethod(method: IR.MethodImplementation, printer: Printer): Unit = {
-    def varNames = nameVariables(method.arguments ++ method.variables)
     // Return type
     printer.print(method.returnType.map(typeName).getOrElse("void"))
     printer.print(" ")
     printer.print(method.name)
     printer.print("(")
-    printer.print(method.arguments.map(v => typeName(v.varType) + " " + varNames(v)).mkString(", "))
+    printer.print(method.arguments.map(v => typeName(v.varType) + " " + v.name).mkString(", "))
     printer.println(")")
     printer.println("{")
     for (variable <- method.variables) {
       printer.printIndented(variable, (v: IR.Var, printer) => {
         printer.print(typeName(v.varType))
         printer.print(" ")
-        printer.print(varNames(v))
+        printer.print(v.name)
         printer.println(";")
       })
     }
@@ -69,22 +54,22 @@ object CNaughtPrinter {
     def printOp(op: IR.Op, printer: Printer): Unit = {
       op match {
         case assign: IR.Op.AssignVar => {
-          printer.print(varNames(assign.subject))
+          printer.print(assign.subject.name)
           printer.print(" = ")
           printer.print(assign.value, printExpr)
           printer.println(";")
         }
 
         case member: IR.Op.AssignMember => {
-          printer.print(varNames(member.subject))
+          printer.print(member.subject.name)
           printer.print(".")
-          printer.print(member.fieldName)
+          printer.print(member.field.name)
           printer.print(" = ")
           printer.print(member.value, printValue)
         }
 
         case assign: IR.Op.AssignArray => {
-          printer.print(varNames(assign.subject))
+          printer.print(assign.subject.name)
           printer.print("[")
           printer.print(assign.index, printValue)
           printer.print("] = ")
@@ -93,11 +78,11 @@ object CNaughtPrinter {
         }
 
         case assign: IR.Op.AssignArrayMember => {
-          printer.print(varNames(assign.subject))
+          printer.print(assign.subject.name)
           printer.print("[")
           printer.print(assign.index, printValue)
           printer.print("].")
-          printer.print(assign.fieldName)
+          printer.print(assign.field.name)
           printer.print(" = ")
           printer.print(assign.value, printValue)
           printer.println(";")
@@ -105,7 +90,7 @@ object CNaughtPrinter {
 
         case assign: IR.Op.AssignPtr => {
           printer.print("*(")
-          printer.print(varNames(assign.subject))
+          printer.print(assign.subject.name)
           printer.print(") = ")
           printer.print(assign.value, printValue)
           printer.println(";")
@@ -156,7 +141,7 @@ object CNaughtPrinter {
 
     def printValue(value: IR.Value, printer: Printer) = {
       value match {
-        case variable: IR.Var => printer.print(varNames(variable))
+        case variable: IR.Var => printer.print(variable.name)
 
         case str: IR.Literal.String => {
           printer.print("\"")
@@ -235,14 +220,14 @@ object CNaughtPrinter {
         }
 
         case arr: IR.Expr.ArrayAccess => {
-          printer.print(varNames(arr.subject))
+          printer.print(arr.subject.name)
           printer.print("[")
           printer.print(arr.index, printValue)
           printer.print("]")
         }
 
         case arrField: IR.Expr.ArrayFieldAccess => {
-          printer.print(varNames(arrField.subject))
+          printer.print(arrField.subject.name)
           printer.print("[")
           printer.print(arrField.index, printValue)
           printer.print("]")
@@ -250,7 +235,7 @@ object CNaughtPrinter {
 
         case deref: IR.Expr.Deref => {
           printer.print("*")
-          printer.print(varNames(deref.subject))
+          printer.print(deref.subject.name)
         }
 
         case negate: IR.Expr.Negation => {
@@ -264,9 +249,9 @@ object CNaughtPrinter {
         }
 
         case member: IR.Expr.Member => {
-          printer.print(varNames(member.subject))
+          printer.print(member.subject.name)
           printer.print("->")
-          printer.print(member.fieldName)
+          printer.print(member.field.name)
         }
 
         case alloc: IR.Expr.Alloc => {
