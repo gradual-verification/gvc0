@@ -1,6 +1,8 @@
 field $int_value: Int
 
 method $method_deref(ptr: Ref) returns ($return: Int)
+  requires true
+  ensures true
 {
   var _: Int
   _ := ptr.$int_value
@@ -8,6 +10,8 @@ method $method_deref(ptr: Ref) returns ($return: Int)
 }
 
 method $method_main() returns ($return: Int)
+  requires true
+  ensures true
 {
   var _: Int
   _ := $method_deref(null)

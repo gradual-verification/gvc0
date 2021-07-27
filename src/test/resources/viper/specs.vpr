@@ -1,0 +1,23 @@
+method $method_max(a: Int, b: Int) returns ($return: Int)
+  requires a > 0 && b > 0
+  ensures $return >= a && $return >= b
+{
+  var _: Bool
+  var _1: Int
+  _ := a > b
+  if (_) {
+    _1 := a
+  } else {
+    _1 := b
+  }
+  $return := _1
+}
+
+method $method_main() returns ($return: Int)
+  requires true
+  ensures true
+{
+  var _: Int
+  _ := $method_max(1, 2)
+  $return := _
+}

@@ -108,7 +108,7 @@ object AssignmentTransformer {
 
     // Use-before-assign errors should be detected before this pass
     if (!rewriter.variables.isEmpty) throw new TransformerException("Use of unassigned variable detected")
-
-    new IR.MethodImplementation(method.name, method.returnType, args, variables, body)
+    ???
+    //new IR.MethodImplementation(method.name, method.returnType, args, variables, body)
   }
 }

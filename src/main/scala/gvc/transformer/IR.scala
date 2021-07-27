@@ -10,14 +10,24 @@ object IR {
     val name: String;
     val returnType: Option[Type]
     val arguments: List[Var]
+    val precondition: Spec
+    val postcondition: Spec
   }
 
-  class LibraryMethod(val name: String, val returnType: Option[Type], val arguments: List[Var]) extends Method
+  class LibraryMethod(
+    val name: String,
+    val returnType: Option[Type],
+    val arguments: List[Var],
+    val precondition: Spec,
+    val postcondition: Spec,
+  ) extends Method
 
   class MethodImplementation(
     val name: String,
     val returnType: Option[Type],
     val arguments: List[Var],
+    val precondition: Spec,
+    val postcondition: Spec,
     val variables: List[Var],
     val body: Block
   ) extends Method
@@ -74,7 +84,7 @@ object IR {
       def valueType = Some(Type.String)
     }
 
-    class Int(val value: Integer) extends Literal {
+    class Int(val value: Integer) extends Literal with Spec {
       def valueType = Some(Type.Int)
     }
 
@@ -82,7 +92,7 @@ object IR {
       def valueType = Some(Type.Char)
     }
 
-    class Bool(val value: Boolean) extends Literal {
+    class Bool(val value: Boolean) extends Literal with Spec {
       def valueType = Some(Type.Bool)
     }
 
@@ -194,4 +204,15 @@ object IR {
   }
 
   class Block(val operations: List[Op])
+
+  sealed trait Spec
+
+  object Spec {
+    val True = new Literal.Bool(true)
+    class ArgumentValue(val argument: Var) extends Spec
+    class ReturnValue extends Spec
+    class Comparison(val left: Spec, val right: Spec, val op: ComparisonOp) extends Spec
+    class Conjunction(val left: Spec, val right: Spec) extends Spec
+    class Conditional(val condition: Spec, val ifTrue: Spec, val ifFalse: Spec) extends Spec
+  }
 }

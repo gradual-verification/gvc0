@@ -1,11 +1,8 @@
 package gvc.transformer
 import scala.collection.mutable
 import viper.silver.{ast => vpr}
-import gvc.transformer.IR.MethodImplementation
 
 object SilverOutput {
-  val IntPtrField = "$intValue"
-
   def expression(scope: LocalScope, expr: IR.Expr): vpr.Exp = {
     expr match {
       case v: IR.Var => scope.localVar(v)
@@ -146,6 +143,43 @@ object SilverOutput {
     vpr.Seqn(block.operations.flatMap(operation(scope, _)), decls)()
   }
 
+  def spec(scope: LocalScope, specification: IR.Spec): vpr.Exp = {
+    specification match {
+      case bool: IR.Literal.Bool => vpr.BoolLit(bool.value)()
+      case int: IR.Literal.Int => vpr.IntLit(BigInt(int.value))()
+
+      case arg: IR.Spec.ArgumentValue => scope.localVar(arg.argument)
+
+      case ret: IR.Spec.ReturnValue => scope.returnVar
+
+      case comp: IR.Spec.Comparison => {
+        val left = spec(scope, comp.left)
+        val right = spec(scope, comp.right)
+        comp.op match {
+          case IR.ComparisonOp.Equal => vpr.EqCmp(left, right)()
+          case IR.ComparisonOp.NotEqual => vpr.NeCmp(left, right)()
+          case IR.ComparisonOp.LessThan => vpr.LtCmp(left, right)()
+          case IR.ComparisonOp.LessThanEqual => vpr.LeCmp(left, right)()
+          case IR.ComparisonOp.GreaterThan => vpr.GtCmp(left, right)()
+          case IR.ComparisonOp.GreaterThanEqual => vpr.GeCmp(left, right)()
+        }
+      }
+
+      case conjunction: IR.Spec.Conjunction => {
+        val left = spec(scope, conjunction.left)
+        val right = spec(scope, conjunction.right)
+        vpr.And(left, right)()
+      }
+
+      case conditional: IR.Spec.Conditional => {
+        val condition = spec(scope, conditional.condition)
+        val left = spec(scope, conditional.ifTrue)
+        val right = spec(scope, conditional.ifTrue)
+        vpr.CondExp(condition, left, right)()
+      }
+    }
+  }
+
   def method(scope: GlobalScope, impl: IR.MethodImplementation): vpr.Method = {
     def declareVar(variable: IR.Var): vpr.LocalVarDecl =
       vpr.LocalVarDecl(variable.name, getType(scope, variable.varType))()
@@ -158,13 +192,20 @@ object SilverOutput {
 
     val localScope = scope.local(returnValue, scopedVars)
     val body = block(localScope, impl.body, variables.map({ case (_, decl) => decl }))
+    val precondition = spec(localScope, impl.precondition)
+    val postcondition = spec(localScope, impl.postcondition)
 
-    vpr.Method(scope.methodName(impl.name), formalArgs.map({ case (_, decl) => decl }), returnValue.toSeq, Seq(), Seq(), Some(body))()
+    vpr.Method(
+      scope.methodName(impl.name),
+      formalArgs.map({ case (_, decl) => decl }),
+      returnValue.toSeq,
+      Seq(precondition), Seq(postcondition),
+      Some(body))()
   }
 
   def program(program: IR.Program): vpr.Program = {
     val scope = new GlobalScope()
-    val methods = program.methods.collect { case impl: MethodImplementation => impl }
+    val methods = program.methods.collect { case impl: IR.MethodImplementation => impl }
       .map(method(scope, _))
       .toList
 

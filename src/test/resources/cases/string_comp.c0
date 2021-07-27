@@ -1,0 +1,9 @@
+//test type_error
+
+int main()
+{
+  string a = "abc";
+  string b = "def";
+  assert(a != b);
+  return 1;
+}

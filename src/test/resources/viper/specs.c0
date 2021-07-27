@@ -1,0 +1,13 @@
+int max(int a, int b)
+  /*@ requires a > 0; @*/
+  /*@ requires b > 0; @*/
+  /*@ ensures \result >= a && \result >= b; @*/
+{
+  return a > b ? a : b;
+}
+
+int main()
+{
+  return max(1, 2);
+}
+

@@ -1,9 +1,13 @@
 method $method_test() returns ($return: Int)
+  requires true
+  ensures true
 {
   $return := 1
 }
 
 method $method_main() returns ($return: Int)
+  requires true
+  ensures true
 {
   var _: Int
   _ := $method_test()
