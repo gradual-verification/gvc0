@@ -1,0 +1,9 @@
+struct Test {
+  int value;
+};
+
+void test(struct Test* input)
+  /*@ requires acc(input->value); @*/
+  /*@ ensures acc(input->value); @*/
+{
+}

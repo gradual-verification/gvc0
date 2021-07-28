@@ -1,0 +1,10 @@
+//test resolve_error
+
+struct Test {
+  int value;
+};
+
+bool test(struct Test* input)
+{
+  return acc(input->value);
+}

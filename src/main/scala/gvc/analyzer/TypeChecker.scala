@@ -94,6 +94,11 @@ object TypeChecker {
         assertType(errors, assert.value, BoolType)
       }
 
+      case assert: ResolvedAssertSpecification => {
+        checkExpression(errors, assert.specification)
+        assertType(errors, assert.specification, BoolType)
+      }
+
       case error: ResolvedError => {
         checkExpression(errors, error.value)
         assertType(errors, error.value, StringType)
@@ -219,7 +224,13 @@ object TypeChecker {
         }
       }
 
+      case acc: ResolvedAccessibility => {
+        // Disregard the actual type of the field, just make sure it is a field/deref
+        assertField(errors, acc.field)
+      }
+
       case _: ResolvedResult |
+        _: ResolvedImprecision |
         _: ResolvedString |
         _: ResolvedChar |
         _: ResolvedInt |
@@ -237,6 +248,25 @@ object TypeChecker {
   def assertSmall(errors: ErrorSink, value: ResolvedExpression): Unit = {
     if (!smallType(value.valueType))
       errors.error(value, "Type '" + value.valueType.name + "' is not small")
+  }
+
+  val FIELD_ERROR = "Subject of acc() expression must be a field or dereference"
+  
+  def assertField(errors: ErrorSink, expr: ResolvedExpression): Unit = {
+    // Top-level must not be simply a variable, but can contain a nested variable
+    expr match {
+      case _: ResolvedVariableRef => errors.error(expr, FIELD_ERROR)
+      case _ => assertFieldInner(errors, expr)
+    }
+  }
+
+  def assertFieldInner(errors: ErrorSink, expr: ResolvedExpression): Unit = {
+    expr match {
+      case _: ResolvedVariableRef => ()
+      case member: ResolvedMember => assertFieldInner(errors, member.parent)
+      case deref: ResolvedDereference => assertFieldInner(errors, deref.value)
+      case _ => errors.error(expr, FIELD_ERROR)
+    }
   }
 
   def assertEquivalent(errors: ErrorSink, left: ResolvedExpression, right: ResolvedExpression): Unit = {

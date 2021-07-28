@@ -1,0 +1,16 @@
+method $method_main() returns ($return: Int)
+  requires true
+  ensures true
+{
+  var i: Int
+  var _: Bool
+  i := 0
+  _ := i < 10
+  while (_)
+    invariant i >= 0 && i <= 10 
+  {
+    i := i + 1
+    _ := i < 10
+  }
+  $return := i
+}

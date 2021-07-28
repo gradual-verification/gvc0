@@ -1,0 +1,9 @@
+int main()
+{
+  int x;
+  bool _;
+  x = 1;
+  _ = x > 0;
+  assert(_);
+  return x;
+}

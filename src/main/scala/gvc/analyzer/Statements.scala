@@ -49,9 +49,13 @@ case class ResolvedReturn(
 ) extends ResolvedStatement
 
 case class ResolvedAssert(
-  // Asserts can come from specs or assert statements
   parsed: Node,
   value: ResolvedExpression,
+) extends ResolvedStatement
+
+case class ResolvedAssertSpecification(
+  parsed: Node,
+  specification: ResolvedExpression
 ) extends ResolvedStatement
 
 case class ResolvedError(

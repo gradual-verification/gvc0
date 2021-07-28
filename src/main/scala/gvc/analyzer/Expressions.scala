@@ -67,6 +67,19 @@ case class ResolvedLength(
   def valueType = IntType
 }
 
+case class ResolvedAccessibility(
+  parsed: Node,
+  field: ResolvedExpression
+) extends ResolvedExpression {
+  def valueType = BoolType
+}
+
+case class ResolvedImprecision(
+  parsed: Node
+) extends ResolvedExpression {
+  def valueType = BoolType
+}
+
 sealed trait ArithmeticOperation
 object ArithmeticOperation {
   case object Add extends ArithmeticOperation

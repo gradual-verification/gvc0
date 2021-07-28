@@ -74,7 +74,10 @@ object IR {
 
   sealed trait Value extends Expr
 
-  class Var(val varType: Type, val name: String) extends Value {
+  class Var(val varType: Type, val name: String)
+    extends Value
+    with Spec
+    with FieldValue {
     def valueType: Option[Type] = Some(varType)
   }
 
@@ -195,9 +198,10 @@ object IR {
     // arr[i].field needs to be encoded differently in Viper and C0 so make a special-case for it
     class AssignArrayMember(val subject: Var, val index: Value, val field: StructField, val value: Value) extends SimpleOp
     class AssignPtr(val subject: Var, val value: Value) extends SimpleOp
-    class While(val condition: Value, val body: Block) extends FlowOp
+    class While(val condition: Value, val invariant: Spec, val body: Block) extends FlowOp
     class If(val condition: Value, val ifTrue: Block, val ifFalse: Block) extends FlowOp
     class Assert(val value: Value) extends SimpleOp
+    class AssertSpec(val spec: Spec) extends SimpleOp
     class Error(val value: Value) extends SimpleOp
     class Return(val value: Option[Value]) extends SimpleOp
     class Noop(val value: Expr) extends SimpleOp
@@ -209,10 +213,18 @@ object IR {
 
   object Spec {
     val True = new Literal.Bool(true)
-    class ArgumentValue(val argument: Var) extends Spec
-    class ReturnValue extends Spec
+    class ReturnValue extends Spec with FieldValue
+    class Imprecision extends Spec
     class Comparison(val left: Spec, val right: Spec, val op: ComparisonOp) extends Spec
     class Conjunction(val left: Spec, val right: Spec) extends Spec
     class Conditional(val condition: Spec, val ifTrue: Spec, val ifFalse: Spec) extends Spec
+    class Accessibility(val field: FieldAccess) extends Spec
+  }
+
+  sealed trait FieldValue
+  sealed trait FieldAccess extends FieldValue
+  object FieldAccess {
+    class Member(val parent: FieldValue, val field: StructField) extends FieldAccess
+    class Dereference(val pointer: FieldValue) extends FieldAccess
   }
 }

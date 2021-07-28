@@ -1,0 +1,5 @@
+void test(int *value)
+  /*@ requires acc(*value); @*/
+  /*@ ensures acc(*value); @*/
+{
+}

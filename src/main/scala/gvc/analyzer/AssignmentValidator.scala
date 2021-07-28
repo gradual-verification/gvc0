@@ -75,6 +75,11 @@ object AssignmentValidator {
         validateExpression(scope, assert.value)
         scope
       }
+      
+      case assert: ResolvedAssertSpecification => {
+        validateExpression(scope, assert.specification)
+        scope
+      }
 
       case error: ResolvedError => {
         validateExpression(scope, error.value)

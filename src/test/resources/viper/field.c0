@@ -1,0 +1,17 @@
+struct Test {
+  int value;
+};
+
+void doTest(struct Test* input)
+  /*@ requires acc(input->value); @*/
+  /*@ ensures acc(input->value); @*/
+{
+  input->value = 1;
+}
+
+int main()
+{
+  struct Test* test = alloc(struct Test);
+  doTest(test);
+  return test->value;
+}

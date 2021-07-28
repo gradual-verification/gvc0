@@ -80,6 +80,8 @@ typeModifier ::= * | [ ]
 **Divergence from reference**
  * `\result` and `\length` are allowed as regular expressions. These are only allowed inside annotations for well-formed programs.
  * Increment operations (`++` and `--`) are defined as expressions. A separate pass must check that they are only used in `expressionStatement` constructs, not as a part of another expression.
+ * Imprecision specifiers (`?`) have been added to support gradual verification. These may only be used in specifications, not in general expressions, but this requirement is not encoded in the grammar.
+ * Accessibility predicates (`acc()`)  have been added to support verification using IDF. The value passed to `acc()` must be a field, dereference, or combination of both, but this requirement is not encoded in the grammar.
 
 ```
 expression ::= binaryExpression [? expression : expression]
@@ -98,6 +100,8 @@ atomExpression ::=
   | nullExpression
   | resultExpression
   | lengthExpression
+  | accessibilityExpression
+  | imprecisionExpression
   | allocExpression
   | allocArrayExpression
   | invokeExpression
@@ -116,6 +120,10 @@ nullExpression ::= NULL
 resultExpression ::= \result
 
 lengthExpression ::= \length ( expression )
+
+accessibilityExpression ::= acc ( expression )
+
+imprecisionExpression ::= ?
 
 allocExpression ::= alloc ( type )
 

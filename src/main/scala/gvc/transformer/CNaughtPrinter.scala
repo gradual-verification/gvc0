@@ -114,8 +114,14 @@ object CNaughtPrinter {
           }
         }
 
-        // Do not output asserts
-        case _: IR.Op.Assert => ()
+        // Do not output assert specifications
+        case _: IR.Op.AssertSpec => ()
+
+        case assert: IR.Op.Assert => {
+          printer.print("assert(");
+          printer.print(assert.value, printValue)
+          printer.println(");")
+        }
 
         case error: IR.Op.Error => {
           printer.print("error(")

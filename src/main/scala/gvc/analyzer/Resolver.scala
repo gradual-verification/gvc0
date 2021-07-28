@@ -446,6 +446,18 @@ object Resolver {
         ResolvedLength(length, resolveExpression(length.value, scope, context))
       }
 
+      case acc: AccessibilityExpression => {
+        if (context == MethodContext)
+          scope.errors.error(acc, "acc() expressions can only be used in specifications")
+        ResolvedAccessibility(acc, resolveExpression(acc.field, scope, context))
+      }
+
+      case imprecision: ImprecisionExpression => {
+        if (context == MethodContext)
+          scope.errors.error(imprecision, "? expressions can only be used in specifications")
+        ResolvedImprecision(imprecision)
+      }
+
       case member: MemberExpression => {
         val parent = resolveExpression(member.parent, scope, context)
         val struct =
@@ -528,7 +540,7 @@ object Resolver {
     }
   }
 
-  def resolveSpecs(specs: List[Specification], scope: Scope): Option[ResolvedAssert] = {
+  def resolveSpecs(specs: List[Specification], scope: Scope): Option[ResolvedAssertSpecification] = {
     val asserts = specs.flatMap({
       case assert: AssertSpecification => Some(resolveExpression(assert.value, scope, AssertContext))
       case other => {
@@ -538,7 +550,7 @@ object Resolver {
     })
 
     asserts match {
-      case head :: _ => Some(ResolvedAssert(head.parsed, combineBooleans(asserts).get))
+      case head :: _ => Some(ResolvedAssertSpecification(head.parsed, combineBooleans(asserts).get))
       case _ => None
     }
   }

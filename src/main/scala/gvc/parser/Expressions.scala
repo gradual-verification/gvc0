@@ -116,6 +116,8 @@ trait Expressions extends Types {
     nullExpression |
     resultExpression |
     lengthExpression |
+    imprecisionExpression |
+    accessibilityExpression |
     allocExpression |
     allocArrayExpression |
     invokeExpression |
@@ -154,6 +156,12 @@ trait Expressions extends Types {
 
   def lengthExpression[_: P]: P[LengthExpression] = P(span(kw("\\length") ~ "(" ~ expression ~ ")"))
     .map { case (expr, span) => LengthExpression(expr, span) }
+
+  def imprecisionExpression[_: P]: P[ImprecisionExpression] = P(span(kw("?")))
+    .map { case (_, span) => ImprecisionExpression(span) }
+
+  def accessibilityExpression[_: P]: P[AccessibilityExpression] = P(span(kw("acc") ~ "(" ~ expression ~ ")"))
+    .map { case (expr, span) => AccessibilityExpression(expr, span) }
 
   def parseString(raw: String): String = {
     // TODO: Replace this with a better solution that doesn't search the string

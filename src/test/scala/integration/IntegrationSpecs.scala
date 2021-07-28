@@ -32,6 +32,13 @@ class IntegrationSpecs extends AnyFunSuite {
     // TODO: while(true); should be a parse error
     "fp-basic/semi.c0",
 
+    // Arrays
+    "cases/length.c0",
+    "fp-basic/annoc.c0",
+    "fp-basic/annok.c0",
+    "fp-basic/annoj.c0",
+    "fp-basic/annog.c0",
+
     // RESOLVING
     // TODO: implement #use
     "fp-basic/libfuns1.c0",

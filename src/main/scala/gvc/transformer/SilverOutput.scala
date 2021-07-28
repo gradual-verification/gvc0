@@ -54,8 +54,8 @@ object SilverOutput {
 
       case negate: IR.Expr.Negation => vpr.Minus(expression(scope, negate.value))()
       case not: IR.Expr.Not => vpr.Not(expression(scope, not.value))()
-      case member: IR.Expr.Member => ???
-      case _: IR.Expr.Alloc => ???
+      case member: IR.Expr.Member => vpr.FieldAccess(scope.localVar(member.subject), scope.structField(member.field))()
+      case alloc: IR.Expr.Alloc =>  throw new TransformerException("Invalid alloc encountered as expression")
       case _: IR.Expr.AllocArray => ???
 
       // Invokes are handled at the statement level
@@ -72,6 +72,16 @@ object SilverOutput {
               scope.methodName(invoke.methodName),
               invoke.arguments.map(expression(scope, _)),
               Seq(scope.localVar(assign.subject)))(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
+          }
+
+          case alloc: IR.Expr.Alloc => {
+            val fields = alloc.memberType match {
+              case value: IR.Type.StructValue => value.definition.fields.map(scope.structField(_))
+              case IR.Type.Int => Seq(scope.intPtrValue)
+              case _ => ???
+            }
+
+            Seq(vpr.NewStmt(scope.localVar(assign.subject), fields)())
           }
 
           case _ => {
@@ -99,17 +109,16 @@ object SilverOutput {
       }
 
       case whil: IR.Op.While => {
-        // TODO: Transform invariants
-        Seq(vpr.While(expression(scope, whil.condition), Seq(), block(scope, whil.body))())
+        Seq(vpr.While(expression(scope, whil.condition), Seq(spec(scope, whil.invariant)), block(scope, whil.body))())
       }
 
       case iff: IR.Op.If => {
         Seq(vpr.If(expression(scope, iff.condition), block(scope, iff.ifTrue), block(scope, iff.ifFalse))())
       }
 
-      case assert: IR.Op.Assert => {
-        Seq(vpr.Assert(expression(scope, assert.value))())
-      }
+      case assert: IR.Op.Assert => Seq() // Ignore run-time asserts
+
+      case assert: IR.Op.AssertSpec => Seq(vpr.Assert(spec(scope, assert.spec))())
 
       case error: IR.Op.Error => {
         // Error => assert(false)
@@ -147,8 +156,7 @@ object SilverOutput {
     specification match {
       case bool: IR.Literal.Bool => vpr.BoolLit(bool.value)()
       case int: IR.Literal.Int => vpr.IntLit(BigInt(int.value))()
-
-      case arg: IR.Spec.ArgumentValue => scope.localVar(arg.argument)
+      case variable: IR.Var => scope.localVar(variable)
 
       case ret: IR.Spec.ReturnValue => scope.returnVar
 
@@ -177,6 +185,27 @@ object SilverOutput {
         val right = spec(scope, conditional.ifTrue)
         vpr.CondExp(condition, left, right)()
       }
+
+      case acc: IR.Spec.Accessibility => vpr.FieldAccessPredicate(field(scope, acc.field), vpr.FullPerm()())()
+
+      case _: IR.Spec.Imprecision => ???
+    }
+  }
+
+  def fieldValue(scope: LocalScope, value: IR.FieldValue): vpr.Exp = {
+    value match {
+      case variable: IR.Var => scope.localVar(variable)
+      case ret: IR.Spec.ReturnValue => scope.returnVar
+      case member: IR.FieldAccess.Member => vpr.FieldAccess(fieldValue(scope, member.parent), scope.structField(member.field))()
+      // TODO: Other pointer types
+      case deref: IR.FieldAccess.Dereference => vpr.FieldAccess(fieldValue(scope, deref.pointer), scope.intPtrValue)()
+    }
+  }
+
+  def field(scope: LocalScope, value: IR.FieldAccess): vpr.FieldAccess = {
+    fieldValue(scope, value) match {
+      case access: vpr.FieldAccess => access
+      case _ => throw new TransformerException("Invalid field access")
     }
   }
 
@@ -224,7 +253,7 @@ object SilverOutput {
   def getType(scope: GlobalScope, t: IR.Type): vpr.Type = {
     t match {
       case IR.Type.Array(_) => ???
-      case IR.Type.StructReference(_, _) => ???
+      case IR.Type.StructReference(_, _) => vpr.Ref
       case IR.Type.Char => ???
       case IR.Type.String => ???
       case IR.Type.Pointer(_) => vpr.Ref

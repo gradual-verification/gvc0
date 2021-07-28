@@ -4,7 +4,9 @@ import gvc.analyzer._
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable
 
-class TransformerException(val message: String) extends RuntimeException
+class TransformerException(val message: String) extends RuntimeException {
+  override def getMessage(): String = message
+}
 
 object Transformer {
 
@@ -271,6 +273,12 @@ object Transformer {
       case _: ResolvedLength =>
         throw new TransformerException("Invalid \\length in method body")
 
+      case _: ResolvedImprecision =>
+          throw new TransformerException("Invalid ? expression in method body")
+
+      case _: ResolvedAccessibility =>
+        throw new TransformerException("Invalid acc() in method body")
+
       case arith: ResolvedArithmetic => {
         val (left, leftOps) = lowerValue(arith.left, scope)
         val (right, rightOps) = lowerValue(arith.right, scope)
@@ -503,15 +511,14 @@ object Transformer {
       }
 
       case whil: ResolvedWhile => {
-        // TODO: Transform invariant
-
         // Evaluate condition at start of loop
         val (condition, conditionOps) = lowerValue(whil.condition, scope)
+        val invariant = whil.invariant.map(lowerSpec(scope, _)).getOrElse(IR.Spec.True)
 
         // Evaluate condition at every turn of the loop
         val body = new IR.Block(lowerStatement(whil.body, scope) ++ conditionOps)
 
-        conditionOps :+ new IR.Op.While(condition, body)
+        conditionOps :+ new IR.Op.While(condition, invariant, body)
       }
 
       case ret: ResolvedReturn => {
@@ -523,8 +530,13 @@ object Transformer {
         }
       }
 
-      // TODO: Implement assert
-      case assert: ResolvedAssert => Nil
+      case assert: ResolvedAssert => lowerValue(assert.value, scope) match {
+        case (value, ops) => ops :+ new IR.Op.Assert(value)
+      }
+
+      case assert: ResolvedAssertSpecification => {
+        List(new IR.Op.AssertSpec(lowerSpec(scope, assert.specification)))
+      }
 
       case error: ResolvedError => lowerValue(error.value, scope) match {
         case (value, ops) => ops :+ new IR.Op.Error(value)
@@ -545,7 +557,7 @@ object Transformer {
 
   def lowerSpec(scope: LocalScope, spec: ResolvedExpression): IR.Spec = {
     spec match {
-      case ref: ResolvedVariableRef => new IR.Spec.ArgumentValue(scope.getVar(ref.variable))
+      case ref: ResolvedVariableRef => scope.getVar(ref.variable)
       case invoke: ResolvedInvoke => ??? // TODO: Predicate handling
       case member: ResolvedMember => ??? // TODO: field access
       case result: ResolvedResult => new IR.Spec.ReturnValue()
@@ -578,6 +590,10 @@ object Transformer {
         }
       }
 
+      case acc: ResolvedAccessibility => new IR.Spec.Accessibility(lowerFieldAccess(scope, acc.field))
+      
+      case imprecise: ResolvedImprecision => new IR.Spec.Imprecision()
+
       case deref: ResolvedDereference => ???
       case not: ResolvedNot => ???
       case negate: ResolvedNegation => ???
@@ -587,6 +603,26 @@ object Transformer {
       case int: ResolvedInt => new IR.Literal.Int(int.value)
       case bool: ResolvedBool => new IR.Literal.Bool(bool.value)
       case _: ResolvedNull => ???
+    }
+  }
+
+  def lowerFieldAccess(scope: LocalScope, expr: ResolvedExpression): IR.FieldAccess = {
+    lowerFieldValue(scope, expr) match {
+      case access: IR.FieldAccess => access
+      case _ => throw new TransformerException("Invalid field")
+    }
+  }
+
+  def lowerFieldValue(scope: LocalScope, expr: ResolvedExpression): IR.FieldValue = {
+    expr match {
+      case mem: ResolvedMember => {
+        val (member, field) = scope.structMember(mem)
+        new IR.FieldAccess.Member(lowerFieldValue(scope, member.parent), field)
+      }
+      case deref: ResolvedDereference => new IR.FieldAccess.Dereference(lowerFieldValue(scope, deref.value))
+      case ref: ResolvedVariableRef => scope.getVar(ref.variable)
+      case result: ResolvedResult => new IR.Spec.ReturnValue()
+      case _ => throw new TransformerException("Invalid field")
     }
   }
 

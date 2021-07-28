@@ -1,0 +1,20 @@
+field $struct_Test$value: Int
+
+method $method_doTest(input: Ref)
+  requires acc(input.$struct_Test$value, write)
+  ensures acc(input.$struct_Test$value, write)
+{
+  input.$struct_Test$value := 1
+}
+
+method $method_main() returns ($return: Int)
+  requires true
+  ensures true
+{
+  var test: Ref
+  var _: Int
+  test := new($struct_Test$value)
+  $method_doTest(test)
+  _ := test.$struct_Test$value
+  $return := _
+}

@@ -59,7 +59,8 @@ object Rewriter {
       case x: IR.Op.AssignArray => new IR.Op.AssignArray(rvar(x.subject), rval(x.index), rval(x.value))
       case x: IR.Op.AssignArrayMember => new IR.Op.AssignArrayMember(rvar(x.subject), rval(x.index), x.field, rval(x.value))
       case x: IR.Op.AssignPtr => new IR.Op.AssignPtr(rvar(x.subject), rval(x.value))
-      case x: IR.Op.While => new IR.Op.While(rval(x.condition), rewriter.block(x.body))
+      // TODO: Rewrite invariant
+      case x: IR.Op.While => new IR.Op.While(rval(x.condition), x.invariant, rewriter.block(x.body))
       case x: IR.Op.If => new IR.Op.If(rval(x.condition), rewriter.block(x.ifTrue), rewriter.block(x.ifFalse))
       case x: IR.Op.Assert => new IR.Op.Assert(rval(x.value))
       case x: IR.Op.Error => new IR.Op.Error(rval(x.value))

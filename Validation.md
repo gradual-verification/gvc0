@@ -10,6 +10,10 @@
 * [X] RESOLVER: Ensure that `requires` and `ensures` are only used in method annotations
 * [X] RESOLVER: Ensure that `loop_invariant` is only used in `while`/`for` annotations
 * [X] RESOLVER: Ensure that `assert` annotations are only used in statements
+* [X] RESOLVER: Ensure that a `?` expression is only used in specifications
+  * TODO: Should this be allowed in `assert` annotations?
+* [X] RESOLVER: Ensure that `acc()` expression is only used in specifications
+* [X] TypeChecker: Ensure that the value passed to `acc()` expressions is a field or dereference
 
 # Static Semantics Reference
 

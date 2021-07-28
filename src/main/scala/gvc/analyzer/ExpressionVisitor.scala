@@ -17,7 +17,8 @@ object ExpressionVisitor {
       case negate: ResolvedNegation => visit(negate.value, visitor)
       case alloc: ResolvedAllocArray => visit(alloc.length, visitor)
       case length: ResolvedLength => visit(length.array, visitor)
-      case _: ResolvedVariableRef | _: ResolvedAlloc | _: ResolvedResult
+      case acc: ResolvedAccessibility => visit(acc.field, visitor)
+      case _: ResolvedVariableRef | _: ResolvedAlloc | _: ResolvedResult | _: ResolvedImprecision
         | _: ResolvedInt | _: ResolvedString | _: ResolvedChar | _: ResolvedBool | _: ResolvedNull => true
     })
   }
