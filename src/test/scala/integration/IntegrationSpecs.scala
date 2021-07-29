@@ -11,6 +11,7 @@ import gvc.transformer.Transformer
 import gvc.transformer.CNaughtPrinter
 import gvc.transformer.IR
 import gvc.transformer.SilverOutput
+import gvc.analyzer.SpecificationValidator
 
 class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
@@ -118,6 +119,7 @@ class IntegrationSpecs extends AnyFunSuite {
           } else {
             AssignmentValidator.validate(result, sink)
             ReturnValidator.validate(result, sink)
+            SpecificationValidator.validate(result, sink)
             if (!sink.errors.isEmpty) {
               ValidationError(sink.errors.map(_.message))
             } else {

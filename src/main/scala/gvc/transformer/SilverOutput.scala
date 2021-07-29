@@ -6,10 +6,10 @@ object SilverOutput {
   def expression(scope: LocalScope, expr: IR.Expr): vpr.Exp = {
     expr match {
       case v: IR.Var => scope.localVar(v)
-      case str: IR.Literal.String => ???
-      case i: IR.Literal.Int => vpr.IntLit(BigInt(i.value))()
-      case _: IR.Literal.Char => ???
-      case b: IR.Literal.Bool => vpr.BoolLit(b.value)()
+      case string: IR.Literal.String => ???
+      case int: IR.Literal.Int => vpr.IntLit(BigInt(int.value))()
+      case char: IR.Literal.Char => vpr.IntLit(BigInt(char.value))()
+      case bool: IR.Literal.Bool => vpr.BoolLit(bool.value)()
       case IR.Literal.Null => vpr.NullLit()()
       case arith: IR.Expr.Arithmetic => {
         val left = expression(scope, arith.left)
@@ -48,15 +48,14 @@ object SilverOutput {
       case _: IR.Expr.ArrayFieldAccess => ???
 
       case deref: IR.Expr.Deref => {
-        // TODO: Handle all pointer types
-        vpr.FieldAccess(expression(scope, deref.subject), scope.intPtrValue)()
+        vpr.FieldAccess(expression(scope, deref.subject), scope.pointerValue(deref.subject.varType))()
       }
 
       case negate: IR.Expr.Negation => vpr.Minus(expression(scope, negate.value))()
       case not: IR.Expr.Not => vpr.Not(expression(scope, not.value))()
       case member: IR.Expr.Member => vpr.FieldAccess(scope.localVar(member.subject), scope.structField(member.field))()
       case alloc: IR.Expr.Alloc =>  throw new TransformerException("Invalid alloc encountered as expression")
-      case _: IR.Expr.AllocArray => ???
+      case _: IR.Expr.AllocArray => throw new TransformerException("Arrays are not implemented")
 
       // Invokes are handled at the statement level
       case invoke: IR.Expr.Invoke => throw new TransformerException("Invalid invoke encoutered as expression")
@@ -77,8 +76,7 @@ object SilverOutput {
           case alloc: IR.Expr.Alloc => {
             val fields = alloc.memberType match {
               case value: IR.Type.StructValue => value.definition.fields.map(scope.structField(_))
-              case IR.Type.Int => Seq(scope.intPtrValue)
-              case _ => ???
+              case _ => Seq(scope.pointerValue(alloc.valueType.get))
             }
 
             Seq(vpr.NewStmt(scope.localVar(assign.subject), fields)())
@@ -104,8 +102,10 @@ object SilverOutput {
       case _: IR.Op.AssignArrayMember => ???
 
       case assign: IR.Op.AssignPtr => {
-        // TODO: Support more pointer types
-        Seq(vpr.FieldAssign(vpr.FieldAccess(scope.localVar(assign.subject), scope.intPtrValue)(), expression(scope, assign.value))())
+        Seq(vpr.FieldAssign(
+          vpr.FieldAccess(scope.localVar(assign.subject),
+          scope.pointerValue(assign.subject.varType))(),
+          expression(scope, assign.value))())
       }
 
       case whil: IR.Op.While => {
@@ -156,9 +156,9 @@ object SilverOutput {
     specification match {
       case bool: IR.Literal.Bool => vpr.BoolLit(bool.value)()
       case int: IR.Literal.Int => vpr.IntLit(BigInt(int.value))()
-      case variable: IR.Var => scope.localVar(variable)
-
-      case ret: IR.Spec.ReturnValue => scope.returnVar
+      case char: IR.Literal.Char => vpr.IntLit(BigInt(char.value))()
+      case IR.Literal.Null => vpr.NullLit()()
+      case field: IR.FieldValue => fieldValue(scope, field)
 
       case comp: IR.Spec.Comparison => {
         val left = spec(scope, comp.left)
@@ -173,10 +173,24 @@ object SilverOutput {
         }
       }
 
-      case conjunction: IR.Spec.Conjunction => {
-        val left = spec(scope, conjunction.left)
-        val right = spec(scope, conjunction.right)
-        vpr.And(left, right)()
+      case logical: IR.Spec.Logical => {
+        val left = spec(scope, logical.left)
+        val right = spec(scope, logical.right)
+        logical.op match {
+          case IR.LogicalOp.Or => vpr.Or(left, right)()
+          case IR.LogicalOp.And => vpr.And(left, right)()
+        }
+      }
+
+      case arith: IR.Spec.Arithmetic => {
+        val left = spec(scope, arith.left)
+        val right = spec(scope, arith.right)
+        arith.op match {
+          case IR.ArithmeticOp.Add => vpr.Add(left, right)()
+          case IR.ArithmeticOp.Subtract => vpr.Sub(left, right)()
+          case IR.ArithmeticOp.Multiply => vpr.Mul(left, right)()
+          case IR.ArithmeticOp.Divide => vpr.Div(left, right)()
+        }
       }
 
       case conditional: IR.Spec.Conditional => {
@@ -196,9 +210,8 @@ object SilverOutput {
     value match {
       case variable: IR.Var => scope.localVar(variable)
       case ret: IR.Spec.ReturnValue => scope.returnVar
-      case member: IR.FieldAccess.Member => vpr.FieldAccess(fieldValue(scope, member.parent), scope.structField(member.field))()
-      // TODO: Other pointer types
-      case deref: IR.FieldAccess.Dereference => vpr.FieldAccess(fieldValue(scope, deref.pointer), scope.intPtrValue)()
+      case member: IR.Spec.Member => vpr.FieldAccess(fieldValue(scope, member.parent), scope.structField(member.field))()
+      case deref: IR.Spec.Dereference => vpr.FieldAccess(fieldValue(scope, deref.pointer), scope.pointerValue(deref.pointerType))()
     }
   }
 
@@ -254,8 +267,8 @@ object SilverOutput {
     t match {
       case IR.Type.Array(_) => ???
       case IR.Type.StructReference(_, _) => vpr.Ref
-      case IR.Type.Char => ???
-      case IR.Type.String => ???
+      case IR.Type.Char => vpr.Int
+      case IR.Type.String => vpr.Ref
       case IR.Type.Pointer(_) => vpr.Ref
       case IR.Type.Int => vpr.Int
       case IR.Type.Bool => vpr.Bool
@@ -263,8 +276,9 @@ object SilverOutput {
   }
 
   class GlobalScope(_fields: mutable.Map[String, vpr.Field] = mutable.Map()) {
-    lazy val intPtrValue = createField("$int_value", vpr.Int)
-    lazy val refPtrValue = createField("$ref_value", vpr.Ref)
+    private lazy val intPtrValue = createField("$int_value", vpr.Int)
+    private lazy val refPtrValue = createField("$ref_value", vpr.Ref)
+    private lazy val boolPtrValue = createField("$bool_value", vpr.Bool)
 
     def structField(field: IR.StructField): vpr.Field = createField("$struct_" + field.struct.name + "$" + field.name, getType(this, field.valueType))
 
@@ -286,6 +300,23 @@ object SilverOutput {
 
     def local(returnVar: Option[vpr.LocalVarDecl], variables: Map[IR.Var, vpr.LocalVarDecl]) = {
       new LocalScope(_fields, returnVar, variables)
+    }
+
+    def pointerValue(pointerType: IR.Type) = {
+      pointerType match {
+        case _: IR.Type.StructReference => refPtrValue
+
+        case IR.Type.Pointer(memberType) => memberType match {
+          case _: IR.Type.Array => throw new TransformerException("Arrays are not implemented")
+          case _: IR.Type.Pointer | _: IR.Type.StructReference => refPtrValue
+          case IR.Type.Int => intPtrValue
+          case IR.Type.Char => intPtrValue
+          case IR.Type.String => refPtrValue
+          case IR.Type.Bool => boolPtrValue
+        }
+
+        case _ => throw new TransformerException("Invalid pointer type")
+      }
     }
   }
 

@@ -1,0 +1,10 @@
+void test(int value)
+  //@requires value + 1 > 0;
+  //@requires value > 1 || value < 0;
+{
+}
+
+int main()
+{
+  return 0;
+}

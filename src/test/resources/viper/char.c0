@@ -1,0 +1,11 @@
+bool isAlphabet(char value)
+  //@requires value != '\0';
+{
+  return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z');
+}
+
+int main()
+{
+  if (isAlphabet('0')) return 1;
+  else return 0;
+}

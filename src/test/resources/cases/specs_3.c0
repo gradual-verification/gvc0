@@ -1,0 +1,9 @@
+void test()
+  //@requires false;
+{
+}
+
+int main()
+{
+  return 0;
+}

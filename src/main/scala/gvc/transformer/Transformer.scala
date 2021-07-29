@@ -225,6 +225,18 @@ object Transformer {
     case ComparisonOperation.GreaterThanOrEqualTo => IR.ComparisonOp.GreaterThanEqual
   }
 
+  def logicalOp(operation: LogicalOperation) = operation match {
+    case LogicalOperation.And => IR.LogicalOp.And
+    case LogicalOperation.Or => IR.LogicalOp.Or
+  }
+
+  def arithmeticOp(operation: ArithmeticOperation) = operation match {
+    case ArithmeticOperation.Add => IR.ArithmeticOp.Add
+    case ArithmeticOperation.Subtract => IR.ArithmeticOp.Subtract
+    case ArithmeticOperation.Divide => IR.ArithmeticOp.Divide
+    case ArithmeticOperation.Multiply => IR.ArithmeticOp.Multiply
+  }
+
   def lowerExpression(expr: ResolvedExpression, scope: LocalScope): (IR.Expr, List[IR.Op]) = {
     expr match {
       case ref: ResolvedVariableRef => (scope.getVar(ref.variable), Nil)
@@ -282,13 +294,7 @@ object Transformer {
       case arith: ResolvedArithmetic => {
         val (left, leftOps) = lowerValue(arith.left, scope)
         val (right, rightOps) = lowerValue(arith.right, scope)
-        val operator = arith.operation match {
-          case ArithmeticOperation.Add => IR.ArithmeticOp.Add
-          case ArithmeticOperation.Subtract => IR.ArithmeticOp.Subtract
-          case ArithmeticOperation.Divide => IR.ArithmeticOp.Divide
-          case ArithmeticOperation.Multiply => IR.ArithmeticOp.Multiply
-        }
-
+        val operator = arithmeticOp(arith.operation)
         (new IR.Expr.Arithmetic(left, right, operator), leftOps ++ rightOps)
       }
 
@@ -513,7 +519,7 @@ object Transformer {
       case whil: ResolvedWhile => {
         // Evaluate condition at start of loop
         val (condition, conditionOps) = lowerValue(whil.condition, scope)
-        val invariant = whil.invariant.map(lowerSpec(scope, _)).getOrElse(IR.Spec.True)
+        val invariant = whil.invariant.map(lowerSpec(scope, _)).getOrElse(new IR.Literal.Bool(true))
 
         // Evaluate condition at every turn of the loop
         val body = new IR.Block(lowerStatement(whil.body, scope) ++ conditionOps)
@@ -559,50 +565,28 @@ object Transformer {
     spec match {
       case ref: ResolvedVariableRef => scope.getVar(ref.variable)
       case invoke: ResolvedInvoke => ??? // TODO: Predicate handling
-      case member: ResolvedMember => ??? // TODO: field access
+      case member: ResolvedMember => lowerFieldValue(scope, member)
+      case deref: ResolvedDereference => lowerFieldValue(scope, deref)
       case result: ResolvedResult => new IR.Spec.ReturnValue()
 
-
-      // TODO: Array handling
-      case _: ResolvedArrayIndex => ???
-      case _: ResolvedLength => ???
-
-      case arith: ResolvedArithmetic => ???
-
-      case comp: ResolvedComparison => {
-        val left = lowerSpec(scope, comp.left)
-        val right = lowerSpec(scope, comp.right)
-        val op = comparisonOp(comp.operation)
-        new IR.Spec.Comparison(left, right, op)
-      }
-
-      case ternary: ResolvedTernary => {
-        val condition = lowerSpec(scope, ternary.condition)
-        val left = lowerSpec(scope, ternary.ifTrue)
-        val right = lowerSpec(scope, ternary.ifFalse)
-        new IR.Spec.Conditional(condition, left, right)
-      }
-
-      case logical: ResolvedLogical => {
-        logical.operation match {
-          case LogicalOperation.Or => ??? // TODO: Support disjunctions in certain places
-          case LogicalOperation.And => new IR.Spec.Conjunction(lowerSpec(scope, logical.left), lowerSpec(scope, logical.right))
-        }
-      }
-
+      case ternary: ResolvedTernary => new IR.Spec.Conditional(lowerSpec(scope, ternary.condition), lowerSpec(scope, ternary.ifTrue), lowerSpec(scope, ternary.ifFalse))
+      case arith: ResolvedArithmetic => new IR.Spec.Arithmetic(lowerSpec(scope, arith.left), lowerSpec(scope, arith.right), arithmeticOp(arith.operation))
+      case comp: ResolvedComparison => new IR.Spec.Comparison(lowerSpec(scope, comp.left), lowerSpec(scope, comp.right), comparisonOp(comp.operation))
+      case logical: ResolvedLogical => new IR.Spec.Logical(lowerSpec(scope, logical.left), lowerSpec(scope, logical.right), logicalOp(logical.operation))
       case acc: ResolvedAccessibility => new IR.Spec.Accessibility(lowerFieldAccess(scope, acc.field))
-      
       case imprecise: ResolvedImprecision => new IR.Spec.Imprecision()
 
-      case deref: ResolvedDereference => ???
       case not: ResolvedNot => ???
       case negate: ResolvedNegation => ???
+
       case _: ResolvedAlloc | _: ResolvedAllocArray => throw new TransformerException("Invalid alloc expression in specification")
-      case _: ResolvedString => ???
-      case _: ResolvedChar => ???
+      case _: ResolvedArrayIndex | _: ResolvedLength => throw new TransformerException("Array access not implemented")
+      case _: ResolvedString => throw new TransformerException("Strings in specifications are not implemented")
+
+      case char: ResolvedChar => new IR.Literal.Char(char.value)
       case int: ResolvedInt => new IR.Literal.Int(int.value)
       case bool: ResolvedBool => new IR.Literal.Bool(bool.value)
-      case _: ResolvedNull => ???
+      case _: ResolvedNull => IR.Literal.Null
     }
   }
 
@@ -617,9 +601,9 @@ object Transformer {
     expr match {
       case mem: ResolvedMember => {
         val (member, field) = scope.structMember(mem)
-        new IR.FieldAccess.Member(lowerFieldValue(scope, member.parent), field)
+        new IR.Spec.Member(lowerFieldValue(scope, member.parent), field)
       }
-      case deref: ResolvedDereference => new IR.FieldAccess.Dereference(lowerFieldValue(scope, deref.value))
+      case deref: ResolvedDereference => new IR.Spec.Dereference(lowerFieldValue(scope, deref.value), scope.varType(deref.value.valueType))
       case ref: ResolvedVariableRef => scope.getVar(ref.variable)
       case result: ResolvedResult => new IR.Spec.ReturnValue()
       case _ => throw new TransformerException("Invalid field")
@@ -630,8 +614,8 @@ object Transformer {
     val args = method.declaration.arguments.map(v => new IR.Var(scope.varType(v.valueType), scope.varName(Some(v.name))))
     for (arg <- args) scope.namedVariables.put(arg.name, arg)
 
-    val precondition = method.declaration.precondition.map(lowerSpec(scope, _)).getOrElse(IR.Spec.True)
-    val postcondition = method.declaration.postcondition.map(lowerSpec(scope, _)).getOrElse(IR.Spec.True)
+    val precondition = method.declaration.precondition.map(lowerSpec(scope, _)).getOrElse(new IR.Literal.Bool(true))
+    val postcondition = method.declaration.postcondition.map(lowerSpec(scope, _)).getOrElse(new IR.Literal.Bool(true))
     
     val body = new IR.Block(lowerStatement(method.body, scope))
 

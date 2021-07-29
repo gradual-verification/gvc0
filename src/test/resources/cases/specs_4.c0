@@ -1,0 +1,11 @@
+//test validation_error
+
+void test(int *x)
+  //@requires acc(*x) || ?;
+{
+}
+
+int main()
+{
+  return 0;
+}

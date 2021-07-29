@@ -15,6 +15,8 @@ trait IRRewriter {
   def operation(op: IR.Op): IR.Op = Rewriter.rewriteOp(this, op)
 
   def block(block: IR.Block): IR.Block = new IR.Block(block.operations.map(Rewriter.rewriteOp(this, _)))
+
+  def specification(spec: IR.Spec): IR.Spec = spec
 }
 
 object Rewriter {
@@ -53,6 +55,8 @@ object Rewriter {
     val rexpr = rewriter.expression(_)
     val rval = rewriter.value(_)
     val rvar = rewriter.variable(_)
+    val rspec = rewriter.specification(_)
+
     val rewrittenOp = op match {
       case x: IR.Op.AssignVar => new IR.Op.AssignVar(rvar(x.subject), rexpr(x.value))
       case x: IR.Op.AssignMember => new IR.Op.AssignMember(rvar(x.subject), x.field, rval(x.value))
@@ -63,6 +67,7 @@ object Rewriter {
       case x: IR.Op.While => new IR.Op.While(rval(x.condition), x.invariant, rewriter.block(x.body))
       case x: IR.Op.If => new IR.Op.If(rval(x.condition), rewriter.block(x.ifTrue), rewriter.block(x.ifFalse))
       case x: IR.Op.Assert => new IR.Op.Assert(rval(x.value))
+      case x: IR.Op.AssertSpec => new IR.Op.AssertSpec(rspec(x.spec))
       case x: IR.Op.Error => new IR.Op.Error(rval(x.value))
       case x: IR.Op.Return => new IR.Op.Return(x.value.map(rval))
       case x: IR.Op.Noop => new IR.Op.Noop(rexpr(x.value))

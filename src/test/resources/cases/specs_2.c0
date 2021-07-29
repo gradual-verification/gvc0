@@ -1,0 +1,11 @@
+//test validation_error
+
+void do(int *x, int *y)
+  //@requires acc(*x) || acc(*y);
+{
+}
+
+int main()
+{
+  return 0;
+}

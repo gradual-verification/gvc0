@@ -91,7 +91,7 @@ object IR {
       def valueType = Some(Type.Int)
     }
 
-    class Char(val value: scala.Char) extends Literal {
+    class Char(val value: scala.Char) extends Literal with Spec {
       def valueType = Some(Type.Char)
     }
 
@@ -99,7 +99,7 @@ object IR {
       def valueType = Some(Type.Bool)
     }
 
-    object Null extends Literal {
+    object Null extends Literal with Spec {
       def valueType = None
     }
   }
@@ -210,21 +210,18 @@ object IR {
   class Block(val operations: List[Op])
 
   sealed trait Spec
+  sealed trait FieldValue extends Spec
+  sealed trait FieldAccess extends FieldValue
 
   object Spec {
-    val True = new Literal.Bool(true)
-    class ReturnValue extends Spec with FieldValue
-    class Imprecision extends Spec
-    class Comparison(val left: Spec, val right: Spec, val op: ComparisonOp) extends Spec
-    class Conjunction(val left: Spec, val right: Spec) extends Spec
-    class Conditional(val condition: Spec, val ifTrue: Spec, val ifFalse: Spec) extends Spec
-    class Accessibility(val field: FieldAccess) extends Spec
-  }
-
-  sealed trait FieldValue
-  sealed trait FieldAccess extends FieldValue
-  object FieldAccess {
+    class ReturnValue extends FieldValue
     class Member(val parent: FieldValue, val field: StructField) extends FieldAccess
-    class Dereference(val pointer: FieldValue) extends FieldAccess
+    class Dereference(val pointer: FieldValue, val pointerType: Type) extends FieldAccess
+    class Imprecision extends Spec
+    class Logical(val left: Spec, val right: Spec, val op: LogicalOp) extends Spec
+    class Comparison(val left: Spec, val right: Spec, val op: ComparisonOp) extends Spec
+    class Conditional(val condition: Spec, val ifTrue: Spec, val ifFalse: Spec) extends Spec
+    class Arithmetic(val left: Spec, val right: Spec, val op: ArithmeticOp) extends Spec
+    class Accessibility(val field: FieldAccess) extends Spec
   }
 }
