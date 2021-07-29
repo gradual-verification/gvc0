@@ -4,7 +4,10 @@ struct test {
   int value;
 };
 
-struct test* getTest();
+struct test* getTest()
+{
+  return NULL;
+}
 
 int main() {
   getTest()->value = 1;

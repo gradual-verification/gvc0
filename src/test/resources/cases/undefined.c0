@@ -1,0 +1,9 @@
+//test validation_error
+
+void test();
+
+int main()
+{
+  test();
+  return 0;
+}

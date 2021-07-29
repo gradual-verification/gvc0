@@ -7,3 +7,9 @@ void test(struct Test* input)
   /*@ ensures acc(input->value); @*/
 {
 }
+
+int main()
+{
+  test(NULL);
+  return 0;
+}

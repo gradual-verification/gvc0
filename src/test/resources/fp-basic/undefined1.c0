@@ -1,4 +1,4 @@
-//test error
+//test validation_error
 int Main () {
   return 1;
 }

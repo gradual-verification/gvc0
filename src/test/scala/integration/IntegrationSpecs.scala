@@ -12,6 +12,7 @@ import gvc.transformer.CNaughtPrinter
 import gvc.transformer.IR
 import gvc.transformer.SilverOutput
 import gvc.analyzer.SpecificationValidator
+import gvc.analyzer.ImplementationValidator
 
 class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
@@ -46,6 +47,7 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/libfuns2.c0",
     "fp-basic/pragma1.c0",
     "fp-basic/usetest0.c0",
+    "fp-basic/usetest.c0",
 
     // TYPE CHECKING
 
@@ -70,9 +72,9 @@ class IntegrationSpecs extends AnyFunSuite {
     "fp-basic/compound5.c0",
     "fp-basic/compound7.c0",
     "fp-basic/compound8.c0",
-    "fp-basic/undefined1.c0", // we don't error on undefined main
-    "fp-basic/undefined2.c0", // we don't error on undefined functions
-    "fp-basic/empty.c0", // we don't error on empty file
+
+    // Not used as test file
+    "fp-basic/pragma1_aux.c0",
   )
 
   val testFiles = testDirs.flatMap(dir =>
@@ -120,6 +122,7 @@ class IntegrationSpecs extends AnyFunSuite {
             AssignmentValidator.validate(result, sink)
             ReturnValidator.validate(result, sink)
             SpecificationValidator.validate(result, sink)
+            ImplementationValidator.validate(result, sink)
             if (!sink.errors.isEmpty) {
               ValidationError(sink.errors.map(_.message))
             } else {

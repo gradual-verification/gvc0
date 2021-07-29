@@ -1,4 +1,4 @@
-//test resolve_error
+//test validation_error
 
 struct Test {
   int value;
@@ -7,4 +7,10 @@ struct Test {
 bool test(struct Test* input)
 {
   return acc(input->value);
+}
+
+int main()
+{
+  test(NULL);
+  return 0;
 }

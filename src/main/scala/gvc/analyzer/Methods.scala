@@ -17,3 +17,9 @@ case class ResolvedMethodDefinition(
 ) extends ResolvedNode {
   def name = declaration.name
 }
+
+case class ResolvedPredicateDefinition(
+  parsed: MethodDefinition,
+  declaration: ResolvedMethodDeclaration,
+  body: ResolvedExpression
+) extends ResolvedNode

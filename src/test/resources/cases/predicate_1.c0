@@ -1,0 +1,17 @@
+
+bool predicate(int* value)
+{
+  return acc(*value);
+}
+
+void test(int* value)
+  //@requires predicate(value);
+{
+}
+
+int main()
+{
+  int* a = alloc(int);
+  test(a);
+  return 0;
+}

@@ -3,3 +3,9 @@ void test(int *value)
   /*@ ensures acc(*value); @*/
 {
 }
+
+int main()
+{
+  test(NULL);
+  return 0;
+}

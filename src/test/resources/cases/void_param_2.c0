@@ -1,3 +1,10 @@
 //test type_error
 
-void doTest(void* value);
+void doTest(void* value)
+{
+}
+
+int main()
+{
+  return 0;
+}

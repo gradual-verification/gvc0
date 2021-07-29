@@ -1,5 +1,8 @@
 //test
-bool condition();
+bool condition()
+{
+  return false;
+}
 
 // Methods must return a value *or* encounter an error
 

@@ -105,10 +105,8 @@ object AssignmentValidator {
     ExpressionVisitor.visit(expr, {
       case ref: ResolvedVariableRef if !scope.isAssigned(ref) => {
         scope.errors.error(ref, "Uninitialized variable '" + ref.variable.map(_.name).getOrElse("") + "'")
-        true
       }
-
-      case _ => true
+      case _ => ()
     })
   }
 

@@ -1,9 +1,14 @@
 //test type_error
 
-int condition();
+int condition()
+{
+  return 1;
+}
 
-int main() {
-  while (condition()) {
+int main()
+{
+  while (condition())
+  {
     return 1;
   }
 

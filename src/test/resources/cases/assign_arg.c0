@@ -1,6 +1,8 @@
 //test validation_error
 
-void test(int x, int y);
+void test(int x, int y)
+{
+}
 
 int main() {
   int x = 1;

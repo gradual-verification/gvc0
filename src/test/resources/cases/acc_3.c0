@@ -8,3 +8,9 @@ void test(struct Test *input)
   /*@ requires acc(input->value) < 0; @*/
 {
 }
+
+int main()
+{
+  test(NULL);
+  return 0;
+}

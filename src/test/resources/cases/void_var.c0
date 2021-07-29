@@ -1,5 +1,6 @@
 //test type_error
-int main() {
+int main()
+{
   void test;
   return 0;
 }

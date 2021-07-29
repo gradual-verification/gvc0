@@ -447,8 +447,7 @@ object Resolver {
       }
 
       case acc: AccessibilityExpression => {
-        if (context == MethodContext)
-          scope.errors.error(acc, "acc() expressions can only be used in specifications")
+        // acc() can be used in methods that are only used as predicates
         ResolvedAccessibility(acc, resolveExpression(acc.field, scope, context))
       }
 

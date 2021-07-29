@@ -1,6 +1,9 @@
 //test validation_error
 
-bool condition();
+bool condition()
+{
+  return true;
+}
 
 int main() {
   if (condition())

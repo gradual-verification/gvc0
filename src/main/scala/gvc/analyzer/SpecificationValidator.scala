@@ -19,7 +19,7 @@ object SpecificationValidator {
       case predicate: ResolvedInvoke => {
         predicate.arguments.foreach(validateValue(_, errors))
       }
-      
+
       case imp: ResolvedImprecision => ???
       
       case member: ResolvedMember => validateField(member.parent, errors)
@@ -72,8 +72,6 @@ object SpecificationValidator {
         errors.error(spec, "Invalid value in specification")
       }
     }
-
-    
   }
 
   // Validates a value used in an expression
