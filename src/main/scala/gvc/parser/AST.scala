@@ -175,6 +175,12 @@ case class MemberDefinition(id: Identifier, valueType: Type, span: SourceSpan) e
 case class TypeDefinition(id: Identifier, value: Type, span: SourceSpan) extends Definition
 case class StructDefinition(id: Identifier, fields: Option[List[MemberDefinition]], span: SourceSpan) extends Definition
 case class UseDeclaration(path: StringExpression, isLibrary: Boolean, span: SourceSpan) extends Definition
+case class PredicateDefinition(
+  id: Identifier,
+  arguments: List[MemberDefinition],
+  body: Option[Expression],
+  span: SourceSpan
+) extends Definition
 case class MethodDefinition(
   id: Identifier,
   returnType: Type,

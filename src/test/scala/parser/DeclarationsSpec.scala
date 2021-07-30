@@ -4,13 +4,13 @@ import fastparse.Parsed.Success
 
 class DeclarationsSpec extends AnyFunSuite {
   test("struct declaration") {
-    val Success(struct: StructDefinition, _) = Parser.parseDef("struct Test;")
+    val Success(Seq(struct: StructDefinition), _) = Parser.parseDef("struct Test;")
     assert(struct.id == "Test")
     assert(struct.fields == None)
   }
 
   test("struct definition") {
-    val Success(struct: StructDefinition, _) = Parser.parseDef("""
+    val Success(Seq(struct: StructDefinition), _) = Parser.parseDef("""
       struct Test {
         int field1;
         string field2;
@@ -27,25 +27,25 @@ class DeclarationsSpec extends AnyFunSuite {
   }
 
   test("type definition") {
-    val Success(d: TypeDefinition, _) = Parser.parseDef("typedef int MyNumber;")
+    val Success(Seq(d: TypeDefinition), _) = Parser.parseDef("typedef int MyNumber;")
     assert(d.id == "MyNumber")
     assert(d.value.asInstanceOf[NamedType].id == "int")
   }
 
   test("typedef with struct type") {
-    val Success(typeDef: TypeDefinition, _) = Parser.parseDef("typedef struct MyStruct MyStruct;")
+    val Success(Seq(typeDef: TypeDefinition), _) = Parser.parseDef("typedef struct MyStruct MyStruct;")
     assert(typeDef.id == "MyStruct")
     assert(typeDef.value.asInstanceOf[NamedStructType].id == "MyStruct")
   }
 
   test("typedef with pointer") {
-    val Success(typeDef: TypeDefinition, _) = Parser.parseDef("typedef int* NumberPointer;")
+    val Success(Seq(typeDef: TypeDefinition), _) = Parser.parseDef("typedef int* NumberPointer;")
     assert(typeDef.id == "NumberPointer")
     assert(typeDef.value.asInstanceOf[PointerType].valueType.asInstanceOf[NamedType].id == "int")
   }
 
   test("method declaration") {
-    val Success(method: MethodDefinition, _) = Parser.parseDef("int addOne(int value);")
+    val Success(Seq(method: MethodDefinition), _) = Parser.parseDef("int addOne(int value);")
     assert(method.id == "addOne")
     assert(method.returnType.asInstanceOf[NamedType].id == "int")
 
@@ -57,7 +57,7 @@ class DeclarationsSpec extends AnyFunSuite {
   }
 
   test("method declaration with precondition") {
-    val Success(method: MethodDefinition, _) = Parser.parseDef("""
+    val Success(Seq(method: MethodDefinition), _) = Parser.parseDef("""
       int test(int a)
       /*@ requires(a > 0); @*/;
     """)
@@ -72,7 +72,7 @@ class DeclarationsSpec extends AnyFunSuite {
   }
 
   test("method with multiple args") {
-    val Success(method: MethodDefinition, _) = Parser.parseDef("int magnitude(int x, int y);")
+    val Success(Seq(method: MethodDefinition), _) = Parser.parseDef("int magnitude(int x, int y);")
     val List(arg1, arg2) = method.arguments
     assert(arg1.id == "x")
     assert(arg1.valueType.asInstanceOf[NamedType].id == "int")
@@ -81,7 +81,7 @@ class DeclarationsSpec extends AnyFunSuite {
   }
 
   test("method with body") {
-    val Success(method: MethodDefinition, _) = Parser.parseDef("""
+    val Success(Seq(method: MethodDefinition), _) = Parser.parseDef("""
       void test()
       {
         int a;
@@ -97,16 +97,43 @@ class DeclarationsSpec extends AnyFunSuite {
   }
 
   test("use library declaration") {
-    val Success(use: UseDeclaration, _) = Parser.parseDef("#use <mylib>")
+    val Success(Seq(use: UseDeclaration), _) = Parser.parseDef("#use <mylib>")
     assert(use.path.raw == "<mylib>")
     assert(use.path == "mylib")
     assert(use.isLibrary)
   }
 
   test("use path declaration") {
-    val Success(use: UseDeclaration, _) = Parser.parseDef("#use \"test.c0\"")
+    val Success(Seq(use: UseDeclaration), _) = Parser.parseDef("#use \"test.c0\"")
     assert(use.path.raw == "\"test.c0\"")
     assert(use.path == "test.c0")
     assert(!use.isLibrary)
+  }
+
+  test("predicate definition") {
+    val Success(Seq(pred: PredicateDefinition), _) = Parser.parseDef("//@ predicate test(int x) = x > 0;")
+    assert(pred.id.name == "test")
+
+    val List(arg: MemberDefinition) = pred.arguments
+    assert(arg.id.name == "x")
+    
+    assert(pred.body.get.isInstanceOf[BinaryExpression])
+  }
+
+  test("multiple predicate definitions") {
+    val Success(Seq(first: PredicateDefinition, second: PredicateDefinition), _) = Parser.parseDef("""
+      /*@
+        @predicate first() = true;
+        predicate second(char c) = false;
+      @*/
+    """)
+
+    assert(first.id.name == "first")
+    assert(second.id.name === "second")
+  }
+
+  test("empty annotation") {
+    assert(Parser.parseDef("//@ ").get.value.isEmpty)
+    assert(Parser.parseDef("/*@  @*/").get.value.isEmpty)
   }
 }

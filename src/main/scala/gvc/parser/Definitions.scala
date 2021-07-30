@@ -2,8 +2,14 @@ package gvc.parser
 import fastparse._
 
 trait Definitions extends Statements with Types {
-  def definition[_: P]: P[Definition] =
-    P(structDefinition | typeDefinition | methodDefinition | useDeclaration)
+  def definition[_: P]: P[Seq[Definition]] =
+    P(
+      structDefinition.map(Seq(_)) |
+      typeDefinition.map(Seq(_)) |
+      methodDefinition.map(Seq(_)) |
+      useDeclaration.map(Seq(_)) |
+      predicateAnnotation
+    )
 
   def structDefinition[_: P]: P[StructDefinition] =
     P(span(kw("struct") ~ identifier ~ structFields.? ~ ";")).map({
@@ -55,4 +61,24 @@ trait Definitions extends Statements with Types {
     })
   def useLocalPath[_: P]: P[LocalPath] =
     P(stringExpression).map(LocalPath(_))
+
+  def predicateAnnotation[_: P]: P[Seq[PredicateDefinition]] =
+    P(singleLinePredicateAnnotation | multiLinePredicateAnnotation)
+
+  def singleLinePredicateAnnotation[_: P]: P[Seq[PredicateDefinition]] =
+    P("//@"./.flatMapX(_ => new Parser(state.inSingleLineAnnotation()).predicateDefinitions) ~~/ ("\n" | End))
+  def multiLinePredicateAnnotation[_: P]: P[Seq[PredicateDefinition]] =
+    P("/*@"./.flatMapX(_ => new Parser(state.inAnnotation()).predicateDefinitions) ~/ "@*/")
+
+  def predicateDefinitions[_: P]: P[Seq[PredicateDefinition]] =
+    P(space ~~ predicateDefinition.rep ~~ space)
+
+  def predicateDefinition[_: P]: P[PredicateDefinition] =
+    P(span("predicate" ~ identifier ~ "(" ~ methodParameter.rep(sep = ",") ~ ")" ~/ predicateBody))
+    .map { case ((ident, args, body), span) => PredicateDefinition(ident, args.toList, body, span) }
+  
+  def emptyPredicateBody[_: P]: P[Option[Expression]] = P(";").map(_ => None)
+
+  def predicateBody[_: P]: P[Option[Expression]] =
+    P("=" ~/ expression ~/ ";").map(Some(_))
 }

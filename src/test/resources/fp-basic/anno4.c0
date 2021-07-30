@@ -1,4 +1,5 @@
-//test error
+//test
+// Modified test: Successful since top-level annotations are supported for predicates
 
 int main() { return 0; }
 //@
