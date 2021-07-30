@@ -144,12 +144,15 @@ indexMember ::= [ expression ]
 **Notes**
  * Do not allow a new-line inside a single line annotation (`//@`)
  * Allow `@` as a valid whitespace character inside annotations
+ * Add `fold` and `unfold` specifications
 
 ```
 <specification> ::= <requiresSpecification> |
                     <ensuresSpecification> |
                     <loopInvariantSpecification> |
-                    <assertSpecification>;
+                    <assertSpecification> |
+                    <unfoldSpecification> |
+                    <foldSpecification>
 
 <requiresSpecification> ::= "requires" <expression> ";"
 
@@ -158,6 +161,10 @@ indexMember ::= [ expression ]
 <loopInvariantSpecification> ::= "loop_invariant" <expression> ";"
 
 <assertSpecification> ::= "assert" <expression> ";"
+
+<unfoldSpecification> ::= "unfold" <identifier> "(" [expression ("," expression)*] ")" ";"
+
+<foldSpecification> ::= "fold" <identifier> "(" [expression ("," expression)*] ")" ";"
 
 <annotations> ::= <annotation>*
 
@@ -208,22 +215,34 @@ expressionStatement ::= expression [assignmentOperator expression]
 
 **Divergence from reference**
  * Declarations are parsed as definitions with no body, not as a separate construct
+ * Predicate annotations are added, using the form `predicate name(arguments) = <expression>;`
 
 ```
-definition ::= structDefinition |
-               typeDefinition |
-               methodDefinition |
-               useDeclaration
+<definition> ::= <structDefinition> |
+                 <typeDefinition> |
+                 <methodDefinition> |
+                 <useDeclaration> |
+                 <predicateAnnotation>
 
-structDefinition ::= struct identifier [structFields] ;
-structFields ::= { structField* }
-structField ::= typeReference identifier ;
+<structDefinition> ::= "struct" <identifier> [<structFields>] ;
+<structFields> ::= "{" <structField>* "}"
+<structField> ::= <typeReference> <identifier> ";"
 
-typeDefinition ::= typedef typeReference identifier ;
+<typeDefinition> ::= "typedef" <typeReference> <identifier> ";"
 
-methodDefinition ::= typeReference identifier ( [methodParameter (, methodParameter)*] ) annotations (blockStatement | ;)
+<methodDefinition> ::= <typeReference> <identifier>
+                       "(" [<methodParameter> ("," <methodParameter>)*] ")"
+                       <annotations>
+                       (<blockStatement> | ";")
 
-methodParameter ::= typeReference identifier
+<methodParameter> ::= <typeReference> <identifier>
 
-useDeclaration ::= #use (libraryExpression | stringExpression)
+<useDeclaration> ::= "#use" (<libraryExpression> | <stringExpression>)
+
+<predicateAnnotation> ::= "//@" <predicateDefinition>* "\n" |
+                           "/*@" <predicateDefinition>* "@*/"
+
+<predicateDefinition> ::= "predicate" <identifier>
+                          "(" [<methodParameter> ("," <methodParameter>)*] ")"
+                          "=" expression ";"
 ```

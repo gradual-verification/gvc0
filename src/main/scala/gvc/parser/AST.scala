@@ -78,6 +78,8 @@ case class RequiresSpecification(value: Expression, span: SourceSpan) extends Sp
 case class EnsuresSpecification(value: Expression, span: SourceSpan) extends Specification
 case class LoopInvariantSpecification(value: Expression, span: SourceSpan) extends Specification
 case class AssertSpecification(value: Expression, span: SourceSpan) extends Specification
+case class FoldSpecification(predicate: Identifier, arguments: List[Expression], span: SourceSpan) extends Specification
+case class UnfoldSpecification(predicate: Identifier, arguments: List[Expression], span: SourceSpan) extends Specification
 
 // Statements
 sealed trait Statement extends Node {

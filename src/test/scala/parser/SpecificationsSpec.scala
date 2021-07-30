@@ -23,6 +23,22 @@ class SpecificationsSpec extends AnyFunSuite {
     assert(spec.value.asInstanceOf[BooleanExpression] == true)
   }
 
+  test("fold") {
+    val Success(List(spec: FoldSpecification), _) = Parser.parseSpec("/*@ fold test(x); @*/")
+    assert(spec.predicate.name == "test")
+    
+    val List(x: VariableExpression) = spec.arguments
+    assert(x.variable.name == "x")
+  }
+
+  test("unfold") {
+    val Success(List(spec: UnfoldSpecification), _) = Parser.parseSpec("/*@ unfold test(x); @*/")
+    assert(spec.predicate.name == "test")
+    
+    val List(x: VariableExpression) = spec.arguments
+    assert(x.variable.name == "x")
+  }
+
   test("single-line annotation") {
     val Success(List(s), _) = Parser.parseSpec("//@ ensures true;")
     assert(s.isInstanceOf[EnsuresSpecification])
