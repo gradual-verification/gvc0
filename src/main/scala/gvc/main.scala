@@ -14,8 +14,6 @@ object Main extends App {
   lazy val silicon = {
     val z3Path = sys.env.get("Z3_EXE").getOrElse("z3")
 
-    println("Z3 Path: " + z3Path)
-
     val reporter = viper.silver.reporter.StdIOReporter()
     val silicon = Silicon.fromPartialCommandLineArguments(Seq("--z3Exe", z3Path), reporter, Seq())
     silicon.start()
@@ -60,7 +58,7 @@ object Main extends App {
     ImplementationValidator.validate(resolved, errors)
 
     if (!errors.errors.isEmpty) {
-      println(s"Errors in '$name':")
+      println(s"Error(s) in '$name':")
       println(errors.errors.map(_.toString()).mkString("\n"))
       sys.exit(0)
     }
@@ -74,13 +72,22 @@ object Main extends App {
 
     val silver = SilverOutput.program(ir)
 
-    if (printC0) println(c0)
-    if (printSilver) println(silver.toString())
+    if (printC0) {
+      println(s"C0 output for '$name':")
+      println(c0)
+    }
+
+    if (printSilver) {
+      println(s"Silver output for '$name':")
+      println(silver.toString())
+    }
+
+    println(s"Verifying '$name'...")
 
     silicon.verify(silver) match {
-      case verifier.Success => println("Success!")
+      case verifier.Success => println(s"Verified successfully!")
       case verifier.Failure(errors) => {
-        println(s"Verification errors in '$name'")
+        println(s"Verification errors in '$name':")
         println(errors.map(_.readableMessage).mkString("\n"))
       }
     }
