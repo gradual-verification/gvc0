@@ -1,5 +1,9 @@
 /silver
 /silicon
+/tmp
+executionTreeData.js
+executionTreeData.txt
+dot_input.dot
 
 # bloop and metals
 .bloop
