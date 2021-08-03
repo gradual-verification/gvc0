@@ -66,6 +66,7 @@ object CNaughtPrinter {
           printer.print(member.field.name)
           printer.print(" = ")
           printer.print(member.value, printValue)
+          printer.println(";")
         }
 
         case assign: IR.Op.AssignArray => {
