@@ -4,7 +4,8 @@ TODO: Get a better name
 
 ## Setup
 
-Link the `silver-gv` repository to the `silver` folder:
+Link the Silver and Silicon repositories, using their gradual verification forks:
 ```sh
 ln -s ../silver-gv silver
+ln -s ../silicon-gv silicon
 ```

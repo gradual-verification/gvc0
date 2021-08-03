@@ -1,6 +1,7 @@
 ThisBuild / scalaVersion := "2.12.14"
 
 lazy val silver = project in file("silver")
+lazy val silicon = project in file("silicon")
 
 lazy val gvc = (project in file("."))
   .settings(
@@ -9,3 +10,4 @@ lazy val gvc = (project in file("."))
     libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.2.2",
   )
   .dependsOn(silver)
+  .dependsOn(silicon)
