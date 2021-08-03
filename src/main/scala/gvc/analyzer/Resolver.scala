@@ -9,14 +9,18 @@ trait ResolvedNode {
 case class ResolvedProgram(
   methodDeclarations: List[ResolvedMethodDeclaration],
   methodDefinitions: List[ResolvedMethodDefinition],
+  predicateDeclarations: List[ResolvedPredicateDeclaration],
+  predicateDefinitions: List[ResolvedPredicateDefinition],
   structDefinitions: List[ResolvedStructDefinition],
-  types: List[ResolvedTypeDef]
+  types: List[ResolvedTypeDef],
 )
 
 case class Scope(
   variables: Map[String, ResolvedVariable],
   methodDeclarations: Map[String, ResolvedMethodDeclaration],
   methodDefinitions: Map[String, ResolvedMethodDefinition],
+  predicateDeclarations: Map[String, ResolvedPredicateDeclaration],
+  predicateDefinitions: Map[String, ResolvedPredicateDefinition],
   structDefinitions: Map[String, ResolvedStructDefinition],
   typeDefs: Map[String, ResolvedTypeDef],
   errors: ErrorSink
@@ -65,6 +69,20 @@ case class Scope(
     }
   }
 
+  def declarePredicate(predicate: ResolvedPredicateDeclaration): Scope = {
+    if (predicateDeclarations.contains(predicate.name)) this
+    else copy(predicateDeclarations = predicateDeclarations + (predicate.name -> predicate))
+  }
+
+  def definePredicate(predicate: ResolvedPredicateDefinition): Scope = {
+    if (predicateDefinitions.contains(predicate.name)) {
+      errors.error(predicate, s"'${predicate.name}' is already defined")
+      this
+    } else {
+      copy(predicateDefinitions = predicateDefinitions + (predicate.name -> predicate))
+    }
+  }
+
   def declareVariable(variable: ResolvedVariable): Scope = {
     if (variables.contains(variable.name)) {
       errors.error(variable.parsed, "'" + variable.name + "' is already declared")
@@ -93,10 +111,8 @@ object Resolver {
 
   sealed trait Context
   case object MethodContext extends Context
-  case object LoopInvariantContext extends Context
-  case object AssertContext extends Context
-  case object MethodPreconditionContext extends Context
-  case class MethodPostconditionContext(returnType: ResolvedType) extends Context
+  case object SpecificationContext extends Context
+  case class PostConditionContext(returnType: ResolvedType) extends Context
 
   def resolveType(input: Type, scope: Scope): ResolvedType = {
     input match {
@@ -390,17 +406,46 @@ object Resolver {
           resolveExpression(ternary.ifTrue, scope, context),
           resolveExpression(ternary.ifFalse, scope, context))
 
+      case invoke: InvokeExpression if context != MethodContext => {
+        // Invokes in a specification must refer to a predicate
+        val name = invoke.method.name
+        val predicate =
+          if (scope.variables.contains(name)) {
+            scope.errors.error(invoke, s"'$name' is a variable, not a predicate")
+            None
+          } else if (scope.methodDeclarations.contains(name)) {
+            scope.errors.error(invoke, s"'$name' is a method, not a predicate")
+            None
+          } else {
+            val decl = scope.predicateDeclarations.get(name)
+            if (!decl.isDefined) {
+              scope.errors.error(invoke, s"'$name' is not declared")
+            }
+            decl
+          }
+
+        ResolvedPredicate(
+          parsed = invoke,
+          predicate = predicate,
+          predicateName = name,
+          arguments = invoke.arguments.map(resolveExpression(_, scope, context))
+        )
+      }
+
       case invoke: InvokeExpression => {
         val name = invoke.method.name
 
         val method =
           if (scope.variables.contains(name)) {
-            scope.errors.error(invoke, "'" + name + "' is a variable, not a function")
+            scope.errors.error(invoke, s"'$name' is a variable, not a function")
+            None
+          } else if (scope.predicateDeclarations.contains(name)) {
+            scope.errors.error(invoke, s"'$name' is a predicate, not a function")
             None
           } else {
             val decl = scope.methodDeclarations.get(name)
             if (!decl.isDefined) {
-              scope.errors.error(invoke, "'" + name + "' is not declared")
+              scope.errors.error(invoke, s"'$name' is not declared")
             }
             decl
           }
@@ -430,7 +475,7 @@ object Resolver {
 
       case result: ResultExpression => {
         val retType = context match {
-          case MethodPostconditionContext(returnType) => returnType
+          case PostConditionContext(returnType) => returnType
           case _ => {
             scope.errors.error(result, "\\result expressions can only be used in 'ensures'")
             UnknownType
@@ -447,7 +492,9 @@ object Resolver {
       }
 
       case acc: AccessibilityExpression => {
-        // acc() can be used in methods that are only used as predicates
+        if (context == MethodContext) {
+          scope.errors.error(acc, "acc() expressions can only be used in specifications")
+        }
         ResolvedAccessibility(acc, resolveExpression(acc.field, scope, context))
       }
 
@@ -541,7 +588,9 @@ object Resolver {
 
   def resolveSpecs(specs: List[Specification], scope: Scope): Option[ResolvedAssertSpecification] = {
     val asserts = specs.flatMap({
-      case assert: AssertSpecification => Some(resolveExpression(assert.value, scope, AssertContext))
+      case assert: AssertSpecification => Some(resolveExpression(assert.value, scope, SpecificationContext))
+      case unfold: UnfoldSpecification => ??? // TODO
+      case fold: FoldSpecification => ???
       case other => {
         scope.errors.error(other, "Invalid specification")
         None
@@ -573,14 +622,17 @@ object Resolver {
     val loopInvariants = stmt.specifications.collect {
       case li: LoopInvariantSpecification => li
     }
-    val invariant = combineBooleans(loopInvariants.map(spec => resolveExpression(spec.value, scope, LoopInvariantContext)))
+    val invariant = combineBooleans(loopInvariants.map(spec => resolveExpression(spec.value, scope, SpecificationContext)))
     val otherSpecs = stmt.specifications.filterNot(_.isInstanceOf[LoopInvariantSpecification])
     (invariant, stmt.withSpecifications(otherSpecs))
   }
 
+  def resolveMethodArguments(args: List[MemberDefinition], scope: Scope) =
+    args.map(arg => ResolvedVariable(arg, arg.id.name, resolveType(arg.valueType, scope)))
+
   def resolveMethodDeclaration(input: MethodDefinition, scope: Scope): ResolvedMethodDeclaration = {
     val retType = resolveType(input.returnType, scope)
-    val parameters = input.arguments.map(arg => ResolvedVariable(arg, arg.id.name, resolveType(arg.valueType, scope)))
+    val parameters = resolveMethodArguments(input.arguments, scope)
 
     // Parameters may be referenced in method specifications
     val specScope = scope.declareVariables(parameters)
@@ -589,17 +641,26 @@ object Resolver {
     val postconditions = ListBuffer[ResolvedExpression]()
     for (spec <- input.specifications) {
       spec match {
-        case requires: RequiresSpecification => preconditions += resolveExpression(requires.value, specScope, MethodPreconditionContext)
-        case ensures: EnsuresSpecification => postconditions += resolveExpression(ensures.value, specScope, MethodPostconditionContext(retType))
+        case requires: RequiresSpecification => preconditions += resolveExpression(requires.value, specScope, SpecificationContext)
+        case ensures: EnsuresSpecification => postconditions += resolveExpression(ensures.value, specScope, PostConditionContext(retType))
+
+        // Continue checking values for resolving errors, even if invalid
+        // TODO: Should invalid values also be type-checked?
         case invariant: LoopInvariantSpecification => {
-          // TODO: Should invalid invariants be type-checked?
-          resolveExpression(invariant.value, specScope, LoopInvariantContext) // To check for resolving errors
+          resolveExpression(invariant.value, specScope, SpecificationContext)
           scope.errors.error(invariant, "Invalid loop_invariant")
         }
         case assert: AssertSpecification => {
-          // TODO: Should invalid asserts be type-checked?
-          resolveExpression(assert.value, specScope, AssertContext) // To check for resolving errors
+          resolveExpression(assert.value, specScope, SpecificationContext)
           scope.errors.error(assert, "Invalid assert")
+        }
+        case fold: FoldSpecification => {
+          fold.arguments.foreach(resolveExpression(_, specScope, SpecificationContext))
+          scope.errors.error(fold, "Invalid fold")
+        }
+        case unfold: UnfoldSpecification => {
+          unfold.arguments.foreach(resolveExpression(_, specScope, SpecificationContext))
+          scope.errors.error(unfold, "Invalid unfold")
         }
       }
     }
@@ -630,9 +691,22 @@ object Resolver {
     ResolvedMethodDefinition(input, localDecl, resolvedBlock)
   }
 
+  def resolvePredicateDeclaration(input: PredicateDefinition, scope: Scope): ResolvedPredicateDeclaration = {
+    val parameters = resolveMethodArguments(input.arguments, scope)
+    ResolvedPredicateDeclaration(parsed = input, name = input.id.name, arguments = parameters)
+  }
+
+  def resolvePredicateDefinition(input: PredicateDefinition, localDecl: ResolvedPredicateDeclaration, scope: Scope): ResolvedPredicateDefinition = {
+    val predicateScope = scope.declareVariables(localDecl.arguments)
+    val body = resolveExpression(input.body.get, predicateScope, SpecificationContext)
+    ResolvedPredicateDefinition(input, localDecl, body)
+  }
+
   def resolveProgram(program: List[Definition], errors: ErrorSink): ResolvedProgram = {
     val methodDeclarations = ListBuffer[ResolvedMethodDeclaration]()
     val methodDefinitions = ListBuffer[ResolvedMethodDefinition]()
+    val predicateDeclarations = ListBuffer[ResolvedPredicateDeclaration]()
+    val predicateDefinitions = ListBuffer[ResolvedPredicateDefinition]()
     val structDefinitions = ListBuffer[ResolvedStructDefinition]()
     val types = ListBuffer[ResolvedTypeDef]()
 
@@ -640,6 +714,8 @@ object Resolver {
       variables = Map.empty,
       methodDeclarations = Map.empty,
       methodDefinitions = Map.empty,
+      predicateDeclarations = Map.empty,
+      predicateDefinitions = Map.empty,
       structDefinitions = Map.empty,
       typeDefs = Map.empty,
       errors = errors
@@ -667,14 +743,24 @@ object Resolver {
         case m: MethodDefinition => {
           val decl = resolveMethodDeclaration(m, scope)
           methodDeclarations += decl
-          if (!scope.methodDeclarations.contains(decl.name)) {
-            scope = scope.copy(methodDeclarations = scope.methodDeclarations + (decl.name -> decl))
-          }
+          scope = scope.declareMethod(decl)
 
           if (m.body.isDefined) {
             val definition = resolveMethodDefinition(m, decl, scope)
             methodDefinitions += definition
             scope = scope.defineMethod(definition)
+          }
+        }
+
+        case p: PredicateDefinition => {
+          val decl = resolvePredicateDeclaration(p, scope)
+          predicateDeclarations += decl
+          scope = scope.declarePredicate(decl)
+
+          if (p.body.isDefined) {
+            val definition = resolvePredicateDefinition(p, decl, scope)
+            predicateDefinitions += definition
+            scope = scope.definePredicate(definition)
           }
         }
       }
@@ -683,6 +769,8 @@ object Resolver {
     ResolvedProgram(
       methodDeclarations = methodDeclarations.toList,
       methodDefinitions = methodDefinitions.toList,
+      predicateDeclarations = predicateDeclarations.toList,
+      predicateDefinitions = predicateDefinitions.toList,
       structDefinitions = structDefinitions.toList,
       types = types.toList
     )

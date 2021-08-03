@@ -1,17 +1,15 @@
 
-bool predicate(int* value)
-{
-  return acc(*value);
-}
+//@predicate testPred(int *value) = acc(*value);
 
 void test(int* value)
-  //@requires predicate(value);
+  //@requires testPred(value);
 {
 }
 
 int main()
 {
   int* a = alloc(int);
+  //@fold testPred(a);
   test(a);
   return 0;
 }

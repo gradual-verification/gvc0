@@ -18,8 +18,16 @@ case class ResolvedMethodDefinition(
   def name = declaration.name
 }
 
-case class ResolvedPredicateDefinition(
-  parsed: MethodDefinition,
-  declaration: ResolvedMethodDeclaration,
-  body: ResolvedExpression
+case class ResolvedPredicateDeclaration(
+  parsed: PredicateDefinition,
+  name: String,
+  arguments: List[ResolvedVariable]
 ) extends ResolvedNode
+
+case class ResolvedPredicateDefinition(
+  parsed: PredicateDefinition,
+  declaration: ResolvedPredicateDeclaration,
+  body: ResolvedExpression
+) extends ResolvedNode {
+  def name = declaration.name
+}

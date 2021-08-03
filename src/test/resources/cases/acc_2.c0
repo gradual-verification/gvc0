@@ -1,6 +1,7 @@
-//test validation_error
+//test resolve_error
 
-struct Test {
+struct Test
+{
   int value;
 };
 

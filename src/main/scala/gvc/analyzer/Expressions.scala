@@ -17,6 +17,15 @@ case class ResolvedVariableRef(
   def isMissing = variable.isEmpty
 }
 
+case class ResolvedPredicate(
+  parsed: Node,
+  predicate: Option[ResolvedPredicateDeclaration],
+  predicateName: String,
+  arguments: List[ResolvedExpression]
+) extends ResolvedExpression {
+  def valueType: ResolvedType = BoolType
+}
+
 case class ResolvedInvoke(
   parsed: Node,
   method: Option[ResolvedMethodDeclaration],

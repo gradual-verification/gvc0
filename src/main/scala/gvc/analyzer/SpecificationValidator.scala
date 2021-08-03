@@ -1,26 +1,38 @@
 package gvc.analyzer
 
+// Validates the structure of specifications
+// This could be integrated into the type-checker since it arguably is checking
+// the types of values used in specifications
 object SpecificationValidator {
   def validate(program: ResolvedProgram, errors: ErrorSink): Unit = {
     program.methodDeclarations.foreach(validateDeclaration(_, errors))
+    program.predicateDefinitions.foreach(validatePredicate(_, errors))
   }
 
   def validateDeclaration(decl: ResolvedMethodDeclaration, errors: ErrorSink): Unit = {
-    decl.precondition.map(validateSpecification(_, errors))
-    decl.postcondition.map(validateSpecification(_, errors))
+    decl.precondition.map(validateSpecification(_, errors, imprecisionAllowed = true))
+    decl.postcondition.map(validateSpecification(_, errors, imprecisionAllowed = true))
   }
 
-  def validateSpecification(spec: ResolvedExpression, errors: ErrorSink): Unit = {
+  def validatePredicate(decl: ResolvedPredicateDefinition, errors: ErrorSink): Unit = {
+    validateSpecification(decl.body, errors, imprecisionAllowed = true)
+  }
+
+  def validateSpecification(spec: ResolvedExpression, errors: ErrorSink, imprecisionAllowed: Boolean = false): Unit = {
     spec match {
       case _: ResolvedVariableRef => ()
       case _: ResolvedResult => ()
       case _: ResolvedBool => ()
       
-      case predicate: ResolvedInvoke => {
+      case predicate: ResolvedPredicate => {
         predicate.arguments.foreach(validateValue(_, errors))
       }
 
-      case imp: ResolvedImprecision => ???
+      case imp: ResolvedImprecision if imprecisionAllowed => ()
+      case imp: ResolvedImprecision => {
+        // TODO: Better error message
+        errors.error(imp, "? can only be used as the left value of a top-level conjunction")
+      }
       
       case member: ResolvedMember => validateField(member.parent, errors)
       case acc: ResolvedAccessibility => validateField(acc.field, errors)
@@ -47,7 +59,7 @@ object SpecificationValidator {
           }
 
           case LogicalOperation.And => {
-            validateSpecification(logical.left, errors)
+            validateSpecification(logical.left, errors, imprecisionAllowed)
             validateSpecification(logical.right, errors)
           }
         }
@@ -68,7 +80,8 @@ object SpecificationValidator {
         | _: ResolvedChar
         | _: ResolvedString
         | _: ResolvedNegation
-        | _: ResolvedArithmetic => {
+        | _: ResolvedArithmetic
+        | _: ResolvedInvoke => {
         errors.error(spec, "Invalid value in specification")
       }
     }
@@ -86,8 +99,13 @@ object SpecificationValidator {
         | _: ResolvedNull => ()
 
       case invoke: ResolvedInvoke => {
-        errors.error(value, "Invalid method call in specification value. Methods can only be used as predicates in specifications.")
+        errors.error(value, "Invalid method call in specification value")
         invoke.arguments.foreach(validateValue(_, errors))
+      }
+
+      case predicate: ResolvedPredicate => {
+        errors.error(value, "Invalid predicate in specification value. Predicates may only be used in specifications, not as values.")
+        predicate.arguments.foreach(validateValue(_, errors))
       }
 
       case member: ResolvedMember => validateField(member.parent, errors)

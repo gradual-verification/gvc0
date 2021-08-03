@@ -19,8 +19,8 @@ object TypeChecker {
     for (decl <- program.methodDeclarations) {
       initialDecls.get(decl.name) match {
         case Some(initial) =>
-          if (!compatibleDeclarations(initial, decl))
-            errors.error(decl, "Mismatching types for function '" + decl.name + "'")
+          if (!initial.returnType.isEquivalent(decl.returnType) || !compatibleArguments(initial.arguments, decl.arguments))
+            errors.error(decl, s"Mismatched types for method '${decl.name}'")
         case None =>
           initialDecls += (decl.name -> decl)
       }
@@ -37,6 +37,30 @@ object TypeChecker {
       method.declaration.precondition.foreach(checkExpression(errors, _))
       method.declaration.postcondition.foreach(checkExpression(errors, _))
       checkStatement(errors, method.declaration, method.body)
+    }
+  }
+
+  def checkPredicateDeclarations(program: ResolvedProgram, errors: ErrorSink): Unit = {
+    val initialDecls = HashMap[String, ResolvedPredicateDeclaration]()
+
+    for (decl <- program.predicateDeclarations) {
+      initialDecls.get(decl.name) match {
+        case Some(initial) if !compatibleArguments(initial.arguments, decl.arguments) =>
+            errors.error(decl, s"Mismatched types for predicate '${decl.name}'")
+        case None => initialDecls += (decl.name -> decl)
+        case _ => ()
+      }
+
+      val invalidParams = decl.arguments.filterNot(arg => validDefinitionType(arg.valueType))
+      for (arg <- invalidParams) {
+        errors.error(arg, "Invalid parameter type: " + arg.valueType.name)
+      }
+    }
+  }
+
+  def checkPredicates(program: ResolvedProgram, errors: ErrorSink): Unit = {
+    for (pred <- program.predicateDefinitions) {
+      checkExpression(errors, pred.body)
     }
   }
 
@@ -128,9 +152,27 @@ object TypeChecker {
           case None => ()
           case Some(method) => {
             if (method.arguments.length != invoke.arguments.length) {
-              errors.error(invoke, "Invalid number of arguments passed to '" + invoke.methodName + "'")
+              errors.error(invoke, s"Invalid number of arguments passed to '${invoke.methodName}'")
             } else {
               for ((defn, arg) <- method.arguments zip invoke.arguments) {
+                assertType(errors, arg, defn.valueType)
+              }
+            }
+          }
+        }
+      }
+
+      case predicate: ResolvedPredicate => {
+        for (arg <- predicate.arguments)
+          checkExpression(errors, arg)
+        
+        predicate.predicate match {
+          case None => ()
+          case Some(decl) => {
+            if (decl.arguments.length != predicate.arguments.length) {
+              errors.error(predicate, s"Invalid number of arguments passed to '${predicate.predicateName}'")
+            } else {
+              for ((defn, arg) <- decl.arguments zip predicate.arguments) {
                 assertType(errors, arg, defn.valueType)
               }
             }
@@ -314,14 +356,13 @@ object TypeChecker {
 
   def assertType(errors: ErrorSink, expr: ResolvedExpression, expectedType: ResolvedType): Unit = {
     if (!expectedType.isEquivalent(expr.valueType)) {
-      errors.error(expr, "Invalid value: expected type '" + expectedType.name + "' but encountered '" + expr.valueType.name + "'")
+      errors.error(expr, s"Invalid value: expected type '${expectedType.name}' but encountered '${expr.valueType.name}'")
     }
   }
 
-  def compatibleDeclarations(initial: ResolvedMethodDeclaration, current: ResolvedMethodDeclaration): Boolean = {
-    return initial.arguments.length == current.arguments.length &&
-      initial.returnType.isEquivalent(current.returnType) &&
-      initial.arguments.zip(current.arguments).forall { case (iArg, cArg) => iArg.valueType.isEquivalent(cArg.valueType) }
+  def compatibleArguments(initial: List[ResolvedVariable], current: List[ResolvedVariable]): Boolean = {
+    return initial.length == current.length &&
+      initial.zip(current).forall { case (iArg, cArg) => iArg.valueType.isEquivalent(cArg.valueType) }
   }
 
   def validDefinitionType(t: ResolvedType): Boolean = smallType(t) && nonVoidType(t)

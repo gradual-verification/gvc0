@@ -1,13 +1,10 @@
 //test validation_error
 // No predicate in disjunction
 
-bool predicate(int value)
-{
-  return value > 0;
-}
+//@predicate test(int value) = value > 0;
 
 void doTest(int x, int y)
-  //@requires predicate(x) || predicate(y);
+  //@requires test(x) || test(y);
 {
 }
 
