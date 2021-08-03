@@ -561,32 +561,61 @@ object Transformer {
     }
   }
 
+  
+
   def lowerSpec(scope: LocalScope, spec: ResolvedExpression): IR.Spec = {
-    spec match {
-      case ref: ResolvedVariableRef => scope.getVar(ref.variable)
-      case invoke: ResolvedInvoke => ??? // TODO: Predicate handling
-      case member: ResolvedMember => lowerFieldValue(scope, member)
-      case deref: ResolvedDereference => lowerFieldValue(scope, deref)
-      case result: ResolvedResult => new IR.Spec.ReturnValue()
+    sealed trait SpecType
+    case object ImpreciseSpec extends SpecType
+    case class IRSpec(spec: IR.Spec) extends SpecType
 
-      case ternary: ResolvedTernary => new IR.Spec.Conditional(lowerSpec(scope, ternary.condition), lowerSpec(scope, ternary.ifTrue), lowerSpec(scope, ternary.ifFalse))
-      case arith: ResolvedArithmetic => new IR.Spec.Arithmetic(lowerSpec(scope, arith.left), lowerSpec(scope, arith.right), arithmeticOp(arith.operation))
-      case comp: ResolvedComparison => new IR.Spec.Comparison(lowerSpec(scope, comp.left), lowerSpec(scope, comp.right), comparisonOp(comp.operation))
-      case logical: ResolvedLogical => new IR.Spec.Logical(lowerSpec(scope, logical.left), lowerSpec(scope, logical.right), logicalOp(logical.operation))
-      case acc: ResolvedAccessibility => new IR.Spec.Accessibility(lowerFieldAccess(scope, acc.field))
-      case imprecise: ResolvedImprecision => new IR.Spec.Imprecision()
+    def value(spec: ResolvedExpression): IR.Spec = {
+      lower(spec) match {
+        case ImpreciseSpec => throw new TransformerException("Invalid ? expression")
+        case IRSpec(s) => s
+      }
+    }
 
-      case not: ResolvedNot => ???
-      case negate: ResolvedNegation => ???
+    def lower(spec: ResolvedExpression): SpecType = {
+      spec match {
+        case ref: ResolvedVariableRef => IRSpec(scope.getVar(ref.variable))
+        case invoke: ResolvedInvoke => ??? // TODO: Predicate handling
+        case _: ResolvedMember | _: ResolvedDereference => IRSpec(lowerFieldValue(scope, spec))
+        case result: ResolvedResult => IRSpec(new IR.Spec.ReturnValue())
 
-      case _: ResolvedAlloc | _: ResolvedAllocArray => throw new TransformerException("Invalid alloc expression in specification")
-      case _: ResolvedArrayIndex | _: ResolvedLength => throw new TransformerException("Array access not implemented")
-      case _: ResolvedString => throw new TransformerException("Strings in specifications are not implemented")
+        case ternary: ResolvedTernary => IRSpec(new IR.Spec.Conditional(value(ternary.condition), value(ternary.ifTrue), value(ternary.ifFalse)))
+        case arith: ResolvedArithmetic => IRSpec(new IR.Spec.Arithmetic(value(arith.left), value(arith.right), arithmeticOp(arith.operation)))
+        case comp: ResolvedComparison => IRSpec(new IR.Spec.Comparison(value(comp.left), value(comp.right), comparisonOp(comp.operation)))
+        case logical: ResolvedLogical => {
+          val left = lower(logical.left)
+          val right = value(logical.right)
+          val op = logicalOp(logical.operation)
+          left match {
+            case IRSpec(imp: IR.Spec.Imprecision) => IRSpec(new IR.Spec.Imprecision(new IR.Spec.Logical(imp.spec, right, op)))
+            case IRSpec(spec) => IRSpec(new IR.Spec.Logical(spec, right, op))
+            case ImpreciseSpec => IRSpec(new IR.Spec.Imprecision(right))
+          }
+        }
 
-      case char: ResolvedChar => new IR.Literal.Char(char.value)
-      case int: ResolvedInt => new IR.Literal.Int(int.value)
-      case bool: ResolvedBool => new IR.Literal.Bool(bool.value)
-      case _: ResolvedNull => IR.Literal.Null
+        case acc: ResolvedAccessibility => IRSpec(new IR.Spec.Accessibility(lowerFieldAccess(scope, acc.field)))
+        case imprecise: ResolvedImprecision => ImpreciseSpec
+
+        case not: ResolvedNot => ???
+        case negate: ResolvedNegation => ???
+
+        case _: ResolvedAlloc | _: ResolvedAllocArray => throw new TransformerException("Invalid alloc expression in specification")
+        case _: ResolvedArrayIndex | _: ResolvedLength => throw new TransformerException("Array access not implemented")
+        case _: ResolvedString => throw new TransformerException("Strings in specifications are not implemented")
+
+        case char: ResolvedChar => IRSpec(new IR.Literal.Char(char.value))
+        case int: ResolvedInt => IRSpec(new IR.Literal.Int(int.value))
+        case bool: ResolvedBool => IRSpec(new IR.Literal.Bool(bool.value))
+        case _: ResolvedNull => IRSpec(IR.Literal.Null)
+      }
+    }
+
+    lower(spec) match {
+      case ImpreciseSpec => new IR.Spec.Imprecision(new IR.Literal.Bool(true))
+      case IRSpec(spec) => spec
     }
   }
 

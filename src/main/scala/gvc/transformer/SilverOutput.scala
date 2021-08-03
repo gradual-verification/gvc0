@@ -202,7 +202,7 @@ object SilverOutput {
 
       case acc: IR.Spec.Accessibility => vpr.FieldAccessPredicate(field(scope, acc.field), vpr.FullPerm()())()
 
-      case _: IR.Spec.Imprecision => ???
+      case imprecise: IR.Spec.Imprecision => vpr.ImpreciseExp(spec(scope, imprecise.spec))()
     }
   }
 

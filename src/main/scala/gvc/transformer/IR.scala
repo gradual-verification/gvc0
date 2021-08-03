@@ -217,7 +217,7 @@ object IR {
     class ReturnValue extends FieldValue
     class Member(val parent: FieldValue, val field: StructField) extends FieldAccess
     class Dereference(val pointer: FieldValue, val pointerType: Type) extends FieldAccess
-    class Imprecision extends Spec
+    class Imprecision(val spec: Spec) extends Spec
     class Logical(val left: Spec, val right: Spec, val op: LogicalOp) extends Spec
     class Comparison(val left: Spec, val right: Spec, val op: ComparisonOp) extends Spec
     class Conditional(val condition: Spec, val ifTrue: Spec, val ifFalse: Spec) extends Spec

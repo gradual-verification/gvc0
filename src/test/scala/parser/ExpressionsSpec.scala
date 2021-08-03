@@ -150,6 +150,14 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(and.right.asInstanceOf[IntegerExpression] == 2)
   }
 
+  test ("&& associativity") {
+    val Success(top: BinaryExpression, _) = Parser.parseExpr("1 && 2 && 3")
+    val nested = top.left.asInstanceOf[BinaryExpression]
+    assert(nested.left.asInstanceOf[IntegerExpression] == 1)
+    assert(nested.right.asInstanceOf[IntegerExpression] == 2)
+    assert(top.right.asInstanceOf[IntegerExpression] == 3)
+  }
+
   test("&& / == precedence") {
     val Success(and: BinaryExpression, _) = Parser.parseExpr(("1 == 2 && 3 == 4"))
     assert(and.operator == BinaryOperator.LogicalAnd)
