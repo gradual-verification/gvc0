@@ -59,6 +59,8 @@ Second, every struct definition could be rewritten to add a special field, say `
 
 Finally, every call to `alloc` or `alloc_array` could be rewritten. After every call `alloc` or `alloc_array` of a `struct` type, for each instance allocated, code equivalent to `instance->id = *permissions->instanceCounter; (*permissions->instanceCounter)++;` would be inserted.
 
+**Note**: This also requires a wrapper struct for pointers to primitive types such as `int` or other pointers.
+
 Pros:
  * Integer identifiers, which makes BSTs or hash tables possible
  * Implementable in C0 source code
