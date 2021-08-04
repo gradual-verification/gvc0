@@ -35,6 +35,7 @@ object ExpressionVisitor {
       case alloc: ResolvedAllocArray => visit(alloc.length, visitor)
       case length: ResolvedLength => visit(length.array, visitor)
       case acc: ResolvedAccessibility => visit(acc.field, visitor)
+      case pred: ResolvedPredicate => pred.arguments.foreach(visit(_, visitor))
       case _: ResolvedVariableRef | _: ResolvedAlloc | _: ResolvedResult | _: ResolvedImprecision
         | _: ResolvedInt | _: ResolvedString | _: ResolvedChar | _: ResolvedBool | _: ResolvedNull => ()
     }

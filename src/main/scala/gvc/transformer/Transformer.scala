@@ -291,6 +291,9 @@ object Transformer {
       case _: ResolvedAccessibility =>
         throw new TransformerException("Invalid acc() in method body")
 
+      case _: ResolvedPredicate =>
+          throw new TransformerException("Invalid predicate in method body")
+
       case arith: ResolvedArithmetic => {
         val (left, leftOps) = lowerValue(arith.left, scope)
         val (right, rightOps) = lowerValue(arith.right, scope)
@@ -544,6 +547,14 @@ object Transformer {
         List(new IR.Op.AssertSpec(lowerSpec(scope, assert.specification)))
       }
 
+      case fold: ResolvedFoldPredicate => {
+        List(new IR.Op.Fold(lowerPredicate(scope, fold.predicate)))
+      }
+
+      case unfold: ResolvedUnfoldPredicate => {
+        List(new IR.Op.Unfold(lowerPredicate(scope, unfold.predicate)))
+      }
+
       case error: ResolvedError => lowerValue(error.value, scope) match {
         case (value, ops) => ops :+ new IR.Op.Error(value)
       }
@@ -564,58 +575,67 @@ object Transformer {
   
 
   def lowerSpec(scope: LocalScope, spec: ResolvedExpression): IR.Spec = {
-    sealed trait SpecType
-    case object ImpreciseSpec extends SpecType
-    case class IRSpec(spec: IR.Spec) extends SpecType
-
-    def value(spec: ResolvedExpression): IR.Spec = {
-      lower(spec) match {
-        case ImpreciseSpec => throw new TransformerException("Invalid ? expression")
-        case IRSpec(s) => s
-      }
-    }
-
-    def lower(spec: ResolvedExpression): SpecType = {
-      spec match {
-        case ref: ResolvedVariableRef => IRSpec(scope.getVar(ref.variable))
-        case invoke: ResolvedInvoke => ??? // TODO: Predicate handling
-        case _: ResolvedMember | _: ResolvedDereference => IRSpec(lowerFieldValue(scope, spec))
-        case result: ResolvedResult => IRSpec(new IR.Spec.ReturnValue())
-
-        case ternary: ResolvedTernary => IRSpec(new IR.Spec.Conditional(value(ternary.condition), value(ternary.ifTrue), value(ternary.ifFalse)))
-        case arith: ResolvedArithmetic => IRSpec(new IR.Spec.Arithmetic(value(arith.left), value(arith.right), arithmeticOp(arith.operation)))
-        case comp: ResolvedComparison => IRSpec(new IR.Spec.Comparison(value(comp.left), value(comp.right), comparisonOp(comp.operation)))
-        case logical: ResolvedLogical => {
-          val left = lower(logical.left)
-          val right = value(logical.right)
-          val op = logicalOp(logical.operation)
-          left match {
-            case IRSpec(imp: IR.Spec.Imprecision) => IRSpec(new IR.Spec.Imprecision(new IR.Spec.Logical(imp.spec, right, op)))
-            case IRSpec(spec) => IRSpec(new IR.Spec.Logical(spec, right, op))
-            case ImpreciseSpec => IRSpec(new IR.Spec.Imprecision(right))
-          }
-        }
-
-        case acc: ResolvedAccessibility => IRSpec(new IR.Spec.Accessibility(lowerFieldAccess(scope, acc.field)))
-        case imprecise: ResolvedImprecision => ImpreciseSpec
-
-        case not: ResolvedNot => ???
-        case negate: ResolvedNegation => ???
-
-        case _: ResolvedAlloc | _: ResolvedAllocArray => throw new TransformerException("Invalid alloc expression in specification")
-        case _: ResolvedArrayIndex | _: ResolvedLength => throw new TransformerException("Array access not implemented")
-        case _: ResolvedString => throw new TransformerException("Strings in specifications are not implemented")
-
-        case char: ResolvedChar => IRSpec(new IR.Literal.Char(char.value))
-        case int: ResolvedInt => IRSpec(new IR.Literal.Int(int.value))
-        case bool: ResolvedBool => IRSpec(new IR.Literal.Bool(bool.value))
-        case _: ResolvedNull => IRSpec(IR.Literal.Null)
-      }
-    }
-
-    lower(spec) match {
+    lowerSpecOuter(scope, spec) match {
       case ImpreciseSpec => new IR.Spec.Imprecision(new IR.Literal.Bool(true))
       case IRSpec(spec) => spec
+    }
+  }
+
+  sealed trait SpecType
+  case object ImpreciseSpec extends SpecType
+  case class IRSpec(spec: IR.Spec) extends SpecType
+
+  def lowerSpecValue(scope: LocalScope, spec: ResolvedExpression): IR.Spec = {
+    lowerSpecOuter(scope, spec) match {
+      case ImpreciseSpec => throw new TransformerException("Invalid ? expression")
+      case IRSpec(s) => s
+    }
+  }
+
+  def lowerSpecOuter(scope: LocalScope, spec: ResolvedExpression): SpecType = {
+    spec match {
+      case ref: ResolvedVariableRef => IRSpec(scope.getVar(ref.variable))
+      case invoke: ResolvedInvoke => throw new TransformerException("Invalid invoke in specification")
+      case pred: ResolvedPredicate => IRSpec(lowerPredicate(scope, pred))
+
+      case _: ResolvedMember | _: ResolvedDereference => IRSpec(lowerFieldValue(scope, spec))
+      case result: ResolvedResult => IRSpec(new IR.Spec.ReturnValue())
+
+      case ternary: ResolvedTernary => IRSpec(new IR.Spec.Conditional(lowerSpecValue(scope, ternary.condition), lowerSpecValue(scope, ternary.ifTrue), lowerSpecValue(scope, ternary.ifFalse)))
+      case arith: ResolvedArithmetic => IRSpec(new IR.Spec.Arithmetic(lowerSpecValue(scope, arith.left), lowerSpecValue(scope, arith.right), arithmeticOp(arith.operation)))
+      case comp: ResolvedComparison => IRSpec(new IR.Spec.Comparison(lowerSpecValue(scope, comp.left), lowerSpecValue(scope, comp.right), comparisonOp(comp.operation)))
+      case logical: ResolvedLogical => {
+        val left = lowerSpecOuter(scope, logical.left)
+        val right = lowerSpecValue(scope, logical.right)
+        val op = logicalOp(logical.operation)
+        left match {
+          case IRSpec(imp: IR.Spec.Imprecision) => IRSpec(new IR.Spec.Imprecision(new IR.Spec.Logical(imp.spec, right, op)))
+          case IRSpec(spec) => IRSpec(new IR.Spec.Logical(spec, right, op))
+          case ImpreciseSpec => IRSpec(new IR.Spec.Imprecision(right))
+        }
+      }
+
+      case acc: ResolvedAccessibility => IRSpec(new IR.Spec.Accessibility(lowerFieldAccess(scope, acc.field)))
+      case imprecise: ResolvedImprecision => ImpreciseSpec
+
+      case not: ResolvedNot => ???
+      case negate: ResolvedNegation => ???
+
+      case _: ResolvedAlloc | _: ResolvedAllocArray => throw new TransformerException("Invalid alloc expression in specification")
+      case _: ResolvedArrayIndex | _: ResolvedLength => throw new TransformerException("Array access not implemented")
+      case _: ResolvedString => throw new TransformerException("Strings in specifications are not implemented")
+
+      case char: ResolvedChar => IRSpec(new IR.Literal.Char(char.value))
+      case int: ResolvedInt => IRSpec(new IR.Literal.Int(int.value))
+      case bool: ResolvedBool => IRSpec(new IR.Literal.Bool(bool.value))
+      case _: ResolvedNull => IRSpec(IR.Literal.Null)
+    }
+  }
+
+  def lowerPredicate(scope: LocalScope, pred: ResolvedPredicate): IR.Spec.Predicate = {
+    pred.predicate match {
+      case None => throw new TransformerException("Unresolved predicate")
+      case Some(predicate) => new IR.Spec.Predicate(predicate.name, pred.arguments.map(lowerSpecValue(scope, _)))
     }
   }
 
@@ -639,6 +659,21 @@ object Transformer {
     }
   }
 
+  def lowerPredicateDef(scope: GlobalScope, decl: ResolvedPredicateDeclaration, defn: Option[ResolvedPredicateDefinition]) = {
+    val localScope = scope.local()
+
+    val definedArgs = defn.map(_.declaration.arguments).getOrElse(decl.arguments)
+    val args = for (arg <- definedArgs) yield {
+      val variable = new IR.Var(localScope.varType(arg.valueType), localScope.varName(Some(arg.name)))
+      localScope.namedVariables.put(variable.name, variable)
+      variable
+    }
+
+    val body = defn.map(d => lowerSpec(localScope, d.body))
+
+    new IR.Predicate(decl.name, args, body)
+  }
+
   def methodToIR(method: ResolvedMethodDefinition, scope: LocalScope): IR.MethodImplementation = {
     val args = method.declaration.arguments.map(v => new IR.Var(scope.varType(v.valueType), scope.varName(Some(v.name))))
     for (arg <- args) scope.namedVariables.put(arg.name, arg)
@@ -648,7 +683,6 @@ object Transformer {
     
     val body = new IR.Block(lowerStatement(method.body, scope))
 
-    // TODO: Implement pre/post-condition rewriting
     new IR.MethodImplementation(
       method.name,
       scope.returnType(method.declaration.returnType),
@@ -662,8 +696,12 @@ object Transformer {
   def programToIR(program: ResolvedProgram): IR.Program = {
     val scope = new GlobalScope(program)
     val methods = program.methodDefinitions.map(d => methodToIR(d, scope.local()))
+
+    val definedPredicates = program.predicateDefinitions.toSeq.map(d => (d.name, d)).toMap
+    val predicates = program.predicateDeclarations.map(d => lowerPredicateDef(scope, d, definedPredicates.get(d.name)))
+
     val structs = program.structDefinitions.map(s => scope.structs(s.name).struct)
-    new IR.Program(methods, structs)
+    new IR.Program(methods, predicates, structs)
   }
 
   class StructDefImpl(val name: String) extends IR.StructDefinition

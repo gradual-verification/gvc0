@@ -1,0 +1,24 @@
+field $int_value: Int
+
+predicate testPred(value: Ref) {
+  acc(value.$int_value, write)
+}
+
+method $method_test(value: Ref)
+  requires acc(testPred(value), write)
+  ensures true
+{
+  unfold acc(testPred(value), write)
+  value.$int_value := 1
+}
+
+method $method_main() returns ($return: Int)
+  requires true
+  ensures true
+{
+  var a: Ref
+  a := new($int_value)
+  fold acc(testPred(a), write)
+  $method_test(a)
+  $return := 0
+}

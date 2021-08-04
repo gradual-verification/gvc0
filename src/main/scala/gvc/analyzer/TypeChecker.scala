@@ -123,6 +123,9 @@ object TypeChecker {
         assertType(errors, assert.specification, BoolType)
       }
 
+      case fold: ResolvedFoldPredicate => checkExpression(errors, fold.predicate)
+      case unfold: ResolvedUnfoldPredicate => checkExpression(errors, unfold.predicate)
+
       case error: ResolvedError => {
         checkExpression(errors, error.value)
         assertType(errors, error.value, StringType)

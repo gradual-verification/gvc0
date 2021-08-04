@@ -408,28 +408,7 @@ object Resolver {
 
       case invoke: InvokeExpression if context != MethodContext => {
         // Invokes in a specification must refer to a predicate
-        val name = invoke.method.name
-        val predicate =
-          if (scope.variables.contains(name)) {
-            scope.errors.error(invoke, s"'$name' is a variable, not a predicate")
-            None
-          } else if (scope.methodDeclarations.contains(name)) {
-            scope.errors.error(invoke, s"'$name' is a method, not a predicate")
-            None
-          } else {
-            val decl = scope.predicateDeclarations.get(name)
-            if (!decl.isDefined) {
-              scope.errors.error(invoke, s"'$name' is not declared")
-            }
-            decl
-          }
-
-        ResolvedPredicate(
-          parsed = invoke,
-          predicate = predicate,
-          predicateName = name,
-          arguments = invoke.arguments.map(resolveExpression(_, scope, context))
-        )
+        resolvePredicate(invoke, invoke.method, invoke.arguments, scope, context)
       }
 
       case invoke: InvokeExpression => {
@@ -586,21 +565,60 @@ object Resolver {
     }
   }
 
-  def resolveSpecs(specs: List[Specification], scope: Scope): Option[ResolvedAssertSpecification] = {
-    val asserts = specs.flatMap({
-      case assert: AssertSpecification => Some(resolveExpression(assert.value, scope, SpecificationContext))
-      case unfold: UnfoldSpecification => ??? // TODO
-      case fold: FoldSpecification => ???
+  def resolveSpecs(specs: List[Specification], scope: Scope): List[ResolvedStatement] = {
+    specs.flatMap {
+      case assert: AssertSpecification => {
+        val value = resolveExpression(assert.value, scope, SpecificationContext)
+        Some(ResolvedAssertSpecification(assert, value))
+      }
+
+      case unfold: UnfoldSpecification => {
+        val predicate = resolvePredicate(unfold, unfold.predicate, unfold.arguments, scope, SpecificationContext)
+        Some(ResolvedUnfoldPredicate(unfold, predicate))
+      }
+
+      case fold: FoldSpecification => {
+        val predicate = resolvePredicate(fold, fold.predicate, fold.arguments, scope, SpecificationContext)
+        Some(ResolvedFoldPredicate(fold, predicate))
+      }
       case other => {
         scope.errors.error(other, "Invalid specification")
         None
       }
-    })
-
-    asserts match {
-      case head :: _ => Some(ResolvedAssertSpecification(head.parsed, combineBooleans(asserts).get))
-      case _ => None
     }
+  }
+
+  def resolvePredicate(
+    parsed: Node,
+    id: Identifier,
+    args: List[Expression],
+    scope: Scope,
+    context: Context
+  ): ResolvedPredicate = {
+    val name = id.name
+    val predicate =
+      if (scope.variables.contains(name)) {
+        scope.errors.error(id, s"'$name' is a variable, not a predicate")
+        None
+      } else if (scope.methodDeclarations.contains(name)) {
+        scope.errors.error(id, s"'$name' is a method, not a predicate")
+        None
+      } else {
+        val decl = scope.predicateDeclarations.get(name)
+        if (!decl.isDefined) {
+          scope.errors.error(id, s"'$name' is not declared")
+        }
+        decl
+      }
+
+    val arguments = args.map(resolveExpression(_, scope, context))
+
+    ResolvedPredicate(
+      parsed = parsed,
+      predicate = predicate,
+      predicateName = name,
+      arguments = arguments
+    )
   }
 
   def combineBooleans(expressions: Seq[ResolvedExpression]): Option[ResolvedExpression] = {

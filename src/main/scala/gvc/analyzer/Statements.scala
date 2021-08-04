@@ -58,6 +58,16 @@ case class ResolvedAssertSpecification(
   specification: ResolvedExpression
 ) extends ResolvedStatement
 
+case class ResolvedUnfoldPredicate(
+  parsed: Node,
+  predicate: ResolvedPredicate
+) extends ResolvedStatement
+
+case class ResolvedFoldPredicate(
+  parsed: Node,
+  predicate: ResolvedPredicate
+) extends ResolvedStatement
+
 case class ResolvedError(
   parsed: Node,
   value: ResolvedExpression

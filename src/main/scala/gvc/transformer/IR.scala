@@ -3,8 +3,9 @@ package gvc.transformer
 object IR {
   class Program(
     val methods: List[Method],
+    val predicates: List[Predicate],
     val structs: List[StructDefinition]
-  )
+    )
 
   sealed trait Method {
     val name: String;
@@ -202,6 +203,8 @@ object IR {
     class If(val condition: Value, val ifTrue: Block, val ifFalse: Block) extends FlowOp
     class Assert(val value: Value) extends SimpleOp
     class AssertSpec(val spec: Spec) extends SimpleOp
+    class Fold(val predicate: Spec.Predicate) extends SimpleOp
+    class Unfold(val predicate: Spec.Predicate) extends SimpleOp
     class Error(val value: Value) extends SimpleOp
     class Return(val value: Option[Value]) extends SimpleOp
     class Noop(val value: Expr) extends SimpleOp
@@ -213,6 +216,12 @@ object IR {
   sealed trait FieldValue extends Spec
   sealed trait FieldAccess extends FieldValue
 
+  class Predicate(
+    val name: String,
+    val arguments: List[Var],
+    val body: Option[Spec]
+  )
+
   object Spec {
     class ReturnValue extends FieldValue
     class Member(val parent: FieldValue, val field: StructField) extends FieldAccess
@@ -223,5 +232,6 @@ object IR {
     class Conditional(val condition: Spec, val ifTrue: Spec, val ifFalse: Spec) extends Spec
     class Arithmetic(val left: Spec, val right: Spec, val op: ArithmeticOp) extends Spec
     class Accessibility(val field: FieldAccess) extends Spec
+    class Predicate(val predicateName: String, val arguments: List[Spec]) extends Spec
   }
 }

@@ -120,6 +120,9 @@ object SilverOutput {
 
       case assert: IR.Op.AssertSpec => Seq(vpr.Assert(spec(scope, assert.spec))())
 
+      case fold: IR.Op.Fold => Seq(vpr.Fold(predicate(scope, fold.predicate))())
+      case unfold: IR.Op.Unfold => Seq(vpr.Unfold(predicate(scope, unfold.predicate))())
+
       case error: IR.Op.Error => {
         // Error => assert(false)
         Seq(vpr.Assert(vpr.BoolLit(false)())())
@@ -200,10 +203,17 @@ object SilverOutput {
         vpr.CondExp(condition, left, right)()
       }
 
+      case pred: IR.Spec.Predicate => predicate(scope, pred)
+
       case acc: IR.Spec.Accessibility => vpr.FieldAccessPredicate(field(scope, acc.field), vpr.FullPerm()())()
 
       case imprecise: IR.Spec.Imprecision => vpr.ImpreciseExp(spec(scope, imprecise.spec))()
     }
+  }
+
+  def predicate(scope: LocalScope, pred: IR.Spec.Predicate): vpr.PredicateAccessPredicate = {
+    val arguments = pred.arguments.map(spec(scope, _))
+    vpr.PredicateAccessPredicate(vpr.PredicateAccess(arguments, pred.predicateName)(), vpr.FullPerm()())()
   }
 
   def fieldValue(scope: LocalScope, value: IR.FieldValue): vpr.Exp = {
@@ -220,6 +230,15 @@ object SilverOutput {
       case access: vpr.FieldAccess => access
       case _ => throw new TransformerException("Invalid field access")
     }
+  }
+
+  def predicateDef(scope: GlobalScope, defn: IR.Predicate): vpr.Predicate = {
+    val args = defn.arguments.map(arg => (arg, vpr.LocalVarDecl(arg.name, getType(scope, arg.varType))()))
+    val localScope = scope.local(None, args.toMap)
+    val argDefns = args.map { case (_, vprArg) => vprArg }
+    val body = defn.body.map(spec(localScope, _))
+
+    vpr.Predicate(defn.name, argDefns, body)()
   }
 
   def method(scope: GlobalScope, impl: IR.MethodImplementation): vpr.Method = {
@@ -250,6 +269,9 @@ object SilverOutput {
     val methods = program.methods.collect { case impl: IR.MethodImplementation => impl }
       .map(method(scope, _))
       .toList
+    val predicates = program.predicates
+      .map(predicateDef(scope, _))
+      .toList
 
     val fields = scope.fields.toList
 
@@ -257,7 +279,7 @@ object SilverOutput {
       domains = Seq.empty,
       fields = fields,
       functions = Seq.empty,
-      predicates = Seq.empty,
+      predicates = predicates,
       methods = methods,
       extensions = Seq.empty
     )()

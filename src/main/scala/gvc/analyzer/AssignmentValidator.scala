@@ -81,6 +81,16 @@ object AssignmentValidator {
         scope
       }
 
+      case fold: ResolvedFoldPredicate => {
+        validateExpression(scope, fold.predicate)
+        scope
+      }
+
+      case unfold: ResolvedUnfoldPredicate => {
+        validateExpression(scope, unfold.predicate)
+        scope
+      }
+
       case error: ResolvedError => {
         validateExpression(scope, error.value)
         scope
