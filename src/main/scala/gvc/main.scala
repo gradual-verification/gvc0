@@ -36,6 +36,12 @@ object Main extends App {
 
   println(s"Verifying ${files.length} file(s)")
   files.foreach(verifyFile)
+
+  for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
+    println("Runtime checks required for " + exp.toString() + ":")
+    println(checks.map(_.toString()).mkString(" && "))
+  }
+
   silicon.stop()
 
   def verifyFile(name: String): Unit = {
