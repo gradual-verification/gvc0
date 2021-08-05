@@ -1,0 +1,11 @@
+void test(int *value)
+  //@requires ? && !(value == NULL);
+  //@ensures ?;
+{
+  *value = 1;
+}
+
+int main()
+{
+  return 0;
+}

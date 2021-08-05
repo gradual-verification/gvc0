@@ -231,6 +231,8 @@ object IR {
     class Comparison(val left: Spec, val right: Spec, val op: ComparisonOp) extends Spec
     class Conditional(val condition: Spec, val ifTrue: Spec, val ifFalse: Spec) extends Spec
     class Arithmetic(val left: Spec, val right: Spec, val op: ArithmeticOp) extends Spec
+    class Negate(val value: Spec) extends Spec
+    class Not(val value: Spec) extends Spec
     class Accessibility(val field: FieldAccess) extends Spec
     class Predicate(val predicateName: String, val arguments: List[Spec]) extends Spec
   }

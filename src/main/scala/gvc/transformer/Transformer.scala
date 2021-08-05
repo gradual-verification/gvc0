@@ -618,8 +618,8 @@ object Transformer {
       case acc: ResolvedAccessibility => IRSpec(new IR.Spec.Accessibility(lowerFieldAccess(scope, acc.field)))
       case imprecise: ResolvedImprecision => ImpreciseSpec
 
-      case not: ResolvedNot => ???
-      case negate: ResolvedNegation => ???
+      case not: ResolvedNot => IRSpec(new IR.Spec.Not(lowerSpecValue(scope, not.value)))
+      case negate: ResolvedNegation => IRSpec(new IR.Spec.Negate(lowerSpecValue(scope, negate.value)))
 
       case _: ResolvedAlloc | _: ResolvedAllocArray => throw new TransformerException("Invalid alloc expression in specification")
       case _: ResolvedArrayIndex | _: ResolvedLength => throw new TransformerException("Array access not implemented")
