@@ -50,3 +50,5 @@ bin/
 
 #general
 *.class
+
+*.c0
