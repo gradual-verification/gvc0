@@ -3,12 +3,20 @@
 TODO: Get a better name
 
 ## Setup
+Clone the gradual verification forks of [Silver](https://github.com/gradual-verification/silver-gv) and [Silicon](https://github.com/gradual-verification/silver-gv).
 
-Link the Silver and Silicon repositories, using their gradual verification forks:
-```sh
+Add a symlink to Silver within the Silicon directory
+```
+cd ./silicon-gv
 ln -s ../silver-gv silver
+```
+Add a symlink to Silicon within the gvc0 directory.
+```
+cd ./gvc0
 ln -s ../silicon-gv silicon
 ```
+Install [z3](https://github.com/Z3Prover/z3/releases) and set the Z3_PATH environment variable to the location of the executable.
+
 
 ## Running
 

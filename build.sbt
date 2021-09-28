@@ -8,7 +8,6 @@ lazy val gvc = (project in file("."))
     libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.9" % Test,
     libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.2.2",
   )
-  .dependsOn(silver)
   .dependsOn(silicon)
 
 Compile / run / fork := true

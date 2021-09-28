@@ -11,13 +11,21 @@ import viper.silver.verifier
 import viper.silver.verifier
 
 object Main extends App {
-  lazy val silicon = {
-    val z3Path = sys.env.get("Z3_EXE").getOrElse("z3")
 
-    val reporter = viper.silver.reporter.StdIOReporter()
-    val silicon = Silicon.fromPartialCommandLineArguments(Seq("--z3Exe", z3Path), reporter, Seq())
-    silicon.start()
-    silicon
+  lazy val silicon = {
+    val z3Path = sys.env.get("Z3_EXE")
+    z3Path match {
+      case Some(z3Path) => {
+        val reporter = viper.silver.reporter.StdIOReporter()
+        val silicon = Silicon.fromPartialCommandLineArguments(Seq("--z3Exe", z3Path), reporter, Seq())
+        silicon.start()
+        silicon
+      }
+      case None => {
+        println(s"Unable to locate z3. Configure the Z3_EXE variable with the location of the executable.")
+        sys.exit(1)
+      }
+    }
   }
 
   val files = ListBuffer[String]()
