@@ -199,7 +199,7 @@ object SilverOutput {
       case conditional: IR.Spec.Conditional => {
         val condition = spec(scope, conditional.condition)
         val left = spec(scope, conditional.ifTrue)
-        val right = spec(scope, conditional.ifTrue)
+        val right = spec(scope, conditional.ifFalse)
         vpr.CondExp(condition, left, right)()
       }
 
