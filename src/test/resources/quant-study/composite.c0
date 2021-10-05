@@ -1,0 +1,105 @@
+
+// Tree node
+struct Node
+{
+  int total;
+  struct Node *left;
+  struct Node *right;
+  struct Node *parent;
+};
+
+/*@
+predicate subtreeHelper(struct Node *l, struct Node *r, struct Node *parent, int total) =
+  (l == NULL) ?
+    (
+      (r == NULL) ?
+        total == 1 
+        :
+        acc(r->left) && acc(r->right) && acc(r->parent) && acc(r->total) &&
+        r->parent == parent && subtreeHelper(r->left, r->right, r, r->total) &&
+        total == 1 + r->total
+    ) 
+    :
+    (
+      (r == NULL) ?
+        acc(l->left) && acc(l->right) && acc(l->parent) && acc(l->total) &&
+        l->parent == parent && subtreeHelper(l->left, l->right, l, l->total) &&
+        total == 1 + l->total 
+        :
+        acc(r->left) && acc(r->right) && acc(r->parent) && acc(r->total) &&
+        r->parent == parent && subtreeHelper(r->left, r->right, r, r->total) &&
+        acc(l->left) && acc(l->right) && acc(l->parent) && acc(l->total) &&
+        l->parent == parent && subtreeHelper(l->left, l->right, l, l->total) &&
+        total == 1 + l->total + r->total
+    ) ;
+@*/
+
+/*@
+// TODO: pickup debugging --- subtreeHelper in the context def is the issue causing the error, in both places it is used, works in backend: ie. ran as a silver program translated from this and was fine    
+predicate context(struct Node *node, struct Node *parent, int total) =
+  (parent == NULL) ?
+    ( true )
+    :
+    (
+      acc(parent->left) && acc(parent->right) && acc(parent->parent) && acc(parent->total) &&
+      context(parent, parent->parent, parent->total) &&
+      ((node == parent->left) ?
+        (
+          (parent->right == NULL) ?
+            ( parent->total == 1 + total )
+            :
+            (
+              acc(parent->right->left) && acc(parent->right->right) && acc(parent->right->parent) && acc(parent->right->total) &&
+              parent->right->parent == parent && subtreeHelper(parent->right->left, parent->right->right, parent->right, parent->right->total) &&
+              parent->total == 1 + total + parent->right->total 
+            )
+        )
+        :
+        (
+          node == parent->right &&
+          (parent->left == NULL) ?
+            ( parent->total == 1 + total )
+            :
+            (
+              acc(parent->left->left) && acc(parent->left->right) && acc(parent->left->parent) && acc(parent->left->total) &&
+              parent->left->parent == parent && subtreeHelper(parent->left->left, parent->left->right, parent->left, parent->left->total) &&
+              parent->total == 1 + total + parent->left->total
+            )
+        )
+      )
+    ) ;
+@*/
+
+/*@
+predicate tree(struct Node *node) =
+  (node == NULL) ?
+    ( true )
+    :
+    (
+      acc(node->left) && acc(node->right) && acc(node->parent) && acc(node->total) &&
+      context(node, node->parent, node->total) && subtreeHelper(node->left, node->right, node, node->total) 
+    ) ;
+@*/
+
+struct Node *create_tree()
+  //@ requires true;
+  //@ ensures tree(\result);
+{
+  struct Node *n = alloc(struct Node);
+  n->left = NULL;
+  n->right = NULL;
+  n->parent = NULL;
+  n->total = 1;
+  //@ fold subtreeHelper(n->left, n->right, n, n->total);
+  //@ fold context(n, n->parent, n->total);
+  //@ fold tree(n);
+  return n;
+}
+
+int main()
+  //@ requires true;
+  //@ ensures true;
+{
+  struct Node *node = create_tree();
+  return 0;
+}
