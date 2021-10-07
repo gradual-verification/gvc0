@@ -31,10 +31,11 @@ object Main extends App {
   val files = ListBuffer[String]()
   var printC0 = false
   var printSilver = false
-
+  var gradualize = false
   for (arg <- args) arg match {
     case "--c0" => printC0 = true
     case "--silver" => printSilver = true
+    case "--gradualize" => gradualize = true
     case flag if flag.startsWith("--") => {
       println(s"Invalid flag '$flag'")
       sys.exit(1)
@@ -76,29 +77,39 @@ object Main extends App {
       println(errors.errors.map(_.toString()).mkString("\n"))
       sys.exit(0)
     }
+    var resolved_asts = List[ResolvedProgram](resolved)
+    if(gradualize){
+      resolved_asts = Gradualizer.gradualizeResolvedProgram(resolved)
+    }
+    var ir = List(Transformer.programToIR(resolved))
 
-    val ir = Transformer.programToIR(resolved)
+    var silver = List[viper.silver.ast.Program]()
 
+    ir.foreach((nextIR) => {
+      
+      val c0 = nextIR.methods.collect { case m: IR.MethodImplementation => m }
+          .map(CNaughtPrinter.printMethod(_))
+          .mkString("\n")
+      
+      val nextSilver = SilverOutput.program(nextIR)
+
+      if (printC0) {
+        println(s"C0 output for '$name':")
+        println(c0)
+      }
+
+      if (printSilver) {
+        println(s"Silver output for '$name':")
+        println(nextSilver.toString())
+      }
+
+      silver = nextSilver :: silver
+    })
     // TODO: Implement printer for whole program
-    val c0 = ir.methods.collect { case m: IR.MethodImplementation => m }
-      .map(CNaughtPrinter.printMethod(_))
-      .mkString("\n")
-
-    val silver = SilverOutput.program(ir)
-
-    if (printC0) {
-      println(s"C0 output for '$name':")
-      println(c0)
-    }
-
-    if (printSilver) {
-      println(s"Silver output for '$name':")
-      println(silver.toString())
-    }
 
     println(s"Verifying '$name'...")
 
-    silicon.verify(silver) match {
+    silicon.verify(silver.head) match {
       case verifier.Success => println(s"Verified successfully!")
       case verifier.Failure(errors) => {
         println(s"Verification errors in '$name':")
