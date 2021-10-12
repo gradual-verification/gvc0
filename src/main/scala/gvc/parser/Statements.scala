@@ -1,5 +1,6 @@
 package gvc.parser
 import fastparse._
+import scala.collection.mutable.ListBuffer
 
 trait Statements extends Specifications {
   sealed trait ConcreteStatement;
@@ -21,14 +22,36 @@ trait Statements extends Specifications {
       (simpleStatement ~/ ";")
     )
 
+  private sealed trait BlockPiece
+  private case class BlockStatementPiece(s: Statement) extends BlockPiece
+  private case class BlockAnnotationPiece(s: Seq[Specification]) extends BlockPiece
+
+  private def blockPiece[_: P]: P[BlockPiece] =
+    P(concreteStatement.map(BlockStatementPiece(_)) | annotation.map(BlockAnnotationPiece(_)))
+
   def blockStatement[_: P]: P[BlockStatement] =
-    P(span("{" ~ annotations ~ (statement.rep(1) ~ annotations).? ~ "}"))
+    P(span("{" ~ blockPiece.rep ~ "}"))
     .map({
-      case ((post, None), span) => BlockStatement(List.empty, span, List.empty, post)
-      case ((pre, Some((stmts, post))), span) => stmts.toList match {
-        case head :: tl => BlockStatement(head.withSpecifications(pre ++ head.specifications) :: tl, span, List.empty, post)
-        case Nil => ??? // This should be impossible since no statements would result in None
-      }
+      case (pieces, span) =>
+        var specs = List.empty[Specification]
+        val stmts = ListBuffer[Statement]()
+        for (piece <- pieces) {
+          piece match {
+            case BlockAnnotationPiece(s) => specs = specs ++ s
+            case BlockStatementPiece(s) => {
+              specs match {
+                case Nil => stmts += s
+                case _ => {
+                  stmts += s.withSpecifications(specs)
+                  specs = Nil
+                }
+              }
+            }
+          }
+        }
+
+        BlockStatement(stmts.toList, span, Nil, specs)
+        //case head :: tl => BlockStatement(head.withSpecifications(pre ++ head.specifications) :: tl, span, List.empty, post)
     })
   
   def ifStatement[_: P]: P[IfStatement] =
