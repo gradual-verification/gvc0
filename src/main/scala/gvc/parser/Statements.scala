@@ -42,7 +42,7 @@ trait Statements extends Specifications {
               specs match {
                 case Nil => stmts += s
                 case _ => {
-                  stmts += s.withSpecifications(specs)
+                  stmts += s.withSpecifications(specs ++ s.specifications)
                   specs = Nil
                 }
               }
@@ -51,7 +51,6 @@ trait Statements extends Specifications {
         }
 
         BlockStatement(stmts.toList, span, Nil, specs)
-        //case head :: tl => BlockStatement(head.withSpecifications(pre ++ head.specifications) :: tl, span, List.empty, post)
     })
   
   def ifStatement[_: P]: P[IfStatement] =
