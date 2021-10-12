@@ -81,7 +81,9 @@ object Main extends App {
     if(gradualize){
       resolved_asts = Gradualizer.gradualizeResolvedProgram(resolved)
     }
-    var ir = List(Transformer.programToIR(resolved))
+
+
+    var ir = resolved_asts.map(Transformer.programToIR)
 
     var silver = List[viper.silver.ast.Program]()
 
@@ -106,15 +108,17 @@ object Main extends App {
       silver = nextSilver :: silver
     })
     // TODO: Implement printer for whole program
+    silver.foreach(silverIR => {
+      println(s"Verifying '$name'...")
 
-    println(s"Verifying '$name'...")
-
-    silicon.verify(silver.head) match {
-      case verifier.Success => println(s"Verified successfully!")
-      case verifier.Failure(errors) => {
-        println(s"Verification errors in '$name':")
-        println(errors.map(_.readableMessage).mkString("\n"))
+      silicon.verify(silver.head) match {
+        case verifier.Success => println(s"Verified successfully!")
+        case verifier.Failure(errors) => {
+          println(s"Verification errors in '$name':")
+          println(errors.map(_.readableMessage).mkString("\n"))
+        }
       }
-    }
+    })
+    
   }
 }

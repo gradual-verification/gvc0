@@ -1,65 +1,107 @@
 package gvc.transformer
-
 import gvc.analyzer.ResolvedProgram
 import gvc.analyzer.ResolvedMethodDeclaration
-import gvc.analyzer.ResolvedMethodDefinition
 import scala.collection.mutable.ListBuffer
 import gvc.analyzer.ResolvedLogical
 import gvc.analyzer.LogicalOperation
 import gvc.analyzer.ResolvedExpression
-import gvc.analyzer.ResolvedImprecision
+import scala.collection.GenTraversableOnce
+
+
 
 object Gradualizer {
+
+    def crossJoin[T](list: List[List[T]]): List[List[T]] =
+        list match {
+            case xs :: Nil => xs map (List(_))
+            case x :: xs => for {
+                i <- x
+                j <- crossJoin(xs)
+            } yield List(i) ++ j
+        }
+
     def gradualizeResolvedProgram(resolved: ResolvedProgram): List[ResolvedProgram] = {
+        println("Gradualizing the provided specification...")
+        
         var permutations = List[ResolvedProgram]()
         var declarations = List()
         var definitions = List()
 
-        var permutedDeclarations = permute(resolved.methodDeclarations)
+        var permutedDeclarations = permuteMethodDeclarations(resolved.methodDeclarations)
 
-        resolved.methodDeclarations.foreach((decl: ResolvedMethodDeclaration) => {
-            
-            
-            decl.postcondition match {
-                case Some(expr: ResolvedExpression) => {   
-                    var permutations = permuteIndices(numClauses(expr))
-                    permutations.foreach(perm => {
-                        println(perm)
-                        println(extractSubsetOfClauses(perm, 0, expr))
-                        println("--------")
-                    })
-                }
-                case Some(ResolvedImprecision(_)) => {
-                    
-                }
-                case None => {
-                    
-                }
-            }
-            decl.precondition match {
-                case Some(expr: ResolvedExpression) => {   
-                    var permutations = permuteIndices(numClauses(expr))
-                    permutations.foreach(perm => {
-                        extractSubsetOfClauses(perm, 0, expr)
-                    })
-                }
-                case Some(impr: ResolvedImprecision) => {
-                    
-                }
-                case None => {
-                    
-                }
+        permutedDeclarations.foreach(declarationSet => {
+            permutations = ResolvedProgram(
+                declarationSet,
+                resolved.methodDefinitions,
+                resolved.predicateDeclarations,
+                resolved.predicateDefinitions,
+                resolved.structDefinitions,
+                resolved.types
+            ) :: permutations
+        })
+        return permutations
+    }
+
+    def permuteMethodDeclarations(declarations: List[ResolvedMethodDeclaration]): List[List[ResolvedMethodDeclaration]] = {
+        var perMethodPermutations = List[List[ResolvedMethodDeclaration]]()
+        
+        declarations.foreach(decl => {
+            println(s"Permuting method: ${decl.name}")
+
+            var permutedPreconditions = permuteConjunctiveClauses(decl.precondition)
+            println(s"${permutedPreconditions.length} combination(s) of preconditions")
+
+            var permutedPostconditions = permuteConjunctiveClauses(decl.postcondition)
+            println(s"${permutedPostconditions.length} combination(s) of postconditions")
+
+            var methodPermutations = List[ResolvedMethodDeclaration]()
+
+            permutedPostconditions.foreach(post => {
+                permutedPreconditions.foreach(pre => {
+                    var duplicate = new ResolvedMethodDeclaration(
+                        decl.parsed,
+                        decl.returnType,
+                        decl.name,
+                        decl.arguments,
+                        Some(pre),
+                        Some(post)
+                    )
+                    methodPermutations = duplicate :: methodPermutations
+                })
+            })
+            println(s"${permutedPostconditions.length} possible specifications.")
+            println(s"----------------")
+            if(methodPermutations.length > 0){
+                perMethodPermutations = methodPermutations :: perMethodPermutations
             }
         })
-
-        return permutations
+        var permutationSet = crossJoin(perMethodPermutations)
+        println(s"TOTAL: ${permutationSet.length} specifications.")
+        return permutationSet
+    }
+    
+    def permuteConjunctiveClauses(condition: Option[ResolvedExpression]):List[ResolvedExpression] = {
+        var permutedClauses = List[ResolvedExpression]()
+        condition match {
+            case Some(expr: ResolvedExpression) => {   
+                var conjunctionNodeIndices = permuteIndices(numClauses(expr))
+                conjunctionNodeIndices.foreach(permutation => {
+                    var subset = extractSubsetOfClauses(permutation, 0, expr)
+                    subset match {
+                        case Some(validSubset: ResolvedExpression) => {permutedClauses = validSubset :: permutedClauses}
+                        case None => {}
+                    }
+                })
+            }
+            case None => {}
+        }
+        return permutedClauses
     }
 
     def extractSubsetOfClauses(subset: List[Int], currentIndex:Int, root:ResolvedExpression):Option[ResolvedExpression] = {
         if(subset.length > 0) {
             root match {
                 case resolveRoot: ResolvedLogical => {
-                    println(subset(subset.length - 1))
                     if(subset(subset.length - 1) == currentIndex){
                         var left = extractSubsetOfClauses(subset.slice(0, subset.length - 1), currentIndex + 1, resolveRoot.left)
                         left match {
