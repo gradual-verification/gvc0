@@ -1,13 +1,15 @@
 package gvc.transformer
 
 object IR {
+  trait Node
+
   class Program(
     val methods: List[Method],
     val predicates: List[Predicate],
     val structs: List[StructDefinition]
-    )
+  ) extends Node
 
-  sealed trait Method {
+  sealed trait Method extends Node {
     val name: String;
     val returnType: Option[Type]
     val arguments: List[Var]
@@ -35,7 +37,7 @@ object IR {
 
   // Make this a trait to hide some of the mutability necessary to create
   // circular links between field types and struct definitions
-  trait StructDefinition {
+  trait StructDefinition extends Node {
     val name: String
     def fields: List[StructField]
 
@@ -50,9 +52,9 @@ object IR {
     val name: String,
     val struct: StructDefinition,
     val valueType: Type,
-  )
+  ) extends Node
 
-  sealed trait ValueType {
+  sealed trait ValueType extends Node {
     def name: String
   }
 
@@ -69,7 +71,7 @@ object IR {
     case object Bool extends Type { val name = "bool" }
   }
   
-  sealed trait Expr {
+  sealed trait Expr extends Node {
     def valueType: Option[Type]
   }
 
@@ -188,7 +190,7 @@ object IR {
     }
   }
 
-  sealed trait Op
+  sealed trait Op extends Node
   sealed trait SimpleOp extends Op
   sealed trait FlowOp extends Op
 
@@ -210,9 +212,9 @@ object IR {
     class Noop(val value: Expr) extends SimpleOp
   }
 
-  class Block(val operations: List[Op])
+  class Block(val operations: List[Op]) extends Node
 
-  sealed trait Spec
+  sealed trait Spec extends Node
   sealed trait FieldValue extends Spec
   sealed trait FieldAccess extends FieldValue
 
@@ -220,7 +222,7 @@ object IR {
     val name: String,
     val arguments: List[Var],
     val body: Option[Spec]
-  )
+  ) extends Node
 
   object Spec {
     class ReturnValue extends FieldValue
