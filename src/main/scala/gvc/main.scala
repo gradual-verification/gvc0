@@ -47,7 +47,7 @@ object Main extends App {
 
   for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
     println("Runtime checks required for " + exp.toString() + ":")
-    println(checks.map(_.toString()).mkString(" && "))
+    println(checks.checks.map(_.toString()).mkString(" && "))
   }
 
   silicon.stop()
