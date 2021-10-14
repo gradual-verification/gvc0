@@ -9,7 +9,7 @@ method $method_isAlphabet(value: Int) returns ($return: Bool)
   var _4: Bool
   var _5: Bool
   _ := value >= 97
-  _1 := !_
+  _1 := _
   if (_1) {
     _ := value <= 122
   }
@@ -17,7 +17,7 @@ method $method_isAlphabet(value: Int) returns ($return: Bool)
   _3 := !_2
   if (_3) {
     _4 := value >= 65
-    _5 := !_4
+    _5 := _4
     if (_5) {
       _4 := value <= 90
     }
