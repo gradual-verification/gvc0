@@ -20,6 +20,16 @@ object CNaughtPrinter {
     printer.toString()
   }
 
+  def printPredicate(predicate: IR.Predicate): String = {
+    val printer = new Printer()
+    printer.print(predicate, printPredicate)
+    printer.toString()
+  }
+
+  def printPredicate(predicate: IR.Predicate, printer: Printer): Unit = {
+    println("")
+  }
+
   def printMethod(method: IR.MethodImplementation, printer: Printer): Unit = {
     // Return type
     printer.print(method.returnType.map(typeName).getOrElse("void"))
@@ -29,6 +39,16 @@ object CNaughtPrinter {
     printer.print(method.arguments.map(v => typeName(v.varType) + " " + v.name).mkString(", "))
     printer.println(")")
     printer.println("{")
+    printer.printIndented(method.precondition, (p: IR.Spec, printer) => {
+      printer.print("/*@ requires ")
+      printer.print(p.asInstanceOf[IR.Expr], printExpr)
+      printer.print("@*/")
+    })
+    printer.printIndented(method.postcondition, (p: IR.Spec, printer) => {
+      printer.print("/*@ ensures ")
+      printer.print(p.asInstanceOf[IR.Expr], printExpr)
+      printer.print("@*/")
+    })
     for (variable <- method.variables) {
       printer.printIndented(variable, (v: IR.Var, printer) => {
         printer.print(typeName(v.varType))

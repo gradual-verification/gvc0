@@ -92,7 +92,7 @@ object Main extends App {
       val c0 = nextIR.methods.collect { case m: IR.MethodImplementation => m }
           .map(CNaughtPrinter.printMethod(_))
           .mkString("\n")
-      
+
       val nextSilver = SilverOutput.program(nextIR)
 
       if (printC0) {

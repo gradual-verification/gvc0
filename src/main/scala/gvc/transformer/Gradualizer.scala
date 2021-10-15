@@ -63,13 +63,13 @@ object Gradualizer {
                         decl.returnType,
                         decl.name,
                         decl.arguments,
-                        Some(pre),
-                        Some(post)
+                        pre,
+                        post
                     )
                     methodPermutations = duplicate :: methodPermutations
                 })
             })
-            println(s"${permutedPostconditions.length} possible specifications.")
+            println(s"${methodPermutations.length} possible specifications.")
             println(s"----------------")
             if(methodPermutations.length > 0){
                 perMethodPermutations = methodPermutations :: perMethodPermutations
@@ -80,21 +80,22 @@ object Gradualizer {
         return permutationSet
     }
     
-    def permuteConjunctiveClauses(condition: Option[ResolvedExpression]):List[ResolvedExpression] = {
-        var permutedClauses = List[ResolvedExpression]()
-        condition match {
+    def permuteConjunctiveClauses(expression: Option[ResolvedExpression]):List[Option[ResolvedExpression]] = {
+        var permutedClauses = List[Option[ResolvedExpression]]()
+        expression match {
             case Some(expr: ResolvedExpression) => {   
-                var conjunctionNodeIndices = permuteIndices(numClauses(expr))
+                val numClausesInAssertion = numClauses(expr)
+                var conjunctionNodeIndices = permuteIndices(numClausesInAssertion)
+                println(s"There are ${numClausesInAssertion} clauses")
                 conjunctionNodeIndices.foreach(permutation => {
                     var subset = extractSubsetOfClauses(permutation, 0, expr)
-                    subset match {
-                        case Some(validSubset: ResolvedExpression) => {permutedClauses = validSubset :: permutedClauses}
-                        case None => {}
-                    }
+                    permutedClauses = subset :: permutedClauses
                 })
             }
-            case None => {}
+            case None => {permutedClauses = None :: permutedClauses}
         }
+        println(s"This results in ${permutedClauses.length} permutations of the assertion")
+
         return permutedClauses
     }
 
