@@ -9,6 +9,7 @@ import gvc.transformer._
 import viper.silicon.Silicon
 import viper.silver.verifier
 import viper.silver.verifier
+import gvc.weaver.Weaver
 
 object Main extends App {
 
@@ -45,11 +46,6 @@ object Main extends App {
   println(s"Verifying ${files.length} file(s)")
   files.foreach(verifyFile)
 
-  for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
-    println("Runtime checks required for " + exp.toString() + ":")
-    println(checks.checks.map(_.toString()).mkString(" && "))
-  }
-
   silicon.stop()
 
   def verifyFile(name: String): Unit = {
@@ -77,14 +73,14 @@ object Main extends App {
       sys.exit(0)
     }
 
-    val ir = Transformer.programToIR(resolved)
+    var ir = Transformer.programToIR(resolved)
+
+    val silver = SilverOutput.program(ir)
 
     // TODO: Implement printer for whole program
     val c0 = ir.methods.collect { case m: IR.MethodImplementation => m }
       .map(CNaughtPrinter.printMethod(_))
       .mkString("\n")
-
-    val silver = SilverOutput.program(ir)
 
     if (printC0) {
       println(s"C0 output for '$name':")
@@ -99,7 +95,16 @@ object Main extends App {
     println(s"Verifying '$name'...")
 
     silicon.verify(silver) match {
-      case verifier.Success => println(s"Verified successfully!")
+      case verifier.Success => {
+        println(s"Verified successfully!")
+        for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
+          println("Runtime checks required for " + exp.toString() + ":")
+          println(checks.map(_.toString()).mkString(" && "))
+          println(checks.map(_.getClass.toString()))
+        }
+
+        ir = Weaver.weave(ir, silver)
+      }
       case verifier.Failure(errors) => {
         println(s"Verification errors in '$name':")
         println(errors.map(_.readableMessage).mkString("\n"))
