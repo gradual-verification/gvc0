@@ -2,6 +2,7 @@ package gvc.weaver
 
 import scala.collection.mutable.ListBuffer
 import gvc.transformer.IR
+import gvc.transformer.IR.Op
 import viper.silver.{ast => vpr}
 
 object Weaver {
@@ -47,20 +48,18 @@ object Weaver {
   private def collectChecks(node: vpr.Node): Seq[IR.Op] = {
     var checks = Seq[IR.Op]()
     val visitor: PartialFunction[vpr.Node, Unit] =  {
-      case n => checks = checks ++ generateChecks(n)
+      case n => checks = checks ++ RuntimeCheckGenerator.generateChecks(n)
     }
 
     node.visit(visitor)
     checks
   }
 
-  // TODO: Implement (probably in a separate file)
-  // Generates the checks that are required for the specified node.
-  private def generateChecks(node: vpr.Node): Seq[IR.Op] = Seq.empty
 
   private def weaveOps(ops: List[IR.Op], silverNodes: List[vpr.Node]): List[IR.Op] = {
     var remaining = silverNodes
     val output = ops.flatMap({ op =>
+      print(op.getClass().toString())
       val (silverOp, tail) = parseSilver(op, remaining)
       remaining = tail
       silverOp.flatMap(collectChecks) :+ op
@@ -73,8 +72,8 @@ object Weaver {
   }
 
   private def parseSilver(op: IR.Op, silver: List[vpr.Node]): (Seq[vpr.Node], List[vpr.Node]) = op match {
-    case assign: IR.Op.AssignVar => {
-      assign.value match {
+    case op: IR.SimpleOp => op match {
+      case assign: Op.AssignVar => assign.value match {
         case invoke: IR.Expr.Invoke => silver match {
           case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
           case node => unexpected(node)
@@ -84,34 +83,51 @@ object Weaver {
           case node => unexpected(node)
         }
       }
-    }
+      case member: Op.AssignMember => member.value match {
+        case invoke: IR.Expr.Invoke => silver match {
+          case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
+          case node => unexpected(node)
+        }
+        case _ => silver match {
+          case (node: vpr.FieldAssign) :: tail => (Seq(node), tail)
+          case node => unexpected(node)
+        }
+      }
 
-    case _: IR.Op.AssignMember => ???
-    case _: IR.Op.AssignArray => ???
-    case _: IR.Op.AssignArrayMember => ???
-    case _: IR.Op.AssignPtr => ???
-    case _: IR.Op.While => ???
-    case _: IR.Op.If => ???
-    case _: IR.Op.Assert => ???
-    case _: IR.Op.AssertSpec => ???
-    case _: IR.Op.Fold => ???
-    case _: IR.Op.Unfold => ???
-    case _: IR.Op.Error => ???
-
-    case ret: IR.Op.Return => ret.value match {
-      case None => (Seq.empty, silver)
-      case Some(_) => silver match {
-        case (node: vpr.LocalVarAssign) :: tail => (Seq(node), tail)
+      case array: Op.AssignArray => ???
+      case member: Op.AssignArrayMember => ???
+      case ptr: Op.AssignPtr => ???
+      case assert: Op.Assert => silver match {
+        case (node: vpr.Assert) :: tail => (Seq(node), tail)
         case node => unexpected(node)
       }
+      case spec: Op.AssertSpec => ???
+      case fold: Op.Fold => ???
+      case unfold: Op.Unfold => ???
+      case error: Op.Error => ???
+      case ret: Op.Return => ret.value match {
+        case None => (Seq.empty, silver)
+        case Some(_) => silver match {
+          case (node: vpr.LocalVarAssign) :: tail => (Seq(node), tail)
+          case node => unexpected(node)
+        }
+      }
+      case noop: Op.Noop => noop.value match {
+        case invoke: IR.Expr.Invoke => silver match {
+          case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
+          case node => unexpected(node)
+        }
+        case _ => (Seq.empty, silver)
+      }
     }
-
-    case noop: IR.Op.Noop => noop.value match {
-      case invoke: IR.Expr.Invoke => silver match {
-        case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
+    case op: IR.FlowOp => op match {
+      case value: Op.While => silver match {
+        case (node: vpr.While) :: tail => (Seq(node), tail)
+      }
+      case value: Op.If => silver match {
+        case (node: vpr.If) :: tail => (Seq(node), tail)
         case node => unexpected(node)
       }
-      case _ => (Seq.empty, silver)
     }
   }
 }
