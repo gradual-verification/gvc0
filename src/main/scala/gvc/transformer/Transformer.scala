@@ -342,13 +342,15 @@ object Transformer {
 
         val ops = ListBuffer[IR.Op](lhsOps:_*)
 
-        // Negate the condition to check if the RHS needs evaluated
-        val negated = scope.allocateTemp(IR.Type.Bool)
-        ops += new IR.Op.AssignVar(negated, new IR.Expr.Not(condition))
+        val tmp = scope.allocateTemp(IR.Type.Bool)
+        ops += new IR.Op.AssignVar(tmp, logical.operation match {
+          case LogicalOperation.Or => new IR.Expr.Not(condition)
+          case LogicalOperation.And => condition
+        })
 
         // Introduce an If that evaluates the RHS and assigns the result to the variable
         val (rhs, rhsOps) = lowerExpression(logical.right, scope)
-        ops += new IR.Op.If(negated, new IR.Block(rhsOps :+ new IR.Op.AssignVar(condition, rhs)), new IR.Block(Nil))
+        ops += new IR.Op.If(tmp, new IR.Block(rhsOps :+ new IR.Op.AssignVar(condition, rhs)), new IR.Block(Nil))
 
         (condition, ops.toList)
       }
