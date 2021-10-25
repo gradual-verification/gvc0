@@ -11,10 +11,10 @@ import gvc.transformer.Transformer
 import gvc.transformer.CNaughtPrinter
 import gvc.transformer.IR
 import gvc.transformer.SilverOutput
-import gvc.analyzer.SpecificationValidator
+import gvc.analyzer.SpecExprificationValidator
 import gvc.analyzer.ImplementationValidator
 
-class IntegrationSpecs extends AnyFunSuite {
+class IntegrationSpecExprs extends AnyFunSuite {
   val testDirs = List(
     // The test files are copied with some modifications in the test header
     // from tests/fp-basic in the cc0 repository
@@ -121,14 +121,14 @@ class IntegrationSpecs extends AnyFunSuite {
           } else {
             AssignmentValidator.validate(result, sink)
             ReturnValidator.validate(result, sink)
-            SpecificationValidator.validate(result, sink)
+            SpecExprificationValidator.validate(result, sink)
             ImplementationValidator.validate(result, sink)
             if (!sink.errors.isEmpty) {
               ValidationError(sink.errors.map(_.message))
             } else {
               var ir = Transformer.programToIR(result)
               val methods = ir.methods.collect { case m: IR.MethodImplementation => m }
-                .map(CNaughtPrinter.printMethod(_))
+                .map(CNaughtPrinter.printMethod(_, false))
                 .mkString("\n")
 
               if (expectedIR.isDefined)

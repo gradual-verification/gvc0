@@ -1,6 +1,5 @@
 package gvc.weaver
 
-import scala.collection.mutable.ListBuffer
 import gvc.transformer.IR
 import viper.silver.{ast => vpr}
 
@@ -75,7 +74,7 @@ object Weaver {
   private def parseSilver(op: IR.Op, silver: List[vpr.Node]): (Seq[vpr.Node], List[vpr.Node]) = op match {
     case assign: IR.Op.AssignVar => {
       assign.value match {
-        case invoke: IR.Expr.Invoke => silver match {
+        case invoke: IR.ProgramExpr.Invoke => silver match {
           case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
           case node => unexpected(node)
         }
@@ -93,7 +92,7 @@ object Weaver {
     case _: IR.Op.While => ???
     case _: IR.Op.If => ???
     case _: IR.Op.Assert => ???
-    case _: IR.Op.AssertSpec => ???
+    case _: IR.Op.AssertSpecExpr => ???
     case _: IR.Op.Fold => ???
     case _: IR.Op.Unfold => ???
     case _: IR.Op.Error => ???
@@ -107,7 +106,7 @@ object Weaver {
     }
 
     case noop: IR.Op.Noop => noop.value match {
-      case invoke: IR.Expr.Invoke => silver match {
+      case invoke: IR.ProgramExpr.Invoke => silver match {
         case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
         case node => unexpected(node)
       }

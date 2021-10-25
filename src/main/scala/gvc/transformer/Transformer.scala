@@ -193,7 +193,7 @@ object Transformer {
   }
 
   // Wraps expression by creating a temp and assigning the value to it
-  def wrapExpr(expr: IR.Expr, ops: List[IR.Op], scope: LocalScope): (IR.Var, List[IR.Op]) = {
+  def wrapExpr(expr: IR.ProgramExpr, ops: List[IR.Op], scope: LocalScope): (IR.Var, List[IR.Op]) = {
     val value = expr.valueType match {
       case None => throw new TransformerException("Cannot assign untyped value to variable")
       case Some(valueType) => scope.allocateTemp(valueType)
@@ -237,7 +237,7 @@ object Transformer {
     case ArithmeticOperation.Multiply => IR.ArithmeticOp.Multiply
   }
 
-  def lowerExpression(expr: ResolvedExpression, scope: LocalScope): (IR.Expr, List[IR.Op]) = {
+  def lowerExpression(expr: ResolvedExpression, scope: LocalScope): (IR.ProgramExpr, List[IR.Op]) = {
     expr match {
       case ref: ResolvedVariableRef => (scope.getVar(ref.variable), Nil)
 
@@ -246,7 +246,7 @@ object Transformer {
         val argOps = argExprs.flatMap { case (_, ops) => ops }
         val args = argExprs.map { case (value, _) => value }
         invoke.method match {
-          case Some(method) => (new IR.Expr.Invoke(method.name, args, scope.returnType(method.returnType)), argOps)
+          case Some(method) => (new IR.ProgramExpr.Invoke(method.name, args, scope.returnType(method.returnType)), argOps)
           case None => throw new TransformerException("Unresolved method")
         }
       }
@@ -257,7 +257,7 @@ object Transformer {
           case arr: ResolvedArrayIndex if !member.isArrow => {
             val (index, indexOps) = lowerValue(arr.index, scope)
             val (array, arrayOps) = lowerVar(arr.array, scope)
-            (new IR.Expr.ArrayFieldAccess(array, index, field), indexOps ++ arrayOps)
+            (new IR.ProgramExpr.ArrayFieldAccess(array, index, field), indexOps ++ arrayOps)
           }
 
           case parent => {
@@ -268,7 +268,7 @@ object Transformer {
             }
 
             val (subject, subjectOps) = lowerVar(ptr, scope)
-            (new IR.Expr.Member(subject, field), subjectOps)
+            (new IR.ProgramExpr.Member(subject, field), subjectOps)
           }
         }
       }
@@ -276,7 +276,7 @@ object Transformer {
       case access: ResolvedArrayIndex => {
         val (subject, subjectOps) = lowerVar(access.array, scope)
         val (index, indexOps) = lowerValue(access.index, scope)
-        (new IR.Expr.ArrayAccess(subject, index), subjectOps ++ indexOps)
+        (new IR.ProgramExpr.ArrayAccess(subject, index), subjectOps ++ indexOps)
       }
 
       case _: ResolvedResult =>
@@ -298,14 +298,14 @@ object Transformer {
         val (left, leftOps) = lowerValue(arith.left, scope)
         val (right, rightOps) = lowerValue(arith.right, scope)
         val operator = arithmeticOp(arith.operation)
-        (new IR.Expr.Arithmetic(left, right, operator), leftOps ++ rightOps)
+        (new IR.ProgramExpr.Arithmetic(left, right, operator), leftOps ++ rightOps)
       }
 
       case comp: ResolvedComparison => {
         val (left, leftOps) = lowerValue(comp.left, scope)
         val (right, rightOps) = lowerValue(comp.right, scope)
         val operator = comparisonOp(comp.operation)
-        (new IR.Expr.Comparison(left, right, operator), leftOps ++ rightOps)
+        (new IR.ProgramExpr.Comparison(left, right, operator), leftOps ++ rightOps)
       }
 
       case ternary: ResolvedTernary => {
@@ -344,7 +344,7 @@ object Transformer {
 
         val tmp = scope.allocateTemp(IR.Type.Bool)
         ops += new IR.Op.AssignVar(tmp, logical.operation match {
-          case LogicalOperation.Or => new IR.Expr.Not(condition)
+          case LogicalOperation.Or => new IR.ProgramExpr.Not(condition)
           case LogicalOperation.And => condition
         })
 
@@ -356,18 +356,18 @@ object Transformer {
       }
 
       case deref: ResolvedDereference => lowerVar(deref.value, scope) match {
-        case (value, ops) => (new IR.Expr.Deref(value), ops)
+        case (value, ops) => (new IR.ProgramExpr.Deref(value), ops)
       }
       case not: ResolvedNot => lowerValue(not.value, scope) match {
-        case (value, ops) => (new IR.Expr.Not(value), ops)
+        case (value, ops) => (new IR.ProgramExpr.Not(value), ops)
       }
       case negate: ResolvedNegation => lowerValue(negate.value, scope) match {
-        case (value, ops) => (new IR.Expr.Negation(value), ops)
+        case (value, ops) => (new IR.ProgramExpr.Negation(value), ops)
       }
       case alloc: ResolvedAllocArray => lowerValue(alloc.length, scope) match {
-        case (length, ops) => (new IR.Expr.AllocArray(scope.valueType(alloc.memberType), length), ops)
+        case (length, ops) => (new IR.ProgramExpr.AllocArray(scope.valueType(alloc.memberType), length), ops)
       }
-      case alloc: ResolvedAlloc => (new IR.Expr.Alloc(scope.valueType(alloc.memberType)), Nil)
+      case alloc: ResolvedAlloc => (new IR.ProgramExpr.Alloc(scope.valueType(alloc.memberType)), Nil)
       case str: ResolvedString => (new IR.Literal.String(str.value), Nil)
       case char: ResolvedChar => (new IR.Literal.Char(char.value), Nil)
       case int: ResolvedInt => (new IR.Literal.Int(int.value), Nil)
@@ -403,7 +403,7 @@ object Transformer {
             member.parent match {
               // array[i].field
               case arr: ResolvedArrayIndex if !member.isArrow => {
-                // Special-case for non-pointer field access in array
+                // SpecExprial-case for non-pointer field access in array
                 val (index, indexOps) = lowerValue(arr.index, namedScope)
                 val (array, arrayOps) = lowerVar(arr.array, namedScope)
                 // Evaluation order: RHS -> Index -> Array -> Assign
@@ -460,7 +460,7 @@ object Transformer {
         inc.value match {
           case ref: ResolvedVariableRef => {
             val variable = scope.getVar(ref.variable)
-            ops += new IR.Op.AssignVar(variable, new IR.Expr.Arithmetic(variable, one, operator))
+            ops += new IR.Op.AssignVar(variable, new IR.ProgramExpr.Arithmetic(variable, one, operator))
           }
 
           case _member: ResolvedMember => {
@@ -471,8 +471,8 @@ object Transformer {
               case arr: ResolvedArrayIndex if !member.isArrow => {
                 val index = resolve(lowerValue(arr.index, scope))
                 val array = resolve(lowerVar(arr.array, scope))
-                val value = resolve(wrapExpr(new IR.Expr.ArrayFieldAccess(array, index, field), Nil, scope))
-                val incremented = resolve(wrapExpr(new IR.Expr.Arithmetic(value, one, operator), Nil, scope))
+                val value = resolve(wrapExpr(new IR.ProgramExpr.ArrayFieldAccess(array, index, field), Nil, scope))
+                val incremented = resolve(wrapExpr(new IR.ProgramExpr.Arithmetic(value, one, operator), Nil, scope))
                 ops += new IR.Op.AssignArrayMember(array, index, field, incremented)
               }
 
@@ -486,8 +486,8 @@ object Transformer {
                 }
 
                 val irPtr = resolve(lowerVar(ptr, scope))
-                val value = resolve(wrapExpr(new IR.Expr.Member(irPtr, field), Nil, scope))
-                val incremented = resolve(wrapExpr(new IR.Expr.Arithmetic(value, one, operator), Nil, scope))
+                val value = resolve(wrapExpr(new IR.ProgramExpr.Member(irPtr, field), Nil, scope))
+                val incremented = resolve(wrapExpr(new IR.ProgramExpr.Arithmetic(value, one, operator), Nil, scope))
                 ops += new IR.Op.AssignMember(irPtr, field, incremented)
               }
             }
@@ -496,15 +496,15 @@ object Transformer {
           case arr: ResolvedArrayIndex => {
             val index = resolve(lowerValue(arr.index, scope))
             val array = resolve(lowerVar(arr.array, scope))
-            val value = resolve(wrapExpr(new IR.Expr.ArrayAccess(array, index), Nil, scope))
-            val incremented = resolve(wrapExpr(new IR.Expr.Arithmetic(value, one, operator), Nil, scope))
+            val value = resolve(wrapExpr(new IR.ProgramExpr.ArrayAccess(array, index), Nil, scope))
+            val incremented = resolve(wrapExpr(new IR.ProgramExpr.Arithmetic(value, one, operator), Nil, scope))
             ops += new IR.Op.AssignArray(array, index, incremented)
           }
 
           case deref: ResolvedDereference => {
             val ptr = resolve(lowerVar(deref.value, scope))
-            val value = resolve(wrapExpr(new IR.Expr.Deref(ptr), Nil, scope))
-            val incremented = resolve(wrapExpr(new IR.Expr.Arithmetic(value, one, operator), Nil, scope))
+            val value = resolve(wrapExpr(new IR.ProgramExpr.Deref(ptr), Nil, scope))
+            val incremented = resolve(wrapExpr(new IR.ProgramExpr.Arithmetic(value, one, operator), Nil, scope))
             ops += new IR.Op.AssignPtr(ptr, incremented)
           }
 
@@ -524,7 +524,7 @@ object Transformer {
       case whil: ResolvedWhile => {
         // Evaluate condition at start of loop
         val (condition, conditionOps) = lowerValue(whil.condition, scope)
-        val invariant = whil.invariant.map(lowerSpec(scope, _)).getOrElse(new IR.Literal.Bool(true))
+        val invariant = whil.invariant.map(lowerSpecExpr(scope, _)).getOrElse(new IR.Literal.Bool(true))
 
         // Evaluate condition at every turn of the loop
         val body = new IR.Block(lowerStatement(whil.body, scope) ++ conditionOps)
@@ -545,8 +545,8 @@ object Transformer {
         case (value, ops) => ops :+ new IR.Op.Assert(value)
       }
 
-      case assert: ResolvedAssertSpecification => {
-        List(new IR.Op.AssertSpec(lowerSpec(scope, assert.specification)))
+      case assert: ResolvedAssertSpecExprification => {
+        List(new IR.Op.AssertSpecExpr(lowerSpecExpr(scope, assert.specification)))
       }
 
       case fold: ResolvedFoldPredicate => {
@@ -576,68 +576,68 @@ object Transformer {
 
   
 
-  def lowerSpec(scope: LocalScope, spec: ResolvedExpression): IR.Spec = {
-    lowerSpecOuter(scope, spec) match {
-      case ImpreciseSpec => new IR.Spec.Imprecision(new IR.Literal.Bool(true))
-      case IRSpec(spec) => spec
+  def lowerSpecExpr(scope: LocalScope, spec: ResolvedExpression): IR.SpecExpr = {
+    lowerSpecExprOuter(scope, spec) match {
+      case ImpreciseSpecExpr => new IR.SpecExpr.Imprecision(new IR.Literal.Bool(true))
+      case IRSpecExpr(spec) => spec
     }
   }
 
-  sealed trait SpecType
-  case object ImpreciseSpec extends SpecType
-  case class IRSpec(spec: IR.Spec) extends SpecType
+  sealed trait SpecExprType
+  case object ImpreciseSpecExpr extends SpecExprType
+  case class IRSpecExpr(spec: IR.SpecExpr) extends SpecExprType
 
-  def lowerSpecValue(scope: LocalScope, spec: ResolvedExpression): IR.Spec = {
-    lowerSpecOuter(scope, spec) match {
-      case ImpreciseSpec => throw new TransformerException("Invalid ? expression")
-      case IRSpec(s) => s
+  def lowerSpecExprValue(scope: LocalScope, spec: ResolvedExpression): IR.SpecExpr = {
+    lowerSpecExprOuter(scope, spec) match {
+      case ImpreciseSpecExpr => throw new TransformerException("Invalid ? expression")
+      case IRSpecExpr(s) => s
     }
   }
 
-  def lowerSpecOuter(scope: LocalScope, spec: ResolvedExpression): SpecType = {
+  def lowerSpecExprOuter(scope: LocalScope, spec: ResolvedExpression): SpecExprType = {
     spec match {
-      case ref: ResolvedVariableRef => IRSpec(scope.getVar(ref.variable))
+      case ref: ResolvedVariableRef => IRSpecExpr(scope.getVar(ref.variable))
       case invoke: ResolvedInvoke => throw new TransformerException("Invalid invoke in specification")
-      case pred: ResolvedPredicate => IRSpec(lowerPredicate(scope, pred))
+      case pred: ResolvedPredicate => IRSpecExpr(lowerPredicate(scope, pred))
 
-      case _: ResolvedMember | _: ResolvedDereference => IRSpec(lowerFieldValue(scope, spec))
-      case result: ResolvedResult => IRSpec(new IR.Spec.ReturnValue())
+      case _: ResolvedMember | _: ResolvedDereference => IRSpecExpr(lowerFieldValue(scope, spec))
+      case result: ResolvedResult => IRSpecExpr(new IR.SpecExpr.ReturnValue(scope.varType(result.valueType)))
 
-      case ternary: ResolvedTernary => IRSpec(new IR.Spec.Conditional(lowerSpecValue(scope, ternary.condition), lowerSpecValue(scope, ternary.ifTrue), lowerSpecValue(scope, ternary.ifFalse)))
-      case arith: ResolvedArithmetic => IRSpec(new IR.Spec.Arithmetic(lowerSpecValue(scope, arith.left), lowerSpecValue(scope, arith.right), arithmeticOp(arith.operation)))
-      case comp: ResolvedComparison => IRSpec(new IR.Spec.Comparison(lowerSpecValue(scope, comp.left), lowerSpecValue(scope, comp.right), comparisonOp(comp.operation)))
+      case ternary: ResolvedTernary => IRSpecExpr(new IR.SpecExpr.Conditional(lowerSpecExprValue(scope, ternary.condition), lowerSpecExprValue(scope, ternary.ifTrue), lowerSpecExprValue(scope, ternary.ifFalse)))
+      case arith: ResolvedArithmetic => IRSpecExpr(new IR.SpecExpr.Arithmetic(lowerSpecExprValue(scope, arith.left), lowerSpecExprValue(scope, arith.right), arithmeticOp(arith.operation)))
+      case comp: ResolvedComparison => IRSpecExpr(new IR.SpecExpr.Comparison(lowerSpecExprValue(scope, comp.left), lowerSpecExprValue(scope, comp.right), comparisonOp(comp.operation)))
       case logical: ResolvedLogical => {
-        val left = lowerSpecOuter(scope, logical.left)
-        val right = lowerSpecValue(scope, logical.right)
+        val left = lowerSpecExprOuter(scope, logical.left)
+        val right = lowerSpecExprValue(scope, logical.right)
         val op = logicalOp(logical.operation)
         left match {
-          case IRSpec(imp: IR.Spec.Imprecision) => IRSpec(new IR.Spec.Imprecision(new IR.Spec.Logical(imp.spec, right, op)))
-          case IRSpec(spec) => IRSpec(new IR.Spec.Logical(spec, right, op))
-          case ImpreciseSpec => IRSpec(new IR.Spec.Imprecision(right))
+          case IRSpecExpr(imp: IR.SpecExpr.Imprecision) => IRSpecExpr(new IR.SpecExpr.Imprecision(new IR.SpecExpr.Logical(imp.spec, right, op)))
+          case IRSpecExpr(spec) => IRSpecExpr(new IR.SpecExpr.Logical(spec, right, op))
+          case ImpreciseSpecExpr => IRSpecExpr(new IR.SpecExpr.Imprecision(right))
         }
       }
 
-      case acc: ResolvedAccessibility => IRSpec(new IR.Spec.Accessibility(lowerFieldAccess(scope, acc.field)))
-      case imprecise: ResolvedImprecision => ImpreciseSpec
+      case acc: ResolvedAccessibility => IRSpecExpr(new IR.SpecExpr.Accessibility(lowerFieldAccess(scope, acc.field)))
+      case imprecise: ResolvedImprecision => ImpreciseSpecExpr
 
-      case not: ResolvedNot => IRSpec(new IR.Spec.Not(lowerSpecValue(scope, not.value)))
-      case negate: ResolvedNegation => IRSpec(new IR.Spec.Negate(lowerSpecValue(scope, negate.value)))
+      case not: ResolvedNot => IRSpecExpr(new IR.SpecExpr.Not(lowerSpecExprValue(scope, not.value)))
+      case negate: ResolvedNegation => IRSpecExpr(new IR.SpecExpr.Negate(lowerSpecExprValue(scope, negate.value)))
 
       case _: ResolvedAlloc | _: ResolvedAllocArray => throw new TransformerException("Invalid alloc expression in specification")
       case _: ResolvedArrayIndex | _: ResolvedLength => throw new TransformerException("Array access not implemented")
       case _: ResolvedString => throw new TransformerException("Strings in specifications are not implemented")
 
-      case char: ResolvedChar => IRSpec(new IR.Literal.Char(char.value))
-      case int: ResolvedInt => IRSpec(new IR.Literal.Int(int.value))
-      case bool: ResolvedBool => IRSpec(new IR.Literal.Bool(bool.value))
-      case _: ResolvedNull => IRSpec(IR.Literal.Null)
+      case char: ResolvedChar => IRSpecExpr(new IR.Literal.Char(char.value))
+      case int: ResolvedInt => IRSpecExpr(new IR.Literal.Int(int.value))
+      case bool: ResolvedBool => IRSpecExpr(new IR.Literal.Bool(bool.value))
+      case _: ResolvedNull => IRSpecExpr(IR.Literal.Null)
     }
   }
 
-  def lowerPredicate(scope: LocalScope, pred: ResolvedPredicate): IR.Spec.Predicate = {
+  def lowerPredicate(scope: LocalScope, pred: ResolvedPredicate): IR.SpecExpr.Predicate = {
     pred.predicate match {
       case None => throw new TransformerException("Unresolved predicate")
-      case Some(predicate) => new IR.Spec.Predicate(predicate.name, pred.arguments.map(lowerSpecValue(scope, _)))
+      case Some(predicate) => new IR.SpecExpr.Predicate(predicate.name, pred.arguments.map(lowerSpecExprValue(scope, _)))
     }
   }
 
@@ -652,11 +652,11 @@ object Transformer {
     expr match {
       case mem: ResolvedMember => {
         val (member, field) = scope.structMember(mem)
-        new IR.Spec.Member(lowerFieldValue(scope, member.parent), field)
+        new IR.SpecExpr.Member(lowerFieldValue(scope, member.parent), field)
       }
-      case deref: ResolvedDereference => new IR.Spec.Dereference(lowerFieldValue(scope, deref.value), scope.varType(deref.value.valueType))
+      case deref: ResolvedDereference => new IR.SpecExpr.Dereference(lowerFieldValue(scope, deref.value), scope.varType(deref.value.valueType))
       case ref: ResolvedVariableRef => scope.getVar(ref.variable)
-      case result: ResolvedResult => new IR.Spec.ReturnValue()
+      case result: ResolvedResult => new IR.SpecExpr.ReturnValue(scope.varType(result.valueType))
       case _ => throw new TransformerException("Invalid field")
     }
   }
@@ -671,7 +671,7 @@ object Transformer {
       variable
     }
 
-    val body = defn.map(d => lowerSpec(localScope, d.body))
+    val body = defn.map(d => lowerSpecExpr(localScope, d.body))
 
     new IR.Predicate(decl.name, args, body)
   }
@@ -680,8 +680,8 @@ object Transformer {
     val args = method.declaration.arguments.map(v => new IR.Var(scope.varType(v.valueType), scope.varName(Some(v.name))))
     for (arg <- args) scope.namedVariables.put(arg.name, arg)
 
-    val precondition = method.declaration.precondition.map(lowerSpec(scope, _)).getOrElse(new IR.Literal.Bool(true))
-    val postcondition = method.declaration.postcondition.map(lowerSpec(scope, _)).getOrElse(new IR.Literal.Bool(true))
+    val precondition = method.declaration.precondition.map(lowerSpecExpr(scope, _)).getOrElse(new IR.Literal.Bool(true))
+    val postcondition = method.declaration.postcondition.map(lowerSpecExpr(scope, _)).getOrElse(new IR.Literal.Bool(true))
     
     val body = new IR.Block(lowerStatement(method.body, scope))
 

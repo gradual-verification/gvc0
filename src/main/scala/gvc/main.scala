@@ -48,7 +48,7 @@ object Main extends App {
 
   for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
     println("Runtime checks required for " + exp.toString() + ":")
-    println(checks.checks.map(_.toString()).mkString(" && "))
+    println(checks.map(_.toString()).mkString(" && "))
   }
 
   silicon.stop()
@@ -69,7 +69,7 @@ object Main extends App {
     TypeChecker.check(resolved, errors)
     AssignmentValidator.validate(resolved, errors)
     ReturnValidator.validate(resolved, errors)
-    SpecificationValidator.validate(resolved, errors)
+    SpecExprificationValidator.validate(resolved, errors)
     ImplementationValidator.validate(resolved, errors)
 
     if (!errors.errors.isEmpty) {
@@ -81,7 +81,9 @@ object Main extends App {
     if(gradualize){
       resolved_asts = Gradualizer.gradualizeResolvedProgram(resolved)
     }
-
+    resolved_asts.foreach((ast) => {
+      print(ast.getClass)
+    })
 
     var ir = resolved_asts.map(Transformer.programToIR)
 
@@ -90,7 +92,7 @@ object Main extends App {
     ir.foreach((nextIR) => {
       
       val c0 = nextIR.methods.collect { case m: IR.MethodImplementation => m }
-          .map(CNaughtPrinter.printMethod(_))
+          .map(CNaughtPrinter.printMethod(_, gradualize))
           .mkString("\n")
 
       val nextSilver = SilverOutput.program(nextIR)

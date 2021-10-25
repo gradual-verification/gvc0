@@ -13,24 +13,24 @@ object IR {
     val name: String;
     val returnType: Option[Type]
     val arguments: List[Var]
-    val precondition: Spec
-    val postcondition: Spec
+    val precondition: SpecExpr
+    val postcondition: SpecExpr
   }
 
   class LibraryMethod(
     val name: String,
     val returnType: Option[Type],
     val arguments: List[Var],
-    val precondition: Spec,
-    val postcondition: Spec,
+    val precondition: SpecExpr,
+    val postcondition: SpecExpr,
   ) extends Method
 
   class MethodImplementation(
     val name: String,
     val returnType: Option[Type],
     val arguments: List[Var],
-    val precondition: Spec,
-    val postcondition: Spec,
+    val precondition: SpecExpr,
+    val postcondition: SpecExpr,
     val variables: List[Var],
     val body: Block
   ) extends Method
@@ -71,15 +71,54 @@ object IR {
     case object Bool extends Type { val name = "bool" }
   }
   
-  sealed trait Expr extends Node {
+  abstract sealed class Expr extends Node {
     def valueType: Option[Type]
   }
 
-  sealed trait Value extends Expr
+  sealed trait ProgramExpr extends Expr
+
+  object Expr {
+    trait LogicalExpr extends Expr{
+      val left: Expr
+      val right: Expr
+      val op: LogicalOp
+      def valueType = Some(Type.Bool)
+    }
+    trait ComparisonExpr extends Expr{
+      val left: Expr
+      val right: Expr
+      val op: ComparisonOp
+      def valueType = Some(Type.Bool)
+    }
+    trait ArithmeticExpr extends Expr{
+      val left: Expr
+      val right: Expr
+      val op: ArithmeticOp
+      def valueType = Some(Type.Int)
+    }
+    trait NegateExpr extends Expr{
+      val value: Expr
+      def valueType = Some(Type.Int)
+    }
+    trait NotExpr extends Expr{
+      val value: Expr
+      def valueType = Some(Type.Bool)
+    }
+    trait CalledExpr extends Expr{
+      val name: String
+      val arguments: List[Expr]
+    }
+    trait ArrayExpr extends Expr{
+      val subject: Var
+      val index: Value
+    }
+  }
+
+  sealed trait Value extends Expr with ProgramExpr with SpecExpr
 
   class Var(val varType: Type, val name: String)
     extends Value
-    with Spec
+    with SpecExpr
     with FieldValue {
     def valueType: Option[Type] = Some(varType)
   }
@@ -90,23 +129,23 @@ object IR {
       def valueType = Some(Type.String)
     }
 
-    class Int(val value: Integer) extends Literal with Spec {
+    class Int(val value: Integer) extends Literal with SpecExpr {
       def valueType = Some(Type.Int)
     }
 
-    class Char(val value: scala.Char) extends Literal with Spec {
+    class Char(val value: scala.Char) extends Literal with SpecExpr {
       def valueType = Some(Type.Char)
     }
 
-    class Bool(val value: Boolean) extends Literal with Spec {
+    class Bool(val value: Boolean) extends Literal with SpecExpr {
       def valueType = Some(Type.Bool)
     }
 
-    object Null extends Literal with Spec {
+    object Null extends Literal with SpecExpr {
       def valueType = None
     }
   }
-  
+
   sealed trait ArithmeticOp
   object ArithmeticOp {
     case object Add extends ArithmeticOp
@@ -131,61 +170,52 @@ object IR {
     case object Or extends LogicalOp
   }
 
-  object Expr {
-    class Arithmetic(val left: Value, val right: Value, val op: ArithmeticOp) extends Expr {
-      def valueType = Some(Type.Int)
-    }
 
-    class Comparison(val left: Value, val right: Value, val op: ComparisonOp) extends Expr {
-      def valueType = Some(Type.Bool)
-    }
+  object ProgramExpr {
+    class Arithmetic(val left: Value, val right: Value, val op: ArithmeticOp) extends ProgramExpr with Expr.ArithmeticExpr
 
-    class Logical(val left: Value, val right: Value, val op: LogicalOp) extends Expr {
-      def valueType = Some(Type.Bool)
-    }
+    class Comparison(val left: Value, val right: Value, val op: ComparisonOp) extends ProgramExpr with Expr.ComparisonExpr
 
-    class ArrayAccess(val subject: Var, val index: Value) extends Expr {
+    class Logical(val left: Value, val right: Value, val op: LogicalOp) extends ProgramExpr with Expr.LogicalExpr
+
+    class ArrayAccess(val subject: Var, val index: Value) extends ProgramExpr with Expr.ArrayExpr {
       def valueType = subject.valueType match {
         case Some(Type.Array(memberType: IR.Type)) => Some(memberType)
         case _ => None
       }
     }
 
-    class ArrayFieldAccess(val subject: Var, val index: Value, val field: StructField) extends Expr {
+    class ArrayFieldAccess(val subject: Var, val index: Value, val field: StructField) extends ProgramExpr with Expr.ArrayExpr {
       def valueType = Some(field.valueType)
     }
 
-    class Deref(val subject: Var) extends Expr {
+    class Deref(val subject: Var) extends ProgramExpr {
       def valueType = subject.valueType match {
         case Some(Type.Pointer(memberType)) => Some(memberType)
         case _ => None
       }
     }
 
-    class Negation(val value: Value) extends Expr {
-      def valueType = Some(Type.Int)
-    }
+    class Negation(val value: Value) extends ProgramExpr with Expr.NegateExpr
 
-    class Not(val value: Value) extends Expr {
-      def valueType = Some(Type.Bool)
-    }
+    class Not(val value: Value) extends ProgramExpr with Expr.NotExpr
 
-    class Member(val subject: Var, val field: StructField) extends Expr {
+    class Member(val subject: Var, val field: StructField) extends ProgramExpr {
       def valueType = Some(field.valueType)
     }
 
-    class Alloc(val memberType: ValueType) extends Expr {
+    class Alloc(val memberType: ValueType) extends ProgramExpr {
       def valueType = memberType match {
         case Type.StructValue(struct) => Some(Type.StructReference(struct.name, Some(struct)))
         case t: IR.Type => Some(Type.Pointer(t))
       }
     }
 
-    class AllocArray(val memberType: ValueType, val length: Value) extends Expr {
+    class AllocArray(val memberType: ValueType, val length: Value) extends ProgramExpr {
       def valueType = Some(Type.Array(memberType))
     }
 
-    class Invoke(val methodName: String, val arguments: List[Value], val returnType: Option[Type]) extends Expr {
+    class Invoke(val name: String, val arguments: List[Value], val returnType: Option[Type]) extends ProgramExpr with Expr.CalledExpr {
       def valueType = returnType
     }
   }
@@ -201,12 +231,12 @@ object IR {
     // arr[i].field needs to be encoded differently in Viper and C0 so make a special-case for it
     class AssignArrayMember(val subject: Var, val index: Value, val field: StructField, val value: Value) extends SimpleOp
     class AssignPtr(val subject: Var, val value: Value) extends SimpleOp
-    class While(val condition: Value, val invariant: Spec, val body: Block) extends FlowOp
+    class While(val condition: Value, val invariant: SpecExpr, val body: Block) extends FlowOp
     class If(val condition: Value, val ifTrue: Block, val ifFalse: Block) extends FlowOp
     class Assert(val value: Value) extends SimpleOp
-    class AssertSpec(val spec: Spec) extends SimpleOp
-    class Fold(val predicate: Spec.Predicate) extends SimpleOp
-    class Unfold(val predicate: Spec.Predicate) extends SimpleOp
+    class AssertSpecExpr(val spec: SpecExpr) extends SimpleOp
+    class Fold(val predicate: SpecExpr.Predicate) extends SimpleOp
+    class Unfold(val predicate: SpecExpr.Predicate) extends SimpleOp
     class Error(val value: Value) extends SimpleOp
     class Return(val value: Option[Value]) extends SimpleOp
     class Noop(val value: Expr) extends SimpleOp
@@ -214,28 +244,54 @@ object IR {
 
   class Block(val operations: List[Op]) extends Node
 
-  sealed trait Spec extends Node
-  sealed trait FieldValue extends Spec
+  sealed trait SpecExpr extends Expr
+  sealed trait FieldValue extends SpecExpr
   sealed trait FieldAccess extends FieldValue
 
   class Predicate(
     val name: String,
     val arguments: List[Var],
-    val body: Option[Spec]
+    val body: Option[SpecExpr]
   ) extends Node
 
-  object Spec {
-    class ReturnValue extends FieldValue
-    class Member(val parent: FieldValue, val field: StructField) extends FieldAccess
-    class Dereference(val pointer: FieldValue, val pointerType: Type) extends FieldAccess
-    class Imprecision(val spec: Spec) extends Spec
-    class Logical(val left: Spec, val right: Spec, val op: LogicalOp) extends Spec
-    class Comparison(val left: Spec, val right: Spec, val op: ComparisonOp) extends Spec
-    class Conditional(val condition: Spec, val ifTrue: Spec, val ifFalse: Spec) extends Spec
-    class Arithmetic(val left: Spec, val right: Spec, val op: ArithmeticOp) extends Spec
-    class Negate(val value: Spec) extends Spec
-    class Not(val value: Spec) extends Spec
-    class Accessibility(val field: FieldAccess) extends Spec
-    class Predicate(val predicateName: String, val arguments: List[Spec]) extends Spec
+  object SpecExpr {
+    class ReturnValue(val returnValueType: Type) extends FieldValue {
+      def valueType: Option[Type] = Some(returnValueType)
+    }
+    class Member(val parent: FieldValue, val field: StructField) extends FieldAccess {
+      def valueType: Option[Type] = Some(field.valueType)
+    }
+    class Dereference(val pointer: FieldValue, val pointerType: Type) extends FieldAccess{
+      def valueType: Option[Type] = Some(pointerType)
+    }
+    class Imprecision(val spec: SpecExpr) extends SpecExpr {
+      override def valueType: Option[Type] = Some(Type.Bool)
+    }
+    class Logical(val left: SpecExpr, val right: SpecExpr, val op: LogicalOp) extends SpecExpr with Expr.LogicalExpr
+    class Comparison(val left: SpecExpr, val right: SpecExpr, val op: ComparisonOp) extends SpecExpr with Expr.ComparisonExpr
+
+    //TODO: can a conditional expression have different types in each branch?
+    class Conditional(val condition: SpecExpr, val ifTrue: SpecExpr, val ifFalse: SpecExpr) extends SpecExpr {
+      def valueType: Option[Type] = ifTrue.valueType match  {
+        case Some(valueTypeTrue) => {
+          Some(valueTypeTrue)
+        }
+        case None => {
+          ifFalse.valueType match {
+            case Some(valueTypeFalse) => {Some(valueTypeFalse)}
+            case None => None
+          }
+        }
+      }
+    }
+    class Arithmetic(val left: SpecExpr, val right: SpecExpr, val op: ArithmeticOp) extends SpecExpr with Expr.ArithmeticExpr
+    class Negate(val value: SpecExpr) extends SpecExpr with Expr.NegateExpr
+    class Not(val value: SpecExpr) extends SpecExpr with Expr.NotExpr
+    class Accessibility(val field: FieldAccess) extends SpecExpr {
+      override def valueType: Option[Type] = Some(Type.Bool)
+    }
+    class Predicate(val name: String, val arguments: List[SpecExpr]) extends SpecExpr with Expr.CalledExpr {
+      override def valueType: Option[Type] = Some(Type.Bool)
+    }
   }
 }

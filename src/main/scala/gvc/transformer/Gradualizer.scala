@@ -1,17 +1,18 @@
 package gvc.transformer
-import gvc.analyzer.ResolvedProgram
-import gvc.analyzer.ResolvedMethodDeclaration
+import gvc.analyzer.{LogicalOperation, ResolvedExpression, ResolvedLogical, ResolvedMethodDeclaration, ResolvedMethodDefinition, ResolvedProgram}
+
 import scala.collection.mutable.ListBuffer
-import gvc.analyzer.ResolvedLogical
-import gvc.analyzer.LogicalOperation
-import gvc.analyzer.ResolvedExpression
-import scala.collection.GenTraversableOnce
+import scala.collection.{GenTraversableOnce, mutable}
 
 
 
 object Gradualizer {
 
-    def crossJoin[T](list: List[List[T]]): List[List[T]] =
+    class GradualizerException(val message: String) extends RuntimeException {
+        override def getMessage(): String = message
+    }
+
+    def crossJoin[T](list: List[List[T]]): List[List[T]] = {
         list match {
             case xs :: Nil => xs map (List(_))
             case x :: xs => for {
@@ -19,20 +20,36 @@ object Gradualizer {
                 j <- crossJoin(xs)
             } yield List(i) ++ j
         }
+    }
 
     def gradualizeResolvedProgram(resolved: ResolvedProgram): List[ResolvedProgram] = {
         println("Gradualizing the provided specification...")
         
         var permutations = List[ResolvedProgram]()
-        var declarations = List()
-        var definitions = List()
-
         var permutedDeclarations = permuteMethodDeclarations(resolved.methodDeclarations)
+        var definitionMap = mutable.HashMap[String, ResolvedMethodDefinition]()
+        resolved.methodDefinitions.foreach((defn) => {
+            definitionMap += (defn.name -> defn)
+        })
 
         permutedDeclarations.foreach(declarationSet => {
+            var definitionSet = List[ResolvedMethodDefinition]()
+            declarationSet.foreach((decl) => {
+                val correspondingDefinition = definitionMap.get(decl.name)
+                correspondingDefinition match {
+                    case Some(defn: ResolvedMethodDefinition) => {
+                        definitionSet = ResolvedMethodDefinition(
+                            defn.parsed,
+                            decl,
+                            defn.body
+                        ) :: definitionSet
+                    }
+                    case None => throw new GradualizerException("Unable to find a definition for " + decl.name)
+                }
+            })
             permutations = ResolvedProgram(
                 declarationSet,
-                resolved.methodDefinitions,
+                definitionSet,
                 resolved.predicateDeclarations,
                 resolved.predicateDefinitions,
                 resolved.structDefinitions,

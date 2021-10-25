@@ -139,7 +139,7 @@ pointerMember ::= -> identifier
 indexMember ::= [ expression ]
 ```
 
-## Specifications
+## SpecExprifications
 
 **Notes**
  * Do not allow a new-line inside a single line annotation (`//@`)
@@ -147,24 +147,24 @@ indexMember ::= [ expression ]
  * Add `fold` and `unfold` specifications
 
 ```
-<specification> ::= <requiresSpecification> |
-                    <ensuresSpecification> |
-                    <loopInvariantSpecification> |
-                    <assertSpecification> |
-                    <unfoldSpecification> |
-                    <foldSpecification>
+<specification> ::= <requiresSpecExprification> |
+                    <ensuresSpecExprification> |
+                    <loopInvariantSpecExprification> |
+                    <assertSpecExprification> |
+                    <unfoldSpecExprification> |
+                    <foldSpecExprification>
 
-<requiresSpecification> ::= "requires" <expression> ";"
+<requiresSpecExprification> ::= "requires" <expression> ";"
 
-<ensuresSpecification> ::= "ensures" <expression> ";"
+<ensuresSpecExprification> ::= "ensures" <expression> ";"
 
-<loopInvariantSpecification> ::= "loop_invariant" <expression> ";"
+<loopInvariantSpecExprification> ::= "loop_invariant" <expression> ";"
 
-<assertSpecification> ::= "assert" <expression> ";"
+<assertSpecExprification> ::= "assert" <expression> ";"
 
-<unfoldSpecification> ::= "unfold" <identifier> "(" [expression ("," expression)*] ")" ";"
+<unfoldSpecExprification> ::= "unfold" <identifier> "(" [expression ("," expression)*] ")" ";"
 
-<foldSpecification> ::= "fold" <identifier> "(" [expression ("," expression)*] ")" ";"
+<foldSpecExprification> ::= "fold" <identifier> "(" [expression ("," expression)*] ")" ";"
 
 <annotations> ::= <annotation>*
 

@@ -2,29 +2,29 @@ import org.scalatest.funsuite._
 import gvc.parser._
 import fastparse.Parsed.{Success, Failure}
 
-class SpecificationsSpec extends AnyFunSuite {
+class SpecExprificationsSpecExpr extends AnyFunSuite {
   test("assert") {
-    val Success(List(spec: AssertSpecification), _) = Parser.parseSpec("/*@ assert true; @*/")
+    val Success(List(spec: AssertSpecExprification), _) = Parser.parseSpecExpr("/*@ assert true; @*/")
     assert(spec.value.asInstanceOf[BooleanExpression] == true)
   }
 
   test("ensures") {
-    val Success(List(spec: EnsuresSpecification), _) = Parser.parseSpec("/*@ ensures true; @*/")
+    val Success(List(spec: EnsuresSpecExprification), _) = Parser.parseSpecExpr("/*@ ensures true; @*/")
     assert(spec.value.asInstanceOf[BooleanExpression] == true)
   }
 
   test("requires") {
-    val Success(List(spec: RequiresSpecification), _) = Parser.parseSpec("/*@ requires true; @*/")
+    val Success(List(spec: RequiresSpecExprification), _) = Parser.parseSpecExpr("/*@ requires true; @*/")
     assert(spec.value.asInstanceOf[BooleanExpression] == true)
   }
 
   test("loop_invariant") {
-    val Success(List(spec: LoopInvariantSpecification), _) = Parser.parseSpec("/*@ loop_invariant true; @*/")
+    val Success(List(spec: LoopInvariantSpecExprification), _) = Parser.parseSpecExpr("/*@ loop_invariant true; @*/")
     assert(spec.value.asInstanceOf[BooleanExpression] == true)
   }
 
   test("fold") {
-    val Success(List(spec: FoldSpecification), _) = Parser.parseSpec("/*@ fold test(x); @*/")
+    val Success(List(spec: FoldSpecExprification), _) = Parser.parseSpecExpr("/*@ fold test(x); @*/")
     assert(spec.predicate.name == "test")
     
     val List(x: VariableExpression) = spec.arguments
@@ -32,7 +32,7 @@ class SpecificationsSpec extends AnyFunSuite {
   }
 
   test("unfold") {
-    val Success(List(spec: UnfoldSpecification), _) = Parser.parseSpec("/*@ unfold test(x); @*/")
+    val Success(List(spec: UnfoldSpecExprification), _) = Parser.parseSpecExpr("/*@ unfold test(x); @*/")
     assert(spec.predicate.name == "test")
     
     val List(x: VariableExpression) = spec.arguments
@@ -40,20 +40,20 @@ class SpecificationsSpec extends AnyFunSuite {
   }
 
   test("single-line annotation") {
-    val Success(List(s), _) = Parser.parseSpec("//@ ensures true;")
-    assert(s.isInstanceOf[EnsuresSpecification])
+    val Success(List(s), _) = Parser.parseSpecExpr("//@ ensures true;")
+    assert(s.isInstanceOf[EnsuresSpecExprification])
   }
 
   test("single-line annotation followed by single-line comment") {
-    val Success(List(s), _) = Parser.parseSpec("""
+    val Success(List(s), _) = Parser.parseSpecExpr("""
       //@ ensures true;
       // test comment
     """)
-    assert(s.isInstanceOf[EnsuresSpecification])
+    assert(s.isInstanceOf[EnsuresSpecExprification])
   }
 
   test("do not allow multi-line expressions inside single-line annotations") {
-      val Failure(_, _, _) = Parser.parseSpec("""
+      val Failure(_, _, _) = Parser.parseSpecExpr("""
         //@ assert (
           true
         );
@@ -61,14 +61,14 @@ class SpecificationsSpec extends AnyFunSuite {
   }
 
   test("multiple multi-line annotations") {
-    val Success(List(_: EnsuresSpecification, _: EnsuresSpecification), _) = Parser.parseSpec("""
+    val Success(List(_: EnsuresSpecExprification, _: EnsuresSpecExprification), _) = Parser.parseSpecExpr("""
       /*@ensures true; @*/
       /*@ensures false; @*/
     """)
   }
 
   test("multiple specs in a multi-line annotation") {
-    val Success(List(_: EnsuresSpecification, _: EnsuresSpecification), _) = Parser.parseSpec("""
+    val Success(List(_: EnsuresSpecExprification, _: EnsuresSpecExprification), _) = Parser.parseSpecExpr("""
       /*@
         ensures true;
         ensures false;
@@ -77,7 +77,7 @@ class SpecificationsSpec extends AnyFunSuite {
   }
 
   test("comments inside multi-line annotation") {
-    val Success(List(_: AssertSpecification), _) = Parser.parseSpec("""
+    val Success(List(_: AssertSpecExprification), _) = Parser.parseSpecExpr("""
     /*@
       assert /* comment */ true;
       // comment
@@ -86,13 +86,13 @@ class SpecificationsSpec extends AnyFunSuite {
   }
 
   test("treat @ in annotation as whitespace") {
-    //val Success(List(AssertSpecification(_), AssertSpecification(_)), _) = 
-    val Success(specs, _) = Parser.parseSpec("""
+    //val Success(List(AssertSpecExprification(_), AssertSpecExprification(_)), _) =
+    val Success(specs, _) = Parser.parseSpecExpr("""
       //@@ assert @true@;@
       /*@ assert@true;@@*/
     """)
 
     assert(specs.length == 2)
-    assert(specs.forall(_.isInstanceOf[AssertSpecification]))
+    assert(specs.forall(_.isInstanceOf[AssertSpecExprification]))
   }
 }
