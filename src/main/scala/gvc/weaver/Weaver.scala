@@ -1,6 +1,4 @@
 package gvc.weaver
-
-import scala.collection.mutable.ListBuffer
 import gvc.transformer.IR
 import viper.silver.{ast => vpr}
 
@@ -37,10 +35,8 @@ object Weaver {
     )
   }
 
-  private def unexpected(node: vpr.Node): Nothing =
-    throw new WeaverException("Encountered unexpected Silver node: " + node.toString())
   private def unexpected(nodes: List[vpr.Node]): Nothing = nodes match {
-    case some :: _ => unexpected(some)
+    case node :: _ => throw new WeaverException("Encountered unexpected Silver node: " + node.toString())
     case Nil => throw new WeaverException("Expected Silver node")
   }
 
@@ -67,51 +63,49 @@ object Weaver {
     })
     
     remaining match {
-      case node :: _ => unexpected(node) // Not all Silver nodes were consumed
-      case _ => output
+      case Nil => output
+      case _ => unexpected(remaining) // Not all Silver nodes were consumed
     }
   }
 
-  private def parseSilver(op: IR.Op, silver: List[vpr.Node]): (Seq[vpr.Node], List[vpr.Node]) = op match {
-    case assign: IR.Op.AssignVar => {
-      assign.value match {
-        case invoke: IR.Expr.Invoke => silver match {
-          case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
-          case node => unexpected(node)
+  private def consume[T <: vpr.Stmt : scala.reflect.ClassTag](silver: List[vpr.Node]) = silver match {
+    case t :: rest if scala.reflect.classTag[T].runtimeClass.isInstance(t) => (Seq(t), rest)
+    case nodes => unexpected(nodes)
+  }
+
+  private def parseSilver(op: IR.Op, silver: List[vpr.Node]): (Seq[vpr.Node], List[vpr.Node]) = {
+    op match {
+      case assign: IR.Op.AssignVar => {
+        assign.value match {
+          case invoke: IR.Expr.Invoke => consume[vpr.MethodCall](silver)
+          case alloc: IR.Expr.Alloc => consume[vpr.NewStmt](silver)
+          case _ => consume[vpr.LocalVarAssign](silver)
         }
-        case _ => silver match {
-          case (node: vpr.LocalVarAssign) :: tail => (Seq(node), tail)
-          case node => unexpected(node)
-        }
       }
-    }
 
-    case _: IR.Op.AssignMember => ???
-    case _: IR.Op.AssignArray => ???
-    case _: IR.Op.AssignArrayMember => ???
-    case _: IR.Op.AssignPtr => ???
-    case _: IR.Op.While => ???
-    case _: IR.Op.If => ???
-    case _: IR.Op.Assert => ???
-    case _: IR.Op.AssertSpec => ???
-    case _: IR.Op.Fold => ???
-    case _: IR.Op.Unfold => ???
-    case _: IR.Op.Error => ???
+      case _: IR.Op.AssignMember
+        | _ : IR.Op.AssignPtr => consume[vpr.FieldAssign](silver)
 
-    case ret: IR.Op.Return => ret.value match {
-      case None => (Seq.empty, silver)
-      case Some(_) => silver match {
-        case (node: vpr.LocalVarAssign) :: tail => (Seq(node), tail)
-        case node => unexpected(node)
+      case _: IR.Op.AssignArray => ???
+      case _: IR.Op.AssignArrayMember => ???
+
+      case _: IR.Op.While => consume[vpr.While](silver)
+      case _: IR.Op.If => consume[vpr.If](silver)
+      case _: IR.Op.Assert => (Seq(), silver)
+      case _: IR.Op.AssertSpec => consume[vpr.Assert](silver)
+      case _: IR.Op.Fold => consume[vpr.Fold](silver)
+      case _: IR.Op.Unfold => consume[vpr.Unfold](silver)
+      case _: IR.Op.Error => consume[vpr.Assert](silver)
+
+      case ret: IR.Op.Return => ret.value match {
+        case None => (Seq.empty, silver)
+        case Some(_) => consume[vpr.LocalVarAssign](silver)
       }
-    }
 
-    case noop: IR.Op.Noop => noop.value match {
-      case invoke: IR.Expr.Invoke => silver match {
-        case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
-        case node => unexpected(node)
+      case noop: IR.Op.Noop => noop.value match {
+        case invoke: IR.Expr.Invoke => consume[vpr.MethodCall](silver)
+        case _ => (Seq.empty, silver)
       }
-      case _ => (Seq.empty, silver)
     }
   }
 }
