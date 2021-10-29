@@ -1,0 +1,46 @@
+#use <conio>
+#use "fieldaccess.h0"
+
+struct Node {
+    int val;
+    struct Node* next;
+    /*INJECTED*/ int instanceID; 
+};
+typedef struct Node Node;
+
+
+
+int fib(int i, /*INJECTED:*/ OwnedFields* fields ){
+    if (i <= 1){
+        return 1;
+    }else{
+        return fib(i - 1) + fib(i - 2);
+    }
+}
+
+int main(){
+
+    OwnedFields* accessibility = alloc(OwnedFields);
+    initOwnedFields(accessibility);
+
+    //---ALLOCATION---
+
+    Node* node = alloc(Node);
+    node->val = 5;
+    node->next = NULL;
+
+    /*INJECTED:*/ node->instanceID = addStruct(accessibility, 2);
+
+    /*
+        Both number of fields present in a given struct and a mapping
+        from field names to field IDs are maintained during compilation.
+        The program will abort if an invalid struct ID or field ID is passed
+        to a function call, which will be prevented by a correct compiler.
+    */
+
+    /*INJECTED:*/ disableAll(accessibility);
+    fib(5);
+    
+
+    return 0;
+}

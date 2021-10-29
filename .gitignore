@@ -15,6 +15,8 @@ project/metals.sbt
 
 # vs code
 .vscode
+.vscode-server
+.ssh
 
 # scala 3
 .tasty
@@ -50,3 +52,9 @@ bin/
 
 #general
 *.class
+
+Dockerfile
+docker.sh
+
+*.out
+.zcompdump
