@@ -50,3 +50,11 @@ bin/
 
 #general
 *.class
+
+#docker
+Dockerfile
+.zcompdump
+docker.sh
+
+.vscode-server
+.ssh
