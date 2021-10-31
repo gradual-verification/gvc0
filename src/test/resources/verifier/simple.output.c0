@@ -1,0 +1,12 @@
+int main()
+{
+  return 0;
+}
+
+int test(int value)
+{
+  bool __1;
+  __1 = value == 0;
+  assert(__1);
+  return value;
+}
