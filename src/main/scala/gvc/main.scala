@@ -9,6 +9,7 @@ import gvc.transformer._
 import viper.silicon.Silicon
 import viper.silver.verifier
 import viper.silver.verifier
+import gvc.weaver.Weaver
 
 object Main extends App {
 
@@ -31,10 +32,12 @@ object Main extends App {
   val files = ListBuffer[String]()
   var printC0 = false
   var printSilver = false
+  var printWeaving = false
 
   for (arg <- args) arg match {
     case "--c0" => printC0 = true
     case "--silver" => printSilver = true
+    case "--weave" => printWeaving = true
     case flag if flag.startsWith("--") => {
       println(s"Invalid flag '$flag'")
       sys.exit(1)
@@ -47,7 +50,7 @@ object Main extends App {
 
   for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
     println("Runtime checks required for " + exp.toString() + ":")
-    println(checks.checks.map(_.toString()).mkString(" && "))
+    println(checks.map(_.checks.toString()).mkString(" && "))
   }
 
   silicon.stop()
@@ -77,18 +80,15 @@ object Main extends App {
       sys.exit(0)
     }
 
-    val ir = Transformer.programToIR(resolved)
+    var ir = Transformer.programToIR(resolved)
 
-    // TODO: Implement printer for whole program
-    val c0 = ir.methods.collect { case m: IR.MethodImplementation => m }
-      .map(CNaughtPrinter.printMethod(_))
-      .mkString("\n")
+    val silver = SilverOutput.program(ir)
 
     val silver = SilverOutput.program(ir)
 
     if (printC0) {
       println(s"C0 output for '$name':")
-      println(c0)
+      println(CNaughtPrinter.printProgram(ir))
     }
 
     if (printSilver) {
@@ -99,7 +99,15 @@ object Main extends App {
     println(s"Verifying '$name'...")
 
     silicon.verify(silver) match {
-      case verifier.Success => println(s"Verified successfully!")
+      case verifier.Success => {
+        println(s"Verified successfully!")
+
+        if (printWeaving) {
+          val woven = Weaver.weave(ir, silver)
+          println(s"Woven output for '$name':")
+          println(CNaughtPrinter.printProgram(woven))
+        }
+      }
       case verifier.Failure(errors) => {
         println(s"Verification errors in '$name':")
         println(errors.map(_.readableMessage).mkString("\n"))

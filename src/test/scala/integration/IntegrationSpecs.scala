@@ -13,6 +13,7 @@ import gvc.transformer.IR
 import gvc.transformer.SilverOutput
 import gvc.analyzer.SpecificationValidator
 import gvc.analyzer.ImplementationValidator
+import gvc.weaver.Weaver
 
 class IntegrationSpecs extends AnyFunSuite {
   val testDirs = List(
@@ -135,8 +136,10 @@ class IntegrationSpecs extends AnyFunSuite {
                 assert(expectedIR.get == methods)
 
               if (expectedSilver.isDefined) {
-                val silver = SilverOutput.program(ir).toString
-                assert(expectedSilver.get == silver)
+                val silver = SilverOutput.program(ir)
+                assert(expectedSilver.get == silver.toString())
+                
+                Weaver.weave(ir, silver)
               }
               ValidProgram
             }

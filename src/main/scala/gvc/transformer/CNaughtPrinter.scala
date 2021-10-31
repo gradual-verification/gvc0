@@ -20,6 +20,27 @@ object CNaughtPrinter {
     printer.toString()
   }
 
+  def printProgram(program: IR.Program): String = {
+    val printer = new Printer()
+
+    var first = true
+
+    // TODO: Print structs and method headers so that everything can compile
+    for (method <- program.methods) {
+      method match {
+        case impl: IR.MethodImplementation => {
+          if (first) first = false
+          else printer.println()
+
+          printer.print(impl, printMethod)
+        }
+        case _ => ()
+      }
+    }
+
+    printer.toString()
+  }
+
   def printMethod(method: IR.MethodImplementation, printer: Printer): Unit = {
     // Return type
     printer.print(method.returnType.map(typeName).getOrElse("void"))
