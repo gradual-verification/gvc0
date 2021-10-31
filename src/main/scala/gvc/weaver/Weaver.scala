@@ -1,9 +1,8 @@
 package gvc.weaver
-
-import scala.collection.mutable.ListBuffer
 import gvc.transformer.IR
 import gvc.transformer.IR.Op
 import viper.silver.{ast => vpr}
+import scala.collection.mutable.ListBuffer
 
 object Weaver {
   class WeaverException(val message: String) extends RuntimeException {
@@ -27,107 +26,214 @@ object Weaver {
   }
 
   private def weaveMethod(c0: IR.MethodImplementation, silver: vpr.Method): IR.MethodImplementation = {
+    val scope = new Scope(c0)
+
+    def weaveBlock(input: IR.Block, verified: vpr.Seqn): IR.Block = {
+      new IR.Block(weave(input.operations, verified.ss).toList)
+    }
+
+    def generateChecks(node: vpr.Node, returnValue: Option[IR.Value]): Seq[IR.Op] = {
+      var ops = Seq[IR.Op]()
+      val visitor: PartialFunction[vpr.Node, Unit] = {
+        case n => {
+          for (check <- n.getChecks()) {
+            ops = ops ++ CheckImplementation.generate(check, scope, returnValue)
+          }
+        }
+      }
+
+      node.visit(visitor)
+      ops
+    }
+
+    def weave(input: Seq[IR.Op], verified: Seq[vpr.Stmt]): ListBuffer[IR.Op] = {
+      val ops = ListBuffer[IR.Op]()
+      var remaining = verified.toList
+
+      def addChecks(stmt: vpr.Stmt, returnValue: Option[IR.Value] = None): Unit = {
+        ops ++= generateChecks(stmt, returnValue)
+      }
+
+      for (op <- input) {
+        op match {
+          case _: IR.Op.AssignVar => {
+            val (stmt, rest) = remaining match {
+              case (c: vpr.MethodCall) :: r => (c, r)
+              case (n: vpr.NewStmt) :: r => (n, r)
+              case (a: vpr.LocalVarAssign) :: r => (a, r)
+              case l => unexpected(l)
+            }
+
+            remaining = rest
+            addChecks(stmt)
+            ops += op
+          }
+
+          case _: IR.Op.AssignMember | _: IR.Op.AssignPtr =>
+            remaining match {
+              case (a: vpr.FieldAssign) :: tail => {
+                remaining = tail
+                addChecks(a)
+                ops += op
+              }
+              case l => unexpected(l)
+            }
+
+          case _: IR.Op.AssignArray => ???
+          case _: IR.Op.AssignArrayMember => ???
+
+          case whileOp: IR.Op.While => {
+            remaining match {
+              case (whileVerified: vpr.While) :: rest => {
+                remaining = rest
+                addChecks(whileVerified)
+
+                ops += new IR.Op.While(
+                  whileOp.condition,
+                  new IR.Literal.Bool(true), // eliminate invariant
+                  weaveBlock(whileOp.body, whileVerified.body))
+              }
+
+              case l => unexpected(l)
+            }
+          }
+          case ifOp: IR.Op.If =>
+            remaining match {
+              case (ifVerified: vpr.If) :: rest => {
+                remaining = rest
+                addChecks(ifVerified)
+                ops += new IR.Op.If(
+                  ifOp.condition,
+                  weaveBlock(ifOp.ifTrue, ifVerified.thn),
+                  weaveBlock(ifOp.ifFalse, ifVerified.els))
+              }
+              case l => unexpected(l)
+            }
+
+          case _: IR.Op.Assert => ops += op
+
+          case _: IR.Op.AssertSpec =>
+            remaining match {
+              case (assert: vpr.Assert) :: rest => {
+                remaining = rest
+                addChecks(assert)
+                // drop specification assert but add the required dynamic checks
+              }
+              case l => unexpected(l)
+            }
+
+          case _: IR.Op.Fold =>
+            remaining match {
+              case (f: vpr.Fold) :: rest => {
+                remaining = rest
+                addChecks(f)
+                // drop the fold but add the required dynamic checks
+              }
+              case l => unexpected(l)
+            }
+
+          case _: IR.Op.Unfold =>
+            remaining match {
+              case (uf: vpr.Unfold) :: rest => {
+                remaining = rest
+                addChecks(uf)
+                // drop the unfold but add the required dynamic checks
+              }
+              case l => unexpected(l)
+            }
+
+          case _: IR.Op.Error =>
+            remaining match {
+              case (a: vpr.Assert) :: rest => {
+                remaining = rest
+                addChecks(a) // there shouldn't ever be any runtime checks
+                ops += op
+              }
+              case l => unexpected(l)
+            }
+
+          case retOp: IR.Op.Return => {
+            retOp.value match {
+              case Some(value) => {
+                remaining match {
+                  case (assign: vpr.LocalVarAssign) :: rest => {
+                    remaining = rest
+                    // Will there ever be a dynamic check that refers to the return value here?
+                    // It seems that a local var assign would not result in a check for the result value
+                    addChecks(assign, returnValue = retOp.value)
+                  }
+                  case l => unexpected(l)
+                }
+              }
+
+              // If no return value, no Silver code is emitted
+              case None => ()
+            }
+
+            // Check post conditions
+            for (post <- silver.posts) {
+              ops ++= generateChecks(post, returnValue = retOp.value)
+            }
+
+            ops += retOp
+          }
+
+          case noop: IR.Op.Noop => {
+            noop.value match {
+              case call: IR.Expr.Invoke => {
+                remaining match {
+                  case (callVerified: vpr.MethodCall) :: rest => {
+                    remaining = rest
+                    addChecks(callVerified)
+                    ops += noop
+                  }
+
+                  case l => unexpected(l)
+                }
+              }
+
+              case _ => () // drop other noops
+            }
+          }
+        }
+      }
+
+      if (!remaining.isEmpty)
+        unexpected(remaining)
+
+      ops
+    }
+
+    // Check the return type of the function
+    val body = weave(c0.body.operations, silver.body.get.ss)
+    c0.returnType match {
+      // If the method does not have a return type, the postcondition cannot refer to
+      // the return value, so we can insert the dynamic checks at the tail without having
+      // a return statment.
+      case None => {
+        for (post <- silver.posts) {
+          body ++= generateChecks(post, returnValue = None)
+        }
+      }
+
+      // If method has a return type, it will need to return a value, so the postcondition
+      // checks will be inserted at the return location where we can access the return value
+      case Some(_) => ()
+    }
+
     new IR.MethodImplementation(
       c0.name,
       c0.returnType,
       c0.arguments,
-      c0.precondition,
-      c0.postcondition,
-      c0.variables,
-      new IR.Block(weaveOps(c0.body.operations, silver.body.get.ss.toList))
+      new IR.Literal.Bool(true), // drop precondition
+      new IR.Literal.Bool(true), // drop postcondition
+      scope.getVars(),
+      new IR.Block(body.toList)
     )
   }
 
-  private def unexpected(node: vpr.Node): Nothing =
-    throw new WeaverException("Encountered unexpected Silver node: " + node.toString())
   private def unexpected(nodes: List[vpr.Node]): Nothing = nodes match {
-    case some :: _ => unexpected(some)
+    case node :: _ => throw new WeaverException("Encountered unexpected Silver node: " + node.toString())
     case Nil => throw new WeaverException("Expected Silver node")
-  }
-
-  private def collectChecks(node: vpr.Node): Seq[IR.Op] = {
-    var checks = Seq[IR.Op]()
-    val visitor: PartialFunction[vpr.Node, Unit] =  {
-      case n => checks = checks ++ RuntimeCheckGenerator.generateChecks(n)
-    }
-
-    node.visit(visitor)
-    checks
-  }
-
-
-  private def weaveOps(ops: List[IR.Op], silverNodes: List[vpr.Node]): List[IR.Op] = {
-    var remaining = silverNodes
-    val output = ops.flatMap({ op =>
-      print(op.getClass().toString())
-      val (silverOp, tail) = parseSilver(op, remaining)
-      remaining = tail
-      silverOp.flatMap(collectChecks) :+ op
-    })
-    
-    remaining match {
-      case node :: _ => unexpected(node) // Not all Silver nodes were consumed
-      case _ => output
-    }
-  }
-
-  private def parseSilver(op: IR.Op, silver: List[vpr.Node]): (Seq[vpr.Node], List[vpr.Node]) = op match {
-    case op: IR.SimpleOp => op match {
-      case assign: Op.AssignVar => assign.value match {
-        case invoke: IR.Expr.Invoke => silver match {
-          case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
-          case node => unexpected(node)
-        }
-        case _ => silver match {
-          case (node: vpr.LocalVarAssign) :: tail => (Seq(node), tail)
-          case node => unexpected(node)
-        }
-      }
-      case member: Op.AssignMember => member.value match {
-        case invoke: IR.Expr.Invoke => silver match {
-          case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
-          case node => unexpected(node)
-        }
-        case _ => silver match {
-          case (node: vpr.FieldAssign) :: tail => (Seq(node), tail)
-          case node => unexpected(node)
-        }
-      }
-
-      case array: Op.AssignArray => ???
-      case member: Op.AssignArrayMember => ???
-      case ptr: Op.AssignPtr => ???
-      case assert: Op.Assert => silver match {
-        case (node: vpr.Assert) :: tail => (Seq(node), tail)
-        case node => unexpected(node)
-      }
-      case spec: Op.AssertSpec => ???
-      case fold: Op.Fold => ???
-      case unfold: Op.Unfold => ???
-      case error: Op.Error => ???
-      case ret: Op.Return => ret.value match {
-        case None => (Seq.empty, silver)
-        case Some(_) => silver match {
-          case (node: vpr.LocalVarAssign) :: tail => (Seq(node), tail)
-          case node => unexpected(node)
-        }
-      }
-      case noop: Op.Noop => noop.value match {
-        case invoke: IR.Expr.Invoke => silver match {
-          case (node: vpr.MethodCall) :: tail => (Seq(node), tail)
-          case node => unexpected(node)
-        }
-        case _ => (Seq.empty, silver)
-      }
-    }
-    case op: IR.FlowOp => op match {
-      case value: Op.While => silver match {
-        case (node: vpr.While) :: tail => (Seq(node), tail)
-      }
-      case value: Op.If => silver match {
-        case (node: vpr.If) :: tail => (Seq(node), tail)
-        case node => unexpected(node)
-      }
-    }
   }
 }

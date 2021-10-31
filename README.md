@@ -24,7 +24,7 @@ Run the C0 frontend and verify using Silicon in SBT:
 
 ```sh
 sbt
-  run <file.c0> [--c0] [--silver]
+  run <file.c0> [--c0] [--silver] [--weave]
 ```
 
-Use `--c0` or `--silver` to print the generated C0 or Silver source code, respectively.
+Use `--c0` or `--silver` to print the generated C0 or Silver source code, respectively. Use `--weave` to insert the required runtime checks and print the resulting C0 source code.
