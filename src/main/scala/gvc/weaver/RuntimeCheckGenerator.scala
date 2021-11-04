@@ -26,18 +26,7 @@ object RuntimeCheckGenerator {
         case NullLit() => IR.Literal.Null
       }
       case predicate: AccessPredicate => predicate match {
-        case MagicWand(left, right) => ???
         case FieldAccessPredicate(loc, perm) => ???
-        case PredicateAccessPredicate(loc, perm) => ???
-      }
-      case exp: PermExp => ???
-      case access: LocationAccess => access match {
-        case FieldAccess(rcv, field) => ???
-        case PredicateAccess(args, predicateName) => ???
-      }
-      case access: ResourceAccess => access match {
-        case MagicWand(left, right) => ???
-        case access: LocationAccess => ???
       }
       case CondExp(cond, thn, els) => ???
       case Unfolding(acc, body) => ???
