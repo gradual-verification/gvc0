@@ -14,7 +14,7 @@ class Parser(val state: ParserState) extends Definitions {
   def expressionProgram[_: P]: P[Expression] = P(Start ~ expression ~ End)
   def statementProgram[_: P]: P[Statement] = P(Start ~ statement ~ End)
   def definitionProgram[_: P]: P[Seq[Definition]] = P(Start ~ definition ~ End)
-  def specificationProgram[_: P]: P[List[Specification]] = P(Start ~ annotations ~ End)
+  def specificationProgram[_: P]: P[List[SpecExprification]] = P(Start ~ annotations ~ End)
 }
 
 object Parser {
@@ -35,7 +35,7 @@ object Parser {
     fastparse.parse(src, parser.definitionProgram(_))
   }
 
-  def parseSpec(src: String): Parsed[List[Specification]] = {
+  def parseSpecExpr(src: String): Parsed[List[SpecExprification]] = {
     val parser = new Parser(src)
     fastparse.parse(src, parser.specificationProgram(_))
   }

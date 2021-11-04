@@ -32,12 +32,11 @@ object Main extends App {
   val files = ListBuffer[String]()
   var printC0 = false
   var printSilver = false
-  var printWeaving = false
-
+  var gradualize = false
   for (arg <- args) arg match {
     case "--c0" => printC0 = true
     case "--silver" => printSilver = true
-    case "--weave" => printWeaving = true
+    case "--gradualize" => gradualize = true
     case flag if flag.startsWith("--") => {
       println(s"Invalid flag '$flag'")
       sys.exit(1)
@@ -50,7 +49,7 @@ object Main extends App {
 
   for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
     println("Runtime checks required for " + exp.toString() + ":")
-    println(checks.map(_.checks.toString()).mkString(" && "))
+    println(checks.map(_.toString()).mkString(" && "))
   }
 
   silicon.stop()
@@ -71,7 +70,7 @@ object Main extends App {
     TypeChecker.check(resolved, errors)
     AssignmentValidator.validate(resolved, errors)
     ReturnValidator.validate(resolved, errors)
-    SpecificationValidator.validate(resolved, errors)
+    SpecExprificationValidator.validate(resolved, errors)
     ImplementationValidator.validate(resolved, errors)
 
     if (!errors.errors.isEmpty) {
@@ -79,39 +78,50 @@ object Main extends App {
       println(errors.errors.map(_.toString()).mkString("\n"))
       sys.exit(0)
     }
-
-    var ir = Transformer.programToIR(resolved)
-
-    val silver = SilverOutput.program(ir)
-
-    val silver = SilverOutput.program(ir)
-
-    if (printC0) {
-      println(s"C0 output for '$name':")
-      println(CNaughtPrinter.printProgram(ir))
+    var resolved_asts = List[ResolvedProgram](resolved)
+    if(gradualize){
+      resolved_asts = Gradualizer.gradualizeResolvedProgram(resolved)
     }
+    resolved_asts.foreach((ast) => {
+      print(ast.getClass)
+    })
 
-    if (printSilver) {
-      println(s"Silver output for '$name':")
-      println(silver.toString())
-    }
+    var ir = resolved_asts.map(Transformer.programToIR)
 
-    println(s"Verifying '$name'...")
+    var silver = List[viper.silver.ast.Program]()
 
-    silicon.verify(silver) match {
-      case verifier.Success => {
-        println(s"Verified successfully!")
+    ir.foreach((nextIR) => {
+      
+      val c0 = nextIR.methods.collect { case m: IR.MethodImplementation => m }
+          .map(CNaughtPrinter.printMethod(_, gradualize))
+          .mkString("\n")
 
-        if (printWeaving) {
-          val woven = Weaver.weave(ir, silver)
-          println(s"Woven output for '$name':")
-          println(CNaughtPrinter.printProgram(woven))
+      val nextSilver = SilverOutput.program(nextIR)
+
+      if (printC0) {
+        println(s"C0 output for '$name':")
+        println(c0)
+      }
+
+      if (printSilver) {
+        println(s"Silver output for '$name':")
+        println(nextSilver.toString())
+      }
+
+      silver = nextSilver :: silver
+    })
+    // TODO: Implement printer for whole program
+    silver.foreach(silverIR => {
+      println(s"Verifying '$name'...")
+
+      silicon.verify(silver.head) match {
+        case verifier.Success => println(s"Verified successfully!")
+        case verifier.Failure(errors) => {
+          println(s"Verification errors in '$name':")
+          println(errors.map(_.readableMessage).mkString("\n"))
         }
       }
-      case verifier.Failure(errors) => {
-        println(s"Verification errors in '$name':")
-        println(errors.map(_.readableMessage).mkString("\n"))
-      }
-    }
+    })
+    
   }
 }

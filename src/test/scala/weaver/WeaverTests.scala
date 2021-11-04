@@ -20,7 +20,7 @@ class WeaverTests extends AnyFunSuite {
 
     val woven = Weaver.weave(c0, silver)
     val main = woven.methods.find(_.name == "main").get.asInstanceOf[IR.MethodImplementation]
-    val output = CNaughtPrinter.printMethod(main)
+    val output = CNaughtPrinter.printMethod(main, false)
 
     assert(output ==
       """|int main()
@@ -43,7 +43,7 @@ class WeaverTests extends AnyFunSuite {
         
         AssignmentValidator.validate(result, sink)
         ReturnValidator.validate(result, sink)
-        SpecificationValidator.validate(result, sink)
+        SpecExprificationValidator.validate(result, sink)
         ImplementationValidator.validate(result, sink)
         assert(sink.errors.isEmpty)
 

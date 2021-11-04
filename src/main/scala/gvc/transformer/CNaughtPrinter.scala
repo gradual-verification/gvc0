@@ -1,6 +1,7 @@
 package gvc.transformer
 
 object CNaughtPrinter {
+  private var printSpecifications: Boolean = false
   def typeName(t: IR.ValueType): String = {
     t match {
       case IR.Type.Array(memberType) => typeName(memberType) + "[]"
@@ -14,34 +15,14 @@ object CNaughtPrinter {
     }
   }
 
-  def printMethod(method: IR.MethodImplementation): String = {
+  def printMethod(method: IR.MethodImplementation, printSpecs: Boolean): String = {
     val printer = new Printer()
+    this.printSpecifications = printSpecs
     printer.print(method, printMethod)
     printer.toString()
   }
 
-  def printProgram(program: IR.Program): String = {
-    val printer = new Printer()
-
-    var first = true
-
-    // TODO: Print structs and method headers so that everything can compile
-    for (method <- program.methods) {
-      method match {
-        case impl: IR.MethodImplementation => {
-          if (first) first = false
-          else printer.println()
-
-          printer.print(impl, printMethod)
-        }
-        case _ => ()
-      }
-    }
-
-    printer.toString()
-  }
-
-  def printMethod(method: IR.MethodImplementation, printer: Printer): Unit = {
+  private def printMethod(method: IR.MethodImplementation, printer: Printer): Unit = {
     // Return type
     printer.print(method.returnType.map(typeName).getOrElse("void"))
     printer.print(" ")
@@ -50,6 +31,20 @@ object CNaughtPrinter {
     printer.print(method.arguments.map(v => typeName(v.varType) + " " + v.name).mkString(", "))
     printer.println(")")
     printer.println("{")
+
+    if(this.printSpecifications){
+      printer.printIndented(method.precondition, (pre: IR.SpecExpr, printer) => {
+        printer.print("/@ requires ")
+        printer.print(pre, printExpr)
+        printer.println("; @*/")
+      })
+      printer.printIndented(method.postcondition, (pre: IR.SpecExpr, printer) => {
+        printer.print("/@ ensures ")
+        printer.print(pre, printExpr)
+        printer.println("; @*/")
+      })
+    }
+
     for (variable <- method.variables) {
       printer.printIndented(variable, (v: IR.Var, printer) => {
         printer.print(typeName(v.varType))
@@ -136,8 +131,27 @@ object CNaughtPrinter {
           }
         }
 
-        // Do not output assert specifications
-        case _: IR.Op.AssertSpec | _: IR.Op.Fold | _: IR.Op.Unfold => ()
+        case assertSpec: IR.Op.AssertSpecExpr => {
+          if(this.printSpecifications){
+            printer.print("assert(")
+            printer.print(assertSpec.spec, printExpr)
+            printer.println(");")
+          }
+        }
+        case fold: IR.Op.Fold => {
+          if (this.printSpecifications) {
+            printer.print("fold(")
+            printer.print(fold.predicate, printExpr)
+            printer.println(");")
+          }
+        }
+        case unfold: IR.Op.Unfold => {
+          if(this.printSpecifications) {
+            printer.print("fold(")
+            printer.print(unfold.predicate, printExpr)
+            printer.println(");")
+          }
+        }
 
         case assert: IR.Op.Assert => {
           printer.print("assert(");
@@ -205,11 +219,15 @@ object CNaughtPrinter {
       }
     }
 
-    def printExpr(expr: IR.Expr, printer: Printer) = {
+    def printExpr(expr: IR.Expr, printer: Printer): Unit = {
       expr match {
+        case impr: IR.SpecExpr.Imprecision => {
+          printer.print("? && ")
+          printer.print(impr.spec, printExpr)
+        }
         case value: IR.Value => printer.print(value, printValue)
-        case a: IR.Expr.Arithmetic => {
-          printer.print(a.left, printValue)
+        case a: IR.Expr.ArithmeticExpr => {
+          printer.print(a.left, printExpr)
           printer.print(" ")
           printer.print(a.op match {
             case IR.ArithmeticOp.Add => "+"
@@ -218,11 +236,11 @@ object CNaughtPrinter {
             case IR.ArithmeticOp.Divide => "/"
           })
           printer.print(" ")
-          printer.print(a.right, printValue)
+          printer.print(a.right, printExpr)
         }
 
-        case c: IR.Expr.Comparison => {
-          printer.print(c.left, printValue)
+        case c: IR.Expr.ComparisonExpr => {
+          printer.print(c.left, printExpr)
           printer.print(" ")
           printer.print(c.op match {
             case IR.ComparisonOp.Equal => "=="
@@ -233,62 +251,55 @@ object CNaughtPrinter {
             case IR.ComparisonOp.GreaterThanEqual => ">="
           })
           printer.print(" ")
-          printer.print(c.right, printValue)
+          printer.print(c.right, printExpr)
         }
 
-        case l: IR.Expr.Logical => {
-          printer.print(l.left, printValue)
+        case l: IR.Expr.LogicalExpr => {
+          printer.print(l.left, printExpr)
           printer.print(" ")
           printer.print(l.op match {
             case IR.LogicalOp.And => "&&"
             case IR.LogicalOp.Or => "||"
           })
           printer.print(" ")
-          printer.print(l.right, printValue)
+          printer.print(l.right, printExpr)
         }
 
-        case arr: IR.Expr.ArrayAccess => {
+        case arr: IR.Expr.ArrayExpr => {
           printer.print(arr.subject.name)
           printer.print("[")
           printer.print(arr.index, printValue)
           printer.print("]")
         }
 
-        case arrField: IR.Expr.ArrayFieldAccess => {
-          printer.print(arrField.subject.name)
-          printer.print("[")
-          printer.print(arrField.index, printValue)
-          printer.print("]")
-        }
-
-        case deref: IR.Expr.Deref => {
+        case deref: IR.ProgramExpr.Deref => {
           printer.print("*")
           printer.print(deref.subject.name)
         }
 
-        case negate: IR.Expr.Negation => {
+        case negate: IR.Expr.NegateExpr => {
           printer.print("-")
-          printer.print(negate.value, printValue)
+          printer.print(negate.value, printExpr)
         }
 
-        case not: IR.Expr.Not => {
+        case not: IR.Expr.NotExpr => {
           printer.print("!")
-          printer.print(not.value, printValue)
+          printer.print(not.value, printExpr)
         }
 
-        case member: IR.Expr.Member => {
+        case member: IR.ProgramExpr.Member => {
           printer.print(member.subject.name)
           printer.print("->")
           printer.print(member.field.name)
         }
 
-        case alloc: IR.Expr.Alloc => {
+        case alloc: IR.ProgramExpr.Alloc => {
           printer.print("alloc(")
           printer.print(typeName(alloc.memberType))
           printer.print(")")
         }
 
-        case allocArray: IR.Expr.AllocArray => {
+        case allocArray: IR.ProgramExpr.AllocArray => {
           printer.print("alloc_array(")
           printer.print(typeName(allocArray.memberType))
           printer.print(", ")
@@ -296,19 +307,22 @@ object CNaughtPrinter {
           printer.print(")")
         }
 
-        case invoke: IR.Expr.Invoke => {
-          printer.print(invoke.methodName)
+        case called: IR.Expr.CalledExpr => {
+          printer.print(called.name)
           printer.print("(")
           var first = true
-          for (arg <- invoke.arguments) {
+          for (arg <- called.arguments) {
             if (first) {
               first = false
             } else {
               printer.print(", ")
             }
-            printer.print(arg, printValue)
+            printer.print(arg, printExpr)
           }
           printer.print(")")
+        }
+        case acc: IR.SpecExpr.Predicate => {
+
         }
       }
     }

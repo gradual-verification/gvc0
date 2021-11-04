@@ -98,9 +98,9 @@ C0: `expression;`
 Silver if expression is `Invoke`: `method(...)`
 Silver if expression is not `Invoke`: (skipped)
 
-## Specifications
+## SpecExprifications
 
-Specifications are only used by Viper, so they only need Silver representations, not C0.
+SpecExprifications are only used by Viper, so they only need Silver representations, not C0.
 
 * Variable (variable)
 * Field access ([variable | field].field)

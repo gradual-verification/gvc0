@@ -11,7 +11,7 @@ object SilverOutput {
       case char: IR.Literal.Char => vpr.IntLit(BigInt(char.value))()
       case bool: IR.Literal.Bool => vpr.BoolLit(bool.value)()
       case IR.Literal.Null => vpr.NullLit()()
-      case arith: IR.Expr.Arithmetic => {
+      case arith: IR.ProgramExpr.Arithmetic => {
         val left = expression(scope, arith.left)
         val right = expression(scope, arith.right)
         arith.op match {
@@ -22,7 +22,7 @@ object SilverOutput {
         }
       }
 
-      case comp: IR.Expr.Comparison => {
+      case comp: IR.ProgramExpr.Comparison => {
         val left = expression(scope, comp.left)
         val right = expression(scope, comp.right)
         comp.op match {
@@ -35,7 +35,7 @@ object SilverOutput {
         }
       }
 
-      case log: IR.Expr.Logical => {
+      case log: IR.ProgramExpr.Logical => {
         val left = expression(scope, log.left)
         val right = expression(scope, log.right)
         log.op match {
@@ -44,21 +44,21 @@ object SilverOutput {
         }
       }
 
-      case _: IR.Expr.ArrayAccess => ???
-      case _: IR.Expr.ArrayFieldAccess => ???
+      case _: IR.ProgramExpr.ArrayAccess => ???
+      case _: IR.ProgramExpr.ArrayFieldAccess => ???
 
-      case deref: IR.Expr.Deref => {
+      case deref: IR.ProgramExpr.Deref => {
         vpr.FieldAccess(expression(scope, deref.subject), scope.pointerValue(deref.subject.varType))()
       }
 
-      case negate: IR.Expr.Negation => vpr.Minus(expression(scope, negate.value))()
-      case not: IR.Expr.Not => vpr.Not(expression(scope, not.value))()
-      case member: IR.Expr.Member => vpr.FieldAccess(scope.localVar(member.subject), scope.structField(member.field))()
-      case alloc: IR.Expr.Alloc =>  throw new TransformerException("Invalid alloc encountered as expression")
-      case _: IR.Expr.AllocArray => throw new TransformerException("Arrays are not implemented")
+      case negate: IR.ProgramExpr.Negation => vpr.Minus(expression(scope, negate.value))()
+      case not: IR.ProgramExpr.Not => vpr.Not(expression(scope, not.value))()
+      case member: IR.ProgramExpr.Member => vpr.FieldAccess(scope.localVar(member.subject), scope.structField(member.field))()
+      case alloc: IR.ProgramExpr.Alloc =>  throw new TransformerException("Invalid alloc encountered as expression")
+      case _: IR.ProgramExpr.AllocArray => throw new TransformerException("Arrays are not implemented")
 
       // Invokes are handled at the statement level
-      case invoke: IR.Expr.Invoke => throw new TransformerException("Invalid invoke encoutered as expression")
+      case invoke: IR.ProgramExpr.Invoke => throw new TransformerException("Invalid invoke encoutered as expression")
     }
   }
 
@@ -66,14 +66,14 @@ object SilverOutput {
     op match {
       case assign: IR.Op.AssignVar => {
         assign.value match {
-          case invoke: IR.Expr.Invoke => {
+          case invoke: IR.ProgramExpr.Invoke => {
             Seq(vpr.MethodCall(
-              scope.methodName(invoke.methodName),
+              scope.methodName(invoke.name),
               invoke.arguments.map(expression(scope, _)),
               Seq(scope.localVar(assign.subject)))(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
           }
 
-          case alloc: IR.Expr.Alloc => {
+          case alloc: IR.ProgramExpr.Alloc => {
             val fields = alloc.memberType match {
               case value: IR.Type.StructValue => value.definition.fields.map(scope.structField(_))
               case _ => Seq(scope.pointerValue(alloc.valueType.get))
@@ -118,7 +118,7 @@ object SilverOutput {
 
       case assert: IR.Op.Assert => Seq() // Ignore run-time asserts
 
-      case assert: IR.Op.AssertSpec => Seq(vpr.Assert(spec(scope, assert.spec))())
+      case assert: IR.Op.AssertSpecExpr => Seq(vpr.Assert(spec(scope, assert.spec))())
 
       case fold: IR.Op.Fold => Seq(vpr.Fold(predicate(scope, fold.predicate))())
       case unfold: IR.Op.Unfold => Seq(vpr.Unfold(predicate(scope, unfold.predicate))())
@@ -140,8 +140,8 @@ object SilverOutput {
       case noop: IR.Op.Noop => {
         noop.value match {
           // Transform method calls
-          case invoke: IR.Expr.Invoke => {
-            Seq(vpr.MethodCall(scope.methodName(invoke.methodName), invoke.arguments.map(expression(scope, _)), Seq())(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
+          case invoke: IR.ProgramExpr.Invoke => {
+            Seq(vpr.MethodCall(scope.methodName(invoke.name), invoke.arguments.map(expression(scope, _)), Seq())(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
           }
 
           // Ignore other noops
@@ -155,7 +155,7 @@ object SilverOutput {
     vpr.Seqn(block.operations.flatMap(operation(scope, _)), decls)()
   }
 
-  def spec(scope: LocalScope, specification: IR.Spec): vpr.Exp = {
+  def spec(scope: LocalScope, specification: IR.SpecExpr): vpr.Exp = {
     specification match {
       case bool: IR.Literal.Bool => vpr.BoolLit(bool.value)()
       case int: IR.Literal.Int => vpr.IntLit(BigInt(int.value))()
@@ -163,7 +163,7 @@ object SilverOutput {
       case IR.Literal.Null => vpr.NullLit()()
       case field: IR.FieldValue => fieldValue(scope, field)
 
-      case comp: IR.Spec.Comparison => {
+      case comp: IR.SpecExpr.Comparison => {
         val left = spec(scope, comp.left)
         val right = spec(scope, comp.right)
         comp.op match {
@@ -176,7 +176,7 @@ object SilverOutput {
         }
       }
 
-      case logical: IR.Spec.Logical => {
+      case logical: IR.SpecExpr.Logical => {
         val left = spec(scope, logical.left)
         val right = spec(scope, logical.right)
         logical.op match {
@@ -185,7 +185,7 @@ object SilverOutput {
         }
       }
 
-      case arith: IR.Spec.Arithmetic => {
+      case arith: IR.SpecExpr.Arithmetic => {
         val left = spec(scope, arith.left)
         val right = spec(scope, arith.right)
         arith.op match {
@@ -196,36 +196,36 @@ object SilverOutput {
         }
       }
 
-      case conditional: IR.Spec.Conditional => {
+      case conditional: IR.SpecExpr.Conditional => {
         val condition = spec(scope, conditional.condition)
         val left = spec(scope, conditional.ifTrue)
         val right = spec(scope, conditional.ifFalse)
         vpr.CondExp(condition, left, right)()
       }
 
-      case pred: IR.Spec.Predicate => predicate(scope, pred)
+      case pred: IR.SpecExpr.Predicate => predicate(scope, pred)
 
-      case acc: IR.Spec.Accessibility => vpr.FieldAccessPredicate(field(scope, acc.field), vpr.FullPerm()())()
+      case acc: IR.SpecExpr.Accessibility => vpr.FieldAccessPredicate(field(scope, acc.field), vpr.FullPerm()())()
 
-      case imprecise: IR.Spec.Imprecision => vpr.ImpreciseExp(spec(scope, imprecise.spec))()
+      case imprecise: IR.SpecExpr.Imprecision => vpr.ImpreciseExp(spec(scope, imprecise.spec))()
 
-      case negate: IR.Spec.Negate => vpr.Minus(spec(scope, negate.value))()
+      case negate: IR.SpecExpr.Negate => vpr.Minus(spec(scope, negate.value))()
 
-      case not: IR.Spec.Not => vpr.Not(spec(scope, not.value))()
+      case not: IR.SpecExpr.Not => vpr.Not(spec(scope, not.value))()
     }
   }
 
-  def predicate(scope: LocalScope, pred: IR.Spec.Predicate): vpr.PredicateAccessPredicate = {
+  def predicate(scope: LocalScope, pred: IR.SpecExpr.Predicate): vpr.PredicateAccessPredicate = {
     val arguments = pred.arguments.map(spec(scope, _))
-    vpr.PredicateAccessPredicate(vpr.PredicateAccess(arguments, pred.predicateName)(), vpr.FullPerm()())()
+    vpr.PredicateAccessPredicate(vpr.PredicateAccess(arguments, pred.name)(), vpr.FullPerm()())()
   }
 
   def fieldValue(scope: LocalScope, value: IR.FieldValue): vpr.Exp = {
     value match {
       case variable: IR.Var => scope.localVar(variable)
-      case ret: IR.Spec.ReturnValue => scope.returnVar
-      case member: IR.Spec.Member => vpr.FieldAccess(fieldValue(scope, member.parent), scope.structField(member.field))()
-      case deref: IR.Spec.Dereference => vpr.FieldAccess(fieldValue(scope, deref.pointer), scope.pointerValue(deref.pointerType))()
+      case ret: IR.SpecExpr.ReturnValue => scope.returnVar
+      case member: IR.SpecExpr.Member => vpr.FieldAccess(fieldValue(scope, member.parent), scope.structField(member.field))()
+      case deref: IR.SpecExpr.Dereference => vpr.FieldAccess(fieldValue(scope, deref.pointer), scope.pointerValue(deref.pointerType))()
     }
   }
 
