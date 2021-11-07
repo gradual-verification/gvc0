@@ -1,0 +1,20 @@
+struct OwnedFields {
+    struct FieldArray*[] contents;
+    int capacity;
+    int instanceCounter;
+};
+typedef struct OwnedFields OwnedFields;
+void initOwnedFields(OwnedFields* child);
+
+
+struct FieldArray {
+  bool accessible;
+  int length;
+  bool[] contents;
+};
+typedef struct FieldArray FieldArray;
+void initFieldArray(FieldArray* array, int numFields);
+
+int addStruct(OwnedFields* structFields, int numFields);
+void setStructAccessibility(OwnedFields* structFields, int structID);
+void setFieldAccessibility(OwnedFields* structFields, int structID, int fieldID);

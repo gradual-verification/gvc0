@@ -1,0 +1,62 @@
+#use "fieldaccess.h0"
+
+int GROW_CAPACITY (int oldCapacity){
+  return ((oldCapacity) < 8 ? 8 : (oldCapacity) + oldCapacity / 2);
+}
+
+int max(int a, int b){
+  if(a > b){
+    return a;
+  }else if (b > a) {
+    return b;
+  }else{
+    return a;
+  }
+}
+
+void initFieldArray(FieldArray* array, int numFields){
+  array->length = numFields;
+  array->accessible = true;
+  array->contents = alloc_array(bool, array->length);
+  for (int i = 0; i<array->length; i += 1) {
+    array->contents[i] = true;
+  }
+}
+
+void initOwnedFields(OwnedFields* fields){
+  fields->instanceCounter = 0;
+  int oldCapacity = 0;
+  fields->capacity = GROW_CAPACITY(oldCapacity);
+  fields->contents = alloc_array(FieldArray*, fields->capacity);
+
+  for(int i = 0; i < fields->capacity; i += 1){
+    fields->contents[i] = NULL;
+  }
+}
+
+int addStruct(OwnedFields* fields, int numFields){
+  if(fields->instanceCounter + 1 == fields->capacity){
+    int oldCapacity = fields->capacity;
+    fields->capacity = GROW_CAPACITY(oldCapacity);
+    FieldArray*[] newContents = alloc_array(FieldArray*, fields->capacity);
+    for (int i = 0; i < oldCapacity; i += 1) {
+      newContents[i] = fields->contents[i];
+    }
+    for (int i = oldCapacity; i < fields->capacity; i += 1){
+      newContents[i] = NULL;
+    }
+    fields->contents = newContents;
+  }
+  fields->contents[fields->instanceCounter] = alloc(FieldArray);
+  initFieldArray(fields->contents[fields->instanceCounter], numFields);
+  fields->instanceCounter += 1;
+  return fields->instanceCounter - 1;
+}
+
+void setStructAccessibility(OwnedFields* structFields, int structID){
+  structFields->contents[structID]->accessible = false;
+}
+
+void setStructFieldAccessibility(OwnedFields* structFields, int structID, int fieldID){
+  structFields->contents[structID]->contents[fieldID] = false;
+}

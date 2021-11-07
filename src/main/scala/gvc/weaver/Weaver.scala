@@ -1,5 +1,6 @@
 package gvc.weaver
 import gvc.transformer.IR
+import gvc.transformer.IR.Op
 import viper.silver.{ast => vpr}
 import scala.collection.mutable.ListBuffer
 

@@ -2,12 +2,12 @@ package gvc.parser
 import fastparse._
 import scala.collection.mutable.ListBuffer
 
-trait Statements extends Specifications {
+trait Statements extends SpecExprifications {
   sealed trait ConcreteStatement;
 
   def statement[_: P]: P[Statement] =
     P(annotations ~ concreteStatement).map({
-      case (annot, concrete) => concrete.withSpecifications(annot)
+      case (annot, concrete) => concrete.withSpecExprifications(annot)
     })
 
   def concreteStatement[_: P]: P[Statement] =
@@ -24,7 +24,7 @@ trait Statements extends Specifications {
 
   private sealed trait BlockPiece
   private case class BlockStatementPiece(s: Statement) extends BlockPiece
-  private case class BlockAnnotationPiece(s: Seq[Specification]) extends BlockPiece
+  private case class BlockAnnotationPiece(s: Seq[SpecExprification]) extends BlockPiece
 
   private def blockPiece[_: P]: P[BlockPiece] =
     P(concreteStatement.map(BlockStatementPiece(_)) | annotation.map(BlockAnnotationPiece(_)))
@@ -33,7 +33,7 @@ trait Statements extends Specifications {
     P(span("{" ~ blockPiece.rep ~ "}"))
     .map({
       case (pieces, span) =>
-        var specs = List.empty[Specification]
+        var specs = List.empty[SpecExprification]
         val stmts = ListBuffer[Statement]()
         for (piece <- pieces) {
           piece match {
@@ -42,7 +42,7 @@ trait Statements extends Specifications {
               specs match {
                 case Nil => stmts += s
                 case _ => {
-                  stmts += s.withSpecifications(specs ++ s.specifications)
+                  stmts += s.withSpecExprifications(specs ++ s.specifications)
                   specs = Nil
                 }
               }

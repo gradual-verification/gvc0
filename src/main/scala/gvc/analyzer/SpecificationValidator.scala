@@ -3,22 +3,22 @@ package gvc.analyzer
 // Validates the structure of specifications
 // This could be integrated into the type-checker since it arguably is checking
 // the types of values used in specifications
-object SpecificationValidator {
+object SpecExprificationValidator {
   def validate(program: ResolvedProgram, errors: ErrorSink): Unit = {
     program.methodDeclarations.foreach(validateDeclaration(_, errors))
     program.predicateDefinitions.foreach(validatePredicate(_, errors))
   }
 
   def validateDeclaration(decl: ResolvedMethodDeclaration, errors: ErrorSink): Unit = {
-    decl.precondition.map(validateSpecification(_, errors, imprecisionAllowed = true))
-    decl.postcondition.map(validateSpecification(_, errors, imprecisionAllowed = true))
+    decl.precondition.map(validateSpecExprification(_, errors, imprecisionAllowed = true))
+    decl.postcondition.map(validateSpecExprification(_, errors, imprecisionAllowed = true))
   }
 
   def validatePredicate(decl: ResolvedPredicateDefinition, errors: ErrorSink): Unit = {
-    validateSpecification(decl.body, errors, imprecisionAllowed = true)
+    validateSpecExprification(decl.body, errors, imprecisionAllowed = true)
   }
 
-  def validateSpecification(spec: ResolvedExpression, errors: ErrorSink, imprecisionAllowed: Boolean = false): Unit = {
+  def validateSpecExprification(spec: ResolvedExpression, errors: ErrorSink, imprecisionAllowed: Boolean = false): Unit = {
     spec match {
       case _: ResolvedVariableRef => ()
       case _: ResolvedResult => ()
@@ -45,8 +45,8 @@ object SpecificationValidator {
 
       case ternary: ResolvedTernary => {
         validateValue(ternary.condition, errors)
-        validateSpecification(ternary.ifTrue, errors)
-        validateSpecification(ternary.ifFalse, errors)
+        validateSpecExprification(ternary.ifTrue, errors)
+        validateSpecExprification(ternary.ifFalse, errors)
       }
 
       case logical: ResolvedLogical => {
@@ -59,8 +59,8 @@ object SpecificationValidator {
           }
 
           case LogicalOperation.And => {
-            validateSpecification(logical.left, errors, imprecisionAllowed)
-            validateSpecification(logical.right, errors)
+            validateSpecExprification(logical.left, errors, imprecisionAllowed)
+            validateSpecExprification(logical.right, errors)
           }
         }
       }
@@ -88,7 +88,7 @@ object SpecificationValidator {
   }
 
   // Validates a value used in an expression
-  // Must not escape back to validateSpecification for a nested value
+  // Must not escape back to validateSpecExprification for a nested value
   def validateValue(value: ResolvedExpression, errors: ErrorSink): Unit = {
     value match {
       case _: ResolvedVariableRef

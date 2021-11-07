@@ -15,6 +15,8 @@ project/metals.sbt
 
 # vs code
 .vscode
+.vscode-server
+.ssh
 
 # scala 3
 .tasty
