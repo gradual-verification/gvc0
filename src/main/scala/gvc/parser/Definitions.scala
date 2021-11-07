@@ -74,7 +74,7 @@ trait Definitions extends Statements with Types {
     P(space ~~ predicateDefinition.rep ~~ space)
 
   def predicateDefinition[_: P]: P[PredicateDefinition] =
-    P(span("predicate" ~ identifier ~ "(" ~ methodParameter.rep(sep = ",") ~ ")" ~/ predicateBody))
+    P(span("predicate" ~ identifier ~ "(" ~ methodParameter.rep(sep = ",") ~ ")" ~/ (predicateBody | emptyPredicateBody)))
     .map { case ((ident, args, body), span) => PredicateDefinition(ident, args.toList, body, span) }
   
   def emptyPredicateBody[_: P]: P[Option[Expression]] = P(";").map(_ => None)
