@@ -3,27 +3,27 @@ package gvc.analyzer
 // Validates the structure of specifications
 // This could be integrated into the type-checker since it arguably is checking
 // the types of values used in specifications
-object SpecExprificationValidator {
+object SpecificationValidator {
   def validate(program: ResolvedProgram, errors: ErrorSink): Unit = {
     program.methodDeclarations.foreach(validateDeclaration(_, errors))
     program.predicateDefinitions.foreach(validatePredicate(_, errors))
   }
 
   def validateDeclaration(decl: ResolvedMethodDeclaration, errors: ErrorSink): Unit = {
-    decl.precondition.map(validateSpecExprification(_, errors, imprecisionAllowed = true))
-    decl.postcondition.map(validateSpecExprification(_, errors, imprecisionAllowed = true))
+    decl.precondition.map(validateSpecification(_, errors, imprecisionAllowed = true))
+    decl.postcondition.map(validateSpecification(_, errors, imprecisionAllowed = true))
   }
 
   def validatePredicate(decl: ResolvedPredicateDefinition, errors: ErrorSink): Unit = {
-    validateSpecExprification(decl.body, errors, imprecisionAllowed = true)
+    validateSpecification(decl.body, errors, imprecisionAllowed = true)
   }
 
-  def validateSpecExprification(spec: ResolvedExpression, errors: ErrorSink, imprecisionAllowed: Boolean = false): Unit = {
+  def validateSpecification(spec: ResolvedExpression, errors: ErrorSink, imprecisionAllowed: Boolean = false): Unit = {
     spec match {
       case _: ResolvedVariableRef => ()
       case _: ResolvedResult => ()
       case _: ResolvedBool => ()
-      
+
       case predicate: ResolvedPredicate => {
         predicate.arguments.foreach(validateValue(_, errors))
       }
@@ -33,7 +33,7 @@ object SpecExprificationValidator {
         // TODO: Better error message
         errors.error(imp, "? can only be used as the left value of a top-level conjunction")
       }
-      
+
       case member: ResolvedMember => validateField(member.parent, errors)
       case acc: ResolvedAccessibility => validateField(acc.field, errors)
       case deref: ResolvedDereference => validateField(deref.value, errors)
@@ -45,8 +45,8 @@ object SpecExprificationValidator {
 
       case ternary: ResolvedTernary => {
         validateValue(ternary.condition, errors)
-        validateSpecExprification(ternary.ifTrue, errors)
-        validateSpecExprification(ternary.ifFalse, errors)
+        validateSpecification(ternary.ifTrue, errors)
+        validateSpecification(ternary.ifFalse, errors)
       }
 
       case logical: ResolvedLogical => {
@@ -59,8 +59,8 @@ object SpecExprificationValidator {
           }
 
           case LogicalOperation.And => {
-            validateSpecExprification(logical.left, errors, imprecisionAllowed)
-            validateSpecExprification(logical.right, errors)
+            validateSpecification(logical.left, errors, imprecisionAllowed)
+            validateSpecification(logical.right, errors)
           }
         }
       }
@@ -76,27 +76,27 @@ object SpecExprificationValidator {
       }
 
       case _: ResolvedNull
-        | _: ResolvedInt
-        | _: ResolvedChar
-        | _: ResolvedString
-        | _: ResolvedNegation
-        | _: ResolvedArithmetic
-        | _: ResolvedInvoke => {
+           | _: ResolvedInt
+           | _: ResolvedChar
+           | _: ResolvedString
+           | _: ResolvedNegation
+           | _: ResolvedArithmetic
+           | _: ResolvedInvoke => {
         errors.error(spec, "Invalid value in specification")
       }
     }
   }
 
   // Validates a value used in an expression
-  // Must not escape back to validateSpecExprification for a nested value
+  // Must not escape back to validateSpecification for a nested value
   def validateValue(value: ResolvedExpression, errors: ErrorSink): Unit = {
     value match {
       case _: ResolvedVariableRef
-        | _: ResolvedResult
-        | _: ResolvedChar
-        | _: ResolvedInt
-        | _: ResolvedBool
-        | _: ResolvedNull => ()
+           | _: ResolvedResult
+           | _: ResolvedChar
+           | _: ResolvedInt
+           | _: ResolvedBool
+           | _: ResolvedNull => ()
 
       case invoke: ResolvedInvoke => {
         errors.error(value, "Invalid method call in specification value")

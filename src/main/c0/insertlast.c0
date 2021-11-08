@@ -1,0 +1,11 @@
+void acyclic()
+
+void insertLastHelper() {
+    //@requires acyclic(this) * unfolding acyclic(this) in this.head != null
+    //@ensures acyclic(this)
+
+    unfold acyclic(this);
+    
+
+
+}

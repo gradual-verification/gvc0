@@ -43,11 +43,11 @@ class WeaverTests extends AnyFunSuite {
         
         AssignmentValidator.validate(result, sink)
         ReturnValidator.validate(result, sink)
-        SpecExprificationValidator.validate(result, sink)
+        SpecificationValidator.validate(result, sink)
         ImplementationValidator.validate(result, sink)
         assert(sink.errors.isEmpty)
 
-        var ir = Transformer.programToIR(result)
+        val ir = Transformer.programToIR(result)
         val silver = SilverOutput.program(ir)
         (ir, silver)
       }

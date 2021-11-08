@@ -1,5 +1,7 @@
 package gvc.weaver
 import gvc.transformer.IR
+import gvc.transformer.IR.Expr
+import gvc.transformer.IR.ProgramExpr
 import viper.silver.{ast => vpr}
 import gvc.transformer._
 import viper.silver.ast
@@ -43,12 +45,12 @@ object RuntimeCheckGenerator {
       case Unfolding(acc, body) => ???
       case binExp: BinExp => binExp match {
         case cmp: EqualityCmp => cmp match {
-          case EqCmp(left, right) => new IR.Expr.Comparison(
+          case EqCmp(left, right) => new ProgramExpr.Comparison(
             silverToIRExpr(left).asInstanceOf[IR.Value],
             silverToIRExpr(right).asInstanceOf[IR.Value],
             IR.ComparisonOp.Equal
           )
-          case NeCmp(left, right) => new IR.Expr.Comparison(
+          case NeCmp(left, right) => new ProgramExpr.Comparison(
             silverToIRExpr(left).asInstanceOf[IR.Value],
             silverToIRExpr(right).asInstanceOf[IR.Value],
             IR.ComparisonOp.NotEqual
@@ -58,52 +60,52 @@ object RuntimeCheckGenerator {
           val irLeft = silverToIRExpr(exp.left).asInstanceOf[IR.Value]
           val irRight = silverToIRExpr(exp.right).asInstanceOf[IR.Value]
           exp match {
-            case Add(left, right) => new IR.Expr.Arithmetic(
+            case Add(left, right) => new ProgramExpr.Arithmetic(
                 irLeft,
                 irRight,
                 IR.ArithmeticOp.Add
             )
-            case Sub(left, right) => new IR.Expr.Arithmetic(
+            case Sub(left, right) => new ProgramExpr.Arithmetic(
               irLeft,
               irRight,
               IR.ArithmeticOp.Subtract
             )
-            case Mul(left, right) => new IR.Expr.Arithmetic(
+            case Mul(left, right) => new ProgramExpr.Arithmetic(
               irLeft,
               irRight,
               IR.ArithmeticOp.Multiply
             )
-            case Div(left, right) => new IR.Expr.Arithmetic(
+            case Div(left, right) => new ProgramExpr.Arithmetic(
               irLeft,
               irRight,
               IR.ArithmeticOp.Divide
             )
-            case LtCmp(left, right) => new IR.Expr.Comparison(
+            case LtCmp(left, right) => new ProgramExpr.Comparison(
               irLeft,
               irRight,
               IR.ComparisonOp.LessThan
             )
-            case LeCmp(left, right) => new IR.Expr.Comparison(
+            case LeCmp(left, right) => new ProgramExpr.Comparison(
               irLeft,
               irRight,
               IR.ComparisonOp.LessThanEqual
             )
-            case GtCmp(left, right) => new IR.Expr.Comparison(
+            case GtCmp(left, right) => new ProgramExpr.Comparison(
               irLeft,
               irRight,
               IR.ComparisonOp.GreaterThan
             )
-            case GeCmp(left, right) => new IR.Expr.Comparison(
+            case GeCmp(left, right) => new ProgramExpr.Comparison(
               irLeft,
               irRight,
               IR.ComparisonOp.GreaterThanEqual
             )
-            case Or(left, right) => new IR.Expr.Logical(
+            case Or(left, right) => new ProgramExpr.Logical(
               irLeft,
               irRight,
               IR.LogicalOp.Or
             )
-            case And(left, right) => new IR.Expr.Logical(
+            case And(left, right) => new ProgramExpr.Logical(
               irLeft,
               irRight,
               IR.LogicalOp.And
@@ -118,8 +120,8 @@ object RuntimeCheckGenerator {
           case LabelledOld(exp, oldLabel) => ???
         }
         case exp: DomainUnExp => exp match {
-          case Minus(exp) => new IR.Expr.Negation(exp.asInstanceOf[IR.Value])
-          case Not(exp) => new IR.Expr.Not(exp.asInstanceOf[IR.Value])
+          case Minus(exp) => new ProgramExpr.Negation(exp.asInstanceOf[IR.Value])
+          case Not(exp) => new ProgramExpr.Not(exp.asInstanceOf[IR.Value])
           case _ => throw dne(exp)
         }
       }

@@ -1,6 +1,7 @@
 package gvc.weaver
 import gvc.transformer.IR
 import gvc.transformer.IR.Op
+import gvc.transformer.IR.ProgramExpr
 import viper.silver.{ast => vpr}
 import scala.collection.mutable.ListBuffer
 
@@ -112,7 +113,7 @@ object Weaver {
 
           case _: IR.Op.Assert => ops += op
 
-          case _: IR.Op.AssertSpec =>
+          case _: IR.Op.AssertSpecExpr =>
             remaining match {
               case (assert: vpr.Assert) :: rest => {
                 remaining = rest
@@ -180,7 +181,7 @@ object Weaver {
 
           case noop: IR.Op.Noop => {
             noop.value match {
-              case call: IR.Expr.Invoke => {
+              case call: ProgramExpr.Invoke => {
                 remaining match {
                   case (callVerified: vpr.MethodCall) :: rest => {
                     remaining = rest

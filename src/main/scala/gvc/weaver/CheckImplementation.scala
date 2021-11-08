@@ -19,7 +19,7 @@ object CheckImplementation {
         val (rightOps, right) = expression(eq.right, scope, returnValue)
 
         val compVar = scope.define(IR.Type.Bool)
-        val compOp = new IR.Op.AssignVar(compVar, new IR.Expr.Comparison(left, right, IR.ComparisonOp.Equal));
+        val compOp = new IR.Op.AssignVar(compVar, new IR.ProgramExpr.Comparison(left, right, IR.ComparisonOp.Equal));
         
         (leftOps ++ rightOps :+ compOp, compVar)
       }
