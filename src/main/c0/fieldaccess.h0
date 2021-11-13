@@ -6,15 +6,27 @@ struct OwnedFields {
 typedef struct OwnedFields OwnedFields;
 void initOwnedFields(OwnedFields* child);
 
-
 struct FieldArray {
   bool accessible;
   int length;
-  bool[] contents;
 };
+
+struct IntWrapper {
+    int* value;
+    int instanceID;
+};
+
+struct BoolWrapper {
+    bool* value;
+    int instanceID;
+};
+
+struct CharWrapper {
+    char* value;
+    int instanceID;
+};
+
 typedef struct FieldArray FieldArray;
 void initFieldArray(FieldArray* array, int numFields);
 
-int addStruct(OwnedFields* structFields, int numFields);
-void setStructAccessibility(OwnedFields* structFields, int structID);
-void setFieldAccessibility(OwnedFields* structFields, int structID, int fieldID);
+int addAllocation(OwnedFields* structFields);

@@ -1,87 +1,108 @@
-The compiler maintains a mapping between indices and struct fields that corresponds to the order in which they appear in each struct definition. A unique `_id` field is injected into each struct definition.
+## Tracking Allocations
+
+At the beginning of `main`, a counter is allocated to provide unique IDs for each struct allocation.
+
+```
+int main () {
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+}
+```
+
+Each struct is injected with a field to contain an ID :
 
 ```
 struct Node {
-    int val;                // index:   0
-    struct Node* next;      //          1
-    int _id;                //          2
+    int val;
+    struct Node * next;
+    int _id;
 };
 ```
-To begin tracking field access, `main()` is injected with the following declaration and initialization:
+
+If a fully verified functionallocates memory, but doesn't call a partially verified function at any point, it will be given `_id_counter` as a parameter and new structs will be assigned an ID directly.
+```
+Node * node = alloc(Node);
+node->_id = *(_id_counter)++;
+```
+It is necessary to pass `_id_counter` because `C0` does not allow global variables.
+
+
+## Passing Accessibility Permissions
+
+If partially verified function is called within fully verified function, then an `OwnedFields` struct must be created to collect the permissions that are availble to fully verified functionand pass them to partially verified function for use in runtime checks.
+
+There are three types of partially verified functions. A function is fully imprecise if both its precondition and postcondition are imprecise. A function is partially imprecise if only one of its precondition or postcondition is imprecise. Fully imprecise functions are passed the entire `OwnedFields` struct without modification. However, partially imprecise functions require additional handling.
+
+### Imprecise Precondition, Precise Postcondition
+
+If a precondition is imprecise, then `OwnedFields` will be passed in without modification. However, the precise postcondition indicates that only a subset of field access permissions will be returned to the caller. This is accomplished by replacing the current `OwnedFields` struct with a new one that contains only the specified permissions.
 
 ```
-int main() {
-    OwnedFields * fields;
+void example(Node* node, OwnedFields** fields) {
+    //@requires ?;
+    //@ensures acc(node->value);
+    
+    ...
+
+    *fields = alloc(OwnedFields);
+    initOwnedFields(*fields);
+    inherit(*fields, node->_id, ["value"]);
+}
+```
+
+### Precise Precondition, Imprecise Postcondition
+
+For functions with precise preconditions and imprecise postconditions, a secondary `OwnedFields` struct is created before the function is called and passed as a parameter. After function returns, the secondary `OwnedFields` is combined with the preexisting one via a call to `merge`.
+
+```
+
+void call_example(Node* node){
+    //@requires true;
+    //@ensures true;
+
+    OwnedFields * fields = alloc(OwnedFields);
     initOwnedFields(fields);
+    inherit(fields, node->_id, ["value", "next"]);
+
+    ...
+
+    OwnedFields* fields_1 = alloc(OwnedFields);
+    initOwnedFields(fields_1);
+    inherit(fields_1, node->_id, ["value", "next"]);
+
+    example(&fields_1);
+
+    merge(fields, fields_1);
+
+}
+void example(Node* node, OwnedFields** fields){
+    //@requires acc(node->value) * acc(node->next);
+    //@ensures ?;
     ...
 }
-```
-When a new struct is allocated, a function call is injected so that `fields` can mark that the struct instance and its fields are accessible in the current stack frame.
 
 ```
-Node * node = alloc(Node)
-node->_id = addStruct(
-    fields,     
-    3,      //three fields within Node
-    0       //called within main, stack frame 0
-)
+
+The `merge` function takes the union of two sets of permissions and assigns them to the first set.
+
+## Inserting Runtime Checks
+Each runtime check is represented as a tuple `(✅, 🏳, 📖)`, where ✅ is the check that must occur, 🏳 is a flag indicating if the check possibly overlaps with another memory location, and 📖 is the context which the check was derived from. 
+
+If a field access check doesn't overlap, then only a call to `assertAcc` is necessary:
 
 ```
-The function `addStruct` takes the number of fields available for the given struct, and returns a unique ID for that struct allocation. 
+int getValue(Node* node, OwnedFields* fields){
+    //@requires ?
+    //@ensures ?
 
-Additional tracking is required for fields that are pointers to other structs. 
-
-```
-Node * nextNode = alloc(Node);
-...
-node->next = nextNode;
-trackStructWithin(
-    fields,
-    node->_id,
-    1,              //id(node->next)
-    nextNode->_id
-)
-```
-
-OwnedFields will only track the instances and fields that are required for runtime checks or are used within the body of a function with an imprecise specification. 
-
-Every function call that requires accessiblity runtime checks is injected with an `OwnedFields` parameter so that `fields` can always be accessible. Before a function is called, `fields` must account for the permissions that the function will acquire:
-
-```
-void printList(Node * head);
-...
-
-lowerStruct(fields, node->_id);
-deleteNext(fields, node);
-```
-
-The function `lowerStruct` marks `node` and all of its fields as accessible in stackframe `n+1`. It will recurse when it encounters a field that is a pointer to another struct. Therefore, this will also provide `printList` with permissions to access `nextNode` via `node->next`. As desired, `lowerStruct` will trigger an exception if node is not available in the current stackframe. 
-
-Each Field maintains the index of the stack frame at which it was most recently accessible, as well as a stack of prior indices where it was saved to a variable. Ever time a function call returns, if the permission for an accessible struct was not lost, then its accessibility index is decremented. If a permission for a struct is lost, then its index will be assigned to the top of its accessibility stack. If the stack is empty, then its index will be assigned to -1; the null stackframe. Consider the following pseudocode example:
-
-```
-Node* node;
-Node* nextNode;
-node->next = nextNode
-
-foo(node){
-    temp = node->next
-
-    bar(node){
-        temp = node;
-        baz(node){
-            ...
-        }
-        baz();
-    }
-    bar();
+    assertAcc(fields, node->_id, ["value"]);
+    return node->value;
 }
-foo();
-
 ```
-When `baz` is executed, the accessibility stack for `node` will be `[0, 2]`, and the stack for `nextNode` will be `[1]`. Both `node` and `nextNode` will be marked as accessible at stackframe index `3`. When `baz` returns, `node` will be marked as accessible at index `n-1 = 2`, but since the permission for `nextNode` was lost in `baz`, its accessibility level reverts to `1`, as it is at the top of `nextNode's` stack. An index is popped from the accessibiliy stack when the corresponding stackframe is popped.
+The `assertAcc` function has no effect if the given field is included in the current `OwnedFields` struct, and will terminate execution otherwise. 
 
+When multiple accessibility predicates are joined by the separating conjunction, then it is necessary to ensure that none of the predicates use different aliases to the same memory location. This can be accomplished by temporarily removing an accessibility permission from the set with a call to `mask`. 
 
+Once the check is complete, `unmask` is called, which unmasks all previously hidden accessibility permissions as is necessary for use in additional runtime checks or calls to imprecise methods that occur after the given runtime check. 
 
-
-
+If the runtime accessibility check was derived from a context that includes statically verified accessibility predicates, then this static component is also hidden via `mask` prior to the runtime checks.
