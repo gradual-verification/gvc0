@@ -28,7 +28,7 @@ It is necessary to pass `_id_counter` because `C0` does not allow global variabl
 
 ## Passing Accessibility Permissions
 
-If a fully verified function calls a partially verified function, then an `OwnedFields` struct must be created to collect the permissions that are available at the beginning of the fully verified function and pass them to partially verified function. These permissions are obtained by examining the function's specifications and receiving information from the verifier, and are added to `OwnedFields` immediately after initialization via injected calls to `inherit`.
+If a fully verified function calls a partially verified function, then an `OwnedFields` struct must be created to collect the permissions that are available at the beginning of the fully verified function and pass them to partially verified function. These permissions are obtained by examining the function's specifications and receiving information from the verifier, and they are added to `OwnedFields` immediately after initialization via injected calls to `inherit`.
 
 ```
 void example(Node* n){
@@ -65,7 +65,7 @@ void example(Node* node, OwnedFields** fields) {
 
 ### Precise Precondition, Imprecise Postcondition
 
-For partially verified functions with precise preconditions and imprecise postconditions, a secondary `OwnedFields` struct is created before the function is called and passed as a parameter. After function returns, the secondary `OwnedFields` is combined with the preexisting one via a call to `merge`.
+For partially verified functions with precise preconditions and imprecise postconditions, a secondary `OwnedFields` struct is created before the function is called and receives all permissions from the first one via a call to `merge`. It is passed as a parameter, and after the function returns, the secondary `OwnedFields` is combined with the preexisting one with another call to `merge`.
 
 ```
 
@@ -81,7 +81,8 @@ void call_example(Node* node){
 
     OwnedFields* fields_1 = alloc(OwnedFields);
     initOwnedFields(fields_1);
-    inherit(fields_1, node->_id, ["value", "next"]);
+
+    merge(fields_1, fields);
 
     example(&fields_1);
 
@@ -99,7 +100,7 @@ void example(Node* node, OwnedFields** fields){
 The `merge` function takes the union of two sets of permissions and assigns them to the first set.
 
 ## Inserting Runtime Checks
-Each runtime check is represented as a tuple containing the check itself, a flag indicating whether the check might overlap with statically verified fields, and the context in which the check occurs. Note that the context is derived from the current functions static specifications and information from the verifier, similar to what occurs when `OwnedFields` is initialized.
+Each runtime check is represented as a tuple containing the check itself, a flag indicating whether the check might overlap with statically verified field, and the context in which the check occurs. For an unverified field to "overlap" with a statically verified field means that there is a possibility that both fields are aliases to the same heap location. Additionally, note that the context for a runtime check is derived from the current function's static specifications and information from the verifier, similar to what occurs when `OwnedFields` is initialized in a fully verified function.
 
 If a field access check doesn't overlap, then runtime checks can be discharged without any extra handling. To verify that a field is accessible, `assertAcc` is called:
 
@@ -114,7 +115,7 @@ int getValue(Node* node, OwnedFields* fields){
 ```
 The `assertAcc` function has no effect if the field is accessible, but it will terminate execution if not.
 
-When multiple accessibility predicates are joined by the separating conjunction, it is necessary to ensure that none of the predicates use different aliases to the same memory location. Consider the following function:
+When multiple accessibility predicates are joined by the separating conjunction, it is necessary to ensure that none of the predicates use different aliases to the same memory location. This is guaranteed to occur if the runtime checks overlap, but also can occur with no overlap if the runtime check includes multiple conjoined accessibiliy predicates. Consider the following function:
 
 ```
 void call_example(Node* x, Node* y){
@@ -158,7 +159,6 @@ void example(Node* a, OwnedFields ** fields){
     ...
 }
 ```
-
 Any time that an accessibility check involves the separating conjunction, all previously verified permissions must be `mask`ed before the current permission can be verified. This procedure holds for cases when all conjuncts require runtime checks and when only a subset do. Statically verified permissions are identified by examining the context of the runtime check, and all are masked before the runtime check. When a runtime check involves two or more conjuncts, each conjunct is checked separately with interleaved calls to mask to ensure separation:
 
 ```
@@ -178,3 +178,85 @@ void example(Node* x, Node* y, OwnedFields** fields){
     ...
 }
 ```
+
+## Abstract Predicates
+
+Abstract predicates are treated equirecursively during static verification, meaning that some accessibility permissions may be present, but hidden within the definition of the predicate. As such all abstract predicates present in runtime checks or sets of statically available permissions must be unfolded competely to ensure soundness.
+
+To add these hidden permissions to `OwnedFields`, the compiler unfolds the predicate in its entirety and collects all accessibility permissions within. In cases where the predicate was statically verified, no checking is needed. However, when the predicate is involved in a runtime check, additional handling is necessary to satisfy any conditionals and separated conjuncts. 
+
+Consider the following predicates:
+
+```
+predicate acyclic (List l) = acc(l.head) && listSeg(l.head, NULL);
+
+predicate listSeg (Node from, Node to) =
+    if (from == to) then true else
+    acc(from.val) && acc(from.next) && listSeg(from.next, to)
+```
+
+A statically specified function calls an `imprecise` function, and it has `acyclic(l)` as a statically verified precondition.
+
+```
+void contains(List l, Node* node){
+    //@requires acyclic(l);
+    //@ensures acyclic(l);
+
+    Node current = l.head;
+    while(current != NULL){
+        printf("%d\n", current.value);
+        imprecise(current)
+        current = current.next;
+    }
+}
+```
+Given the imprecise function, an `OwnedFields` struct must be created, intialized with all accessibility permissions available to `printList`, and passed to `imprecise`. However, all of `printList`'s permissions are hidden in `acyclic`. To dynamically unfold `acyclic`, it is translated into a `c0` function. If the predicate has been statically verified, then permissions are collected for each `acc`:
+
+```
+void acyclic(List l, OwnedFields* fields){
+    inherit(fields, l._id, ["head"]);       // acc(l.head)
+    listSeg(l.head, NULL, fields);
+}
+
+void listSeg(Node from, Node to, OwnedFields* fields){
+    if(from == to){
+        return true;
+    }else{
+        inherit(fields, from._id, ["val", "next"]);
+        listSeg(from.next, to, fields);
+    }
+}
+```
+
+If a predicate is required for a runtime check, then `mask` and `assertAcc` must be used to satisfy the separating conjunction for each accessibility predicate. Note that `unmask` is called for every predicate function before it returns, allowing permissions to be retained as recursion unwinds.
+
+```
+void acyclic(List l, OwnedFields* fields){
+    assertAcc(fields, l._id, ["head"]);
+
+    mask(fields, l._id, ["head]);
+
+    listSeg(l.head, NULL, fields);
+
+    unmask(fields, l._id, ["head"]);
+}
+
+void listSeg(Node from, Node to, OwnedFields* fields){
+    if(from == to){
+        return;
+    }else{
+        assertAcc(fields, from._id, ["val"]);
+        mask(fields, from._id, ["val"]);
+
+        assertAcc(fields, from._id, ["next"]);
+        mask(fields, from._id, ["next"]);
+
+        listSeg(from.next, to, fields);
+
+        unmask(fields, from._id, ["val", "next"]);
+    }
+}
+
+```
+
+In either case, the transformed predicate functions via its side effects of initializing permissions or aborting execution when a permission isn't present. A return value isn't necessary. 
