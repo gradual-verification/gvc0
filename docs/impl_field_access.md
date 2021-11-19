@@ -1,16 +1,13 @@
 ## Tracking Allocations
 
 At the beginning of `main`, a counter is allocated to provide unique IDs for each struct allocation.
-
 ```
 int main () {
     int * _id_counter = alloc(int);
     *(_id_counter) = 0;
 }
 ```
-
 Each struct is injected with a field to contain an ID :
-
 ```
 struct Node {
     int val;
@@ -18,7 +15,6 @@ struct Node {
     int _id;
 };
 ```
-
 If a fully verified function allocates memory but doesn't call a partially verified function, it will be passed `_id_counter` as a parameter and new structs will be assigned an ID directly.
 ```
 Node * node = alloc(Node);
@@ -138,16 +134,16 @@ Only the accessibility of `x.value` has been statically ensured; it might be an 
 
 This can be accomplished by removing the accessibility permission for `x.value` from `OwnedFields` before `assert` is called. However, it is necessary to retain the permission for `x.value` so that it can be passed to the partially verified function `example`.  
 
-To temporarily hide a permission, a call to `mask` is injected. Calling `unmask` unhides the permission for use later on.  
+To temporarily hide a permission, a call to `mask` is injected. Calling `unmask` unhides all previously `mask`ed permissions so that they can be available later on. 
 ```
 void call_example(Node* x, Node* y, OwnedFields ** fields){
-    //@requires ? && acc(x.f);
+    //@requires ? && acc(x.value);
     //@ensures ?;
     
     mask(*fields, x->_id, ["value"]);
     assertAcc(*fields, y->_id, ["value"]);
 
-    unmask(*fields, x->_id, ["value"]);
+    unmask(*fields);
 
     example(x, fields);
     ...
@@ -159,7 +155,7 @@ void example(Node* a, OwnedFields ** fields){
     ...
 }
 ```
-Any time that an accessibility check involves the separating conjunction, all previously verified permissions must be `mask`ed before the current permission can be verified. This procedure holds for cases when all conjuncts require runtime checks and when only a subset do. Statically verified permissions are identified by examining the context of the runtime check, and all are masked before the runtime check. When a runtime check involves two or more conjuncts, each conjunct is checked separately with interleaved calls to mask to ensure separation:
+Any time that an accessibility check involves the separating conjunction, all previously verified permissions must be `mask`ed before the current permission can be verified. This procedure holds for cases when all conjuncts require runtime checks and when only a subset do. Statically verified permissions are identified by examining the context of the runtime check, and all are masked before the check is executed. When a runtime check involves two or more conjuncts, each conjunct is checked independently with interleaved calls to mask to ensure separation:
 
 ```
 void example(Node* x, Node* y, OwnedFields** fields){
@@ -172,7 +168,7 @@ void example(Node* x, Node* y, OwnedFields** fields){
 
     assertAcc(*fields, y->_id, ["value"]);
     
-    unmask(*fields, x->_id, ["value]);
+    unmask(*fields);
 
     int sum = x->value + y->value;
     ...
@@ -198,19 +194,25 @@ predicate listSeg (Node from, Node to) =
 A statically specified function calls an `imprecise` function, and it has `acyclic(l)` as a statically verified precondition.
 
 ```
-void contains(List l, Node* node){
+void traverse(List l, Node* node){
     //@requires acyclic(l);
-    //@ensures acyclic(l);
 
+    unfold acyclic(l);
+    
     Node current = l.head;
+
     while(current != NULL){
-        printf("%d\n", current.value);
-        imprecise(current)
+        //@loop_invariant current != NULL
+        
+        imprecise(current.value)
+        
         current = current.next;
     }
+
+            ...
 }
 ```
-Given the imprecise function, an `OwnedFields` struct must be created, intialized with all accessibility permissions available to `printList`, and passed to `imprecise`. However, all of `printList`'s permissions are hidden in `acyclic`. To dynamically unfold `acyclic`, it is translated into a `c0` function. If the predicate has been statically verified, then permissions are collected for each `acc`:
+Because of the imprecise function, an `OwnedFields` struct must be create, intialized with all accessibility permissions available to `printList`, and passed to `imprecise`. However, all of `printList`'s permissions are hidden in `acyclic`. To dynamically unfold `acyclic`, it is translated into a `c0` function. If the predicate has been statically verified, then permissions are collected for each `acc` within `acyclic` without any additional checking, because it is safe to assume that the separating conjunction is satisfied.
 
 ```
 void acyclic(List l, OwnedFields* fields){
@@ -228,7 +230,7 @@ void listSeg(Node from, Node to, OwnedFields* fields){
 }
 ```
 
-If a predicate is required for a runtime check, then `mask` and `assertAcc` must be used to satisfy the separating conjunction for each accessibility predicate. Note that `unmask` is called for every predicate function before it returns, allowing permissions to be retained as recursion unwinds.
+If a predicate is part of a runtime check, then `mask` and `assertAcc` must be used in place of each `acc` to satisfy the separating conjunction.
 
 ```
 void acyclic(List l, OwnedFields* fields){
@@ -237,8 +239,6 @@ void acyclic(List l, OwnedFields* fields){
     mask(fields, l._id, ["head]);
 
     listSeg(l.head, NULL, fields);
-
-    unmask(fields, l._id, ["head"]);
 }
 
 void listSeg(Node from, Node to, OwnedFields* fields){
@@ -252,11 +252,8 @@ void listSeg(Node from, Node to, OwnedFields* fields){
         mask(fields, from._id, ["next"]);
 
         listSeg(from.next, to, fields);
-
-        unmask(fields, from._id, ["val", "next"]);
     }
 }
 
 ```
-
-In either case, the transformed predicate functions via its side effects of initializing permissions or aborting execution when a permission isn't present. A return value isn't necessary. 
+In either case, the transformed predicate functions via its side effects of initializing permissions or aborting execution when a permission isn't present. A return value isn't necessary. As shown previously, once the runtime check completes, `unmask` is called to ensure that all permissions are available later on.
