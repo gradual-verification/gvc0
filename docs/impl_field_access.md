@@ -189,28 +189,41 @@ predicate listSeg (Node from, Node to) =
     acc(from.val) && acc(from.next) && listSeg(from.next, to)
 ```
 
-Then, a statically specified function calls an `imprecise` function, and it has `acyclic(l)` as a statically verified precondition.
+Then, a statically specified function with `acyclic(l)` as a precondition calls an `imprecise` function.
 
 ```
-void traverse(List l, Node* node){
-    //@requires acyclic(l);
+void printList(List * l, int val){
+    //@requires acyclic(*l) && unfolding acyclic(l) in l->head != NULL;
+    //@ensures acyclic(*l);
 
-    unfold acyclic(l);
-    
-    Node current = l.head;
+    unfold acyclic(*l);
+    Node * current = l->head;
 
-    while(current != NULL){
-        //@loop_invariant current != NULL
+    fold listSeg(l->head, current);
+    unfold listSeg(current, NULL);
+
+    while(current->next != NULL){
+        @loop_invariant current != NULL && acc(l->head) && listSeg(l->head, current)
+            && acc(y->val) && acc(y->next) && listSeg(y->next, NULL)
+
+        imprecise()
+
+        printf("%d\n", val);
+
+        Node * prev = current;
+        current = current->next;
         
-        imprecise(current.value)
-        
-        current = current.next;
+        unfold listSeg(current, NULL);
+        fold listSeg(prev->next, current);
+        fold listSeg(prev, current);
+        appendLemma(l->head, current, NULL);
     }
+                
+                 ...
 
-            ...
 }
 ```
-Because of the imprecise function, an `OwnedFields` struct must be created, intialized with all accessibility permissions available to `printList`, and passed in the call to `imprecise`. However, all of `printList`'s permissions are hidden in `acyclic`. To dynamically unfold `acyclic`, it is translated into a `c0` function. If the predicate has been statically verified, then permissions are collected for each `acc` within `acyclic` without any additional checking, because it is safe to assume that the separating conjunction is satisfied.
+Because of the imprecise function, an `OwnedFields` struct must be created, intialized with all accessibility permissions available to `printList`, and passed in the call to `imprecise`. However, many of `printList`'s permissions are hidden in `acyclic` and `listSeg`. To dynamically unfold `acyclic`, it is translated into a `c0` function. If the predicate has been statically verified, then permissions are collected for each `acc` within `acyclic` without any additional checking, because it is safe to assume that the separating conjunction is satisfied.
 
 ```
 void acyclic(List l, OwnedFields* fields){
