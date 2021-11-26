@@ -60,3 +60,6 @@ docker.sh
 
 .vscode-server
 .ssh
+
+*.dSYM
+*.out

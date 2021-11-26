@@ -1,32 +1,21 @@
 struct OwnedFields {
     struct FieldArray*[] contents;
     int capacity;
-    int instanceCounter;
+    int length;
+    int* instanceCounter;
 };
+
 typedef struct OwnedFields OwnedFields;
-void initOwnedFields(OwnedFields* child);
+
+void initOwnedFields(OwnedFields* fields);
+void initAccess(OwnedFields * fields, int _id, int numFields);
+void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex);
+void merge(OwnedFields* target, OwnedFields* source);
 
 struct FieldArray {
-  bool accessible;
+  bool[] contents;
   int length;
-};
-
-struct IntWrapper {
-    int* value;
-    int instanceID;
-};
-
-struct BoolWrapper {
-    bool* value;
-    int instanceID;
-};
-
-struct CharWrapper {
-    char* value;
-    int instanceID;
+  int _id;
 };
 
 typedef struct FieldArray FieldArray;
-void initFieldArray(FieldArray* array, int numFields);
-
-int addAllocation(OwnedFields* structFields);

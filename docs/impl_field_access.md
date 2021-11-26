@@ -26,7 +26,7 @@ It is necessary to pass `_id_counter` because `C0` does not allow global variabl
 
 ## Passing Accessibility Permissions
 
-If a fully verified function calls a partially verified function, then an `OwnedFields` struct must be created to collect the permissions that are available at the beginning of the fully verified function and pass them to partially verified function. These permissions are obtained by examining the function's specifications and receiving information from the verifier, and they are added to `OwnedFields` immediately after initialization via injected calls to `inherit`.
+If a fully verified function calls a partially verified function, then an `OwnedFields` struct must be created to collect the permissions that are available at the beginning of the fully verified function and pass them to partially verified function. These permissions are obtained by examining the function's specifications and receiving information from the verifier, and they are added to `OwnedFields` immediately after initialization via injected calls to `addAccess`.
 
 ```
 void example(Node* n){
@@ -36,7 +36,7 @@ void example(Node* n){
     OwnedFields* fields = alloc(OwnedFields);
     initOwnedFields(*fields);
 
-    inherit(fields, n->_id, ["value", "next"]);
+    addAccess(fields, n->_id, ["value", "next"]);
 
     ...
 }
@@ -46,7 +46,7 @@ Partially verified functions are differentiated based on the precision of their 
 
 ### Imprecise Precondition, Precise Postcondition
 
-If a function's precondition is imprecise, then `OwnedFields` will be passed in without modification. However, if its postcondition is precise, then only the specified permissions will be returned to the caller. This is accomplished by replacing the current `OwnedFields` struct with a new one that contains only the specified permissions using `inherit`.
+If a function's precondition is imprecise, then `OwnedFields` will be passed in without modification. However, if its postcondition is precise, then only the specified permissions will be returned to the caller. This is accomplished by replacing the current `OwnedFields` struct with a new one that contains only the specified permissions using `addAccess`.
 
 ```
 void example(Node* node, OwnedFields** fields) {
@@ -57,7 +57,7 @@ void example(Node* node, OwnedFields** fields) {
 
     *fields = alloc(OwnedFields);
     initOwnedFields(*fields);
-    inherit(*fields, node->_id, ["value"]);
+    addAccess(*fields, node->_id, ["value"]);
 }
 ```
 
@@ -74,13 +74,13 @@ void call_example(Node* node){
 
     OwnedFields * fields = alloc(OwnedFields);
     initOwnedFields(fields);
-    inherit(fields, node->_id, ["value", "next"]);
+    addAccess(fields, node->_id, ["value", "next"]);
 
     ...
 
     OwnedFields* fields_1 = alloc(OwnedFields);
     initOwnedFields(fields_1);
-    inherit(fields_1, node_id, ["value", "next"]);
+    addAccess(fields_1, node_id, ["value", "next"]);
 
     example(&fields_1);
 
@@ -227,7 +227,7 @@ Because of the imprecise function, an `OwnedFields` struct must be created, inti
 
 ```
 void acyclic(List l, OwnedFields* fields){
-    inherit(fields, l._id, ["head"]);       // acc(l.head)
+    addAccess(fields, l._id, ["head"]);       // acc(l.head)
     listSeg(l.head, NULL, fields);
 }
 
@@ -235,7 +235,7 @@ void listSeg(Node from, Node to, OwnedFields* fields){
     if(from == to){
         return true;
     }else{
-        inherit(fields, from._id, ["val", "next"]);
+        addAccess(fields, from._id, ["val", "next"]);
         listSeg(from.next, to, fields);
     }
 }

@@ -4,23 +4,15 @@ int GROW_CAPACITY (int oldCapacity){
   return ((oldCapacity) < 8 ? 8 : (oldCapacity) + oldCapacity / 2);
 }
 
-int max(int a, int b){
-  if(a > b){
-    return a;
-  }else if (b > a) {
-    return b;
-  }else{
-    return a;
-  }
-}
-
-void initFieldArray(FieldArray* array, int numFields){
-  array->length = numFields;
-  array->accessible = true;
+int hash(int index, int arrayLength){
+    index = ((index >> 16) ^ index) * 0x45d9f3b;
+    index = ((index >> 16) ^ index) * 0x45d9f3b;
+    index = (index >> 16) ^ index;
+    return index % arrayLength;
 }
 
 void initOwnedFields(OwnedFields* fields){
-  fields->instanceCounter = 0;
+  fields->instanceCounter = NULL;
   int oldCapacity = 0;
   fields->capacity = GROW_CAPACITY(oldCapacity);
   fields->contents = alloc_array(FieldArray*, fields->capacity);
@@ -30,31 +22,59 @@ void initOwnedFields(OwnedFields* fields){
   }
 }
 
-int addAllocation(OwnedFields* fields){
-  if(fields->instanceCounter + 1 == fields->capacity){
-    int oldCapacity = fields->capacity;
-    fields->capacity = GROW_CAPACITY(oldCapacity);
-    FieldArray*[] newContents = alloc_array(FieldArray*, fields->capacity);
-    for (int i = 0; i < oldCapacity; i += 1) {
-      newContents[i] = fields->contents[i];
+void grow(OwnedFields* fields) {
+  int oldCapacity = fields->capacity;
+  fields->capacity = GROW_CAPACITY(oldCapacity);
+  FieldArray*[] newContents = alloc_array(FieldArray*, fields->capacity);
+  for(int i = 0; i<oldCapacity; i += 1){
+    if(fields->contents[i] != NULL){
+      int _id = fields->contents[i]->_id;
+      int newIndex = hash(_id, fields->capacity);
+      newContents[newIndex] = fields->contents[i];
     }
-    for (int i = oldCapacity; i < fields->capacity; i += 1){
-      newContents[i] = NULL;
-    }
-    fields->contents = newContents;
   }
-  fields->instanceCounter += 1;
-  return fields->instanceCounter - 1;
+  fields->contents = newContents;
 }
 
-void setStructAccessibility(OwnedFields* structFields, int structID){
-  return; //structFields->contents[structID]->accessible = false;
+FieldArray* find(OwnedFields* fields, int _id){
+  return fields->contents[hash(fields->capacity, _id)];
 }
 
-void setStructFieldAccessibility(OwnedFields* structFields, int structID, int fieldID){
-  return; //structFields->contents[structID]->contents[fieldID] = false;
+FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool accAll){
+  if(fields->length == fields->capacity) grow(fields);
+
+  int fieldIndex = hash(_id, fields->capacity);
+  while(fields->contents[fieldIndex] != NULL) fieldIndex += 1;
+
+  FieldArray * array = alloc(FieldArray);
+  fields->contents[fieldIndex] = array;
+  fields->length += 1;
+
+  array->contents = alloc_array(bool, numFields);
+  array->length = numFields;
+
+  for(int i = 0; i<array->length; i += 1){
+    array->contents[i] = accAll;
+  }
+  
+  return fields->contents[fieldIndex];
 }
 
-void assertAcc(OwnedFields* fields, int instanceID){
-    return;
+void initAccess(OwnedFields * fields, int _id, int numFields){
+  newFieldArray(fields, _id, numFields, true);
+}
+
+void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex){
+  FieldArray * array = find(fields, _id);
+  if(array != NULL){
+    array->contents[fieldIndex] = true;
+  }else{
+    array = newFieldArray(fields, _id, numFields, false);
+    array->contents[fieldIndex] = true;
+  }
+}
+
+void merge(OwnedFields* target, OwnedFields* source){
+
+    
 }
