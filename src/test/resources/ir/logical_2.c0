@@ -6,7 +6,8 @@ bool test(int value)
 int main()
 {
   bool b = test(1);
-  if (b || test(2))
+  bool c = test(2);
+  if (b || c)
   {
     return 1;
   }

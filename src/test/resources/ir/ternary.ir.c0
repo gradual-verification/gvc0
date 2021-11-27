@@ -1,3 +1,6 @@
+bool condition();
+int main();
+
 bool condition()
 {
   return true;
@@ -5,16 +8,7 @@ bool condition()
 
 int main()
 {
-  bool _;
-  int _1;
-  _ = condition();
-  if (_)
-  {
-    _1 = 0;
-  }
-  else
-  {
-    _1 = 1;
-  }
-  return _1;
+  bool c = false;
+  c = condition();
+  return c ? 0 : 1;
 }

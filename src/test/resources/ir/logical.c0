@@ -5,7 +5,10 @@ bool test(int value)
 
 int main()
 {
-  if (test(1) || test(2)) {
+  bool a = test(1);
+  bool b = test(2);
+
+  if (a || b) {
     return 0;
   }
 

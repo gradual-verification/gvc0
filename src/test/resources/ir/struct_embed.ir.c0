@@ -1,8 +1,21 @@
+struct inner;
+struct outer;
+
+struct inner
+{
+  int value;
+};
+
+struct outer
+{
+  int innerValue_value;
+};
+
+int main();
+
 int main()
 {
-  struct outer* test;
-  int _;
+  struct outer* test = NULL;
   test = alloc(struct outer);
-  _ = test->innerValue_value;
-  return _;
+  return test->innerValue_value;
 }

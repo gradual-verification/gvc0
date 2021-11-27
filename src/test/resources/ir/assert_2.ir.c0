@@ -1,6 +1,9 @@
+int main();
+
 int main()
 {
-  int x;
+  int x = 0;
   x = 1;
+  //@assert x > 0;
   return x;
 }
