@@ -181,6 +181,8 @@ object GraphTransformer {
       val method = ir.getMethod(input.name)
       val scope = new MethodScope(method, method.parameters.map(p => p.name -> p), None)
       transformBlock(input.body, method.entry, scope)
+      method.precondition = input.declaration.precondition.map(transformSpec(_, scope))
+      method.postcondition = input.declaration.postcondition.map(transformSpec(_, scope))
     }
 
     def transformBlock(
@@ -216,6 +218,7 @@ object GraphTransformer {
         case loop: ResolvedWhile => {
           val cond = transformExpr(loop.condition, scope)
           val loopBlock = new IRGraph.WhileBlock(output.method, Some(output), cond)
+          loopBlock.invariant = loop.invariant.map(transformSpec(_, scope))
           output.next = Some(loopBlock)
           transformStatement(loop.body, loopBlock.body, scope)
           loopBlock
@@ -284,7 +287,7 @@ object GraphTransformer {
           appendOp(output, new IRGraph.Assert(transformExpr(assert.value, scope), IRGraph.AssertMethod.Imperative))
         
         case spec: ResolvedAssertSpecExprification =>
-          appendOp(output, new IRGraph.Assert(transformExpr(spec.specification, scope), IRGraph.AssertMethod.Specification))
+          appendOp(output, new IRGraph.Assert(transformSpec(spec.specification, scope), IRGraph.AssertMethod.Specification))
 
         case unfold: ResolvedUnfoldPredicate =>
           appendOp(output, new IRGraph.Unfold(transformPredicate(unfold.predicate, scope)))
@@ -382,6 +385,43 @@ object GraphTransformer {
       case int: ResolvedInt => new IRGraph.Int(int.value)
       case b: ResolvedBool => new IRGraph.Bool(b.value)
       case _: ResolvedNull => new IRGraph.Null()
+    }
+
+    // Catches a ? specifier and wraps it in an Imprecise object
+    def transformSpec(input: ResolvedExpression, scope: Scope): IRGraph.Expression = input match {
+      case _: ResolvedImprecision => new IRGraph.Imprecise(None)
+
+      case logical: ResolvedLogical => {
+        val (left, leftImp) = transformSpec(logical.left, scope) match {
+          case imp: IRGraph.Imprecise => (imp.precise, true)
+          case other => (Some(other), false)
+        }
+
+        val (right, rightImp) = transformSpec(logical.right, scope) match {
+          case imp: IRGraph.Imprecise => (imp.precise, true)
+          case other => (Some(other), false)
+        }
+
+        if ((leftImp || rightImp) && logical.operation != LogicalOperation.And)
+          throw new TransformerException("Invalid ? expression")
+        
+        (left, right) match {
+          case (None, None) => new IRGraph.Imprecise(None)
+          case (None, Some(exp)) => new IRGraph.Imprecise(Some(exp))
+          case (Some(exp), None) => new IRGraph.Imprecise(Some(exp))
+          case (Some(l), Some(r)) => {
+            val op = logical.operation match {
+              case LogicalOperation.And => IRGraph.BinaryOp.And
+              case LogicalOperation.Or => IRGraph.BinaryOp.Or
+            }
+            val exp = new IRGraph.Binary(op, l, r)
+            if (leftImp || rightImp) new IRGraph.Imprecise(Some(exp))
+            else exp
+          }
+        }
+      }
+
+      case other => transformExpr(input, scope)
     }
 
     def transformInvoke(input: ResolvedInvoke, target: Option[IRGraph.Var], scope: Scope): IRGraph.Invoke = {

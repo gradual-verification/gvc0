@@ -64,7 +64,9 @@ object IRGraph {
 
   class Method(
     var name: String,
-    var returnType: Option[Type]
+    var returnType: Option[Type],
+    var precondition: Option[Expression] = None,
+    var postcondition: Option[Expression] = None
   ) extends Node {
     private val params = mutable.ArrayBuffer[Parameter]()
     private val vars = mutable.ArrayBuffer[Var]()
@@ -146,7 +148,8 @@ object IRGraph {
   class WhileBlock(
     var method: Method,
     var previous: Option[Block],
-    var condition: IRGraph.Expression
+    var condition: IRGraph.Expression,
+    var invariant: Option[IRGraph.Expression] = None
   ) extends Block {
     var next: Option[Block] = None
     val body = new BasicBlock(method, previous)
@@ -166,6 +169,8 @@ object IRGraph {
     var arguments: List[IRGraph.Expression]) extends Expression
 
   class Result() extends Expression
+
+  class Imprecise(var precise: Option[IRGraph.Expression]) extends Expression
 
   sealed trait Literal extends Expression
   class Int(val value: scala.Int) extends Literal

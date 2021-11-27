@@ -17,6 +17,7 @@ class GraphTransformerTests extends AnyFunSuite {
     "ir/increment",
     "ir/logical",
     "ir/logical_2",
+    "ir/specs",
     "ir/struct_embed",
     "ir/ternary",
     "ir/while",

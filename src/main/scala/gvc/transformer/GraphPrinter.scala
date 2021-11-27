@@ -71,6 +71,23 @@ object GraphPrinter {
     def printMethod(method: Method): Unit = {
       printMethodHeader(method)
       p.println()
+
+      method.precondition.foreach {pre =>
+        p.withIndent {
+          p.print("//@requires ")
+          printExpr(pre)
+          p.println(";")
+        }
+      }
+
+      method.postcondition.foreach { post =>
+        p.withIndent {
+          p.print("//@ensures ")
+          printExpr(post)
+          p.println(";")
+        }
+      }
+
       p.println("{")
       p.withIndent {
         for (decl <- method.variables) {
@@ -116,6 +133,15 @@ object GraphPrinter {
           p.print("while (")
           printExpr(loop.condition)
           p.println(")")
+
+          loop.invariant.foreach { invariant =>
+            p.withIndent {
+              p.print("//@loop_invariant ")
+              printExpr(invariant)
+              p.println(";")
+            }
+          }
+
           p.println("{")
           p.withIndent { printBlock(loop.body) }
           p.println("}")
@@ -251,7 +277,14 @@ object GraphPrinter {
         p.print(")")
       }
 
-      case res: Result => p.print("\result")
+      case res: Result => p.print("\\result")
+      case imp: Imprecise => imp.precise match {
+        case None => p.print("?")
+        case Some(precise) => wrapExpr(precedence, Precedence.And) {
+          p.print("? && ")
+          printExpr(precise, Precedence.And)
+        }
+      }
       case int: Int => p.print(int.value.toString())
       case char: Char => {
         p.print("'")
