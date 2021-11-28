@@ -127,7 +127,7 @@ object IRGraphSilver {
       }
 
       case fold: Fold => Seq(vpr.Fold(convertPredicateInstance(fold.instance))())
-      case unfold: Unfold => Seq(vpr.Fold(convertPredicateInstance(unfold.instance))())
+      case unfold: Unfold => Seq(vpr.Unfold(convertPredicateInstance(unfold.instance))())
       case error: Error => Seq(vpr.Assert(vpr.FalseLit()())())
 
       case ret: ReturnValue =>

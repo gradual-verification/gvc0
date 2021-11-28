@@ -93,6 +93,9 @@ object IRGraph {
         case n => name + n
       }).find(!scope.contains(_)).get
 
+    def variable(name: String): Var =
+      scope.get(name).getOrElse(throw new IRException(s"Variable '$name' not found"))
+
     def variables: Seq[Var] = vars.toSeq
   }
 

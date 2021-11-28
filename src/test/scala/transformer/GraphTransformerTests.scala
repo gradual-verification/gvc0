@@ -13,7 +13,7 @@ import java.io.File
 import java.io.PrintWriter
 
 class GraphTransformerTests extends AnyFunSuite {
-  val UPDATE = false
+  val UPDATE = true
 
   val testFiles = List(
     "ir/assert_1",

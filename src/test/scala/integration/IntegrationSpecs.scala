@@ -7,13 +7,12 @@ import scala.io.Source
 import fastparse.Parsed.{Success, Failure}
 import gvc.analyzer.{Resolver, ErrorSink, TypeChecker, AssignmentValidator}
 import gvc.analyzer.ReturnValidator
-import gvc.transformer.Transformer
-import gvc.transformer.CNaughtPrinter
-import gvc.transformer.IR
-import gvc.transformer.SilverOutput
 import gvc.analyzer.SpecificationValidator
 import gvc.analyzer.ImplementationValidator
 import gvc.weaver.Weaver
+import gvc.transformer.GraphTransformer
+import gvc.transformer.GraphPrinter
+import gvc.transformer.IRGraphSilver
 
 class IntegrationSpecExprs extends AnyFunSuite {
   val testDirs = List(
@@ -127,16 +126,14 @@ class IntegrationSpecExprs extends AnyFunSuite {
             if (!sink.errors.isEmpty) {
               ValidationError(sink.errors.map(_.message))
             } else {
-              var ir = Transformer.programToIR(result)
-              val methods = ir.methods.collect { case m: IR.MethodImplementation => m }
-                .map(CNaughtPrinter.printMethod(_, false))
-                .mkString("\n")
+              var ir = GraphTransformer.transform(result)
+              val irSrc = GraphPrinter.print(ir)
 
               if (expectedIR.isDefined)
-                assert(expectedIR.get == methods)
+                assert(expectedIR.get == irSrc)
 
               if (expectedSilver.isDefined) {
-                val silver = SilverOutput.program(ir)
+                val silver = IRGraphSilver.toSilver(ir)
                 assert(expectedSilver.get == silver.toString())
                 
                 Weaver.weave(ir, silver)

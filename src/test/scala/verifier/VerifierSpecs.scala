@@ -1,21 +1,20 @@
 package gvc.verifier
 
-import gvc.parser._
-import org.scalatest.funsuite._
-import java.io.File
-import scala.io.Source
 import fastparse.Parsed.Success
-import gvc.analyzer.{Resolver, ErrorSink, TypeChecker, AssignmentValidator}
-import gvc.analyzer.ReturnValidator
-import gvc.transformer.Transformer
-import gvc.transformer.SilverOutput
-import gvc.analyzer.SpecificationValidator
-import gvc.analyzer.ImplementationValidator
+import gvc.analyzer.ErrorSink
+import gvc.analyzer.Validator
+import gvc.parser._
+import gvc.transformer.GraphPrinter
+import gvc.transformer.GraphTransformer
+import gvc.transformer.IRGraphSilver
 import gvc.weaver.Weaver
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.funsuite._
 import viper.silicon.Silicon
 import viper.silver.verifier.Failure
-import org.scalatest.BeforeAndAfterAll
-import gvc.transformer.CNaughtPrinter
+
+import java.io.File
+import scala.io.Source
 
 class VerifierSpecs extends AnyFunSuite with BeforeAndAfterAll {
   var silicon: Silicon = null
@@ -42,20 +41,12 @@ class VerifierSpecs extends AnyFunSuite with BeforeAndAfterAll {
     val Success(parsed, _) = Parser.parseProgram(source)
     val sink = new ErrorSink()
 
-    val result = Resolver.resolveProgram(parsed, sink)
+    val result = Validator.validateParsed(parsed, sink)
     assert(sink.errors.isEmpty)
+    assert(result.isDefined)
 
-    TypeChecker.check(result, sink)
-    assert(sink.errors.isEmpty)
-
-    AssignmentValidator.validate(result, sink)
-    ReturnValidator.validate(result, sink)
-    SpecificationValidator.validate(result, sink)
-    ImplementationValidator.validate(result, sink)
-    assert(sink.errors.isEmpty)
-
-    var ir = Transformer.programToIR(result)
-    val silver = SilverOutput.program(ir)
+    var ir = GraphTransformer.transform(result.get)
+    val silver = IRGraphSilver.toSilver(ir)
     
     assert(silver.toString == expectedSilver)
 
@@ -64,8 +55,8 @@ class VerifierSpecs extends AnyFunSuite with BeforeAndAfterAll {
       case Failure(errors) => fail(errors.map(e => e.toString()).mkString("\n"))
     }
 
-    val program = Weaver.weave(ir, silver)
-    assert(CNaughtPrinter.printProgram(program) == expectedOutput)
+    Weaver.weave(ir, silver)
+    assert(GraphPrinter.print(ir) == expectedOutput)
   }
 
   override protected def beforeAll(): Unit = {

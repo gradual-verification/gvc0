@@ -1,240 +1,228 @@
 package gvc.weaver
-import gvc.transformer.IR
-import gvc.transformer.IR.Op
-import gvc.transformer.IR.ProgramExpr
+import gvc.transformer.IRGraph._
 import viper.silver.{ast => vpr}
-import scala.collection.mutable.ListBuffer
 
 object Weaver {
-  class WeaverException(val message: String) extends RuntimeException {
-    override def getMessage(): String = message
-  }
+  class WeaverException(message: String) extends Exception(message)
 
-  def weave(c0: IR.Program, silver: vpr.Program): IR.Program = {
-    new IR.Program(
-      c0.methods.map {
-        case impl: IR.MethodImplementation => weaveMethod(impl, findMethod(impl, silver))
-        case lib: IR.LibraryMethod => lib
-      },
-      c0.predicates,
-      c0.structs
-    )
-  }
+  def weave(ir: Program, silver: vpr.Program): Unit =
+    new Weaver(ir, silver).weave()
 
-  private def findMethod(method: IR.Method, program: vpr.Program) = {
-    val name = "$method_" + method.name
-    program.methods.filter(_.name == name).head
-  }
-
-  private def weaveMethod(c0: IR.MethodImplementation, silver: vpr.Method): IR.MethodImplementation = {
-    val scope = new Scope(c0)
-
-    def weaveBlock(input: IR.Block, verified: vpr.Seqn): IR.Block = {
-      new IR.Block(weave(input.operations, verified.ss).toList)
+  private class Weaver(ir: Program, silver: vpr.Program) {
+    private sealed trait Position {
+      def method: Method
+      def insertBefore(op: Op): Unit
     }
 
-    def generateChecks(node: vpr.Node, returnValue: Option[IR.Value]): Seq[IR.Op] = {
-      var ops = Seq[IR.Op]()
-      val visitor: PartialFunction[vpr.Node, Unit] = {
-        case n => {
-          for (check <- n.getChecks()) {
-            ops = ops ++ CheckImplementation.generate(check, scope, returnValue)
+    private case class AtOp(block: BasicBlock, var index: scala.Int) extends Position {
+      def method = block.method
+
+      def insertBefore(op: Op): Unit = {
+        block.ops.insert(index, op)
+        index += 1
+      }
+    }
+
+    private case class BeforeBlock(block: Block) extends Position {
+      def method = block.method
+
+      def insertBefore(op: Op): Unit = {
+        val basic = block.previous match {
+          // If there is a basic block, just use that
+          case Some(basic: BasicBlock) => basic
+          case Some(prev) => {
+            // Otherwise, insert a basic block and patch up the surrounding links
+            val newBlock = new BasicBlock(block.method, Some(prev))
+            newBlock.next = Some(block)
+
+            prev.next = Some(newBlock)
+            block.previous = Some(newBlock)
+
+            newBlock
           }
+
+          // Root blocks should always be basic blocks
+          case None => throw new WeaverException("Invalid root block")
+        }
+
+        basic.ops += op
+      }
+    }
+
+    def weave(): Unit = {
+      ir.methods.foreach { method => weave(method, silver.findMethod(method.name)) }
+    }
+
+    private def weave(method: Method, silver: vpr.Method): Unit = {
+      weave(method.entry, silver.body.get.ss.toList, silver)
+    }
+
+    private def weave(block: Block, silver: List[vpr.Stmt], silverMethod: vpr.Method): Unit = {
+      val remaining = block match {
+        case block: BasicBlock =>  weaveOps(block, silver, silverMethod)
+
+        case iff: IfBlock => silver match {
+          case (stmt: vpr.If) :: rest => {
+            val pos = BeforeBlock(iff)
+            inspect(stmt, pos)
+            inspectDeep(stmt.cond, pos)
+
+            weave(iff.ifTrue, stmt.thn.ss.toList, silverMethod)
+            weave(iff.ifFalse, stmt.els.ss.toList, silverMethod)
+            rest
+          }
+          case other => unexpected(other)
+        }
+
+        case loop: WhileBlock => silver match {
+          case (stmt: vpr.While) :: rest => {
+            val pos = BeforeBlock(loop)
+            inspect(stmt, pos)
+            inspectDeep(stmt.cond, pos)
+
+            // TODO: Do we have runtime checks on loop invariants, and if so, where do they belong?
+            stmt.invs.foreach(inspectDeep(_, pos))
+
+            weave(loop.body, stmt.body.ss.toList, silverMethod)
+            rest
+          }
+          case other => unexpected(other)
         }
       }
 
-      node.visit(visitor)
-      ops
+      block.next match {
+        case None => remaining match {
+          case Nil => ()
+          case other => unexpected(other)
+        }
+        case Some(block) => weave(block, remaining, silverMethod)
+      }
     }
 
-    def weave(input: Seq[IR.Op], verified: Seq[vpr.Stmt]): ListBuffer[IR.Op] = {
-      val ops = ListBuffer[IR.Op]()
-      var remaining = verified.toList
+    private def weaveOps(block: BasicBlock, silver: List[vpr.Stmt], silverMethod: vpr.Method): List[vpr.Stmt] = {
+      var remaining = silver
 
-      def addChecks(stmt: vpr.Stmt, returnValue: Option[IR.Value] = None): Unit = {
-        ops ++= generateChecks(stmt, returnValue)
+      var index = 0
+      while (index < block.ops.length) {
+        val op = block.ops(index)
+        val pos = AtOp(block, index)
+        remaining = weaveOp(op, pos, remaining, silverMethod)
+
+        // Use the index from the position, since inserting runtime checks could have modified it
+        index = pos.index + 1
       }
 
-      for (op <- input) {
-        op match {
-          case _: IR.Op.AssignVar => {
-            val (stmt, rest) = remaining match {
-              case (c: vpr.MethodCall) :: r => (c, r)
-              case (n: vpr.NewStmt) :: r => (n, r)
-              case (a: vpr.LocalVarAssign) :: r => (a, r)
-              case l => unexpected(l)
-            }
+      remaining
+    }
 
-            remaining = rest
-            addChecks(stmt)
-            ops += op
+    private def weaveOp(op: Op, pos: Position, silver: List[vpr.Stmt], silverMethod: vpr.Method): List[vpr.Stmt] = op match {
+      case _: Invoke  => silver match {
+        case (stmt: vpr.MethodCall) :: rest => {
+          inspectDeep(stmt, pos)
+          rest
+        }
+        case other => unexpected(other)
+      }
+
+      case _: AllocValue | _ : AllocStruct => silver match {
+        case (stmt: vpr.NewStmt) :: rest => {
+          inspectDeep(stmt, pos)
+          rest
+        }
+        case other => unexpected(other)
+      }
+
+      case _: Assign => silver match {
+        case (stmt: vpr.LocalVarAssign) :: rest => {
+          inspectDeep(stmt, pos)
+          rest
+        }
+        case other => unexpected(other)
+      }
+
+      case _: AssignMember => silver match {
+        case (stmt: vpr.FieldAssign) :: rest => {
+          inspectDeep(stmt, pos)
+          rest
+        }
+        case other => unexpected(other)
+      }
+
+      case assert: Assert => assert.method match {
+        case AssertMethod.Imperative => silver
+        case AssertMethod.Specification => silver match {
+          case (stmt: vpr.Assert) :: rest => {
+            inspectDeep(stmt, pos)
+            rest
           }
-
-          case _: IR.Op.AssignMember | _: IR.Op.AssignPtr =>
-            remaining match {
-              case (a: vpr.FieldAssign) :: tail => {
-                remaining = tail
-                addChecks(a)
-                ops += op
-              }
-              case l => unexpected(l)
-            }
-
-          case _: IR.Op.AssignArray => ???
-          case _: IR.Op.AssignArrayMember => ???
-
-          case whileOp: IR.Op.While => {
-            remaining match {
-              case (whileVerified: vpr.While) :: rest => {
-                remaining = rest
-                addChecks(whileVerified)
-
-                ops += new IR.Op.While(
-                  whileOp.condition,
-                  new IR.Literal.Bool(true), // eliminate invariant
-                  weaveBlock(whileOp.body, whileVerified.body))
-              }
-
-              case l => unexpected(l)
-            }
-          }
-          case ifOp: IR.Op.If =>
-            remaining match {
-              case (ifVerified: vpr.If) :: rest => {
-                remaining = rest
-                addChecks(ifVerified)
-                ops += new IR.Op.If(
-                  ifOp.condition,
-                  weaveBlock(ifOp.ifTrue, ifVerified.thn),
-                  weaveBlock(ifOp.ifFalse, ifVerified.els))
-              }
-              case l => unexpected(l)
-            }
-
-          case _: IR.Op.Assert => ops += op
-
-          case _: IR.Op.AssertSpecExpr =>
-            remaining match {
-              case (assert: vpr.Assert) :: rest => {
-                remaining = rest
-                addChecks(assert)
-                // drop specification assert but add the required dynamic checks
-              }
-              case l => unexpected(l)
-            }
-
-          case _: IR.Op.Fold =>
-            remaining match {
-              case (f: vpr.Fold) :: rest => {
-                remaining = rest
-                addChecks(f)
-                // drop the fold but add the required dynamic checks
-              }
-              case l => unexpected(l)
-            }
-
-          case _: IR.Op.Unfold =>
-            remaining match {
-              case (uf: vpr.Unfold) :: rest => {
-                remaining = rest
-                addChecks(uf)
-                // drop the unfold but add the required dynamic checks
-              }
-              case l => unexpected(l)
-            }
-
-          case _: IR.Op.Error =>
-            remaining match {
-              case (a: vpr.Assert) :: rest => {
-                remaining = rest
-                addChecks(a) // there shouldn't ever be any runtime checks
-                ops += op
-              }
-              case l => unexpected(l)
-            }
-
-          case retOp: IR.Op.Return => {
-            retOp.value match {
-              case Some(value) => {
-                remaining match {
-                  case (assign: vpr.LocalVarAssign) :: rest => {
-                    remaining = rest
-                    // Will there ever be a dynamic check that refers to the return value here?
-                    // It seems that a local var assign would not result in a check for the result value
-                    addChecks(assign, returnValue = retOp.value)
-                  }
-                  case l => unexpected(l)
-                }
-              }
-
-              // If no return value, no Silver code is emitted
-              case None => ()
-            }
-
-            // Check post conditions
-            for (post <- silver.posts) {
-              ops ++= generateChecks(post, returnValue = retOp.value)
-            }
-
-            ops += retOp
-          }
-
-          case noop: IR.Op.Noop => {
-            noop.value match {
-              case call: ProgramExpr.Invoke => {
-                remaining match {
-                  case (callVerified: vpr.MethodCall) :: rest => {
-                    remaining = rest
-                    addChecks(callVerified)
-                    ops += noop
-                  }
-
-                  case l => unexpected(l)
-                }
-              }
-
-              case _ => () // drop other noops
-            }
-          }
+          case other => unexpected(other)
         }
       }
 
-      if (!remaining.isEmpty)
-        unexpected(remaining)
-
-      ops
-    }
-
-    // Check the return type of the function
-    val body = weave(c0.body.operations, silver.body.get.ss)
-    c0.returnType match {
-      // If the method does not have a return type, the postcondition cannot refer to
-      // the return value, so we can insert the dynamic checks at the tail without having
-      // a return statment.
-      case None => {
-        for (post <- silver.posts) {
-          body ++= generateChecks(post, returnValue = None)
+      case _: Fold => silver match {
+        case (stmt: vpr.Fold) :: rest => {
+          inspectDeep(stmt, pos)
+          rest
         }
+        case other => unexpected(other)
       }
 
-      // If method has a return type, it will need to return a value, so the postcondition
-      // checks will be inserted at the return location where we can access the return value
-      case Some(_) => ()
+      case _: Unfold => silver match {
+        case (stmt: vpr.Unfold) :: rest => {
+          inspectDeep(stmt, pos)
+          rest
+        }
+        case other => unexpected(other)
+      }
+
+      case _: Error => silver match {
+        case (stmt: vpr.Assert) :: rest => {
+          inspectDeep(stmt, pos)
+          rest
+        }
+        case other => unexpected(other)
+      }
+
+      case ret: Return => {
+        val rest = ret match {
+          case _: ReturnInvoke => silver match {
+            case (stmt: vpr.MethodCall) :: rest => {
+              // TODO: use temp variable to allow runtime checks
+              inspectDeep(stmt, pos)
+              rest
+            }
+            case other => unexpected(other)
+          }
+
+          case ret: ReturnValue => silver match {
+            case (stmt: vpr.LocalVarAssign) :: rest => {
+              inspectDeep(stmt, pos, Some(ret.value))
+              rest
+            }
+            case other => unexpected(other)
+          }
+
+          case _ => silver
+        }
+
+        silverMethod.posts.foreach(inspectDeep(_, pos))
+        rest
+      }
     }
 
-    new IR.MethodImplementation(
-      c0.name,
-      c0.returnType,
-      c0.arguments,
-      new IR.Literal.Bool(true), // drop precondition
-      new IR.Literal.Bool(true), // drop postcondition
-      scope.getVars(),
-      new IR.Block(body.toList)
-    )
-  }
+    private def inspect(node: vpr.Node, position: Position, returnValue: Option[Expression] = None): Unit = {
+      for (check <- node.getChecks())
+      for (impl <- CheckImplementation.generate(check, position.method, returnValue))
+        position.insertBefore(impl)
+    }
 
-  private def unexpected(nodes: List[vpr.Node]): Nothing = nodes match {
-    case node :: _ => throw new WeaverException("Encountered unexpected Silver node: " + node.toString())
-    case Nil => throw new WeaverException("Expected Silver node")
+    private def inspectDeep(node: vpr.Node, position: Position, returnValue: Option[Expression] = None): Unit = {
+      node.visit { case n => inspect(n, position, returnValue) }
+    }
+
+    private def unexpected(nodes: List[vpr.Node]): Nothing = nodes match {
+      case node :: _ => throw new WeaverException("Encountered unexpected Silver node: " + node.toString())
+      case Nil => throw new WeaverException("Expected Silver node")
+    }
   }
 }
