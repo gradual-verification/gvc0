@@ -36,7 +36,8 @@ object IRGraph {
     def methods = _methods.values.toSeq.sortBy(_.name)
     def predicates = _predicates.values.toSeq.sortBy(_.name)
 
-    def struct(name: String) = _structs.get(name).getOrElse(throw new IRException(s"Struct '$name' not found"))
+    // Structs can be used even if they are never declared
+    def struct(name: String) = _structs.getOrElseUpdate(name, new Struct(name))
     def method(name: String) = _methods.get(name).getOrElse(throw new IRException(s"Method '$name' not found"))
     def predicate(name: String) = _predicates.get(name).getOrElse(throw new IRException(s"Predicate '$name' not found"))
   }
