@@ -191,20 +191,22 @@ object GraphPrinter {
         p.println(";")
       }
 
-      case assign: AssignMember => {
-        printExpr(assign.target)
-        p.print("->")
-        p.print(assign.field.name)
-        p.print(" = ")
-        printExpr(assign.value)
-        p.println(";")
-      }
-      case assign: AssignPointer => {
-        p.print("*(")
-        printExpr(assign.target)
-        p.print(") = ")
-        printExpr(assign.value)
-        p.println(";")
+      case assign: AssignMember => assign.member match {
+        case member: FieldMember => {
+          printExpr(member.root)
+          p.print("->")
+          p.print(member.field.name)
+          p.print(" = ")
+          printExpr(assign.value)
+          p.println(";")
+        }
+        case member: DereferenceMember => {
+          p.print("*")
+          printExpr(member.root, Precedence.Unary)
+          p.print(" = ")
+          printExpr(assign.value)
+          p.println(";")
+        }
       }
 
       case assert: Assert => assert.method match {
@@ -267,10 +269,14 @@ object GraphPrinter {
 
     def printExpr(expr: Expression, precedence: scala.Int = Precedence.Top): Unit = expr match {
       case v: Var => p.print(v.name)
-      case m: Member => {
-        printExpr(m.instance)
+      case m: FieldMember => {
+        printExpr(m.root)
         p.print("->")
         p.print(m.field.name)
+      }
+      case deref: DereferenceMember => wrapExpr(precedence, Precedence.Unary) {
+        p.print("*")
+        printExpr(deref.root, Precedence.Unary)
       }
       case acc: Accessibility => {
         p.print("acc(")
@@ -344,11 +350,6 @@ object GraphPrinter {
           case UnaryOp.Negate => "-"
         })
         printExpr(unary.operand, Precedence.Unary)
-      }
-
-      case deref: Dereference => wrapExpr(precedence, Precedence.Unary) {
-        p.print("*")
-        printExpr(deref.value, Precedence.Unary)
       }
     }
 

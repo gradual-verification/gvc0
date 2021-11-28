@@ -18,6 +18,11 @@ object GraphTransformer {
       for (struct <- program.structDefinitions)
         implementStruct(struct)
 
+      for (predicate <- program.predicateDefinitions)
+        definePredicate(predicate)
+      for(predicate <- program.predicateDefinitions)
+        implementPredicate(predicate)
+
       for (method <- program.methodDefinitions)
         defineMethod(method)
       for (method <- program.methodDefinitions)
@@ -56,7 +61,7 @@ object GraphTransformer {
     class StructValue(val field: IRGraph.StructField) extends StructItem
 
     def implementStruct(input: ResolvedStructDefinition): Unit = {
-      val struct = ir.getStruct(input.name)
+      val struct = ir.struct(input.name)
 
       def resolveField(field: ResolvedStructField, base: Option[String]): StructItem = {
         val fullName = base match {
@@ -126,7 +131,7 @@ object GraphTransformer {
         case UnknownType => throw new TransformerException("Unknown type")
         case MissingNamedType(name) => throw new TransformerException(s"Missing type '$name'")
         case ResolvedStructType(structName) => throw new TransformerException(s"Invalid bare struct value '$structName'")
-        case ResolvedPointer(struct: ResolvedStructType) => new IRGraph.ReferenceType(ir.getStruct(struct.structName))
+        case ResolvedPointer(struct: ResolvedStructType) => new IRGraph.ReferenceType(ir.struct(struct.structName))
         case ResolvedPointer(valueType) => new IRGraph.PointerType(transformType(valueType))
         case ResolvedArray(valueType) => throw new TransformerException("Unsupported array type")
         case BoolType => IRGraph.BoolType
@@ -146,7 +151,6 @@ object GraphTransformer {
 
     sealed trait Scope {
       def variable(name: String): IRGraph.Var
-      def method: IRGraph.Method
 
       def variable(input: ResolvedVariableRef): IRGraph.Var = {
         input.variable match {
@@ -179,7 +183,7 @@ object GraphTransformer {
     }
 
     def implementMethod(input: ResolvedMethodDefinition): Unit = {
-      val method = ir.getMethod(input.name)
+      val method = ir.method(input.name)
       val scope = new MethodScope(method, method.parameters.map(p => p.name -> p), None)
       transformBlock(input.body, method.entry, scope)
       method.precondition = input.declaration.precondition.map(transformSpec(_, scope))
@@ -318,6 +322,25 @@ object GraphTransformer {
       block
     }
 
+    def definePredicate(input: ResolvedPredicateDefinition): Unit = {
+      val pred = ir.addPredicate(input.name)
+      for (param <- input.declaration.arguments)
+        pred.addParameter(transformType(param.valueType), param.name)
+    }
+
+    class PredicateScope(val predicate: IRGraph.Predicate) extends Scope {
+      private val params = predicate.parameters.map(p => p.name -> p).toMap
+
+      def variable(name: String): IRGraph.Var =
+        params.get(name).getOrElse(throw new TransformerException(s"Predicate parameter '$name' not found"))
+    }
+
+    def implementPredicate(input: ResolvedPredicateDefinition): Unit = {
+      val predicate = ir.predicate(input.name)
+      val scope = new PredicateScope(predicate)
+      predicate.expression = transformExpr(input.body, scope)
+    }
+
     def transformExpr(input: ResolvedExpression, scope: Scope): IRGraph.Expression = input match {
       case ref: ResolvedVariableRef => scope.variable(ref)
       case pred: ResolvedPredicate => transformPredicate(pred, scope)
@@ -325,20 +348,22 @@ object GraphTransformer {
 
       case m: ResolvedMember => {
         val (parent, field) = transformField(m)
-        new IRGraph.Member(transformExpr(parent, scope), field)
+        new IRGraph.FieldMember(transformExpr(parent, scope), field)
       }
 
       case _: ResolvedArrayIndex | _: ResolvedLength | _: ResolvedAllocArray =>
         throw new TransformerException("Arrays are not supported")
-      case _: ResolvedResult => new IRGraph.Result(scope.method)
 
-      case acc: ResolvedAccessibility => {
-        val (parent, field) = acc.field match {
-          case member: ResolvedMember => transformField(member)
-          case _ => throw new TransformerException("Invalid acc() argument")
-        }
-        new IRGraph.Accessibility(new IRGraph.Member(transformExpr(parent, scope), field))
+      case _: ResolvedResult => scope match {
+        case scope: MethodScope => new IRGraph.Result(scope.method)
+        case _ => throw new TransformerException("Result used in invalid context")
       }
+
+      case acc: ResolvedAccessibility =>
+        new IRGraph.Accessibility(transformExpr(acc.field, scope) match {
+          case member: IRGraph.Member => member
+          case _ => throw new TransformerException("Invalid acc() argument")
+        })
 
       case imp: ResolvedImprecision => throw new TransformerException("Invalid ? encountered as expression")
       
@@ -381,11 +406,7 @@ object GraphTransformer {
       }
 
       case deref: ResolvedDereference => {
-        val valueType = deref.valueType match {
-          case ResolvedPointer(valueType) => transformType(valueType)
-          case _ => throw new TransformerException("Invalid dereference of non-pointer value")
-        }
-        new IRGraph.Dereference(valueType, transformExpr(deref.value, scope))
+        new IRGraph.DereferenceMember(transformExpr(deref.value, scope), transformType(deref.valueType))
       }
 
       case not: ResolvedNot => new IRGraph.Unary(IRGraph.UnaryOp.Not, transformExpr(not.value, scope))
@@ -442,11 +463,11 @@ object GraphTransformer {
     }
 
     def resolveMethod(invoke: ResolvedInvoke): IRGraph.Method =
-      invoke.method.map(m => ir.getMethod(m.name))
+      invoke.method.map(m => ir.method(m.name))
         .getOrElse(throw new TransformerException("Invalid invoke"))
 
     def resolvePredicate(pred: ResolvedPredicate): IRGraph.Predicate =
-      pred.predicate.map(p => ir.getPredicate(p.name))
+      pred.predicate.map(p => ir.predicate(p.name))
         .getOrElse(throw new TransformerException("Invalid predicate reference"))
 
     def transformPredicate(pred: ResolvedPredicate, scope: Scope): IRGraph.PredicateInstance =
@@ -458,11 +479,11 @@ object GraphTransformer {
 
         case member: ResolvedMember => {
           val (parent, field) = transformField(member)
-          new IRGraph.AssignMember(transformExpr(parent, scope), field, value)
+          new IRGraph.AssignMember(new IRGraph.FieldMember(transformExpr(parent, scope), field), value)
         }
 
         case deref: ResolvedDereference =>
-          new IRGraph.AssignPointer(transformExpr(deref.value, scope), value, transformType(deref.valueType))
+          new IRGraph.AssignMember(new IRGraph.DereferenceMember(transformExpr(deref.value, scope), transformType(deref.valueType)), value)
 
         case _: ResolvedArrayIndex => throw new TransformerException("Arrays are not supported")
         case _ => throw new TransformerException("Invalid L-value")
@@ -471,7 +492,7 @@ object GraphTransformer {
 
     def transformAlloc(input: ResolvedAlloc, target: IRGraph.Var, scope: Scope): IRGraph.Op =
       input.memberType match {
-        case ResolvedStructType(structName) => new IRGraph.AllocStruct(ir.getStruct(structName), target)
+        case ResolvedStructType(structName) => new IRGraph.AllocStruct(ir.struct(structName), target)
         case valueType => new IRGraph.AllocValue(transformType(valueType), target)
       }
   }

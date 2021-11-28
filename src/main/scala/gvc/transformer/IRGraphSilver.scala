@@ -23,10 +23,11 @@ object IRGraphSilver {
     lazy val boolPointer = declareField("$boolValue", vpr.Bool)
 
     def convert(): vpr.Program = {
+      val predicates = ir.predicates.map(convertPredicate).toList
       val methods = ir.methods.map(convertMethod).toList
       val fields = this.fields.toSeq.sortBy(_.name).toList
 
-      vpr.Program(Seq.empty, fields, Seq.empty, Seq.empty, methods, Seq.empty)()
+      vpr.Program(Seq.empty, fields, Seq.empty, predicates, methods, Seq.empty)()
     }
 
     def convertMethod(method: Method): vpr.Method = {
@@ -118,12 +119,7 @@ object IRGraphSilver {
         Seq(vpr.LocalVarAssign(convertVar(assign.target), convertExpr(assign.value))())
       
       case assign: AssignMember =>
-        Seq(vpr.FieldAssign(convertMember(assign.target, assign.field), convertExpr(assign.value))())
-
-      case assign: AssignPointer =>
-        Seq(vpr.FieldAssign(
-          vpr.FieldAccess(convertExpr(assign.target), getPointerField(assign.valueType))(),
-          convertExpr(assign.value))())
+        Seq(vpr.FieldAssign(convertMember(assign.member), convertExpr(assign.value))())
 
       case assert: Assert => assert.method match {
         case AssertMethod.Imperative => Seq.empty
@@ -148,16 +144,18 @@ object IRGraphSilver {
     def convertVar(v: Var): vpr.LocalVar =
       vpr.LocalVar(v.name, convertType(v.valueType))()
 
-    def convertMember(instance: Expression, field: StructField): vpr.FieldAccess =
-      vpr.FieldAccess(convertExpr(instance), convertField(field))()
+    def convertMember(member: Member): vpr.FieldAccess = member match {
+      case member: FieldMember => vpr.FieldAccess(convertExpr(member.root), convertField(member.field))()
+      case member: DereferenceMember => vpr.FieldAccess(convertExpr(member.root), getPointerField(member.valueType))()
+    }
 
     def convertPredicateInstance(pred: PredicateInstance): vpr.PredicateAccessPredicate =
       vpr.PredicateAccessPredicate(vpr.PredicateAccess(pred.arguments.map(convertExpr), pred.predicate.name)(), vpr.FullPerm()())()
 
     def convertExpr(expr: Expression): vpr.Exp = expr match {
       case v: Var => convertVar(v)
-      case m: Member => convertMember(m.instance, m.field)
-      case acc: Accessibility => vpr.FieldAccessPredicate(convertMember(acc.member.instance, acc.member.field), vpr.FullPerm()())()
+      case m: Member => convertMember(m)
+      case acc: Accessibility => vpr.FieldAccessPredicate(convertMember(acc.member), vpr.FullPerm()())()
       case pred: PredicateInstance => convertPredicateInstance(pred)
       case result: Result => getReturnVar(result.method)
       case imp: Imprecise => vpr.ImpreciseExp(imp.precise.map(convertExpr).getOrElse(vpr.TrueLit()()))()
@@ -192,10 +190,10 @@ object IRGraphSilver {
           case UnaryOp.Not => vpr.Not(value)()
         }
       }
+    }
 
-      case deref: Dereference => {
-        vpr.FieldAccess(convertExpr(deref.value), getPointerField(deref.valueType))()
-      }
+    def convertPredicate(pred: IRGraph.Predicate): vpr.Predicate = {
+      vpr.Predicate(pred.name, pred.parameters.map(convertDecl).toList, Some(convertExpr(pred.expression)))()
     }
   }
 }

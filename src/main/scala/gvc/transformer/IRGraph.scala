@@ -9,7 +9,7 @@ object IRGraph {
   class Program {
     private val _structs = mutable.Map[String, Struct]()
     private val _methods = mutable.Map[String, Method]()
-    private val predicates = mutable.Map[String, Predicate]()
+    private val _predicates = mutable.Map[String, Predicate]()
 
     def addStruct(name: String): Struct = {
       val struct = new Struct(name)
@@ -27,22 +27,18 @@ object IRGraph {
 
     def addPredicate(name: String): Predicate = {
       val predicate = new Predicate(name, new IRGraph.Bool(true))
-      if (predicates.getOrElseUpdate(predicate.name, predicate) != predicate)
+      if (_predicates.getOrElseUpdate(predicate.name, predicate) != predicate)
         throw new IRException(s"Predicate '${predicate.name}' already exists")
       predicate
     }
 
-    def structs = _structs.toSeq
-      .sortBy({ case (k, _) => k })
-      .map({ case (_, v) => v })
+    def structs = _structs.values.toSeq.sortBy(_.name)
+    def methods = _methods.values.toSeq.sortBy(_.name)
+    def predicates = _predicates.values.toSeq.sortBy(_.name)
 
-    def methods = _methods.toSeq
-      .sortBy({ case (k, _) => k })
-      .map({ case (_, v) => v })
-
-    def getStruct(name: String) = _structs.get(name).getOrElse(throw new IRException(s"Struct '$name' not found"))
-    def getMethod(name: String) = _methods.get(name).getOrElse(throw new IRException(s"Method '$name' not found"))
-    def getPredicate(name: String) = predicates.get(name).getOrElse(throw new IRException(s"Predicate '$name' not found"))
+    def struct(name: String) = _structs.get(name).getOrElse(throw new IRException(s"Struct '$name' not found"))
+    def method(name: String) = _methods.get(name).getOrElse(throw new IRException(s"Method '$name' not found"))
+    def predicate(name: String) = _predicates.get(name).getOrElse(throw new IRException(s"Predicate '$name' not found"))
   }
 
   class Struct(var name: String) extends Node {
@@ -161,7 +157,12 @@ object IRGraph {
   class Parameter(valueType: Type, name: String) extends Var(valueType, name)
   class Var(var valueType: Type, val name: String) extends Expression
 
-  class Member(var instance: Expression, var field: StructField) extends Expression
+  sealed trait Member extends Expression {
+    var root: Expression
+  }
+
+  class FieldMember(var root: Expression, var field: StructField) extends Member
+  class DereferenceMember(var root: Expression, var valueType: Type) extends Member
 
   class Accessibility(var member: Member) extends Expression
 
@@ -218,11 +219,6 @@ object IRGraph {
     object Negate extends UnaryOp
   }
 
-  class Dereference(
-    var valueType: Type,
-    var value: Expression
-  ) extends Expression
-
   sealed trait Type extends Node {
     def name: String
     def default: IRGraph.Literal
@@ -276,15 +272,8 @@ object IRGraph {
   ) extends Op
 
   class AssignMember(
-    var target: Expression,
-    var field: StructField,
+    var member: Member,
     var value: Expression
-  ) extends Op
-
-  class AssignPointer(
-    var target: Expression,
-    var value: Expression,
-    var valueType: Type
   ) extends Op
 
   class Assert(
