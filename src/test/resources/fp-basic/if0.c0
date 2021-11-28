@@ -1,4 +1,4 @@
-//test return 32
+//test unsupported
 
 int main () {
   int* x = alloc(int);
