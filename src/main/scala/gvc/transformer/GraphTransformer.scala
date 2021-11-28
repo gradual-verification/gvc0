@@ -88,13 +88,18 @@ object GraphTransformer {
     // skipping any flattened fields.
     // Returns the struct item and the expression for the concrete struct (the field's parent).
     private def getStructItem(member: ResolvedMember): (ResolvedExpression, StructItem) = {
+      val (instance, isPointer) = member.parent match {
+        case deref: ResolvedDereference if !member.isArrow => (deref.value, true)
+        case other => (other, member.isArrow)
+      }
+
       member.field match {
         case None => throw new TransformerException(s"Invalid field '${member.fieldName}'")
         case Some(field) => {
-          member.parent match {
+          instance match {
             // Embedded structs must be accessed by a dot, not an arrow
-            case parent: ResolvedMember if !member.isArrow => {
-              val (root, node) = getStructItem(parent)
+            case instance: ResolvedMember if !isPointer => {
+              val (root, node) = getStructItem(instance)
               node match {
                 case embed: StructEmbedding => (root, embed.field(field.name))
                 // Dotted member, but there is no corresponding embedded field
@@ -102,8 +107,8 @@ object GraphTransformer {
               }
             }
 
-            case parent => {
-              (parent, getStructLayout(field.structName).field(field.name))
+            case instance => {
+              (instance, getStructLayout(field.structName).field(field.name))
             }
           }
         }
