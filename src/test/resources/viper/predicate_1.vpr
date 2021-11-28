@@ -16,6 +16,6 @@ method main() returns ($result: Int)
 method test(value: Ref)
   requires acc(testPred(value), write)
 {
-  fold acc(testPred(value), write)
+  unfold acc(testPred(value), write)
   value.$refValue := 1
 }

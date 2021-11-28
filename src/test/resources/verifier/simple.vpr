@@ -1,13 +1,11 @@
-method $method_main() returns ($return: Int)
-  requires true
-  ensures true
+method main() returns ($result: Int)
 {
-  $return := 0
+  $result := 0
 }
 
-method $method_test(value: Int) returns ($return: Int)
+method test(value: Int) returns ($result: Int)
   requires ? && true
-  ensures $return == 0
+  ensures $result == 0
 {
-  $return := value
+  $result := value
 }
