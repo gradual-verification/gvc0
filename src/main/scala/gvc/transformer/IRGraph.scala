@@ -310,8 +310,16 @@ object IRGraph {
     var value: Expression
   ) extends Op
 
-  class Return(
-    var value: Option[Expression],
-    var method: Method
-  ) extends Op
+  class Return(var method: Method) extends Op
+
+  class ReturnValue(
+    var value: Expression,
+    method: Method
+  ) extends Return(method)
+
+  class ReturnInvoke(
+    var invoke: Method,
+    var arguments: List[Expression],
+    method: Method
+  ) extends Return(method)
 }

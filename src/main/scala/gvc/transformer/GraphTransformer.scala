@@ -281,8 +281,11 @@ object GraphTransformer {
           appendOp(output, transformAssign(inc.value, computed, scope))
         }
 
-        case ret: ResolvedReturn =>
-          appendOp(output, new IRGraph.Return(ret.value.map(transformExpr(_, scope)), scope.method))
+        case ret: ResolvedReturn => appendOp(output, ret.value match {
+          case None => new IRGraph.Return(scope.method)
+          case Some(invoke: ResolvedInvoke) => new IRGraph.ReturnInvoke(resolveMethod(invoke), invoke.arguments.map(transformExpr(_, scope)), scope.method)
+          case Some(value) => new IRGraph.ReturnValue(transformExpr(value, scope), scope.method)
+        })
 
         case assert: ResolvedAssert =>
           appendOp(output, new IRGraph.Assert(transformExpr(assert.value, scope), IRGraph.AssertMethod.Imperative))
@@ -384,7 +387,7 @@ object GraphTransformer {
         }
         new IRGraph.Dereference(valueType, transformExpr(deref.value, scope))
       }
-      
+
       case not: ResolvedNot => new IRGraph.Unary(IRGraph.UnaryOp.Not, transformExpr(not.value, scope))
       case negate: ResolvedNegation => new IRGraph.Unary(IRGraph.UnaryOp.Negate, transformExpr(negate.value, scope))
       case _: ResolvedAlloc => throw new TransformerException("Using alloc in a complex expression is not supported")

@@ -238,14 +238,21 @@ object GraphPrinter {
         p.println(");")
       }
 
-      case ret: Return => ret.value match {
-        case None => p.println("return;")
-        case Some(value) => {
-          p.print("return ")
-          printExpr(value)
-          p.println(";")
-        }
+      case ret: ReturnValue => {
+        p.print("return ")
+        printExpr(ret.value)
+        p.println(";")
       }
+
+      case ret: ReturnInvoke => {
+        p.print("return ")
+        p.print(ret.invoke.name)
+        p.print("(")
+        printList(ret.arguments) { arg => printExpr(arg) }
+        p.println(");")
+      }
+
+      case _: Return => p.println("return;")
     }
 
     def wrapExpr(currentPrecedence: scala.Int, exprPrecedence: scala.Int)(action: => Unit): Unit = {

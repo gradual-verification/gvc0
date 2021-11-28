@@ -133,11 +133,16 @@ object IRGraphSilver {
       case fold: Fold => Seq(vpr.Fold(convertPredicateInstance(fold.instance))())
       case unfold: Unfold => Seq(vpr.Fold(convertPredicateInstance(unfold.instance))())
       case error: Error => Seq(vpr.Assert(vpr.FalseLit()())())
-      case ret: Return => ret.value match {
-        case None => Seq.empty
-        case Some(value) =>
-          Seq(vpr.LocalVarAssign(getReturnVar(ret.method), convertExpr(value))())
-      }
+
+      case ret: ReturnValue =>
+          Seq(vpr.LocalVarAssign(getReturnVar(ret.method), convertExpr(ret.value))())
+      case ret: ReturnInvoke =>
+        Seq(vpr.MethodCall(
+          ret.invoke.name,
+          ret.arguments.map(convertExpr),
+          Seq(getReturnVar(ret.method))
+        )(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
+      case _: Return => Seq.empty
     }
 
     def convertVar(v: Var): vpr.LocalVar =
