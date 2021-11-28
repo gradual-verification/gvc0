@@ -48,6 +48,25 @@ object GraphPrinter {
 
     def printType(t: Type): Unit = p.print(t.name)
 
+    def printPredicateHeader(predicate: Predicate): Unit = {
+      p.print("//@predicate ")
+      p.print(predicate.name)
+      p.print("(")
+      printList(predicate.parameters) { param =>
+        printType(param.valueType)
+        p.print(" ")
+        p.print(param.name)
+      }
+      p.print(")")
+    }
+
+    def printPredicate(predicate: Predicate): Unit = {
+      printPredicateHeader(predicate)
+      p.print(" = ")
+      printExpr(predicate.expression)
+      p.println(";")
+    }
+
     def printMethodHeader(method: Method): Unit = {
       method.returnType match {
         case None => p.print("void")
@@ -373,6 +392,21 @@ object GraphPrinter {
       printStruct(struct)
       p.println()
     }
+
+    for (predicate <- program.predicates) {
+      printPredicateHeader(predicate)
+      p.println(";")
+      empty = false
+    }
+
+    printSeparator()
+
+    for (predicate <- program.predicates) {
+      printPredicate(predicate)
+      empty = false
+    }
+
+    printSeparator()
     
     for(method <- program.methods) {
       printMethodHeader(method)
