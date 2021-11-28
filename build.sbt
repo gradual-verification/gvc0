@@ -11,3 +11,4 @@ lazy val gvc = (project in file("."))
   .dependsOn(silicon)
 
 Compile / run / fork := true
+Compile / run / javaOptions += "-Xss15m"
