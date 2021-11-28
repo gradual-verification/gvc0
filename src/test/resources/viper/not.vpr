@@ -1,15 +1,13 @@
-field $int_value: Int
+field $refValue: Ref
 
-method $method_test(value: Ref)
+method main() returns ($result: Int)
+{
+  $result := 0
+}
+
+method test(value: Ref)
   requires ? && !(value == null)
   ensures ? && true
 {
-  value.$int_value := 1
-}
-
-method $method_main() returns ($return: Int)
-  requires true
-  ensures true
-{
-  $return := 0
+  value.$refValue := 1
 }

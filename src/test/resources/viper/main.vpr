@@ -1,6 +1,4 @@
-method $method_main() returns ($return: Int)
-  requires true
-  ensures true
+method main() returns ($result: Int)
 {
-  $return := 0
+  $result := 0
 }

@@ -6,6 +6,7 @@ bool isAlphabet(char value)
 
 int main()
 {
-  if (isAlphabet('0')) return 1;
+  bool alpha = isAlphabet('0');
+  if (alpha) return 1;
   else return 0;
 }

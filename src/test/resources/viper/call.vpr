@@ -1,15 +1,9 @@
-method $method_test() returns ($return: Int)
-  requires true
-  ensures true
+method main() returns ($result: Int)
 {
-  $return := 1
+  $result := test()
 }
 
-method $method_main() returns ($return: Int)
-  requires true
-  ensures true
+method test() returns ($result: Int)
 {
-  var _: Int
-  _ := $method_test()
-  $return := _
+  $result := 1
 }

@@ -1,19 +1,11 @@
-field $int_value: Int
+field $refValue: Ref
 
-method $method_deref(ptr: Ref) returns ($return: Int)
-  requires true
-  ensures true
+method deref(ptr: Ref) returns ($result: Int)
 {
-  var _: Int
-  _ := ptr.$int_value
-  $return := _
+  $result := ptr.$refValue
 }
 
-method $method_main() returns ($return: Int)
-  requires true
-  ensures true
+method main() returns ($result: Int)
 {
-  var _: Int
-  _ := $method_deref(null)
-  $return := _
+  $result := deref(null)
 }
