@@ -49,7 +49,7 @@ object IRGraph {
     private val _fields = mutable.ArrayBuffer[StructField]()
 
     def addField(name: String, valueType: Type): StructField = {
-      val field = new StructField(name, valueType)
+      val field = new StructField(this, name, valueType)
       _fields += field
       field
     }
@@ -58,6 +58,7 @@ object IRGraph {
   }
 
   class StructField(
+    var struct: Struct,
     var name: String,
     var valueType: Type
   ) extends Node
@@ -168,7 +169,7 @@ object IRGraph {
     var predicate: Predicate,
     var arguments: List[IRGraph.Expression]) extends Expression
 
-  class Result() extends Expression
+  class Result(var method: Method) extends Expression
 
   class Imprecise(var precise: Option[IRGraph.Expression]) extends Expression
 
@@ -213,10 +214,14 @@ object IRGraph {
 
   sealed trait UnaryOp
   object UnaryOp {
-    object Dereference extends UnaryOp
     object Not extends UnaryOp
     object Negate extends UnaryOp
   }
+
+  class Dereference(
+    var valueType: Type,
+    var value: Expression
+  ) extends Expression
 
   sealed trait Type extends Node {
     def name: String
@@ -278,7 +283,8 @@ object IRGraph {
 
   class AssignPointer(
     var target: Expression,
-    var value: Expression
+    var value: Expression,
+    var valueType: Type
   ) extends Op
 
   class Assert(
@@ -305,6 +311,7 @@ object IRGraph {
   ) extends Op
 
   class Return(
-    var value: Option[Expression]
+    var value: Option[Expression],
+    var method: Method
   ) extends Op
 }

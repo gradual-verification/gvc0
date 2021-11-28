@@ -8,6 +8,7 @@ import gvc.analyzer.Validator
 import gvc.transformer.GraphTransformer
 import gvc.transformer.GraphPrinter
 import org.scalatest.funsuite.AnyFunSuite
+import gvc.transformer.IRGraphSilver
 
 class GraphTransformerTests extends AnyFunSuite {
   val testFiles = List(
@@ -38,6 +39,8 @@ class GraphTransformerTests extends AnyFunSuite {
       val ir = GraphTransformer.transform(resolved.get)
       val printed = GraphPrinter.print(ir)
       assert(printed == expected)
+
+      IRGraphSilver.toSilver(ir)
     }
   }
 }

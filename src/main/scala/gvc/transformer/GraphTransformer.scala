@@ -146,6 +146,7 @@ object GraphTransformer {
 
     sealed trait Scope {
       def variable(name: String): IRGraph.Var
+      def method: IRGraph.Method
 
       def variable(input: ResolvedVariableRef): IRGraph.Var = {
         input.variable match {
@@ -281,7 +282,7 @@ object GraphTransformer {
         }
 
         case ret: ResolvedReturn =>
-          appendOp(output, new IRGraph.Return(ret.value.map(transformExpr(_, scope))))
+          appendOp(output, new IRGraph.Return(ret.value.map(transformExpr(_, scope)), scope.method))
 
         case assert: ResolvedAssert =>
           appendOp(output, new IRGraph.Assert(transformExpr(assert.value, scope), IRGraph.AssertMethod.Imperative))
@@ -326,7 +327,7 @@ object GraphTransformer {
 
       case _: ResolvedArrayIndex | _: ResolvedLength | _: ResolvedAllocArray =>
         throw new TransformerException("Arrays are not supported")
-      case _: ResolvedResult => new IRGraph.Result()
+      case _: ResolvedResult => new IRGraph.Result(scope.method)
 
       case acc: ResolvedAccessibility => {
         val (parent, field) = acc.field match {
@@ -376,7 +377,14 @@ object GraphTransformer {
         new IRGraph.Binary(op, transformExpr(logic.left, scope), transformExpr(logic.right, scope))
       }
 
-      case deref: ResolvedDereference => new IRGraph.Unary(IRGraph.UnaryOp.Dereference, transformExpr(deref.value, scope))
+      case deref: ResolvedDereference => {
+        val valueType = deref.valueType match {
+          case ResolvedPointer(valueType) => transformType(valueType)
+          case _ => throw new TransformerException("Invalid dereference of non-pointer value")
+        }
+        new IRGraph.Dereference(valueType, transformExpr(deref.value, scope))
+      }
+      
       case not: ResolvedNot => new IRGraph.Unary(IRGraph.UnaryOp.Not, transformExpr(not.value, scope))
       case negate: ResolvedNegation => new IRGraph.Unary(IRGraph.UnaryOp.Negate, transformExpr(negate.value, scope))
       case _: ResolvedAlloc => throw new TransformerException("Using alloc in a complex expression is not supported")
@@ -451,7 +459,7 @@ object GraphTransformer {
         }
 
         case deref: ResolvedDereference =>
-          new IRGraph.AssignPointer(transformExpr(deref.value, scope), value)
+          new IRGraph.AssignPointer(transformExpr(deref.value, scope), value, transformType(deref.valueType))
 
         case _: ResolvedArrayIndex => throw new TransformerException("Arrays are not supported")
         case _ => throw new TransformerException("Invalid L-value")

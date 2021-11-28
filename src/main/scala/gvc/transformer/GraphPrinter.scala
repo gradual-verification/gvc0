@@ -333,11 +333,15 @@ object GraphPrinter {
 
       case unary: Unary => wrapExpr(precedence, Precedence.Unary) {
         p.print(unary.operator match {
-          case UnaryOp.Dereference => "*"
           case UnaryOp.Not => "!"
           case UnaryOp.Negate => "-"
         })
         printExpr(unary.operand, Precedence.Unary)
+      }
+
+      case deref: Dereference => wrapExpr(precedence, Precedence.Unary) {
+        p.print("*")
+        printExpr(deref.value, Precedence.Unary)
       }
     }
 
