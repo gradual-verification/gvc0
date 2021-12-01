@@ -2,27 +2,21 @@ package gvc.integration
 
 import gvc.parser._
 import org.scalatest.funsuite._
-import java.io.File
-import scala.io.Source
-import fastparse.Parsed.{Success, Failure}
-import gvc.analyzer.{Resolver, ErrorSink, TypeChecker, AssignmentValidator}
-import gvc.analyzer.ReturnValidator
-import gvc.transformer.Transformer
-import gvc.transformer.CNaughtPrinter
-import gvc.transformer.IR
-import gvc.transformer.SilverOutput
-import gvc.analyzer.SpecificationValidator
-import gvc.analyzer.ImplementationValidator
+import scala.util.{Try,Success,Failure}
+import fastparse.Parsed
 import gvc.weaver.Weaver
+import gvc.analyzer._
+import gvc.transformer._
+import gvc.specs.BaseFileSpecs
 
-class IntegrationSpecExprs extends AnyFunSuite {
+class IntegrationSpecs extends AnyFunSuite with BaseFileSpecs {
   val testDirs = List(
     // The test files are copied with some modifications in the test header
     // from tests/fp-basic in the cc0 repository
-    "fp-basic/",
-    "cases/",
-    "ir/",
-    "viper/"
+    "fp-basic",
+    "cases",
+    "ir",
+    "viper"
   )
 
   val exclusions = Set(
@@ -78,20 +72,14 @@ class IntegrationSpecExprs extends AnyFunSuite {
     "fp-basic/pragma1_aux.c0",
   )
 
-  val testFiles = testDirs.flatMap(dir =>
-    new File(getClass().getResource("/" + dir).getFile()).listFiles()
-      map { file => (dir + file.getName().toLowerCase(), file) }
-      filterNot { case (name, _) => exclusions.contains(name) || name.endsWith(".ir.c0") || name.endsWith(".vpr") })
+  val testFiles = testDirs
+    .flatMap(getFiles)
+    .filterNot { name => exclusions.contains(name) || name.endsWith(".ir.c0") || name.endsWith(".vpr") }
 
-  for ((name, file) <- testFiles) {
+  for (name <- testFiles) {
     test("test " + name) {
-      val irFile = new File(file.getParentFile(), file.getName().replace(".c0", ".ir.c0"))
-      val silverFile = new File(file.getParentFile(), file.getName().replace(".c0", ".vpr"))
-
-      val src = Source.fromFile(file).mkString
-      val irSrc = if (irFile.exists()) Some(Source.fromFile(irFile).mkString) else None
-      val silverSrc = if (silverFile.exists()) Some(Source.fromFile(silverFile).mkString) else None
-      val result = runIntegrationTest(src, irSrc, silverSrc)
+      val src = getFile(name).get
+      val result = runIntegrationTest(src, name)
       
       if (src.startsWith("//test error")) {
         assert(result.isInstanceOf[ParseError])
@@ -101,16 +89,18 @@ class IntegrationSpecExprs extends AnyFunSuite {
         assert(result.isInstanceOf[TypeError])
       } else if (src.startsWith("//test validation_error")) {
         assert(result.isInstanceOf[ValidationError])
+      } else if (src.startsWith("//test unsupported")) {
+        assert(result.isInstanceOf[UnsupportedError])
       } else {
         assert(result == ValidProgram)
       }
     }
   }
 
-  def runIntegrationTest(source: String, expectedIR: Option[String], expectedSilver: Option[String]): IntegrationResult = {
+  def runIntegrationTest(source: String, name: String): IntegrationResult = {
     Parser.parseProgram(source) match {
-      case fail: Failure => ParseError(fail.trace().longMsg)
-      case Success(parsed, _) => {
+      case fail: Parsed.Failure => ParseError(fail.trace().longMsg)
+      case Parsed.Success(parsed, _) => {
         val sink = new ErrorSink()
         val result = Resolver.resolveProgram(parsed, sink)
         if (!sink.errors.isEmpty) {
@@ -127,21 +117,19 @@ class IntegrationSpecExprs extends AnyFunSuite {
             if (!sink.errors.isEmpty) {
               ValidationError(sink.errors.map(_.message))
             } else {
-              var ir = Transformer.programToIR(result)
-              val methods = ir.methods.collect { case m: IR.MethodImplementation => m }
-                .map(CNaughtPrinter.printMethod(_, false))
-                .mkString("\n")
+              Try(GraphTransformer.transform(result)) match {
+                case Failure(ex) => UnsupportedError(ex.getMessage())
+                case Success(ir) => {
+                  val irSrc = GraphPrinter.print(ir)
+                  val silver = IRGraphSilver.toSilver(ir)
 
-              if (expectedIR.isDefined)
-                assert(expectedIR.get == methods)
+                  assertFile(name.replace(".c0", ".ir.c0"), irSrc)
+                  assertFile(name.replace(".c0", ".vpr"), silver.toString())
 
-              if (expectedSilver.isDefined) {
-                val silver = SilverOutput.program(ir)
-                assert(expectedSilver.get == silver.toString())
-                
-                Weaver.weave(ir, silver)
+                  Weaver.weave(ir, silver)
+                  ValidProgram
+                }
               }
-              ValidProgram
             }
           }
         }
@@ -154,6 +142,7 @@ class IntegrationSpecExprs extends AnyFunSuite {
   case class ResolverError(messages: List[String]) extends IntegrationResult
   case class TypeError(messages: List[String]) extends IntegrationResult
   case class ValidationError(messages: List[String]) extends IntegrationResult
+  case class UnsupportedError(message: String) extends IntegrationResult
   case object ValidProgram extends IntegrationResult
 }
 

@@ -1,24 +1,21 @@
-field $int_value: Int
+field $refValue: Ref
 
 predicate testPred(value: Ref) {
-  acc(value.$int_value, write)
+  acc(value.$refValue, write)
 }
 
-method $method_test(value: Ref)
-  requires acc(testPred(value), write)
-  ensures true
-{
-  unfold acc(testPred(value), write)
-  value.$int_value := 1
-}
-
-method $method_main() returns ($return: Int)
-  requires true
-  ensures true
+method main() returns ($result: Int)
 {
   var a: Ref
-  a := new($int_value)
+  a := new($refValue)
   fold acc(testPred(a), write)
-  $method_test(a)
-  $return := 0
+  test(a)
+  $result := 0
+}
+
+method test(value: Ref)
+  requires acc(testPred(value), write)
+{
+  unfold acc(testPred(value), write)
+  value.$refValue := 1
 }

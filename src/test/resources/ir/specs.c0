@@ -1,0 +1,25 @@
+int main()
+{
+  //@assert ?;
+  //@assert ? && false;
+  return 0;
+}
+
+int test(int x)
+  //@requires x > 0;
+  //@ensures \result > 0;
+{
+  return x;
+}
+
+int test2(int y)
+  //@requires ? && y > 0;
+  //@ensures ?;
+{
+  while (false)
+    //@loop_invariant y > 0;
+  {
+  }
+
+  return y;
+}

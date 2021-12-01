@@ -1,23 +1,11 @@
-method $method_max(a: Int, b: Int) returns ($return: Int)
-  requires a > 0 && b > 0
-  ensures $return >= a && $return >= b
+method main() returns ($result: Int)
 {
-  var _: Bool
-  var _1: Int
-  _ := a > b
-  if (_) {
-    _1 := a
-  } else {
-    _1 := b
-  }
-  $return := _1
+  $result := max(1, 2)
 }
 
-method $method_main() returns ($return: Int)
-  requires true
-  ensures true
+method max(a: Int, b: Int) returns ($result: Int)
+  requires a > 0 && b > 0
+  ensures $result >= a && $result >= b
 {
-  var _: Int
-  _ := $method_max(1, 2)
-  $return := _
+  $result := (a > b ? a : b)
 }

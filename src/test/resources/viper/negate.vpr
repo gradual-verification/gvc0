@@ -1,19 +1,10 @@
-method $method_negate(value: Int) returns ($return: Int)
-  requires true
-  ensures $return == -value
+method main() returns ($result: Int)
 {
-  var _: Int
-  var _1: Int
-  _ := -1
-  _1 := value * _
-  $return := _1
+  $result := negate(1)
 }
 
-method $method_main() returns ($return: Int)
-  requires true
-  ensures true
+method negate(value: Int) returns ($result: Int)
+  ensures $result == -value
 {
-  var _: Int
-  _ := $method_negate(1)
-  $return := _
+  $result := value * -1
 }

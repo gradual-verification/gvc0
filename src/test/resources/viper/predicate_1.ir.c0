@@ -1,0 +1,22 @@
+//@predicate testPred(int* value);
+
+//@predicate testPred(int* value) = acc(*value);
+
+int main();
+void test(int* value);
+
+int main()
+{
+  int* a = NULL;
+  a = alloc(int);
+  fold testPred(a);
+  test(a);
+  return 0;
+}
+
+void test(int* value)
+  //@requires testPred(value);
+{
+  unfold testPred(value);
+  *value = 1;
+}

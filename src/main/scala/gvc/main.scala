@@ -71,26 +71,20 @@ object Main extends App {
     }
     
     val errors = new ErrorSink()
-    val resolved = Resolver.resolveProgram(parsed, errors)
-    TypeChecker.check(resolved, errors)
-    AssignmentValidator.validate(resolved, errors)
-    ReturnValidator.validate(resolved, errors)
-    SpecificationValidator.validate(resolved, errors)
-    ImplementationValidator.validate(resolved, errors)
+    val resolved = Validator.validateParsed(parsed, errors)
 
-    if (!errors.errors.isEmpty) {
+    if (!resolved.isDefined) {
       println(s"Error(s) in '$name':")
       println(errors.errors.map(_.toString()).mkString("\n"))
-      sys.exit(0)
+      sys.exit(1)
     }
 
-    val ir = Transformer.programToIR(resolved)
-
-    val silver = SilverOutput.program(ir)
+    val ir = GraphTransformer.transform(resolved.get)
+    val silver = IRGraphSilver.toSilver(ir)
 
     if (printC0) {
       println(s"C0 output for '$name':")
-      println(CNaughtPrinter.printProgram(ir))
+      println(GraphPrinter.print(ir))
     }
 
     if (printSilver) {
@@ -105,9 +99,9 @@ object Main extends App {
         println(s"Verified successfully!")
 
         if (printWeaving) {
-          val woven = Weaver.weave(ir, silver)
+          Weaver.weave(ir, silver)
           println(s"Woven output for '$name':")
-          println(CNaughtPrinter.printProgram(woven))
+          println(GraphPrinter.print(ir))
         }
       }
       case verifier.Failure(errors) => {

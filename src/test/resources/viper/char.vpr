@@ -1,40 +1,16 @@
-method $method_isAlphabet(value: Int) returns ($return: Bool)
+method isAlphabet(value: Int) returns ($result: Bool)
   requires value != 0
-  ensures true
 {
-  var _: Bool
-  var _1: Bool
-  var _2: Bool
-  var _3: Bool
-  var _4: Bool
-  var _5: Bool
-  _ := value >= 97
-  _1 := _
-  if (_1) {
-    _ := value <= 122
-  }
-  _2 := _
-  _3 := !_2
-  if (_3) {
-    _4 := value >= 65
-    _5 := _4
-    if (_5) {
-      _4 := value <= 90
-    }
-    _2 := _4
-  }
-  $return := _2
+  $result := value >= 97 && value <= 122 || value >= 65 && value <= 90
 }
 
-method $method_main() returns ($return: Int)
-  requires true
-  ensures true
+method main() returns ($result: Int)
 {
-  var _: Bool
-  _ := $method_isAlphabet(48)
-  if (_) {
-    $return := 1
+  var alpha: Bool
+  alpha := isAlphabet(48)
+  if (alpha) {
+    $result := 1
   } else {
-    $return := 0
+    $result := 0
   }
 }

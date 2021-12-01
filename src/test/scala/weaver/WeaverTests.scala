@@ -1,6 +1,5 @@
 package gvc.weaver
 
-import viper.silver.{ast=>vpr}
 import org.scalatest.funsuite.AnyFunSuite
 import gvc.transformer._
 import gvc.analyzer._
@@ -18,12 +17,12 @@ class WeaverTests extends AnyFunSuite {
       """
     )
 
-    val woven = Weaver.weave(c0, silver)
-    val main = woven.methods.find(_.name == "main").get.asInstanceOf[IR.MethodImplementation]
-    val output = CNaughtPrinter.printMethod(main, false)
-
+    Weaver.weave(c0, silver)
+    val output = GraphPrinter.print(c0)
     assert(output ==
-      """|int main()
+      """|int main();
+         |
+         |int main()
          |{
          |  return 0;
          |}
@@ -35,20 +34,12 @@ class WeaverTests extends AnyFunSuite {
       case _: Failure => fail("could not parse")
       case Success(parsed, _) => {
         val sink = new ErrorSink()
-        val result = Resolver.resolveProgram(parsed, sink)
+        val result = Validator.validateParsed(parsed, sink)
         assert(sink.errors.isEmpty)
+        assert(result.isDefined)
 
-        TypeChecker.check(result, sink)
-        assert(sink.errors.isEmpty)
-        
-        AssignmentValidator.validate(result, sink)
-        ReturnValidator.validate(result, sink)
-        SpecificationValidator.validate(result, sink)
-        ImplementationValidator.validate(result, sink)
-        assert(sink.errors.isEmpty)
-
-        val ir = Transformer.programToIR(result)
-        val silver = SilverOutput.program(ir)
+        val ir = GraphTransformer.transform(result.get)
+        val silver = IRGraphSilver.toSilver(ir)
         (ir, silver)
       }
     }

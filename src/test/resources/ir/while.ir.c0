@@ -1,14 +1,10 @@
-bool test(int value)
-{
-  bool _;
-  _ = value < 10;
-  return _;
-}
+int main();
+bool test(int value);
 
 int main()
 {
-  bool cond;
-  int value;
+  bool cond = false;
+  int value = 0;
   cond = true;
   value = 0;
   while (cond)
@@ -17,4 +13,9 @@ int main()
     cond = test(value);
   }
   return 0;
+}
+
+bool test(int value)
+{
+  return value < 10;
 }
