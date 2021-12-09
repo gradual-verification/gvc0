@@ -1,5 +1,0 @@
-#use "fieldaccess.h0"
-
-int main() {
-    return 0;
-}

@@ -1,18 +1,23 @@
 #use "fieldaccess.h0"
+#use <conio>
+#use <string>
 
 int GROW_CAPACITY (int oldCapacity){
   return ((oldCapacity) < 8 ? 8 : (oldCapacity) + oldCapacity / 2);
 }
 
-int hash(int index, int arrayLength){
+int hash(int index, int arrayLength)
+    //@requires index >= 0;
+    //@ensures \result >= 0 && \result < arrayLength;
+{
     index = ((index >> 16) ^ index) * 0x45d9f3b;
     index = ((index >> 16) ^ index) * 0x45d9f3b;
     index = (index >> 16) ^ index;
     return index % arrayLength;
 }
 
-void initOwnedFields(OwnedFields* fields){
-  fields->instanceCounter = NULL;
+void initOwnedFields(OwnedFields* fields, int * instanceCounter){
+  fields->instanceCounter = instanceCounter;
   int oldCapacity = 0;
   fields->capacity = GROW_CAPACITY(oldCapacity);
   fields->contents = alloc_array(FieldArray*, fields->capacity);
@@ -22,7 +27,10 @@ void initOwnedFields(OwnedFields* fields){
   }
 }
 
-void grow(OwnedFields* fields) {
+void grow(OwnedFields* fields)
+  //@requires fields != NULL;
+  //@ensures fields != NULL && fields->capacity > fields->length;
+{
   int oldCapacity = fields->capacity;
   fields->capacity = GROW_CAPACITY(oldCapacity);
   FieldArray*[] newContents = alloc_array(FieldArray*, fields->capacity);
@@ -37,11 +45,15 @@ void grow(OwnedFields* fields) {
 }
 
 FieldArray* find(OwnedFields* fields, int _id){
-  return fields->contents[hash(fields->capacity, _id)];
+  int index = hash(_id, fields->capacity);
+  return fields->contents[index];
 }
 
-FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool accAll){
-  if(fields->length == fields->capacity) grow(fields);
+FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool accAll)
+  //@requires fields != NULL && _id >= 0 && numFields > 0;
+  //@ensures fields != NULL && fields->capacity > fields->length;
+{
+  if(fields->length > (fields->capacity * (5/6))) grow(fields);
 
   int fieldIndex = hash(_id, fields->capacity);
   while(fields->contents[fieldIndex] != NULL) fieldIndex += 1;
@@ -60,8 +72,10 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   return fields->contents[fieldIndex];
 }
 
-void initAccess(OwnedFields * fields, int _id, int numFields){
-  newFieldArray(fields, _id, numFields, true);
+int initStructAccess(OwnedFields * fields, int numFields){
+    newFieldArray(fields, *fields->instanceCounter, numFields, true);
+    *(fields->instanceCounter) += 1;
+    return *(fields->instanceCounter) - 1;
 }
 
 void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex){
@@ -75,6 +89,131 @@ void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex){
 }
 
 void merge(OwnedFields* target, OwnedFields* source){
+    for(int i = 0; i< source->length; i += 1){
+        FieldArray* currFields = source->contents[i];
+        if(currFields != NULL){
+            for(int j = 0; j< currFields->length; j += 1){
+                addAccess(target, currFields->_id, currFields->length, j);
+            }
+        }
+    }
+}
 
-    
+bool assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
+    FieldArray* toCheck = find(fields, _id);
+    if(toCheck != NULL){
+        if(fieldIndex >= toCheck->length){
+            println("[INTERNAL] Field index exceeds maximum for the given struct.\n");
+        }else if(toCheck->contents[fieldIndex]){
+            return true;
+        }
+    }
+    println(errorMessage);
+    return false;
+}
+
+bool test(string header, bool condition, string message){
+    if(!condition){
+        error(string_join(string_join(header, " - "), message));
+        return false;
+    }else{
+        return true;
+    }
+}
+
+bool testOwnedFieldsInitialization(string header){
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+
+    OwnedFields* fields = alloc(OwnedFields);
+    initOwnedFields(fields, _id_counter);
+    if(!test(header, fields->capacity > 0, "OwnedFields must have a nonzero default capacity after intialization.")){
+        return false;
+    }
+    if(!test(header, fields->length == 0, "OwnedFields must have a length of zero after initialization.")){
+        return false;
+    }
+
+    bool allNULL = true;
+    for(int i = 0; i < fields->length; i+=1){
+        if(fields->contents[i] != NULL){
+            allNULL = false;
+        }
+    }
+    if(!test(header, allNULL, "The contents of OwnedFields must all be set to NULL after initialization.")){
+        return false;
+    }
+    return true;
+}
+
+bool testStructCreation(string header){
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+
+    OwnedFields* fields = alloc(OwnedFields);
+    initOwnedFields(fields, _id_counter);
+
+    int _id = initStructAccess(fields, 80);
+
+    for(int i = 0; i<80; i += 1){
+        if(!assertAcc(fields, _id, i, "Failed to verify access to the fields of a newly created struct.")){
+            return false;
+        }
+    }
+    return true;
+}
+
+bool testFieldInheritance(string header){
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+
+
+
+    return true;
+}
+
+bool testFieldMerging(string header){
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+
+    return true;
+}
+
+bool testAssertions(string header){
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+
+    return true;
+}
+
+int runTests() {
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+
+    if(testOwnedFieldsInitialization("OwnedFields Initialization")){
+        println("PASS: OwnedFields Initialization");
+    }else{
+        return 1;
+    }
+    if(testStructCreation("Field Creation")){
+        println("PASS: Field Creation");
+    }else{
+        return 1;
+    }
+    if(testFieldInheritance("Field Inheritance")){
+        println("PASS: Field Inheritance");
+    }else{
+        return 1;
+    }
+    if(testFieldMerging("Field Merging")){
+        println("PASS: Field Merging");
+    }else{
+        return 1;
+    }
+    if(testAssertions("Field Access Assertions")){
+        println("PASS: Field Access Assertions");
+    }else{
+        return 1;
+    }
+    return 0;
 }
