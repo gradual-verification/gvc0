@@ -36,9 +36,9 @@ void grow(OwnedFields* fields)
   FieldArray*[] newContents = alloc_array(FieldArray*, fields->capacity);
   for(int i = 0; i<oldCapacity; i += 1){
     if(fields->contents[i] != NULL){
-      int _id = fields->contents[i]->_id;
-      int newIndex = hash(_id, fields->capacity);
-      newContents[newIndex] = fields->contents[i];
+        int _id = fields->contents[i]->_id;
+        int newIndex = hash(_id, fields->capacity);
+        newContents[newIndex] = fields->contents[i];
     }
   }
   fields->contents = newContents;
@@ -64,12 +64,42 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
 
   array->contents = alloc_array(bool, numFields);
   array->length = numFields;
+  array->_id = _id;
 
   for(int i = 0; i<array->length; i += 1){
     array->contents[i] = accAll;
   }
   
   return fields->contents[fieldIndex];
+}
+
+void debugOwnedFields(OwnedFields* fields, string name) {
+    print("---[ ");
+    print(name);
+    print(" ]---\n");
+    print("* Num. of structs: ");
+    printint(fields->length);
+    print("\n");
+    print("* Capacity: ");
+    printint(fields->capacity);
+    print("\n");
+    print("[");
+    if(fields->capacity > 0){
+        if(fields->contents[0] != NULL){
+            printint(fields->contents[0]->_id);
+        }else{
+            print("NULL");
+        }
+        for(int i = 1; i < fields->capacity; i+=1){
+            print(", ");
+            if(fields->contents[i] != NULL){
+                printint(fields->contents[i]->_id);
+            }else{
+                print("NULL");
+            }
+        }
+    }
+    print("]\n");
 }
 
 int initStructAccess(OwnedFields * fields, int numFields){
@@ -88,16 +118,6 @@ void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex){
   }
 }
 
-void merge(OwnedFields* target, OwnedFields* source){
-    for(int i = 0; i< source->length; i += 1){
-        FieldArray* currFields = source->contents[i];
-        if(currFields != NULL){
-            for(int j = 0; j< currFields->length; j += 1){
-                addAccess(target, currFields->_id, currFields->length, j);
-            }
-        }
-    }
-}
 
 bool assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
     FieldArray* toCheck = find(fields, _id);
@@ -127,10 +147,10 @@ bool testOwnedFieldsInitialization(string header){
 
     OwnedFields* fields = alloc(OwnedFields);
     initOwnedFields(fields, _id_counter);
-    if(!test(header, fields->capacity > 0, "OwnedFields must have a nonzero default capacity after intialization.")){
+    if(!test(header, fields->capacity > 0, "(initOwnedFields) OwnedFields must have a nonzero default capacity after intialization.")){
         return false;
     }
-    if(!test(header, fields->length == 0, "OwnedFields must have a length of zero after initialization.")){
+    if(!test(header, fields->length == 0, "(initOwnedFields) OwnedFields must have a length of zero after initialization.")){
         return false;
     }
 
@@ -140,7 +160,7 @@ bool testOwnedFieldsInitialization(string header){
             allNULL = false;
         }
     }
-    if(!test(header, allNULL, "The contents of OwnedFields must all be set to NULL after initialization.")){
+    if(!test(header, allNULL, "(initOwnedFields) The contents of OwnedFields must all be set to NULL after initialization.")){
         return false;
     }
     return true;
@@ -156,63 +176,115 @@ bool testStructCreation(string header){
     int _id = initStructAccess(fields, 80);
 
     for(int i = 0; i<80; i += 1){
-        if(!assertAcc(fields, _id, i, "Failed to verify access to the fields of a newly created struct.")){
+        if(!assertAcc(fields, _id, i, "(initStructAccess) Failed to verify access to the fields of a newly created struct.")){
             return false;
         }
     }
     return true;
 }
 
-bool testFieldInheritance(string header){
+
+
+bool testFieldAddition(string header){
     int * _id_counter = alloc(int);
     *(_id_counter) = 0;
+    
+    OwnedFields* fields_1 = alloc(OwnedFields);
+    initOwnedFields(fields_1, _id_counter);
 
+    OwnedFields* fields_2 = alloc(OwnedFields);
+    initOwnedFields(fields_2, _id_counter);
 
+    int _id = initStructAccess(fields_1, 4);
+
+    addAccess(fields_2, _id, 4, 2);
+    if(!assertAcc(fields_2, _id, 2, "(addAccess/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.")){
+        return false;
+    }
 
     return true;
+}
+
+void merge(OwnedFields* target, OwnedFields* source){
+    for(int i = 0; i<source->capacity; i += 1){
+        FieldArray* currFields = source->contents[i];
+        if(currFields != NULL){
+            for(int j = 0; j< currFields->length; j += 1){
+                addAccess(target, currFields->_id, currFields->length, j);
+            }
+        }
+    }
 }
 
 bool testFieldMerging(string header){
     int * _id_counter = alloc(int);
     *(_id_counter) = 0;
+    
+    int num_fields = 20;
 
-    return true;
-}
+    OwnedFields* source = alloc(OwnedFields);
+    initOwnedFields(source, _id_counter);
 
-bool testAssertions(string header){
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
+    int _id_node_1 = initStructAccess(source, num_fields);
+    int _id_node_2 = initStructAccess(source, num_fields);
 
+    OwnedFields* fields_1 = alloc(OwnedFields);
+    initOwnedFields(fields_1, _id_counter);
+
+    OwnedFields* fields_2 = alloc(OwnedFields);
+    initOwnedFields(fields_2, _id_counter);
+
+    for(int i = 0; i<num_fields; i += 1){
+        addAccess(fields_1, _id_node_1, num_fields, i);
+        if(!assertAcc(fields_1, _id_node_1, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.")){
+            return false;
+        }
+
+        addAccess(fields_2, _id_node_2, num_fields, i);
+        if(!assertAcc(fields_2, _id_node_2, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.")){
+            return false;
+        }
+    }
+
+
+    merge(fields_1, fields_2);
+
+    for(int i = 0; i<num_fields; i += 1){
+        if(!assertAcc(fields_1, _id_node_1, i, "(merge/assertAcc) Failed to preserve existing permissions after merge.")){
+            return false;
+        }
+        if(!assertAcc(fields_1, _id_node_2, i, "(merge/assertAcc) Failed to add new permissions from merge.")){
+            return false;
+        }
+    }
     return true;
 }
 
 int runTests() {
     int * _id_counter = alloc(int);
     *(_id_counter) = 0;
-
     if(testOwnedFieldsInitialization("OwnedFields Initialization")){
         println("PASS: OwnedFields Initialization");
     }else{
+        println("FAIL: OwnedFields Initialization");
         return 1;
     }
     if(testStructCreation("Field Creation")){
         println("PASS: Field Creation");
     }else{
+        println("FAIL: Field Creation");
         return 1;
     }
-    if(testFieldInheritance("Field Inheritance")){
-        println("PASS: Field Inheritance");
+    if(testFieldAddition("Field Addition")){
+        println("PASS: Field Addition");
     }else{
+        println("FAIL: Field Addition");
         return 1;
     }
     if(testFieldMerging("Field Merging")){
         println("PASS: Field Merging");
     }else{
-        return 1;
-    }
-    if(testAssertions("Field Access Assertions")){
-        println("PASS: Field Access Assertions");
-    }else{
+        println("FAIL: Field Merging");
         return 1;
     }
     return 0;

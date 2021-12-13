@@ -36,7 +36,7 @@ void example(Node* n){
     OwnedFields* fields = alloc(OwnedFields);
     initOwnedFields(*fields);
 
-    addAccess(fields, n->_id, ["value", "next"]);
+    inheritAccess(fields, n->_id, ["value", "next"]);
 
     ...
 }
