@@ -51,6 +51,7 @@ object Weaver {
 
     def weave(): Unit = {
       ir.methods.foreach { method => weave(method, silver.findMethod(method.name)) }
+      FieldAccessTracker.injectAccessTracking(ir)
     }
 
     private def weave(method: Method, silver: vpr.Method): Unit = {
