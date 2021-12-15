@@ -1,0 +1,22 @@
+struct OwnedFields {
+    struct FieldArray*[] contents;
+    int capacity;
+    int length;
+    int* instanceCounter;
+};
+typedef struct OwnedFields OwnedFields;
+
+struct FieldArray {
+  bool[] contents;
+  int length;
+  int _id;
+  bool deleted;
+};
+typedef struct FieldArray FieldArray;
+
+void initOwnedFields(OwnedFields* fields, int * instanceCounter);
+int addStructAccess(OwnedFields * fields, int numFields);
+void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex);
+void join(OwnedFields* target, OwnedFields* source);
+void disjoin(OwnedFields* target, OwnedFields* source);
+bool assertAcc(OwnedFields* fields, int _id, int fieldIndex);
