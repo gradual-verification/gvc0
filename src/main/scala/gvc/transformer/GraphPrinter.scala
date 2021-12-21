@@ -196,6 +196,15 @@ object GraphPrinter {
         p.println(");")
       }
 
+      case alloc: AllocArray => {
+        printExpr(alloc.target)
+        p.print(" = alloc_array(")
+        printType(alloc.valueType)
+        p.print(", ")
+        printExpr(alloc.length)
+        p.println(");")
+      }
+
       case alloc: AllocStruct => {
         printExpr(alloc.target)
         p.print(" = alloc(struct ")
@@ -226,6 +235,15 @@ object GraphPrinter {
           printExpr(assign.value)
           p.println(";")
         }
+      }
+
+      case assign: AssignIndex => {
+        printExpr(assign.target)
+        p.print("[")
+        printExpr(assign.index)
+        p.print("] = ")
+        printExpr(assign.value)
+        p.println(";")
       }
 
       case assert: Assert => assert.method match {
@@ -308,7 +326,12 @@ object GraphPrinter {
         printList(pred.arguments) { arg => printExpr(arg) }
         p.print(")")
       }
-
+      case arr: ArrayAtIndex => {
+        printExpr(arr.arrayExp)
+        p.print("[")
+        printExpr(arr.index)
+        p.print("]")
+      }
       case res: Result => p.print("\\result")
       case imp: Imprecise => imp.precise match {
         case None => p.print("?")

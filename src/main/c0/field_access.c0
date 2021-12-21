@@ -110,16 +110,23 @@ void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex){
   }
 }
 
-bool assertAcc(OwnedFields* fields, int _id, int fieldIndex){
+void assertOverlappingAcc(OwnedFields* static, OwnedFields* all, int _id, int fieldIndex){
+    FieldArray* existsStatically = find(static, _id);
+    if(existsStatically == NULL || existsStatically->deleted || !existsStatically->contents[fieldIndex]){
+        assertDisjointAcc(all, _id, fieldIndex);
+    }else{
+        error();
+    }
+}
+void assertDisjointAcc(OwnedFields* all, int _id, int fieldIndex){
     FieldArray* toCheck = find(fields, _id);
     if(toCheck != NULL && !toCheck->deleted){
-        if(fieldIndex >= toCheck->length){
-            println("[INTERNAL] Field index exceeds maximum for the given struct.\n");
-        }else if(toCheck->contents[fieldIndex]){
-            return true;
+        if(fieldIndex >= toCheck->length || !toCheck->contents[fieldIndex]){
+            error();
         }
+    }else{
+        error();
     }
-    return false;
 }
 
 void join(OwnedFields* target, OwnedFields* source){

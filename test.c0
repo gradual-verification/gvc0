@@ -1,0 +1,29 @@
+
+struct Node {
+    int value1;
+    int value2;
+    int value3;
+    int value4;
+};
+typedef struct Node Node;
+
+int getValue(Node* n)
+//@requires ? && acc(n->value1) && acc(n->value3) && acc(n->value4);
+//@ensures ?;
+{
+    return n->value1 + n->value2;
+}
+
+int testWeaving(Node* n)
+//@requires acc(n->value1) && acc(n->value2) && acc(n->value3) && acc(n->value4);
+//@ensures acc(n->value1) && acc(n->value2);
+{
+    int result = getValue(n);
+    return result;
+}
+
+int main() {
+    Node* n = alloc(Node);
+    testWeaving(n);
+    return 0;
+}

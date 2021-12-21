@@ -19,4 +19,6 @@ int addStructAccess(OwnedFields * fields, int numFields);
 void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex);
 void join(OwnedFields* target, OwnedFields* source);
 void disjoin(OwnedFields* target, OwnedFields* source);
-bool assertAcc(OwnedFields* fields, int _id, int fieldIndex);
+void assertAccess(OwnedFields* static, OwnedFields* all, int _id, int fieldIndex);
+void assertDisjointAccess(OwnedFields* all, int _id, int fieldIndex);
+

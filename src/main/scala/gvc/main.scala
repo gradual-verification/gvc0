@@ -97,9 +97,10 @@ object Main extends App {
     silicon.verify(silver) match {
       case verifier.Success => {
         println(s"Verified successfully!")
+        println(s"Weaving in runtime checks...")
+        Weaver.weave(ir, silver)
 
-        if (printWeaving) {
-          Weaver.weave(ir, silver)
+        if (true) {
           println(s"Woven output for '$name':")
           println(GraphPrinter.print(ir))
         }
