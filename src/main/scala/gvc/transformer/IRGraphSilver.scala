@@ -13,7 +13,7 @@ object IRGraphSilver {
     val structFields = mutable.Map[StructField, vpr.Field]()
 
     def declareField(name: String, typ: vpr.Type): vpr.Field = {
-      val field = vpr.Field("$refValue", vpr.Ref)()
+      val field = vpr.Field(name, vpr.Ref)()
       fields += field
       field
     }
@@ -47,7 +47,7 @@ object IRGraphSilver {
     }
 
     def convertField(field: StructField): vpr.Field =
-      structFields.getOrElseUpdate(field, vpr.Field(field.struct.name + "$" + field.name, convertType(field.valueType))())
+      structFields.getOrElseUpdate(field, declareField(field.struct.name + "$" + field.name, convertType(field.valueType)))
 
     def convertType(t: Type) = t match {
       case _: ReferenceType => vpr.Ref

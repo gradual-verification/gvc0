@@ -1,4 +1,4 @@
-field $refValue: Ref
+field $intValue: Ref
 
 method main() returns ($result: Int)
 {
@@ -9,5 +9,5 @@ method test(value: Ref)
   requires ? && !(value == null)
   ensures ? && true
 {
-  value.$refValue := 1
+  value.$intValue := 1
 }
