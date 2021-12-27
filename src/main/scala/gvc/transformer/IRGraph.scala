@@ -70,7 +70,7 @@ object IRGraph {
     private val vars = mutable.ArrayBuffer[Var]()
     private val scope = mutable.Map[String, Var]()
 
-    val entry = new BasicBlock(this, None)
+    val body = new Block()
 
     def parameters: Seq[Parameter] = params
 
@@ -92,13 +92,7 @@ object IRGraph {
       vars += newVar
     }
 
-    def getVar(name: String): Option[Var] = {
-      if(scope isDefinedAt name){
-        Some(scope(name))
-      }else{
-        None
-      }
-    }
+    def getVar(name: String) = scope.get(name)
 
     private def getAvailableName(name: String) =
       Iterator.from(0).map {
@@ -127,45 +121,33 @@ object IRGraph {
     }
   }
 
-  sealed trait Block extends Node {
-    var method: Method
-    var previous: Option[Block]
-    var next: Option[Block]
+  class Block extends Iterable[Op] {
+    private[IRGraph] var blockHead: Option[Op] = None
+    private[IRGraph] var blockTail: Option[Op] = None
 
-    def predecessors: Seq[IRGraph.Block] = previous match {
-      case None => Seq.empty
-      case Some(basic: BasicBlock) => Seq(basic)
-      case Some(iff: IfBlock) => Seq(iff.ifTrue, iff.ifFalse)
-      case Some(whil: WhileBlock) => whil.predecessors :+ whil.body
+    private[IRGraph] def claim(op: Op): Unit = {
+      if (op.block.isDefined) throw new IRException("Cannot insert already-inserted Op")
+      op.block = Some(this)
     }
-  }
 
-  class BasicBlock(
-    var method: Method,
-    var previous: Option[Block],
-  ) extends Block {
-    var next: Option[Block] = None
-    var ops: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
-  }
+    def += (op: Op): Unit = blockTail match {
+      case Some(tailOp) => tailOp.insertAfter(op)
+      case None => {
+        claim(op)
+        blockHead = Some(op)
+        blockTail = blockHead
+      }
+    }
 
-  class IfBlock(
-    var method: Method,
-    var previous: Option[Block],
-    var condition: IRGraph.Expression
-  ) extends Block {
-    var next: Option[Block] = None
-    val ifTrue = new BasicBlock(method, previous)
-    val ifFalse = new BasicBlock(method, previous)
-  }
-
-  class WhileBlock(
-    var method: Method,
-    var previous: Option[Block],
-    var condition: IRGraph.Expression,
-    var invariant: Option[IRGraph.Expression] = None
-  ) extends Block {
-    var next: Option[Block] = None
-    val body = new BasicBlock(method, previous)
+    def iterator: Iterator[Op] = new Iterator[Op] {
+      var current: Option[Op] = blockHead
+      def hasNext: Boolean = current.isDefined
+      def next(): Op = {
+        val value = current.get
+        current = value.next
+        value        
+      }
+    }
   }
 
   sealed trait Expression extends Node
@@ -179,7 +161,8 @@ object IRGraph {
 
   class FieldMember(var root: Expression, var field: StructField) extends Member
   class DereferenceMember(var root: Expression, var valueType: Type) extends Member
-  class ArrayAtIndex(var arrayExp: Expression, var valueType: Type, var index: Int) extends Expression
+  // TODO: Index should be Expression
+  class ArrayMember(var root: Expression, var valueType: Type, var index: Int) extends Member
 
   class Accessibility(var member: Member) extends Expression
 
@@ -277,7 +260,46 @@ object IRGraph {
     def default = new IRGraph.Char(0)
   }
 
-  sealed trait Op extends Node
+  sealed trait Op {
+    private[IRGraph] var block: Option[Block] = None
+    private[IRGraph] var previous: Option[Op] = None
+    private[IRGraph] var next: Option[Op] = None
+
+    def insertBefore(op: Op): Unit = {
+      val b = block.getOrElse(throw new IRException("Cannot insert before an Op that has not been added to a Block"))
+      b.claim(op)
+
+      previous match {
+        case Some(prevOp) => prevOp.insertAfter(op)
+        case None => {
+          // If there is no previous, the current node must be the head node
+          previous = Some(op)
+          b.blockHead = previous
+          op.next = Some(this)
+        }
+      }
+    }
+
+    def insertAfter(op: Op): Unit = {
+      val b = block.getOrElse(throw new IRException("Cannot insert after an Op that has not been added to a Block"))
+      b.claim(op)
+
+      op.previous = Some(this)
+      next match {
+        case Some(nextOp) => {
+          nextOp.previous = Some(op)
+          op.next = Some(nextOp)
+        }
+        case None => {
+          // If there is no next, then the current node is the current tail
+          // Update the tail to be the new appended node
+          b.blockTail = Some(op)
+        }
+      }
+
+      next = Some(op)
+    }
+  }
 
   class Invoke(
     var method: Method,
@@ -305,8 +327,6 @@ object IRGraph {
     var member: Member,
     var value: Expression
   ) extends Op
-
-  class AssignIndex(var target: Var, var index: Int, var value: Expression) extends Op
 
   class Assert(
     var value: Expression,
@@ -343,4 +363,18 @@ object IRGraph {
     var arguments: List[Expression],
     method: Method
   ) extends Return(method)
+
+  class If(
+    var condition: Expression
+  ) extends Op {
+    val ifTrue = new Block()
+    val ifFalse = new Block()
+  }
+
+  class While(
+    var condition: Expression,
+    var invariant: Option[Expression]
+  ) extends Op {
+    val body = new Block()
+  }
 }

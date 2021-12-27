@@ -109,11 +109,8 @@ object GraphPrinter {
 
       p.println("{")
       p.withIndent {
-        for (decl <- method.variables) {
-          printVar(decl)
-        }
-
-        printBlock(method.entry)
+        method.variables.foreach(printVar)
+        method.body.foreach(printOp)
       }
       p.println("}")
     }
@@ -128,49 +125,9 @@ object GraphPrinter {
     }
 
     def printBlock(block: Block): Unit = {
-      block match {
-        case basic: BasicBlock => {
-          for (op <- basic.ops) printOp(op)
-        }
-
-        case iff: IfBlock => {
-          p.print("if (")
-          printExpr(iff.condition)
-          p.println(")")
-          p.println("{")
-          p.withIndent { printBlock(iff.ifTrue) }
-          p.println("}")
-          if (iff.ifFalse.ops.nonEmpty || iff.ifFalse.next.isDefined) {
-            p.println("else")
-            p.println("{")
-            p.withIndent { printBlock(iff.ifFalse) }
-            p.println("}")
-          }
-        }
-
-        case loop: WhileBlock => {
-          p.print("while (")
-          printExpr(loop.condition)
-          p.println(")")
-
-          loop.invariant.foreach { invariant =>
-            p.withIndent {
-              p.print("//@loop_invariant ")
-              printExpr(invariant)
-              p.println(";")
-            }
-          }
-
-          p.println("{")
-          p.withIndent { printBlock(loop.body) }
-          p.println("}")
-        }
-      }
-
-      block.next match {
-        case None => ()
-        case Some(next) => printBlock(next)
-      }
+      p.println("{")
+      p.withIndent(block.foreach(printOp))
+      p.println("}")
     }
 
     def printOp(op: Op): Unit = op match {
@@ -219,29 +176,26 @@ object GraphPrinter {
         p.println(";")
       }
 
-      case assign: AssignMember => assign.member match {
-        case member: FieldMember => {
-          printExpr(member.root)
-          p.print("->")
-          p.print(member.field.name)
-          p.print(" = ")
-          printExpr(assign.value)
-          p.println(";")
+      case assign: AssignMember => {
+        assign.member match {
+          case member: FieldMember => {
+            printExpr(member.root)
+            p.print("->")
+            p.print(member.field.name)
+          }
+          case member: DereferenceMember => {
+            p.print("*")
+            printExpr(member.root, Precedence.Unary)
+          }
+          case member: ArrayMember => {
+            printExpr(member.root)
+            p.print("[")
+            printExpr(member.index)
+            p.print("]")
+          }
         }
-        case member: DereferenceMember => {
-          p.print("*")
-          printExpr(member.root, Precedence.Unary)
-          p.print(" = ")
-          printExpr(assign.value)
-          p.println(";")
-        }
-      }
-
-      case assign: AssignIndex => {
-        printExpr(assign.target)
-        p.print("[")
-        printExpr(assign.index)
-        p.print("] = ")
+        
+        p.print(" = ")
         printExpr(assign.value)
         p.println(";")
       }
@@ -292,6 +246,33 @@ object GraphPrinter {
       }
 
       case _: Return => p.println("return;")
+
+      case iff: If => {
+        p.print("if (")
+        printExpr(iff.condition)
+        p.println(")")
+        printBlock(iff.ifTrue)
+
+        if (!iff.ifFalse.isEmpty) {
+          p.println("else")
+          printBlock(iff.ifFalse)
+        }
+      }
+
+      case w: While => {
+        p.print("while (")
+        printExpr(w.condition)
+        p.println(")")
+        w.invariant.foreach { inv =>
+          p.withIndent {
+            p.print("//@loop_invariant ")
+            printExpr(inv)
+            p.println(";")
+          }
+        }
+
+        printBlock(w.body)
+      }
     }
 
     def wrapExpr(currentPrecedence: scala.Int, exprPrecedence: scala.Int)(action: => Unit): Unit = {
@@ -326,8 +307,8 @@ object GraphPrinter {
         printList(pred.arguments) { arg => printExpr(arg) }
         p.print(")")
       }
-      case arr: ArrayAtIndex => {
-        printExpr(arr.arrayExp)
+      case arr: ArrayMember => {
+        printExpr(arr.root)
         p.print("[")
         printExpr(arr.index)
         p.print("]")
