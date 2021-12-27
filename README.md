@@ -28,3 +28,11 @@ sbt
 ```
 
 Use `--c0` or `--silver` to print the generated C0 or Silver source code, respectively. Use `--weave` to insert the required runtime checks and print the resulting C0 source code.
+
+## Testing
+
+A number of tests use resource files for the input and expected output. When modifying the output, it can become cumbersome to manually edit these files. Instead, you can overwrite all expected output files with by running the following command in an `sbt` shell:
+
+    testOnly ** -- -Dupdate_files=true
+
+Note that you will need to manually verify any modified files before committing to ensure that the new output is correct.
