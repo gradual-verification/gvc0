@@ -1,4 +1,4 @@
-field $intValue: Int
+field Test$value: Int
 
 method main() returns ($result: Int)
 {
@@ -6,8 +6,8 @@ method main() returns ($result: Int)
 }
 
 method test(value: Ref)
-  requires ? && !(value == null)
+  requires ? && acc(value.Test$value, write)
   ensures ? && true
 {
-  value.$intValue := 1
+  assert value.Test$value == 0
 }

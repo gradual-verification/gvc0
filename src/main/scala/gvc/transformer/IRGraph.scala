@@ -157,9 +157,12 @@ object IRGraph {
 
   sealed trait Member extends Expression {
     var root: Expression
+    def valueType: Type
   }
 
-  class FieldMember(var root: Expression, var field: StructField) extends Member
+  class FieldMember(var root: Expression, var field: StructField) extends Member {
+    def valueType: Type = field.valueType
+  }
   class DereferenceMember(var root: Expression, var valueType: Type) extends Member
   // TODO: Index should be Expression
   class ArrayMember(var root: Expression, var valueType: Type, var index: Int) extends Member
@@ -223,7 +226,6 @@ object IRGraph {
     def name: String
     def default: IRGraph.Literal
   }
-
 
   class ReferenceType(val struct: Struct) extends Type {
     def name: String = "struct " + struct.name + "*"

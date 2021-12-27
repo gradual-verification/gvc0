@@ -1,4 +1,4 @@
-field $intValue: Ref
+field $intValue: Int
 
 method deref(ptr: Ref) returns ($result: Int)
 {
