@@ -231,21 +231,14 @@ object GraphPrinter {
         p.println(");")
       }
 
-      case ret: ReturnValue => {
-        p.print("return ")
-        printExpr(ret.value)
+      case ret: Return => {
+        p.print("return")
+        ret.value.foreach { value =>
+          p.print(" ")
+          printExpr(value)
+        }
         p.println(";")
       }
-
-      case ret: ReturnInvoke => {
-        p.print("return ")
-        p.print(ret.invoke.name)
-        p.print("(")
-        printList(ret.arguments) { arg => printExpr(arg) }
-        p.println(");")
-      }
-
-      case _: Return => p.println("return;")
 
       case iff: If => {
         p.print("if (")

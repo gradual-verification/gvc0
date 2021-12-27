@@ -7,5 +7,7 @@ method deref(ptr: Ref) returns ($result: Int)
 
 method main() returns ($result: Int)
 {
-  $result := deref(null)
+  var _: Int
+  _ := deref(null)
+  $result := _
 }

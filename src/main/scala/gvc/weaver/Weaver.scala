@@ -129,28 +129,18 @@ object Weaver {
         }
 
         case ret: Return => {
-          val (rest, value) = ret match {
-            case _: ReturnInvoke => silver match {
-              case (stmt: vpr.MethodCall) :: rest => {
-                // TODO: use temp variable to allow runtime checks
-                visit(stmt)
-                (rest, None)
-              }
-              case other => unexpected(other)
-            }
-
-            case ret: ReturnValue => silver match {
+          val rest =  ret.value match {
+            case None => silver
+            case Some(_) => silver match {
               case (stmt: vpr.LocalVarAssign) :: rest => {
                 visit(stmt)
-                (rest, Some(ret.value))
+                rest
               }
               case other => unexpected(other)
             }
-
-            case _ => (silver, None)
           }
 
-          silverMethod.posts.foreach(inspectDeep(_, op, method, value))
+          silverMethod.posts.foreach(inspectDeep(_, op, method, ret.value))
           rest
         }
       }

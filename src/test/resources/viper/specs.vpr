@@ -1,6 +1,8 @@
 method main() returns ($result: Int)
 {
-  $result := max(1, 2)
+  var _: Int
+  _ := max(1, 2)
+  $result := _
 }
 
 method max(a: Int, b: Int) returns ($result: Int)
