@@ -32,14 +32,14 @@ object IRGraph {
       predicate
     }
 
-    def structs = _structs.values.toSeq.sortBy(_.name)
-    def methods = _methods.values.toSeq.sortBy(_.name)
-    def predicates = _predicates.values.toSeq.sortBy(_.name)
+    def structs: Seq[Struct] = _structs.values.toSeq.sortBy(_.name)
+    def methods: Seq[Method] = _methods.values.toSeq.sortBy(_.name)
+    def predicates: Seq[Predicate] = _predicates.values.toSeq.sortBy(_.name)
 
     // Structs can be used even if they are never declared
-    def struct(name: String) = _structs.getOrElseUpdate(name, new Struct(name))
-    def method(name: String) = _methods.get(name).getOrElse(throw new IRException(s"Method '$name' not found"))
-    def predicate(name: String) = _predicates.get(name).getOrElse(throw new IRException(s"Predicate '$name' not found"))
+    def struct(name: String): Struct = _structs.getOrElseUpdate(name, new Struct(name))
+    def method(name: String): Method = _methods.getOrElse(name, throw new IRException(s"Method '$name' not found"))
+    def predicate(name: String): Predicate = _predicates.getOrElse(name, throw new IRException(s"Predicate '$name' not found"))
   }
 
   class Struct(var name: String) extends Node {
@@ -72,7 +72,7 @@ object IRGraph {
 
     val entry = new BasicBlock(this, None)
 
-    def parameters: Seq[Parameter] = params.toSeq
+    def parameters: Seq[Parameter] = params
 
     def addParameter(valueType: Type, name: String): Parameter = {
       val newParam = new Parameter(valueType, getAvailableName(name))
@@ -83,21 +83,33 @@ object IRGraph {
 
     def addVar(valueType: Type, name: String = "_"): Var = {
       val newVar = new Var(valueType, getAvailableName(name))
-      scope += newVar.name -> newVar
-      vars += newVar
+      addExistingVar(newVar)
       newVar
     }
 
+    def addExistingVar(newVar: Var): Unit = {
+      scope += newVar.name -> newVar
+      vars += newVar
+    }
+
+    def getVar(name: String): Option[Var] = {
+      if(scope isDefinedAt name){
+        Some(scope(name))
+      }else{
+        None
+      }
+    }
+
     private def getAvailableName(name: String) =
-      Iterator.from(0).map(_ match {
+      Iterator.from(0).map {
         case 0 => name
         case n => name + n
-      }).find(!scope.contains(_)).get
+      }.find(!scope.contains(_)).get
 
     def variable(name: String): Var =
-      scope.get(name).getOrElse(throw new IRException(s"Variable '$name' not found"))
+      scope.getOrElse(name, throw new IRException(s"Variable '$name' not found"))
 
-    def variables: Seq[Var] = vars.toSeq
+    def variables: Seq[Var] = vars
   }
 
   class Predicate(
@@ -106,7 +118,7 @@ object IRGraph {
   ) {
     private val params = mutable.ArrayBuffer[Parameter]()
 
-    def parameters = params.toSeq
+    def parameters:Seq[Parameter] = params
 
     def addParameter(valueType: Type, name: String): Parameter = {
       val newParam = new Parameter(valueType, name)
@@ -133,7 +145,7 @@ object IRGraph {
     var previous: Option[Block],
   ) extends Block {
     var next: Option[Block] = None
-    val ops = mutable.ArrayBuffer[Op]()
+    var ops: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
   }
 
   class IfBlock(
@@ -167,6 +179,7 @@ object IRGraph {
 
   class FieldMember(var root: Expression, var field: StructField) extends Member
   class DereferenceMember(var root: Expression, var valueType: Type) extends Member
+  class ArrayAtIndex(var arrayExp: Expression, var valueType: Type, var index: Int) extends Expression
 
   class Accessibility(var member: Member) extends Expression
 
@@ -228,13 +241,24 @@ object IRGraph {
     def default: IRGraph.Literal
   }
 
+
   class ReferenceType(val struct: Struct) extends Type {
-    def name = "struct " + struct.name + "*"
+    def name: String = "struct " + struct.name + "*"
     def default = new IRGraph.Null()
   }
 
   class PointerType(val valueType: Type) extends Type {
-    def name = valueType.name + "*"
+    def name: String = valueType.name + "*"
+    def default = new IRGraph.Null()
+  }
+
+  class ArrayType(val valueType: Type) extends Type {
+    def name: String = valueType.name + "[]"
+    def default = new IRGraph.Null()
+  }
+
+  class ReferenceArrayType(val struct: Struct) extends Type {
+    def name: String = "struct " + struct.name + "[]"
     def default = new IRGraph.Null()
   }
 
@@ -258,7 +282,7 @@ object IRGraph {
   class Invoke(
     var method: Method,
     var arguments: List[Expression],
-    var target: Option[Var]) extends Op
+    var target: Option[Expression]) extends Op
 
   class AllocValue(
     var valueType: Type,
@@ -267,8 +291,10 @@ object IRGraph {
 
   class AllocStruct(
     var struct: Struct,
-    var target: Var
+    var target: Expression
   ) extends Op
+
+  class AllocArray(var valueType: Type, var length: Int, var target: Var) extends Op
 
   class Assign(
     var target: Var,
@@ -279,6 +305,8 @@ object IRGraph {
     var member: Member,
     var value: Expression
   ) extends Op
+
+  class AssignIndex(var target: Var, var index: Int, var value: Expression) extends Op
 
   class Assert(
     var value: Expression,
