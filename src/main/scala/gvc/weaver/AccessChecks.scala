@@ -2,70 +2,71 @@ package gvc.weaver
 import gvc.transformer.IRGraph
 import gvc.transformer.IRGraph._
 import viper.silicon.state.CheckInfo
-import viper.silver.ast.{FieldAccess, LocalVar}
+import viper.silver.ast.{FieldAccess, LocalVar, Exp}
 
 import scala.collection.mutable
 
 object AccessChecks{
 
   private object Names {
-    val NM_INSTANCE_COUNTER = "_instance_counter"
-    val NM_DYN_OWNED_FIELDS = "dyn_fields"
-    val NM_ID = "_id"
+    val InstanceCounter = "_instance_counter"
+    val DynamicOwnedFields = "dyn_fields"
+    val StaticOwnedFields = "static_fields"
+    val ID = "_id"
   }
   private object Structs {
-    val ST_OWNED_FIELDS = new Struct("OwnedFields")
+    def OwnedFields = new Struct("OwnedFields")
   }
   private object Vars {
-    val VAR_INSTANCE_COUNTER = new Var(new PointerType(IntType), Names.NM_INSTANCE_COUNTER)
-    val VAR_STATIC_OWNED_FIELDS = new Var(new ReferenceType(Structs.ST_OWNED_FIELDS), "static_fields")
-    val VAR_DYN_OWNED_FIELDS = new Var(new ReferenceArrayType(Structs.ST_OWNED_FIELDS), name=Names.NM_DYN_OWNED_FIELDS)
+    def InstanceCounter = new Var(new PointerType(IntType), Names.InstanceCounter)
+    def StaticOwnedFields = new Var(new ReferenceType(Structs.OwnedFields), "static_fields")
+    def DynamicOwnedFields = new Var(new ReferenceArrayType(Structs.OwnedFields), name=Names.DynamicOwnedFields)
   }
   private object Methods{
-    val MT_INIT_OWNED_FIELDS = new Method(
+    def InitOwnedFields = new Method(
       "initOwnedFields",
       Some(BoolType),
       None,
       None
     )
-    val MT_ADD_FIELD_ACCESS = new Method(
+    def AddFieldAccess = new Method(
       "addAccess",
       Some(BoolType),
       None,
       None
     )
-    val MT_ASSERT_ACC = new Method(
+    def AssertAcc = new Method(
       "assertAcc",
       Some(BoolType),
       None,
       None,
     )
-    val MT_ASSERT = new Method(
+    def Assert = new Method(
       "assertAccess",
       Some(BoolType),
       None,
       None,
     )
-    val MT_ASSERT_DISJOINT = new Method(
+    def AssertDisjoint = new Method(
       "assertDisjointAccess",
       Some(BoolType),
       None,
       None,
     )
 
-    val MT_ADD_STRUCT_ACCESS = new Method(
+    def AddStructAccess = new Method(
       "addStructAccess",
       Some(IntType),
       None,
       None
     )
-    val MT_JOIN = new Method(
+    def Join = new Method(
       "disjoin",
       Some(BoolType),
       None,
       None,
     )
-    val MT_DISJOIN = new Method(
+    def Disjoin = new Method(
       "disjoin",
       Some(BoolType),
       None,
@@ -73,22 +74,22 @@ object AccessChecks{
     )
   }
   private object Commands {
-    val CMD_INIT_COUNTER = Seq(
-      new AllocValue(IntType, Vars.VAR_INSTANCE_COUNTER),
-      new AssignMember(new DereferenceMember(Vars.VAR_INSTANCE_COUNTER, IntType), new Int(0))
+    def InitCounter = Seq(
+      new AllocValue(IntType, Vars.InstanceCounter),
+      new AssignMember(new DereferenceMember(Vars.InstanceCounter, IntType), new Int(0))
     )
-    val CMD_INIT_STATIC = Seq(
-      new AllocStruct(Structs.ST_OWNED_FIELDS, Vars.VAR_STATIC_OWNED_FIELDS),
-      new Invoke(Methods.MT_INIT_OWNED_FIELDS, List(Vars.VAR_STATIC_OWNED_FIELDS, Vars.VAR_INSTANCE_COUNTER), None)
+    def InitStatic = Seq(
+      new AllocStruct(Structs.OwnedFields, Vars.StaticOwnedFields),
+      new Invoke(Methods.InitOwnedFields, List(Vars.StaticOwnedFields, Vars.InstanceCounter), None)
     )
-    val CMD_INIT_DYN = Seq(
-      new AllocArray(new ReferenceType(Structs.ST_OWNED_FIELDS), new Int(1), Vars.VAR_DYN_OWNED_FIELDS),
-      new AllocStruct(Structs.ST_OWNED_FIELDS, new ArrayAtIndex(Vars.VAR_DYN_OWNED_FIELDS, Vars.VAR_DYN_OWNED_FIELDS.valueType, new Int(0))),
-      new Invoke(Methods.MT_INIT_OWNED_FIELDS, List(Commands.CMD_GET_DYN_OWNED_FIELDS, Vars.VAR_INSTANCE_COUNTER), None),
+    def InitDynamic = Seq(
+      new AllocArray(new ReferenceType(Structs.OwnedFields), new Int(1), Vars.DynamicOwnedFields),
+      new AllocStruct(Structs.OwnedFields, new ArrayMember(Vars.DynamicOwnedFields, Vars.DynamicOwnedFields.valueType, new Int(0))),
+      new Invoke(Methods.InitOwnedFields, List(Commands.GetDynamicOwnedFields, Vars.InstanceCounter), None),
     )
-    val CMD_JOIN = new Invoke(Methods.MT_JOIN, List(Commands.CMD_GET_DYN_OWNED_FIELDS, Vars.VAR_STATIC_OWNED_FIELDS), None)
-    val CMD_DISJOIN = new Invoke(Methods.MT_DISJOIN, List(Commands.CMD_GET_DYN_OWNED_FIELDS, Vars.VAR_STATIC_OWNED_FIELDS), None)
-    val CMD_GET_DYN_OWNED_FIELDS = new ArrayAtIndex(Vars.VAR_DYN_OWNED_FIELDS, new ReferenceType(Structs.ST_OWNED_FIELDS), new Int(0))
+    def Join = new Invoke(Methods.Join, List(Commands.GetDynamicOwnedFields, Vars.StaticOwnedFields), None)
+    def Disjoin = new Invoke(Methods.Disjoin, List(Commands.GetDynamicOwnedFields, Vars.StaticOwnedFields), None)
+    def GetDynamicOwnedFields = new ArrayMember(Vars.DynamicOwnedFields, new ReferenceType(Structs.OwnedFields), new Int(0))
 
   }
 
@@ -102,114 +103,145 @@ object AccessChecks{
       case _ => false
     }
   }
+  class Edge(var callsImprecise: Boolean, var callsites: mutable.ArrayBuffer[Op], var returns: mutable.ArrayBuffer[Op])
 
-  case class CallGraphEdge(var callsImprecise: Boolean, callsites: mutable.ArrayBuffer[AtOp], returns: mutable.ArrayBuffer[AtOp])
-  class CallGraph {
-    var graph: Map[Method, CallGraphEdge] = Map[Method, CallGraphEdge]()
+
+  class AccessTracker(){
+    val callGraph = new CallGraph()
     var entry: Option[Method] = None
-    def setEntry(method: Method): Unit = {
-      entry = Some(method)
+    private val visited: mutable.Set[String] = mutable.Set[String]()
+    private val visitedStructs: mutable.Set[String] = mutable.Set[String]()
+    val allocations: mutable.Set[(Method, Op)] = mutable.Set[(Method, Op)]()
+
+    def requiresTracking(): Boolean = visited.nonEmpty
+
+    def visitedStruct(structName: String): Boolean = {
+      visitedStructs.contains(structName)
     }
-    def addEdge(calledMethod: Method, callPosition: AtOp): Unit = {
+
+    def visitStruct(structName: String): Unit = {
+      visitedStructs += structName
+    }
+
+    def visitedMethod(method: Method): Boolean = {
+      visited.contains(method.name)
+    }
+
+    def visitMethod(method: Method): Unit = {
+      visited += method.name
+    }
+
+  }
+
+  class CallGraph extends Iterable[(Method, Edge)]{
+    override def iterator = graph.iterator;
+    private var graph: Map[Method, Edge] = Map[Method, Edge]()
+
+    def addEdge(calledMethod: Method, callPosition: Op, callingMethod: Method): Unit = {
       if (graph isDefinedAt calledMethod) {
         graph(calledMethod).callsites += callPosition
       } else {
-        val edge = CallGraphEdge(callsImprecise = false, mutable.ArrayBuffer[AtOp](callPosition), mutable.ArrayBuffer[AtOp]())
+        val edge = new Edge(callsImprecise = false, mutable.ArrayBuffer[Op](callPosition), mutable.ArrayBuffer[Op]())
         graph += calledMethod -> edge
       }
       if (isImprecise(calledMethod)) {
-        if (!(graph isDefinedAt callPosition.method)) {
-          graph += callPosition.method -> CallGraphEdge(callsImprecise = true, mutable.ArrayBuffer[AtOp](), mutable.ArrayBuffer[AtOp]())
+        if (!(graph isDefinedAt callingMethod)) {
+          graph += callingMethod -> new Edge(callsImprecise = true, mutable.ArrayBuffer[Op](), mutable.ArrayBuffer[Op]())
         } else {
-          graph(callPosition.method).callsImprecise = true
+          graph(callingMethod).callsImprecise = true
         }
       }
     }
-    def addReturn(returnPosition: AtOp): Unit ={
-      if(graph isDefinedAt returnPosition.method){
-        graph(returnPosition.method).returns += returnPosition
+    def addReturn(returnPosition: Op, returningMethod: Method): Unit ={
+      if(graph isDefinedAt returningMethod){
+        graph(returningMethod).returns += returnPosition
       }else{
-        graph += returnPosition.method -> CallGraphEdge(callsImprecise = false, mutable.ArrayBuffer[AtOp](), mutable.ArrayBuffer[AtOp](returnPosition))
+        graph += returningMethod -> new Edge(callsImprecise = false, mutable.ArrayBuffer[Op](), mutable.ArrayBuffer[Op](returnPosition))
       }
     }
   }
 
-  var visited: Set[Method] = Set[Method]()
-  var visitedStructs: Set[Struct] = Set[Struct]()
-  var allocations: Set[AtOp] = Set[AtOp]()
-
-  def injectSupport(ir: Program, callGraph: CallGraph): Unit = {
-    if (visited.nonEmpty) {
-      for ((method: Method, edge: CallGraphEdge) <- callGraph.graph) {
-        injectParameters(method, edge)
-        edge.callsites.foreach((position: AtOp) => {
+  def injectSupport(ir: Program, tracker: AccessTracker): Unit = {
+    if (tracker.requiresTracking) {
+      for ((method: Method, edge: Edge) <- tracker.callGraph) {
+        injectParameters(method, edge, tracker)
+        edge.callsites.foreach((position: Op) => {
           if(optionImprecise(method.precondition)) {
-            position.insertBefore(Commands.CMD_JOIN)
+            position.insertBefore(Commands.Join)
           }
           if (optionImprecise(method.postcondition)) {
-            position.insertAfter(Commands.CMD_DISJOIN)
+            position.insertAfter(Commands.Disjoin)
           }
         })
       }
-      allocations.foreach(alloc => {
-        val allocationOp = alloc.block.ops(alloc.index)
-        allocationOp match {
+      tracker.allocations.foreach(alloc => {
+        val method = alloc._1
+        val alloc_op = alloc._2
+        alloc_op match {
           case structAlloc: AllocStruct =>
-            if(isImprecise(alloc.method)){
-              injectIDField(structAlloc.struct)
-              alloc.insertAfter(addDynamicStructAccess(structAlloc.target, structAlloc.struct))
+            if(isImprecise(method)){
+              injectIDField(structAlloc.struct, tracker)
+              structAlloc.insertAfter(addDynamicStructAccess(structAlloc.target, structAlloc.struct, tracker))
             }else{
               //assign and increment _id_counter
             }
         }
       })
-      callGraph.entry match {
+      tracker.entry match {
         case Some(mainMethod) =>
-          var currBlock = mainMethod.entry
-          while (currBlock.previous.isDefined) {
-            currBlock = currBlock.previous.get.asInstanceOf[BasicBlock]
-          }
-          mainMethod.addExistingVar(Vars.VAR_INSTANCE_COUNTER)
-          currBlock.ops = mutable.ArrayBuffer(Commands.CMD_INIT_COUNTER ++ mainMethod.entry.ops: _*)
+          mainMethod.addExistingVar(Vars.InstanceCounter)
+          mainMethod.body.head.insertBefore(Commands.InitCounter)
+      }
+
+      for (method <- tracker.visited) {
+
       }
     }
   }
 
-  def injectParameters(method: Method, edge:CallGraphEdge): Unit = {
+  def injectParameters(method: Method, edge:Edge, tracker: AccessTracker): Unit = {
     if (isImprecise(method)) {
-      method.addParameter(new PointerType(new ReferenceArrayType(Structs.ST_OWNED_FIELDS)), Names.NM_DYN_OWNED_FIELDS)
-      generateStaticTracker(method)
+      method.addParameter(Vars.DynamicOwnedFields.valueType , Names.DynamicOwnedFields)
+      method.addParameter(Vars.StaticOwnedFields.valueType, Names.StaticOwnedFields)
+      edge.callsites.foreach(site => {
+        collectStaticPermissions(site, method, tracker)
+      })
       if (method.postcondition.isDefined && !optionImprecise(method.postcondition)) {
         for (ret <- edge.returns) {
-          ret.insertBefore(new AssignIndex(Vars.VAR_DYN_OWNED_FIELDS, new Int(0), Vars.VAR_STATIC_OWNED_FIELDS))
+          ret.insertBefore(new AssignIndex(Vars.DynamicOwnedFields, new Int(0), Vars.StaticOwnedFields))
         }
       }
     } else {
-      method.addParameter(new PointerType(IntType), Names.NM_INSTANCE_COUNTER)
+      method.addParameter(new PointerType(IntType), Names.InstanceCounter)
       if (edge.callsImprecise) {
-        method.addExistingVar(Vars.VAR_DYN_OWNED_FIELDS)
-        method.entry.ops = mutable.ArrayBuffer(Commands.CMD_INIT_DYN ++ method.entry.ops: _*)
+        method.addExistingVar(Vars.DynamicOwnedFields)
+        method.body.head.insertBefore(Commands.InitDynamic)
       }
     }
   }
 
-  def generateStaticTracker(method: Method): Unit = {
-    var staticFieldInitialization = Seq[Op]()
+  def collectStaticPermissions(site: Op, method: Method, tracker: AccessTracker): Unit = {
+    val permissions = getPermissionsFor
+  }
+
+  def generateStaticTracker(method: Method, tracker: AccessTracker): Unit = {
+    val staticFieldInitialization = mutable.ArrayBuffer[Op]()
     val accessibilityPredicates = collectStaticPermissions(method.precondition)
     accessibilityPredicates.foreach(acc => {
       acc.member match {
         case member: FieldMember =>
-          staticFieldInitialization = staticFieldInitialization ++ addFieldAccess(
-            Vars.VAR_STATIC_OWNED_FIELDS,
+           staticFieldInitialization += addFieldAccess(
+            Vars.StaticOwnedFields,
             member.root,
             member.field.struct,
-            member.field.name
+            member.field.name, tracker
           )
         case _: DereferenceMember => throw new WeaverException("Field access check implementation doesn't exist for DereferenceMember.")
       }
     })
-    method.addExistingVar(Vars.VAR_STATIC_OWNED_FIELDS)
-    method.entry.ops = mutable.ArrayBuffer(Commands.CMD_INIT_STATIC ++ staticFieldInitialization ++ method.entry.ops: _*)
+    method.addExistingVar(Vars.StaticOwnedFields)
+    method.body.head.insertBefore(Commands.InitStatic)
+    method.body.head.insertBefore(staticFieldInitialization)
   }
 
 
@@ -242,28 +274,27 @@ object AccessChecks{
     new Int(index)
   }
 
-  def injectIDField(structType: Struct): Unit = {
-    if (!visitedStructs.contains(structType)) {
-      structType.addField(Names.NM_ID, IntType)
-      visitedStructs += structType
+  def injectIDField(structType: Struct, tracker: AccessTracker): Unit = {
+    if (!tracker.visitedStruct(structType.name)) {
+      structType.addField(Names.ID, IntType)
+      tracker.visitStruct(structType.name)
     }
   }
 
   def generateAccessCheck(info: CheckInfo, loc: FieldAccess, toDeref: Expression, structType: Struct, fieldName: String): Seq[Op] = {
-    injectIDField(structType)
     if (info.overlaps && !isStaticallyVerifiedField(loc)) {
       Seq(new Invoke(
-        Methods.MT_ASSERT_DISJOINT,
-        List(Vars.VAR_STATIC_OWNED_FIELDS,
-          Commands.CMD_GET_DYN_OWNED_FIELDS,
+        Methods.AssertDisjoint,
+        List(Vars.StaticOwnedFields,
+          Commands.GetDynamicOwnedFields,
           new FieldMember(toDeref, structType.fields.last),
           getFieldIndex(structType, fieldName)),
         None
       ))
     } else {
       Seq(new Invoke(
-        Methods.MT_ASSERT,
-        List(Commands.CMD_GET_DYN_OWNED_FIELDS,
+        Methods.Assert,
+        List(Commands.GetDynamicOwnedFields,
           new FieldMember(toDeref, structType.fields.last),
           getFieldIndex(structType, fieldName)),
         None
@@ -275,24 +306,25 @@ object AccessChecks{
     true
   }
 
-  def assertFieldAccess(info: viper.silicon.state.CheckInfo, loc: FieldAccess, method: Method): Seq[Op] = {
+  def assertFieldAccess(check: CheckInfo, loc: FieldAccess, method: Method, tracker: AccessTracker): Seq[Op] = {
     val fieldName = loc.field.name.substring(loc.field.name.lastIndexOf('$') + 1)
     loc.rcv match {
       case LocalVar(name, _) =>
         method.getVar(name) match {
           case Some(variable) =>
             val structType = variable.valueType.asInstanceOf[ReferenceType].struct
-            generateAccessCheck(info, loc, variable, structType, fieldName)
+            injectIDField(structType, tracker)
+            generateAccessCheck(check, loc, variable, structType, fieldName)
           case None => ???
         }
       case _ => ???
     }
   }
 
-  private def addFieldAccess(fields: Expression, expressionToDereference: Expression, structType: Struct, fieldName: String): Seq[Op] = {
-    injectIDField(structType)
+  private def addFieldAccess(fields: Expression, expressionToDereference: Expression, structType: Struct, fieldName: String, tracker: AccessTracker): Seq[Op] = {
+    injectIDField(structType, tracker)
     val call = new Invoke(
-      Methods.MT_ADD_FIELD_ACCESS,
+      Methods.AddFieldAccess,
       List(fields,
         new FieldMember(expressionToDereference, structType.fields.last),
         getFieldIndex(structType, fieldName)),
@@ -301,30 +333,29 @@ object AccessChecks{
     Seq[Op](call)
   }
 
-  def addDynamicFieldAccess(expressionToDereference: Expression, structType: Struct, fieldName: String): Seq[Op] = {
-    this.addFieldAccess(Commands.CMD_GET_DYN_OWNED_FIELDS, expressionToDereference, structType, fieldName)
+  def addDynamicFieldAccess(expressionToDereference: Expression, structType: Struct, fieldName: String, tracker: AccessTracker): Seq[Op] = {
+    this.addFieldAccess(Commands.GetDynamicOwnedFields, expressionToDereference, structType, fieldName, tracker)
   }
 
-  def addStaticFieldAccess(expressionToDereference: Expression, structType: Struct, fieldName: String): Seq[Op] = {
-    this.addFieldAccess(Vars.VAR_STATIC_OWNED_FIELDS, expressionToDereference, structType, fieldName)
+  def addStaticFieldAccess(expressionToDereference: Expression, structType: Struct, fieldName: String, tracker: AccessTracker): Seq[Op] = {
+    this.addFieldAccess(Vars.StaticOwnedFields, expressionToDereference, structType, fieldName, tracker)
 
   }
 
-  private def addStructAccess(fields: Expression, exprToDeref: Expression, structType: Struct): Op = {
-    injectIDField(structType)
+  private def addStructAccess(fields: Expression, exprToDeref: Expression, structType: Struct, tracker:AccessTracker): Op = {
+    injectIDField(structType, tracker)
     new Invoke(
-      Methods.MT_ADD_STRUCT_ACCESS,
+      Methods.AddStructAccess,
       List(fields, new Int(structType.fields.length)),
-      Some(new FieldMember(exprToDeref, new StructField(structType, Names.NM_ID, IntType)))
+      Some(new FieldMember(exprToDeref, new StructField(structType, Names.ID, IntType)))
     )
-
   }
 
-  def addDynamicStructAccess(exprToDeref: Expression, structType: Struct): Op = {
-    addStructAccess(Commands.CMD_GET_DYN_OWNED_FIELDS, exprToDeref, structType)
+  def addDynamicStructAccess(exprToDeref: Expression, structType: Struct, tracker: AccessTracker): Op = {
+    addStructAccess(Commands.GetDynamicOwnedFields, exprToDeref, structType, tracker)
   }
 
-  def addStaticStructAccess(exprToDeref: Expression, structType: Struct): Op = {
-    addStructAccess(Vars.VAR_STATIC_OWNED_FIELDS, exprToDeref, structType)
+  def addStaticStructAccess(exprToDeref: Expression, structType: Struct, tracker: AccessTracker): Op = {
+    addStructAccess(Vars.StaticOwnedFields, exprToDeref, structType, tracker)
   }
 }

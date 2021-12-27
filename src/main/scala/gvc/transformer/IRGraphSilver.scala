@@ -1,7 +1,6 @@
 package gvc.transformer
 import viper.silver.{ast => vpr}
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 import IRGraph._
 
 object IRGraphSilver {
@@ -13,7 +12,7 @@ object IRGraphSilver {
     val structFields = mutable.Map[StructField, vpr.Field]()
 
     def declareField(name: String, typ: vpr.Type): vpr.Field = {
-      val field = vpr.Field("$refValue", vpr.Ref)()
+      val field = vpr.Field(name, vpr.Ref)()
       fields += field
       field
     }
@@ -36,8 +35,7 @@ object IRGraphSilver {
       val ret = method.returnType.map({ ret => vpr.LocalVarDecl(RESULT, convertType(ret))() }).toSeq
       val pre = method.precondition.map(convertExpr).toSeq
       val post = method.postcondition.map(convertExpr).toSeq
-      val body = ListBuffer[vpr.Stmt]()
-      convertBlock(method.entry, body)
+      val body = method.body.flatMap(convertOp).toList
 
       vpr.Method(method.name, params, ret, pre, post, Some(vpr.Seqn(body, vars)()))()
     }
@@ -47,7 +45,7 @@ object IRGraphSilver {
     }
 
     def convertField(field: StructField): vpr.Field =
-      structFields.getOrElseUpdate(field, vpr.Field(field.struct.name + "$" + field.name, convertType(field.valueType))())
+      structFields.getOrElseUpdate(field, declareField(field.struct.name + "$" + field.name, convertType(field.valueType)))
 
     def convertType(t: Type) = t match {
       case _: ReferenceType => vpr.Ref
@@ -55,50 +53,39 @@ object IRGraphSilver {
       case IntType => vpr.Int
       case BoolType => vpr.Bool
       case CharType => vpr.Int
+      case _ => throw new IRException(s"Unsupported type: ${t.name}")
     }
 
     def getPointerField(t: Type) = t match {
       case _: ReferenceType | _: PointerType => refPointer
       case IntType | CharType => intPointer
       case BoolType => boolPointer
+      case _ => throw new IRException(s"Unsupported type: ${t.name}")
     }
 
     def getReturnVar(method: Method): vpr.LocalVar =
       vpr.LocalVar(RESULT, convertType(method.returnType.get))()
 
-    def convertBlock(block: Block, output: ListBuffer[vpr.Stmt]): Unit = {
-      block match {
-        case basic: BasicBlock => {
-          output ++= basic.ops.flatMap(convertOp)
-        }
-
-        case iff: IfBlock => {
-          val ifTrue = ListBuffer[vpr.Stmt]()
-          val ifFalse = ListBuffer[vpr.Stmt]()
-          convertBlock(iff.ifTrue, ifTrue)
-          convertBlock(iff.ifFalse, ifFalse)
-          output += vpr.If(convertExpr(iff.condition), vpr.Seqn(ifTrue, Seq.empty)(), vpr.Seqn(ifFalse, Seq.empty)())()
-        }
-
-        case whil: WhileBlock => {
-          val body = ListBuffer[vpr.Stmt]()
-          convertBlock(whil.body, body)
-          output += vpr.While(
-            convertExpr(whil.condition),
-            whil.invariant.map(convertExpr).toList,
-            vpr.Seqn(body, Seq.empty)())()
-        }
-      }
-
-      block.next match {
-        case None => ()
-        case Some(next) => convertBlock(next, output)
-      }
-    }
-
     def convertOp(op: Op): Seq[vpr.Stmt] = op match {
+      case iff: If => {
+        val ifTrue = iff.ifTrue.flatMap(convertOp).toList
+        val ifFalse = iff.ifFalse.flatMap(convertOp).toList
+        Seq(vpr.If(convertExpr(iff.condition), vpr.Seqn(ifTrue, Seq.empty)(), vpr.Seqn(ifFalse, Seq.empty)())())
+      }
+
+      case loop: While => {
+        Seq(vpr.While(
+          convertExpr(loop.condition),
+          loop.invariant.map(convertExpr).toList,
+          vpr.Seqn(loop.body.flatMap(convertOp).toList, Seq.empty)())())
+      }
+
       case invoke: Invoke => {
-        val target = invoke.target.map(convertVar)
+        val target = invoke.target.map({
+          case v: Var => convertVar(v)
+          case _ => throw new IRException("Complex invoke target cannot be converted to Silver")
+        })
+
         val args = invoke.arguments.map(convertExpr).toList
         Seq(vpr.MethodCall(invoke.method.name, args, target.toSeq)(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
       }
@@ -110,10 +97,16 @@ object IRGraphSilver {
       }
 
       case alloc: AllocStruct => {
-        val target = convertVar(alloc.target)
+        val target = alloc.target match {
+          case v: Var => convertVar(v)
+          case _ => throw new IRException("Complex alloc target cannot be converted to Silver")
+        }
         val fields = alloc.struct.fields.map(convertField).toList
         Seq(vpr.NewStmt(target, fields)())
       }
+
+      case _: AllocArray =>
+        throw new IRException("Array operations are not implemented in Silver")
 
       case assign: Assign =>
         Seq(vpr.LocalVarAssign(convertVar(assign.target), convertExpr(assign.value))())
@@ -147,6 +140,7 @@ object IRGraphSilver {
     def convertMember(member: Member): vpr.FieldAccess = member match {
       case member: FieldMember => vpr.FieldAccess(convertExpr(member.root), convertField(member.field))()
       case member: DereferenceMember => vpr.FieldAccess(convertExpr(member.root), getPointerField(member.valueType))()
+      case _: ArrayMember => throw new IRException("Array operations are not implemented in Silver")
     }
 
     def convertPredicateInstance(pred: PredicateInstance): vpr.PredicateAccessPredicate =

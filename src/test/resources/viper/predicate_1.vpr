@@ -1,13 +1,13 @@
-field $refValue: Ref
+field $intValue: Ref
 
 predicate testPred(value: Ref) {
-  acc(value.$refValue, write)
+  acc(value.$intValue, write)
 }
 
 method main() returns ($result: Int)
 {
   var a: Ref
-  a := new($refValue)
+  a := new($intValue)
   fold acc(testPred(a), write)
   test(a)
   $result := 0
@@ -17,5 +17,5 @@ method test(value: Ref)
   requires acc(testPred(value), write)
 {
   unfold acc(testPred(value), write)
-  value.$refValue := 1
+  value.$intValue := 1
 }

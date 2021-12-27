@@ -1,3 +1,5 @@
+field Test$value: Ref
+
 method doTest(input: Ref)
   requires ? && true
   ensures ? && true

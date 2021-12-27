@@ -190,72 +190,60 @@ object GraphTransformer {
     def implementMethod(input: ResolvedMethodDefinition): Unit = {
       val method = ir.method(input.name)
       val scope = new MethodScope(method, method.parameters.map(p => p.name -> p), None)
-      transformBlock(input.body, method.entry, scope)
       method.precondition = input.declaration.precondition.map(transformSpec(_, scope))
+      transformBlock(input.body, method.body, scope)
       method.postcondition = input.declaration.postcondition.map(transformSpec(_, scope))
     }
 
     def transformBlock(
       input: ResolvedBlock,
       output: IRGraph.Block,
-      scope: MethodScope): IRGraph.Block = {
+      scope: MethodScope): Unit = {
       val blockScope = scope.child()
       for (decl <- input.variableDefs) {
         blockScope.declareVariable(transformType(decl.valueType), decl.name)
       }
 
-      var block = output
       for (stmt <- input.statements) {
-        block = transformStatement(stmt, block, blockScope)
+        transformStatement(stmt, output, blockScope)
       }
-
-      block
     }
 
-    def transformStatement(input: ResolvedStatement, output: IRGraph.Block, scope: MethodScope): IRGraph.Block = {
+    def transformStatement(input: ResolvedStatement, output: IRGraph.Block, scope: MethodScope): Unit = {
       input match {
         case block: ResolvedBlock => transformBlock(block, output, scope)
 
         case iff: ResolvedIf => {
-          val cond = transformExpr(iff.condition, scope)
-          val ifBlock = new IRGraph.IfBlock(output.method, Some(output), cond)
-          output.next = Some(ifBlock)
-          transformStatement(iff.ifTrue, ifBlock.ifTrue, scope)
-          iff.ifFalse.foreach(transformStatement(_, ifBlock.ifFalse, scope))
-          ifBlock
+          val ir = new IRGraph.If(transformExpr(iff.condition, scope))
+          transformStatement(iff.ifTrue, ir.ifTrue, scope)
+          iff.ifFalse.foreach(transformStatement(_, ir.ifFalse, scope))
+          output += ir
         }
 
         case loop: ResolvedWhile => {
-          val cond = transformExpr(loop.condition, scope)
-          val loopBlock = new IRGraph.WhileBlock(output.method, Some(output), cond)
-          loopBlock.invariant = loop.invariant.map(transformSpec(_, scope))
-          output.next = Some(loopBlock)
-          transformStatement(loop.body, loopBlock.body, scope)
-          loopBlock
+          val ir = new IRGraph.While(
+            transformExpr(loop.condition, scope),
+            loop.invariant.map(transformSpec(_, scope)))
+          transformStatement(loop.body, ir.body, scope)
+          output += ir
         }
 
         case expr: ResolvedExpressionStatement => expr.value match {
-          case invoke: ResolvedInvoke => appendOp(output, transformInvoke(invoke, None, scope))
-
-          case expr => {
-            transformExpr(expr, scope) // traverse expression to make sure it is valid
-            output
-          }
+          case invoke: ResolvedInvoke => output += transformInvoke(invoke, None, scope)
+          case expr => transformExpr(expr, scope) // traverse expression to make sure it is valid
         }
 
         case assign: ResolvedAssignment => assign.value match {
           case invoke: ResolvedInvoke => {
             val method = resolveMethod(invoke)
-            val args = invoke.arguments.map(transformExpr(_, scope))
             val retType = method.returnType.getOrElse(throw new TransformerException("Cannot assign result of void method"))
-
-            // Create a temporary variable if assigning to complex expression
             assign.left match {
-              case ref: ResolvedVariableRef => appendOp(output, transformInvoke(invoke, Some(scope.variable(ref)), scope))
+              case ref: ResolvedVariableRef => output += transformInvoke(invoke, Some(scope.variable(ref)), scope)
               case complex => {
+                // Create a temporary variable if assigning to complex expression
                 val temp = scope.method.addVar(retType)
-                val block = appendOp(output, new IRGraph.Invoke(method, args, Some(temp)))
-                appendOp(block, transformAssign(complex, temp, scope))
+                output += transformInvoke(invoke, Some(temp), scope)
+                output += transformAssign(complex, temp, scope)
               }
             }
           }
@@ -264,16 +252,16 @@ object GraphTransformer {
             val valueType = transformType(alloc.valueType)
             // Create a temporary variable if assigning to complex expression
             assign.left match {
-              case ref: ResolvedVariableRef => appendOp(output, transformAlloc(alloc, scope.variable(ref), scope))
+              case ref: ResolvedVariableRef => output += transformAlloc(alloc, scope.variable(ref), scope)
               case complex => {
                 val target = scope.method.addVar(valueType)
-                val block = appendOp(output, transformAlloc(alloc, target, scope))
-                appendOp(block, transformAssign(complex, target, scope))
+                output += transformAlloc(alloc, target, scope)
+                output += transformAssign(complex, target, scope)
               }
             }
           }
 
-          case expr => appendOp(output, transformAssign(assign.left, transformExpr(expr, scope), scope))
+          case expr => output += transformAssign(assign.left, transformExpr(expr, scope), scope)
         }
 
         case inc: ResolvedIncrement => {
@@ -287,44 +275,30 @@ object GraphTransformer {
           }
 
           val computed = new IRGraph.Binary(op, current, new IRGraph.Int(1))
-          appendOp(output, transformAssign(inc.value, computed, scope))
+          output += transformAssign(inc.value, computed, scope)
         }
 
-        case ret: ResolvedReturn => appendOp(output, ret.value match {
+        case ret: ResolvedReturn => output += (ret.value match {
           case None => new IRGraph.Return(scope.method)
           case Some(invoke: ResolvedInvoke) => new IRGraph.ReturnInvoke(resolveMethod(invoke), invoke.arguments.map(transformExpr(_, scope)), scope.method)
           case Some(value) => new IRGraph.ReturnValue(transformExpr(value, scope), scope.method)
         })
 
         case assert: ResolvedAssert =>
-          appendOp(output, new IRGraph.Assert(transformExpr(assert.value, scope), IRGraph.AssertMethod.Imperative))
+          output += new IRGraph.Assert(transformExpr(assert.value, scope), IRGraph.AssertMethod.Imperative)
         
         case spec: ResolvedAssertSpecExprification =>
-          appendOp(output, new IRGraph.Assert(transformSpec(spec.specification, scope), IRGraph.AssertMethod.Specification))
+          output += new IRGraph.Assert(transformSpec(spec.specification, scope), IRGraph.AssertMethod.Specification)
 
         case unfold: ResolvedUnfoldPredicate =>
-          appendOp(output, new IRGraph.Unfold(transformPredicate(unfold.predicate, scope)))
+          output += new IRGraph.Unfold(transformPredicate(unfold.predicate, scope))
 
         case fold: ResolvedFoldPredicate =>
-          appendOp(output, new IRGraph.Fold(transformPredicate(fold.predicate, scope)))
+          output += new IRGraph.Fold(transformPredicate(fold.predicate, scope))
 
         case err: ResolvedError =>
-          appendOp(output, new IRGraph.Error(transformExpr(err.value, scope)))
+          output += new IRGraph.Error(transformExpr(err.value, scope))
       }
-    }
-
-    def appendOp(output: IRGraph.Block, op: IRGraph.Op): IRGraph.Block = {
-      val block = output match {
-        case basic: IRGraph.BasicBlock => basic
-        case other => {
-          val basic = new IRGraph.BasicBlock(output.method, Some(output))
-          output.next = Some(basic)
-          basic
-        }
-      }
-
-      block.ops += op
-      block
     }
 
     def definePredicate(input: ResolvedPredicateDefinition): Unit = {

@@ -1,17 +1,18 @@
 package gvc.weaver
 
 import gvc.transformer.IRGraph._
-import viper.silver.ast.{FieldAccessPredicate}
-import viper.silver.{ ast => vpr}
+import gvc.weaver.AccessChecks.AccessTracker
+import viper.silicon.state.{CheckInfo}
+import viper.silver.ast.FieldAccessPredicate
+import viper.silver.{ast => vpr}
 
 object CheckImplementation {
 
-  def generate(check: viper.silicon.state.CheckInfo, method: Method, returnValue: Option[Expression]): Seq[Op] = {
-    check.checks match {
-      case FieldAccessPredicate(loc, _) => {
-        AccessChecks.visited += method
-        AccessChecks.assertFieldAccess(check, loc, method)
-      }
+  def generate(check: CheckInfo, method: Method, returnValue: Option[Expression], tracker: AccessTracker): Seq[Op] = {
+      check match {
+      case FieldAccessPredicate(loc, _) =>
+        tracker.visitMethod(method)
+        AccessChecks.assertFieldAccess(check, loc, method, tracker)
       case _ => Seq(new Assert(expression(check.checks, method, returnValue), AssertMethod.Imperative))
     }
   }
