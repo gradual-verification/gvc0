@@ -14,8 +14,6 @@ object GraphTransformer {
 
     def transform(): IRGraph.Program = {
       for (struct <- program.structDefinitions)
-        defineStruct(struct)
-      for (struct <- program.structDefinitions)
         implementStruct(struct)
 
       for (predicate <- program.predicateDefinitions)
@@ -29,10 +27,6 @@ object GraphTransformer {
         implementMethod(method)
 
       ir
-    }
-
-    def defineStruct(input: ResolvedStructDefinition): Unit = {
-      ir.addStruct(input.name)
     }
 
     // Data for struct flattening (i.e. embedding a value-type struct
