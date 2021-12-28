@@ -36,10 +36,10 @@ object IRGraph {
   }
 
   class Struct(val name: String) {
-    private val _fields = mutable.ArrayBuffer[StructField]()
+    private val _fields = mutable.ListBuffer[StructField]()
 
     def addField(name: String, valueType: Type): StructField = {
-      val field = new StructField(this, name, valueType)
+      val field = new StructField(this, Helpers.findAvailableName(_fields.map(_.name), name), valueType)
       _fields += field
       field
     }
@@ -74,26 +74,20 @@ object IRGraph {
       scope.getOrElse(name, throw new IRException(s"Variable '$name' not found"))
 
     def addParameter(valueType: Type, name: String): Parameter = {
-      val newParam = new Parameter(valueType, getAvailableName(name))
+      val newParam = new Parameter(valueType, Helpers.findAvailableName(scope, name))
       scope += newParam.name -> newParam
       _parameters += newParam
       newParam
     }
 
     def addVar(valueType: Type, name: String = "_"): Var = {
-      val newVar = new Var(valueType, getAvailableName(name))
+      val newVar = new Var(valueType, Helpers.findAvailableName(scope, name))
       scope += newVar.name -> newVar
       _variables += newVar
       newVar
     }
 
     def getVar(name: String): Option[Var] = scope.get(name)
-
-    private def getAvailableName(name: String) =
-      Iterator.from(0).map {
-        case 0 => name
-        case n => name + n
-      }.find(!scope.contains(_)).get
   }
 
   class Predicate(

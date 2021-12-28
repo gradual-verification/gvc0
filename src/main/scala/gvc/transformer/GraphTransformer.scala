@@ -59,7 +59,7 @@ object GraphTransformer {
 
       def resolveField(field: ResolvedStructField, base: Option[String]): StructItem = {
         val fullName = base match {
-          case Some(n) => n + "_" + field.name // TODO: handle field name conflicts
+          case Some(n) => n + "_" + field.name
           case None => field.name
         }
 
