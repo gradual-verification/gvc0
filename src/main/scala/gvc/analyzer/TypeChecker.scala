@@ -300,14 +300,14 @@ object TypeChecker {
   def assertField(errors: ErrorSink, expr: ResolvedExpression): Unit = {
     // Top-level must not be simply a variable, but can contain a nested variable
     expr match {
-      case _: ResolvedVariableRef => errors.error(expr, FIELD_ERROR)
+      case _: ResolvedVariableRef | _: ResolvedResult => errors.error(expr, FIELD_ERROR)
       case _ => assertFieldInner(errors, expr)
     }
   }
 
   def assertFieldInner(errors: ErrorSink, expr: ResolvedExpression): Unit = {
     expr match {
-      case _: ResolvedVariableRef => ()
+      case _: ResolvedVariableRef | _: ResolvedResult => ()
       case member: ResolvedMember => assertFieldInner(errors, member.parent)
       case deref: ResolvedDereference => assertFieldInner(errors, deref.value)
       case _ => errors.error(expr, FIELD_ERROR)
