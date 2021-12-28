@@ -109,19 +109,24 @@ object GraphPrinter {
 
       p.println("{")
       p.withIndent {
-        method.variables.foreach(printVar)
+        val varTypes = method.variables.groupBy(_.valueType.name)
+          .toSeq.sortBy({ case (t, _) => t })
+
+        for ((t, vars) <- varTypes) {
+          p.print(t)
+          p.print(" ")
+          printList(vars.sortBy(_.name)) { v =>
+            p.print(v.name)
+            p.print(" = ")
+            printExpr(v.valueType.default)
+          }
+
+          p.println(";")
+        }
+
         method.body.foreach(printOp)
       }
       p.println("}")
-    }
-
-    def printVar(decl: Var): Unit = {
-      printType(decl.valueType)
-      p.print(" ")
-      p.print(decl.name)
-      p.print(" = ")
-      printExpr(decl.valueType.default)
-      p.println(";")
     }
 
     def printBlock(block: Block): Unit = {

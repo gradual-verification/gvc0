@@ -1,0 +1,10 @@
+int main();
+
+int main()
+{
+  bool x = false;
+  int a = 0, b = 0, c = 0, d = 0;
+  c = 1;
+  x = true;
+  return c;
+}

@@ -3,8 +3,7 @@ bool test(int value);
 
 int main()
 {
-  bool a = false;
-  bool b = false;
+  bool a = false, b = false;
   a = test(1);
   b = test(2);
   if (a || b)
