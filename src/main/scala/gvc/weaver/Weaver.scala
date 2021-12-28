@@ -93,9 +93,9 @@ object Weaver {
           case other => unexpected(other)
         }
 
-        case assert: Assert => assert.method match {
-          case AssertMethod.Imperative => silver
-          case AssertMethod.Specification => silver match {
+        case assert: Assert => assert.kind match {
+          case AssertKind.Imperative => silver
+          case AssertKind.Specification => silver match {
             case (stmt: vpr.Assert) :: rest => {
               visit(stmt)
               rest

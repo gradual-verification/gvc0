@@ -93,7 +93,7 @@ object IRGraphSilver {
         })
 
         val args = invoke.arguments.map(convertExpr).toList
-        Seq(vpr.MethodCall(invoke.method.name, args, target.toSeq)(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
+        Seq(vpr.MethodCall(invoke.callee.name, args, target.toSeq)(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
       }
 
       case alloc: AllocValue => {
@@ -120,9 +120,9 @@ object IRGraphSilver {
       case assign: AssignMember =>
         Seq(vpr.FieldAssign(convertMember(assign.member), convertExpr(assign.value))())
 
-      case assert: Assert => assert.method match {
-        case AssertMethod.Imperative => Seq.empty
-        case AssertMethod.Specification => Seq(vpr.Assert(convertExpr(assert.value))())
+      case assert: Assert => assert.kind match {
+        case AssertKind.Imperative => Seq.empty
+        case AssertKind.Specification => Seq(vpr.Assert(convertExpr(assert.value))())
       }
 
       case fold: Fold => Seq(vpr.Fold(convertPredicateInstance(fold.instance))())

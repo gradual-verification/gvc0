@@ -137,7 +137,7 @@ object GraphPrinter {
           p.print(" = ")
         }
 
-        p.print(invoke.method.name)
+        p.print(invoke.callee.name)
         p.print("(")
 
         printList(invoke.arguments) { arg =>
@@ -200,13 +200,13 @@ object GraphPrinter {
         p.println(";")
       }
 
-      case assert: Assert => assert.method match {
-        case AssertMethod.Specification => {
+      case assert: Assert => assert.kind match {
+        case AssertKind.Specification => {
           p.print("//@assert ")
           printExpr(assert.value)
           p.println(";")
         }
-        case AssertMethod.Imperative => {
+        case AssertKind.Imperative => {
           p.print("assert(")
           printExpr(assert.value)
           p.println(");")

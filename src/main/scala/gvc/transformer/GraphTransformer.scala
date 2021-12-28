@@ -266,13 +266,13 @@ object GraphTransformer {
         }
 
         case ret: ResolvedReturn =>
-          output += new IRGraph.Return(scope.method, ret.value.map(invokeExpr(_, output, scope)))
+          output += new IRGraph.Return(ret.value.map(invokeExpr(_, output, scope)))
 
         case assert: ResolvedAssert =>
-          output += new IRGraph.Assert(invokeExpr(assert.value, output, scope), IRGraph.AssertMethod.Imperative)
+          output += new IRGraph.Assert(invokeExpr(assert.value, output, scope), IRGraph.AssertKind.Imperative)
         
         case spec: ResolvedAssertSpecExprification =>
-          output += new IRGraph.Assert(transformSpec(spec.specification, scope), IRGraph.AssertMethod.Specification)
+          output += new IRGraph.Assert(transformSpec(spec.specification, scope), IRGraph.AssertKind.Specification)
 
         case unfold: ResolvedUnfoldPredicate =>
           output += new IRGraph.Unfold(transformPredicate(unfold.predicate, scope))
