@@ -12,10 +12,10 @@ import org.scalatest.funsuite._
 import viper.silicon.Silicon
 import viper.silver.verifier.Failure
 
-import gvc.specs.BaseFileSpecs
+import gvc.specs.BaseFileSpec
 import org.scalatest.ConfigMap
 
-class VerifierSpecs extends AnyFunSuite with BaseFileSpecs {
+class VerifierSpec extends AnyFunSuite with BaseFileSpec {
   var silicon: Silicon = null
 
   val testFiles = getFiles("verifier")

@@ -45,7 +45,7 @@ object ImplementationValidator {
         }
         case x: ResolvedReturn => x.value.foreach(expression)
         case x: ResolvedAssert => expression(x.value)
-        case x: ResolvedAssertSpecExprification => () // Abstract predicates allowed in asserts
+        case x: ResolvedAssertSpecification => () // Abstract predicates allowed in asserts
         case x: ResolvedError => expression(x.value)
         case x: ResolvedBlock => x.statements.foreach(statement)
         case x: ResolvedUnfoldPredicate => expression(x.predicate)

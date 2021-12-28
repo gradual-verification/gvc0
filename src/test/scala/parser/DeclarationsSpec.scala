@@ -2,7 +2,7 @@ import org.scalatest.funsuite._
 import gvc.parser._
 import fastparse.Parsed.Success
 
-class DeclarationsSpecExpr extends AnyFunSuite {
+class DeclarationsSpec extends AnyFunSuite {
   test("struct declaration") {
     val Success(Seq(struct: StructDefinition), _) = Parser.parseDef("struct Test;")
     assert(struct.id == "Test")
@@ -64,7 +64,7 @@ class DeclarationsSpecExpr extends AnyFunSuite {
 
     assert(method.body == None)
 
-    val List(spec: RequiresSpecExprification) = method.specifications
+    val List(spec: RequiresSpecification) = method.specifications
     val expr = spec.value.asInstanceOf[BinaryExpression]
     assert(expr.operator == BinaryOperator.Greater)
     assert(expr.left.asInstanceOf[VariableExpression].variable == "a")

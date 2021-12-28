@@ -118,7 +118,7 @@ object TypeChecker {
         assertType(errors, assert.value, BoolType)
       }
 
-      case assert: ResolvedAssertSpecExprification => {
+      case assert: ResolvedAssertSpecification => {
         checkExpression(errors, assert.specification)
         assertType(errors, assert.specification, BoolType)
       }

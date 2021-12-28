@@ -5,7 +5,7 @@ import gvc.transformer._
 import gvc.analyzer._
 import fastparse.Parsed.{Success,Failure}
 
-class WeaverTests extends AnyFunSuite {
+class WeaverSpec extends AnyFunSuite {
 
   test("resolve empty method") {
     val (c0, silver) = createProgram(

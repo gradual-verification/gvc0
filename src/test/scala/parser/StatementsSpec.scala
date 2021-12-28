@@ -2,7 +2,7 @@ import fastparse.Parsed.{Success, Failure}
 import org.scalatest.funsuite._
 import gvc.parser._
 
-class StatementsSpecExpr extends AnyFunSuite {
+class StatementsSpec extends AnyFunSuite {
   test("literal statement") {
     val Success(stmt: ExpressionStatement, _) = Parser.parseStatement("123;")
     assert(stmt.expression.asInstanceOf[IntegerExpression] == 123)
@@ -106,8 +106,8 @@ class StatementsSpecExpr extends AnyFunSuite {
     val Success(b: BlockStatement, _) = Parser.parseStatement("{ /*@ assert true; @*/ }")
     assert(b.body.isEmpty)
 
-    val List(spec) = b.trailingSpecExprifications
-    assert(spec.asInstanceOf[AssertSpecExprification].value.asInstanceOf[BooleanExpression] == true)
+    val List(spec) = b.trailingSpecifications
+    assert(spec.asInstanceOf[AssertSpecification].value.asInstanceOf[BooleanExpression] == true)
   }
 
   test("single statement block") {
@@ -125,7 +125,7 @@ class StatementsSpecExpr extends AnyFunSuite {
       }
     """)
     assert(b.specifications.isEmpty)
-    assert(b.trailingSpecExprifications.isEmpty)
+    assert(b.trailingSpecifications.isEmpty)
 
     val List(assign: AssignmentStatement) = b.body
     assert(assign.left.asInstanceOf[VariableExpression].variable == "a")
@@ -133,7 +133,7 @@ class StatementsSpecExpr extends AnyFunSuite {
     assert(assign.right.asInstanceOf[IntegerExpression] == 123)
 
     val List(spec) = assign.specifications
-    assert(spec.asInstanceOf[AssertSpecExprification].value.asInstanceOf[BooleanExpression] == false)
+    assert(spec.asInstanceOf[AssertSpecification].value.asInstanceOf[BooleanExpression] == false)
   }
 
   test("multi-statement block") {

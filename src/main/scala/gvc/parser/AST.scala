@@ -72,62 +72,62 @@ case class NullExpression(raw: String = "NULL", value: Null, span: SourceSpan) e
   def ==(other: Null): Boolean = true
 }
 
-// SpecExprifications
-sealed trait SpecExprification extends Node
-case class RequiresSpecExprification(value: Expression, span: SourceSpan) extends SpecExprification
-case class EnsuresSpecExprification(value: Expression, span: SourceSpan) extends SpecExprification
-case class LoopInvariantSpecExprification(value: Expression, span: SourceSpan) extends SpecExprification
-case class AssertSpecExprification(value: Expression, span: SourceSpan) extends SpecExprification
-case class FoldSpecExprification(predicate: Identifier, arguments: List[Expression], span: SourceSpan) extends SpecExprification
-case class UnfoldSpecExprification(predicate: Identifier, arguments: List[Expression], span: SourceSpan) extends SpecExprification
+// Specifications
+sealed trait Specification extends Node
+case class RequiresSpecification(value: Expression, span: SourceSpan) extends Specification
+case class EnsuresSpecification(value: Expression, span: SourceSpan) extends Specification
+case class LoopInvariantSpecification(value: Expression, span: SourceSpan) extends Specification
+case class AssertSpecification(value: Expression, span: SourceSpan) extends Specification
+case class FoldSpecification(predicate: Identifier, arguments: List[Expression], span: SourceSpan) extends Specification
+case class UnfoldSpecification(predicate: Identifier, arguments: List[Expression], span: SourceSpan) extends Specification
 
 // Statements
 sealed trait Statement extends Node {
-  val specifications: List[SpecExprification]
-  def withSpecExprifications(specs: List[SpecExprification]): Statement
+  val specifications: List[Specification]
+  def withSpecifications(specs: List[Specification]): Statement
 }
 
 case class ExpressionStatement(
   expression: Expression,
   span: SourceSpan,
-  specifications: List[SpecExprification] = List.empty
+  specifications: List[Specification] = List.empty
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): ExpressionStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): ExpressionStatement = copy(specifications = specs)
 }
 case class AssignmentStatement(
   left: Expression,
   operator: AssignOperator.Value,
   right: Expression,
   span: SourceSpan,
-  specifications: List[SpecExprification] = List.empty
+  specifications: List[Specification] = List.empty
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): AssignmentStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): AssignmentStatement = copy(specifications = specs)
 }
 case class VariableStatement(
   valueType: Type,
   id: Identifier,
   initialValue: Option[Expression],
   span: SourceSpan,
-  specifications: List[SpecExprification] = List.empty
+  specifications: List[Specification] = List.empty
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): VariableStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): VariableStatement = copy(specifications = specs)
 }
 case class IfStatement(
   condition: Expression,
   ifTrue: Statement,
   ifFalse: Option[Statement],
   span: SourceSpan,
-  specifications: List[SpecExprification] = List.empty
+  specifications: List[Specification] = List.empty
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): IfStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): IfStatement = copy(specifications = specs)
 }
 case class WhileStatement(
   condition: Expression,
   body: Statement,
   span: SourceSpan,
-  specifications: List[SpecExprification] = List.empty
+  specifications: List[Specification] = List.empty
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): WhileStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): WhileStatement = copy(specifications = specs)
 }
 case class ForStatement(
   initializer: Statement,
@@ -135,38 +135,38 @@ case class ForStatement(
   incrementor: Statement,
   body: Statement,
   span: SourceSpan,
-  specifications: List[SpecExprification] = List.empty
+  specifications: List[Specification] = List.empty
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): ForStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): ForStatement = copy(specifications = specs)
 }
 case class ReturnStatement(
   value: Option[Expression],
   span: SourceSpan,
-  specifications: List[SpecExprification] = List.empty
+  specifications: List[Specification] = List.empty
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): ReturnStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): ReturnStatement = copy(specifications = specs)
 }
 case class AssertStatement(
   value: Expression,
   span: SourceSpan,
-  specifications: List[SpecExprification] = List.empty
+  specifications: List[Specification] = List.empty
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): AssertStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): AssertStatement = copy(specifications = specs)
 }
 case class ErrorStatement(
   value: Expression,
   span: SourceSpan,
-  specifications: List[SpecExprification] = List.empty
+  specifications: List[Specification] = List.empty
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): ErrorStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): ErrorStatement = copy(specifications = specs)
 }
 case class BlockStatement(
   body: List[Statement],
   span: SourceSpan,
-  specifications: List[SpecExprification],
-  trailingSpecExprifications: List[SpecExprification]
+  specifications: List[Specification],
+  trailingSpecifications: List[Specification]
 ) extends Statement {
-  def withSpecExprifications(specs: List[SpecExprification]): BlockStatement = copy(specifications = specs)
+  def withSpecifications(specs: List[Specification]): BlockStatement = copy(specifications = specs)
 }
 
 // Definitions
@@ -186,7 +186,7 @@ case class MethodDefinition(
   returnType: Type,
   arguments: List[MemberDefinition],
   body: Option[BlockStatement],
-  specifications: List[SpecExprification],
+  specifications: List[Specification],
   span: SourceSpan
 ) extends Definition
 

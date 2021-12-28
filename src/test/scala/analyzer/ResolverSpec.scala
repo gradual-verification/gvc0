@@ -2,7 +2,7 @@ import org.scalatest.funsuite._
 import gvc.parser._
 import gvc.analyzer._
 
-class ResolverSpecExpr extends AnyFunSuite {
+class ResolverSpec extends AnyFunSuite {
   test("resolve empty method") {
     val input = List(
       methodDef("main", namedType("int"), List(), Some(block()))

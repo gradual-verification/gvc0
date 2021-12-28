@@ -271,7 +271,7 @@ object GraphTransformer {
         case assert: ResolvedAssert =>
           output += new IRGraph.Assert(invokeExpr(assert.value, output, scope), IRGraph.AssertKind.Imperative)
         
-        case spec: ResolvedAssertSpecExprification =>
+        case spec: ResolvedAssertSpecification =>
           output += new IRGraph.Assert(transformSpec(spec.specification, scope), IRGraph.AssertKind.Specification)
 
         case unfold: ResolvedUnfoldPredicate =>

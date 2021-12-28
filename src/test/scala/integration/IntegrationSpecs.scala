@@ -7,9 +7,9 @@ import fastparse.Parsed
 import gvc.weaver.Weaver
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.specs.BaseFileSpecs
+import gvc.specs.BaseFileSpec
 
-class IntegrationSpecs extends AnyFunSuite with BaseFileSpecs {
+class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
   val testDirs = List(
     // The test files are copied with some modifications in the test header
     // from tests/fp-basic in the cc0 repository

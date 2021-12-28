@@ -76,7 +76,7 @@ object AssignmentValidator {
         scope
       }
       
-      case assert: ResolvedAssertSpecExprification => {
+      case assert: ResolvedAssertSpecification => {
         validateExpression(scope, assert.specification)
         scope
       }
