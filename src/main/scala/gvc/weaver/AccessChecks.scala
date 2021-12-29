@@ -23,121 +23,152 @@ object AccessChecks {
   }
 
   private object Vars {
-    def InstanceCounter: Var = { new Var(new PointerType(IntType), Names.InstanceCounter) }
-    def StaticOwnedFields: Var = { new Var(
-      new ReferenceType(Structs.OwnedFields),
-      name = Names.StaticOwnedFields
-    )}
-    def DynamicOwnedFields: Var = { new Var(
-      new ArrayType(new ReferenceType(Structs.OwnedFields)),
-      name = Names.DynamicOwnedFields
-    )}
-    def TempOwnedFields: Var = { new Var(
-      new ReferenceType(Structs.OwnedFields),
-      name = Names.TempOwnedFields
-    )}
+    def InstanceCounter: Var = {
+      new Var(new PointerType(IntType), Names.InstanceCounter)
+    }
+    def StaticOwnedFields: Var = {
+      new Var(
+        new ReferenceType(Structs.OwnedFields),
+        name = Names.StaticOwnedFields
+      )
+    }
+    def DynamicOwnedFields: Var = {
+      new Var(
+        new ArrayType(new ReferenceType(Structs.OwnedFields)),
+        name = Names.DynamicOwnedFields
+      )
+    }
+    def TempOwnedFields: Var = {
+      new Var(
+        new ReferenceType(Structs.OwnedFields),
+        name = Names.TempOwnedFields
+      )
+    }
   }
 
   private object Methods {
-    def InitOwnedFields: Method = { new Method(
-      "initOwnedFields",
-      Some(BoolType),
-      None,
-      None
-    )}
-    def AddFieldAccess: Method = { new Method(
-      "addAccess",
-      Some(BoolType),
-      None,
-      None
-    )}
-    def Assert: Method = { new Method(
-      "assertAccess",
-      Some(BoolType),
-      None,
-      None
-    )}
-    def AssertDisjoint: Method = { new Method(
-      "assertDisjointAccess",
-      Some(BoolType),
-      None,
-      None
-    )}
-    def AddStructAccess: Method = { new Method(
-      "addStructAccess",
-      Some(IntType),
-      None,
-      None
-    )}
-    def Join: Method = { new Method(
-      "join",
-      Some(BoolType),
-      None,
-      None
-    )}
-    def Disjoin: Method = { new Method(
-      "disjoin",
-      Some(BoolType),
-      None,
-      None
-    )}
+    def InitOwnedFields: Method = {
+      new Method(
+        "initOwnedFields",
+        Some(BoolType),
+        None,
+        None
+      )
+    }
+    def AddFieldAccess: Method = {
+      new Method(
+        "addAccess",
+        Some(BoolType),
+        None,
+        None
+      )
+    }
+    def Assert: Method = {
+      new Method(
+        "assertAccess",
+        Some(BoolType),
+        None,
+        None
+      )
+    }
+    def AssertDisjoint: Method = {
+      new Method(
+        "assertDisjointAccess",
+        Some(BoolType),
+        None,
+        None
+      )
+    }
+    def AddStructAccess: Method = {
+      new Method(
+        "addStructAccess",
+        Some(IntType),
+        None,
+        None
+      )
+    }
+    def Join: Method = {
+      new Method(
+        "join",
+        Some(BoolType),
+        None,
+        None
+      )
+    }
+    def Disjoin: Method = {
+      new Method(
+        "disjoin",
+        Some(BoolType),
+        None,
+        None
+      )
+    }
   }
 
   private object Commands {
-    def InitCounter: Seq[Op] = {Seq(
-      new AllocValue(IntType, Vars.InstanceCounter),
-      new AssignMember(
-        new DereferenceMember(Vars.InstanceCounter, IntType),
-        new Int(0)
-      )
-    )}
-    def InitStatic: Seq[Op] = {Seq(
-      new AllocStruct(Structs.OwnedFields, Vars.StaticOwnedFields),
-      new Invoke(
-        Methods.InitOwnedFields,
-        List(Vars.StaticOwnedFields, Vars.InstanceCounter),
-        None
-      )
-    )}
-    def InitDynamic: Seq[Op] = {Seq(
-      new AllocArray(
-        new ReferenceType(Structs.OwnedFields),
-        new Int(1),
-        Vars.DynamicOwnedFields
-      ),
-      new AllocStruct(
-        Structs.OwnedFields,
-        new ArrayMember(
-          Vars.DynamicOwnedFields,
-          Vars.DynamicOwnedFields.valueType,
+    def InitCounter: Seq[Op] = {
+      Seq(
+        new AllocValue(IntType, Vars.InstanceCounter),
+        new AssignMember(
+          new DereferenceMember(Vars.InstanceCounter, IntType),
           new Int(0)
         )
-      ),
+      )
+    }
+    def InitStatic: Seq[Op] = {
+      Seq(
+        new AllocStruct(Structs.OwnedFields, Vars.StaticOwnedFields),
+        new Invoke(
+          Methods.InitOwnedFields,
+          List(Vars.StaticOwnedFields, Vars.InstanceCounter),
+          None
+        )
+      )
+    }
+    def InitDynamic: Seq[Op] = {
+      Seq(
+        new AllocArray(
+          new ReferenceType(Structs.OwnedFields),
+          new Int(1),
+          Vars.DynamicOwnedFields
+        ),
+        new AllocStruct(
+          Structs.OwnedFields,
+          new ArrayMember(
+            Vars.DynamicOwnedFields,
+            Vars.DynamicOwnedFields.valueType,
+            new Int(0)
+          )
+        ),
+        new Invoke(
+          Methods.InitOwnedFields,
+          List(
+            Commands.GetDynamicOwnedFields,
+            Vars.InstanceCounter
+          ),
+          None
+        )
+      )
+    }
+    def GetDynamicOwnedFields: ArrayMember = {
+      new ArrayMember(
+        Vars.DynamicOwnedFields,
+        new ReferenceType(Structs.OwnedFields),
+        new Int(0)
+      )
+    }
+
+    def Join: Invoke = {
       new Invoke(
-        Methods.InitOwnedFields,
+        Methods.Join,
         List(
           Commands.GetDynamicOwnedFields,
-          Vars.InstanceCounter
+          Vars.StaticOwnedFields
         ),
         None
       )
-    )}
-    def GetDynamicOwnedFields: ArrayMember = { new ArrayMember(
-      Vars.DynamicOwnedFields,
-      new ReferenceType(Structs.OwnedFields),
-      new Int(0)
-    )}
-
-    def Join:Invoke = {
-      new Invoke(
-      Methods.Join,
-      List(
-        Commands.GetDynamicOwnedFields,
-        Vars.StaticOwnedFields
-      ),
-      None
-    )}
-    def Disjoin:Invoke = new Invoke(
+    }
+    def Disjoin: Invoke = new Invoke(
       Methods.Disjoin,
       List(
         Commands.GetDynamicOwnedFields,
@@ -185,7 +216,11 @@ object AccessChecks {
       var returns: mutable.ArrayBuffer[Op]
   )
 
-  class CallPosition(val callingMethod: Method, val invocation: Op, val vprNode: MethodCall)
+  class CallPosition(
+      val callingMethod: Method,
+      val invocation: Op,
+      val vprNode: MethodCall
+  )
 
   class CallGraph extends Iterable[(Method, Edge)] {
     override def iterator: Iterator[(Method, Edge)] = graph.iterator
@@ -198,11 +233,17 @@ object AccessChecks {
         callingMethod: Method
     ): Unit = {
       if (graph isDefinedAt calledMethod) {
-        graph(calledMethod).callsites += new CallPosition(callingMethod, callPosition, vprNode)
+        graph(calledMethod).callsites += new CallPosition(
+          callingMethod,
+          callPosition,
+          vprNode
+        )
       } else {
         val edge = new Edge(
           callsImprecise = false,
-          mutable.ArrayBuffer[CallPosition](new CallPosition(callingMethod, callPosition, vprNode)),
+          mutable.ArrayBuffer[CallPosition](
+            new CallPosition(callingMethod, callPosition, vprNode)
+          ),
           mutable.ArrayBuffer[Op]()
         )
         graph += calledMethod -> edge
@@ -249,21 +290,24 @@ object AccessChecks {
       for ((method: Method, edge: Edge) <- tracker.callGraph) {
         /* Modify the parameters of each method to accept OwnedFields objects as necessary */
 
-        if(method.name != "main") injectParameters(method, edge)
+        if (method.name != "main") injectParameters(method, edge)
 
         /* Pass the necessary OwnedFields objects when each method is called */
         edge.callsites.foreach(position => {
           val invoke_op = position.invocation.asInstanceOf[Invoke]
 
-          if(!isImprecise(position.callingMethod)){
+          if (!isImprecise(position.callingMethod)) {
             position.callingMethod.addExistingVar(Vars.DynamicOwnedFields)
             position.callingMethod.addExistingVar(Vars.StaticOwnedFields)
             position.callingMethod.addExistingVar(Vars.TempOwnedFields)
           }
 
-          if(isImprecise(method)){
+          if (isImprecise(method)) {
             // if an imprecise method is called in a precise context, it must be passed dynamic and static OwnedFields structs.
-            invoke_op.arguments = invoke_op.arguments ++ List(Vars.DynamicOwnedFields, Vars.StaticOwnedFields)
+            invoke_op.arguments = invoke_op.arguments ++ List(
+              Vars.DynamicOwnedFields,
+              Vars.StaticOwnedFields
+            )
 
             position.invocation.insertBefore(storeTemp(Vars.StaticOwnedFields))
 
@@ -292,10 +336,10 @@ object AccessChecks {
 
             position.invocation.insertAfter(loadTemp(Vars.StaticOwnedFields))
 
-
-          }else{
+          } else {
             //TODO: optimize so that _instance_counter is only passed to methods that eventually allocate memory
-            invoke_op.arguments = invoke_op.arguments ++ List(Vars.InstanceCounter)
+            invoke_op.arguments =
+              invoke_op.arguments ++ List(Vars.InstanceCounter)
           }
         })
       }
@@ -366,7 +410,10 @@ object AccessChecks {
     }
   }
 
-  def addStaticPermissionsAt(position: CallPosition, tracker: AccessTracker): Unit = {
+  def addStaticPermissionsAt(
+      position: CallPosition,
+      tracker: AccessTracker
+  ): Unit = {
     val permissions: Iterable[Exp] = getPermissionsFor(position.vprNode)
     permissions.foreach {
       case fa: FieldAccess =>
@@ -378,16 +425,21 @@ object AccessChecks {
               case Some(variable) =>
                 val structType =
                   variable.valueType.asInstanceOf[ReferenceType].struct
-                position.invocation.insertBefore(addStaticFieldAccess(variable, structType, fieldName, tracker))
+                position.invocation.insertBefore(
+                  addStaticFieldAccess(variable, structType, fieldName, tracker)
+                )
             }
         }
-      case _ => throw new AccessCheckException("Only field permissions for structs that are LocalVars have been implemented.")
+      case _ =>
+        throw new AccessCheckException(
+          "Only field permissions for structs that are LocalVars have been implemented."
+        )
     }
   }
 
   def injectParameters(
       method: Method,
-      edge: Edge,
+      edge: Edge
   ): Unit = {
     /* imprecise methods are passed two disjoint OwnedFields structs: one containing the fields that are statically
      * accessible at the method's callsite, and the other containing all other field access permissions that have been
@@ -447,7 +499,6 @@ object AccessChecks {
     }
   }
 
-
   def assertFieldAccess(
       check: CheckInfo,
       loc: FieldAccess,
@@ -489,9 +540,15 @@ object AccessChecks {
                 )
               )
             }
-          case None => throw new AccessCheckException("No local variable exists for the given field permission.")
+          case None =>
+            throw new AccessCheckException(
+              "No local variable exists for the given field permission."
+            )
         }
-      case _ => throw new AccessCheckException("Only field permissions for structs that are LocalVars have been implemented.")
+      case _ =>
+        throw new AccessCheckException(
+          "Only field permissions for structs that are LocalVars have been implemented."
+        )
     }
   }
 
