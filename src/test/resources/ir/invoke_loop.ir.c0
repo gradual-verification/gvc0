@@ -3,7 +3,9 @@ int something();
 
 int main()
 {
-  int _ = 0, _1 = 0, _2 = 0;
+  int _ = 0;
+  int _1 = 0;
+  int _2 = 0;
   _ = something();
   while (_ != 0)
   {

@@ -2,8 +2,11 @@ int main();
 
 int main()
 {
+  int c = 0;
+  int d = 0;
+  int a = 0;
+  int b = 0;
   bool x = false;
-  int a = 0, b = 0, c = 0, d = 0;
   c = 1;
   x = true;
   return c;

@@ -10,8 +10,11 @@ void something(struct Test* value);
 
 int main()
 {
-  int* _1 = NULL, _2 = NULL;
-  struct Test* _ = NULL, _3 = NULL, _4 = NULL;
+  struct Test* _ = NULL;
+  int* _1 = NULL;
+  int* _2 = NULL;
+  struct Test* _3 = NULL;
+  struct Test* _4 = NULL;
   _ = alloc(struct Test);
   _1 = alloc(int);
   if (true)
