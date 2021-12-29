@@ -1,4 +1,4 @@
-//test unsupported
+//test return 1
 
 int main () {
   bool a = NULL == NULL;

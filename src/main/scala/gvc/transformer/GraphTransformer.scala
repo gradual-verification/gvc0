@@ -269,14 +269,11 @@ object GraphTransformer {
 
           case alloc: ResolvedAlloc => {
             val valueType = transformType(alloc.valueType)
-            // Create a temporary variable if assigning to complex expression
             assign.left match {
+              // Avoid introducing a temp var for the case when the result
+              // is immediately assigned to a var
               case ref: ResolvedVariableRef => scope += transformAlloc(alloc, scope.variable(ref), scope)
-              case complex => {
-                val target = scope.method.addVar(valueType)
-                scope += transformAlloc(alloc, target, scope)
-                scope += transformAssign(complex, target, scope)
-              }
+              case complex => scope += transformAssign(complex, transformExpr(alloc, scope), scope)
             }
           }
 
@@ -351,6 +348,7 @@ object GraphTransformer {
       case ref: ResolvedVariableRef => scope.variable(ref)
       case pred: ResolvedPredicate => transformPredicate(pred, scope)
       case invoke: ResolvedInvoke => invokeToValue(invoke, scope)
+      case alloc: ResolvedAlloc => allocToValue(alloc, scope)
 
       case m: ResolvedMember => {
         val (parent, field) = transformField(m)
@@ -420,7 +418,6 @@ object GraphTransformer {
 
       case not: ResolvedNot => new IRGraph.Unary(IRGraph.UnaryOp.Not, transformExpr(not.value, scope))
       case negate: ResolvedNegation => new IRGraph.Unary(IRGraph.UnaryOp.Negate, transformExpr(negate.value, scope))
-      case _: ResolvedAlloc => throw new TransformerException("Using alloc in a complex expression is not supported")
       case _: ResolvedString => throw new TransformerException("Strings are not supported")
       case char: ResolvedChar => new IRGraph.Char(char.value)
       case int: ResolvedInt => new IRGraph.Int(int.value)
@@ -465,11 +462,15 @@ object GraphTransformer {
       case other => transformExpr(input, scope)
     }
 
-    def invokeExpr(input: ResolvedExpression, scope: MethodScope): IRGraph.Expression = {
-      input match {
-        case invoke: ResolvedInvoke => invokeToValue(invoke, scope)
-        case _ => transformExpr(input, scope)
+    def allocToValue(input: ResolvedAlloc, scope: Scope): IRGraph.Var = scope match {
+      case scope: MethodScope => {
+        val valueType = transformType(input.valueType)
+        val temp = scope.method.addVar(valueType)
+        scope += transformAlloc(input, temp, scope)
+        temp
       }
+
+      case _ => throw new TransformerException("Invalid alloc")
     }
 
     def invokeToValue(input: ResolvedInvoke, scope: Scope): IRGraph.Var = {
