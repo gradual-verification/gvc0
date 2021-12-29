@@ -1,4 +1,4 @@
-//test unsupported
+//test return 1
 
 bool is_maxint(int n) {
   return !(n+1 > n);

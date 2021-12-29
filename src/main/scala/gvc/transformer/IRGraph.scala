@@ -347,43 +347,63 @@ object IRGraph {
 
     // If this Op is not in a block, this is a no-op
     def remove(): Unit = _block.foreach(_.remove(this))
+
+    // Creates a copy of the current Op
+    // The new copy will not be attached to any Block
+    def copy: IRGraph.Op
   }
 
   class Invoke(
     var callee: Method,
     var arguments: List[Expression],
-    var target: Option[Expression]) extends Op
+    var target: Option[Expression]
+  ) extends Op {
+    def copy = new Invoke(callee, arguments, target)
+  }
 
   class AllocValue(
     var valueType: Type,
     var target: Var
-  ) extends Op
+  ) extends Op {
+    def copy = new AllocValue(valueType, target)
+  }
 
   class AllocStruct(
     var struct: Struct,
     var target: Expression
-  ) extends Op
+  ) extends Op {
+    def copy = new AllocStruct(struct, target)
+  }
 
   // TODO: Length should be an expression
   class AllocArray(
     var valueType: Type,
     var length: Int,
-    var target: Var) extends Op
+    var target: Var
+  ) extends Op {
+    def copy = new AllocArray(valueType, length, target)
+  }
 
   class Assign(
     var target: Var,
     var value: Expression
-  ) extends Op
+  ) extends Op {
+    def copy = new Assign(target, value)
+  }
 
   class AssignMember(
     var member: Member,
     var value: Expression
-  ) extends Op
+  ) extends Op {
+    def copy = new AssignMember(member, value)
+  }
 
   class Assert(
     var value: Expression,
     var kind: AssertKind
-  ) extends Op
+  ) extends Op {
+    def copy = new Assert(value, kind)
+  }
 
   sealed trait AssertKind
   object AssertKind {
@@ -393,23 +413,38 @@ object IRGraph {
 
   class Fold(
     var instance: PredicateInstance
-  ) extends Op
+  ) extends Op {
+    def copy = new Fold(instance)
+  }
 
   class Unfold(
     var instance: PredicateInstance
-  ) extends Op
+  ) extends Op {
+    def copy = new Unfold(instance)
+  }
 
   class Error(
     var value: Expression
-  ) extends Op
+  ) extends Op {
+    def copy = new Error(value)
+  }
 
-  class Return(var value: Option[Expression]) extends Op
+  class Return(var value: Option[Expression]) extends Op {
+    def copy = new Return(value)
+  }
 
   class If(
     var condition: Expression
   ) extends Op {
     val ifTrue = new ChildBlock(this)
     val ifFalse = new ChildBlock(this)
+
+    def copy = {
+      val newIf = new If(condition)
+      ifTrue.foreach(newIf.ifTrue += _.copy)
+      ifFalse.foreach(newIf.ifFalse += _.copy)
+      newIf
+    }
   }
 
   class While(
@@ -417,5 +452,11 @@ object IRGraph {
     var invariant: Option[Expression]
   ) extends Op {
     val body = new ChildBlock(this)
+
+    def copy = {
+      val newWhile = new While(condition, invariant)
+      body.foreach(newWhile.body += _.copy)
+      newWhile
+    }
   }
 }

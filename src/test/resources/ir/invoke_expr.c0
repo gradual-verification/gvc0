@@ -1,0 +1,40 @@
+// Tests invoke used in an expression position
+
+bool test()
+{
+  return false;
+}
+
+void something()
+{
+}
+
+void input(bool value)
+{
+}
+
+int main()
+{
+  // In expression statements
+  true && test();
+  true || test();
+  test() || test();
+
+  // In if condition
+  if (true && test()) something();
+  if (true == test()) something();
+
+  // In function parameters
+  input(test());
+  input(test() == true);
+
+  // In ternaries
+  input(test() ? true : false);
+  input(test() ? test() : false);
+  input(false ? test() : test());
+
+  // Combine conditions
+  input(true ? true : true || false && test());
+
+  return 0;
+}

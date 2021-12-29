@@ -1,0 +1,75 @@
+void input(bool value);
+int main();
+void something();
+bool test();
+
+void input(bool value)
+{
+}
+
+int main()
+{
+  bool _ = false, _1 = false, _10 = false, _11 = false, _12 = false, _13 = false, _2 = false, _3 = false, _4 = false, _5 = false, _6 = false, _7 = false, _8 = false, _9 = false;
+  if (true)
+  {
+    _ = test();
+  }
+  if (!true)
+  {
+    _1 = test();
+  }
+  _2 = test();
+  if (!_2)
+  {
+    _3 = test();
+  }
+  if (true)
+  {
+    _4 = test();
+  }
+  if (true && _4)
+  {
+    something();
+  }
+  _5 = test();
+  if (true == _5)
+  {
+    something();
+  }
+  _6 = test();
+  input(_6);
+  _7 = test();
+  input(_7 == true);
+  _8 = test();
+  input(_8 ? true : false);
+  _9 = test();
+  if (_9)
+  {
+    _10 = test();
+  }
+  input(_9 ? _10 : false);
+  if (false)
+  {
+    _11 = test();
+  }
+  if (!false)
+  {
+    _12 = test();
+  }
+  input(false ? _11 : _12);
+  if (!true && !true && false)
+  {
+    _13 = test();
+  }
+  input(true ? true : true || false && _13);
+  return 0;
+}
+
+void something()
+{
+}
+
+bool test()
+{
+  return false;
+}
