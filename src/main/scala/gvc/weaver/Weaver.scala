@@ -11,12 +11,12 @@ sealed trait Position {
   def insertBefore(op: Op): Unit
 }
 
-  private class Weaver(ir: Program, silver: vpr.Program) {
+class Weaver(ir: Program, silver: vpr.Program) {
     val tracker: AccessTracker = new AccessTracker()
 
     def weave(): Unit = {
       ir.methods.foreach { method => weave(method, silver.findMethod(method.name)) }
-      AccessChecks.injectSupport(ir, tracker)
+      AccessChecks.injectSupport(tracker)
     }
 
     private def weave(method: Method, silver: vpr.Method): Unit = {
@@ -26,7 +26,7 @@ sealed trait Position {
     private def weave(block: Block, method: Method, silver: vpr.Seqn, silverMethod: vpr.Method): Unit = {
       val irOps = block.toList
       var silverOps = silver.ss.toList
-
+      if(method.name == "main") tracker.entry = Some(method)
       block.toList.foreach { op => silverOps = weaveOp(op, method, silverOps, silverMethod) }
       
       silverOps match {
@@ -51,7 +51,7 @@ sealed trait Position {
         }
 
         case loop: While => silver match {
-          case (stmt: vpr.While) :: rest => {
+          case (stmt: vpr.While) :: rest =>
             inspect(stmt, op, method)
             visit(stmt.cond)
 
@@ -60,12 +60,12 @@ sealed trait Position {
 
             weave(loop.body, method, stmt.body, silverMethod)
             rest
-          }
           case other => unexpected(other)
         }
 
-        case _: Invoke  => silver match {
+        case inv: Invoke  => silver match {
           case (stmt: vpr.MethodCall) :: rest => {
+            tracker.callGraph.addEdge(inv.method, inv, stmt, method)
             visit(stmt)
             rest
           }
@@ -74,6 +74,7 @@ sealed trait Position {
 
         case _: AllocValue | _ : AllocStruct => silver match {
           case (stmt: vpr.NewStmt) :: rest => {
+            tracker.allocations += Tuple2(method, op)
             visit(stmt)
             rest
           }
@@ -83,10 +84,9 @@ sealed trait Position {
         case _: AllocArray => throw new WeaverException("Unsupported array operation")
 
         case _: Assign => silver match {
-          case (stmt: vpr.LocalVarAssign) :: rest => {
+          case (stmt: vpr.LocalVarAssign) :: rest =>
             visit(stmt)
             rest
-          }
           case other => unexpected(other)
         }
 
@@ -101,10 +101,9 @@ sealed trait Position {
         case assert: Assert => assert.method match {
           case AssertMethod.Imperative => silver
           case AssertMethod.Specification => silver match {
-            case (stmt: vpr.Assert) :: rest => {
+            case (stmt: vpr.Assert) :: rest =>
               visit(stmt)
               rest
-            }
             case other => unexpected(other)
           }
         }
@@ -133,6 +132,7 @@ sealed trait Position {
         }
 
         case ret: Return => {
+          tracker.callGraph.addReturn(ret, method)
           val (rest, value) = ret match {
             case _: ReturnInvoke => silver match {
               case (stmt: vpr.MethodCall) :: rest => {
@@ -161,9 +161,13 @@ sealed trait Position {
     }
 
     private def inspect(node: vpr.Node, op: Op, method: Method, returnValue: Option[Expression] = None): Unit = {
-      for (check <- runtimeChecks.getChecks(node))
-      for (impl <- CheckImplementation.generate(check, method, returnValue, this.tracker)) {
-        op.insertBefore(impl)
+      try {
+        for (check <- runtimeChecks.getChecks(node))
+          for (impl <- CheckImplementation.generate(check, method, returnValue, this.tracker)) {
+            op.insertBefore(impl)
+          }
+      }catch{
+        case ex: NoSuchElementException => //no runtime checks present for the given Node (thrown by TrieMap)
       }
     }
 
@@ -175,6 +179,4 @@ sealed trait Position {
       case node :: _ => throw new WeaverException("Encountered unexpected Silver node: " + node.toString())
       case Nil => throw new WeaverException("Expected Silver node")
     }
-  }
-
 }

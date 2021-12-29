@@ -126,7 +126,10 @@ object IRGraph {
     private[IRGraph] var blockTail: Option[Op] = None
 
     private[IRGraph] def claim(op: Op): Unit = {
-      if (op.block.isDefined) throw new IRException("Cannot insert already-inserted Op")
+      if (op.block.isDefined) {
+        println("here")
+        throw new IRException("Cannot insert already-inserted Op")
+      }
       op.block = Some(this)
     }
 
@@ -270,13 +273,15 @@ object IRGraph {
       b.claim(op)
 
       previous match {
-        case Some(prevOp) => prevOp.insertAfter(op)
-        case None => {
+        case Some(prevOp) =>
+          prevOp.next = Some(op)
+          op.next = Some(this)
+          previous = Some(op)
+        case None =>
           // If there is no previous, the current node must be the head node
           previous = Some(op)
           b.blockHead = previous
           op.next = Some(this)
-        }
       }
     }
     def insertBefore(opSeq: Seq[Op]): Unit = {
@@ -286,7 +291,7 @@ object IRGraph {
     }
 
     def insertAfter(op: Op): Unit = {
-      val b = block.getOrElse(throw new IRException("Cannot insert after an Op that has not been added to a Block"))
+      val b = block.getOrElse(throw new IRException("Cannot insert before an Op that has not been added to a Block"))
       b.claim(op)
 
       op.previous = Some(this)

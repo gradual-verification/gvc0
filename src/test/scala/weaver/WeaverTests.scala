@@ -17,7 +17,7 @@ class WeaverTests extends AnyFunSuite {
       """
     )
 
-    Weaver.weave(c0, silver)
+    new Weaver(c0, silver).weave()
     val output = GraphPrinter.print(c0)
     assert(output ==
       """|int main();

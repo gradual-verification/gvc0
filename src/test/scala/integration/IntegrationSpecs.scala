@@ -126,7 +126,7 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpecs {
                   assertFile(name.replace(".c0", ".ir.c0"), irSrc)
                   assertFile(name.replace(".c0", ".vpr"), silver.toString())
 
-                  Weaver.weave(ir, silver)
+                  new Weaver(ir, silver).weave()
                   ValidProgram
                 }
               }

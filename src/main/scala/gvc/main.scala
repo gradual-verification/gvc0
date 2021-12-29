@@ -50,11 +50,12 @@ object Main extends App {
 
   for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
     println("Runtime checks required for " + exp.toString() + ":")
+    /*
     println(
     checks.map(
       b => 
         "  if " + (if (b.branch.isEmpty) "true" else b.branch.map(c => "(" + c.toString() + ")").mkString(" && ")) + ": " +
-        b.checks.toString()).mkString("\n"))
+        b.checks.toString()).mkString("\n"))*/
   }
 
   silicon.stop()
@@ -98,7 +99,8 @@ object Main extends App {
       case verifier.Success => {
         println(s"Verified successfully!")
         println(s"Weaving in runtime checks...")
-        Weaver.weave(ir, silver)
+        val weaver = new Weaver(ir, silver)
+        weaver.weave()
 
         if (true) {
           println(s"Woven output for '$name':")

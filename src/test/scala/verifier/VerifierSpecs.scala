@@ -45,7 +45,7 @@ class VerifierSpecs extends AnyFunSuite with BaseFileSpecs {
       case Failure(errors) => fail(errors.map(e => e.toString()).mkString("\n"))
     }
 
-    Weaver.weave(ir, silver)
+    new Weaver(ir, silver).weave()
     assertFile(name.replace(".c0", ".output.c0"), GraphPrinter.print(ir))
   }
 
