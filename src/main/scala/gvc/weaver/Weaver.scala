@@ -10,6 +10,8 @@ object Weaver {
 
   private class Weaver(ir: Program, silver: vpr.Program) {
 
+    val checks = viper.silicon.state.runtimeChecks.getChecks
+
     def weave(): Unit = {
       ir.methods.foreach { method => weave(method, silver.findMethod(method.name)) }
     }
@@ -147,9 +149,11 @@ object Weaver {
     }
 
     private def inspect(node: vpr.Node, op: Op, method: Method, returnValue: Option[Expression] = None): Unit = {
-      for (check <- node.getChecks())
-      for (impl <- CheckImplementation.generate(check, method, returnValue))
-        op.insertBefore(impl)
+      checks.get(node).toSeq
+        .flatten
+        .map(_.checks)
+        .flatMap(CheckImplementation.generate(_, method, returnValue))
+        .foreach(op.insertBefore(_))
     }
 
     private def inspectDeep(node: vpr.Node, op: Op, method: Method, returnValue: Option[Expression] = None): Unit = {
