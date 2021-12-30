@@ -2,269 +2,36 @@
 
 ## Tracking Allocations
 
-At the beginning of `main`, a counter is allocated to provide unique IDs for each struct allocation.
-```
-int main () {
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-}
-```
-Each struct is injected with a field to contain its ID :
-```
-struct Node {
-    int val;
-    struct Node * next;
-    int _id;
-};
-```
-If a fully verified function allocates memory but doesn't call a partially verified function, it will be passed `_id_counter` as a parameter and new structs will be assigned an ID directly.
-```
-Node * node = alloc(Node);
-node->_id = *(_id_counter)++;
-```
-It is necessary to pass `_id_counter` because `C0` does not allow global variables.
+If a function has a complete, statically-verified specification, and it does not call any partially specified functions, then no runtime checks are required in its immediate body. However, because it may allocate memory, an `_id_counter` variable is injected as a parameter to assign unique IDs to each struct allocation. This is initialized once at the entry of the program, and is incremented for each allocation. Each struct's definition is injected with an `_id` field to contain its unique identifier. 
 
-## Passing Accessibility Permissions
+If a precise function calls imprecise functions, or if a function itself is imprecise, then `OwnedFields` structs must be introduced to track which fields become accessible and inaccessible during runtime. 
 
-If a fully verified function calls a partially verified function, then an `OwnedFields` struct must be created to collect the permissions that are available at the beginning of the fully verified function and pass them to partially verified function. These permissions are obtained by examining the function's specifications and receiving information from the verifier, and they are added to `OwnedFields` immediately after initialization via injected calls to `addAccess`.
+We differentiate between field permissions that are explicitly specified and those created at runtime by allocations. The struct `static_fields` contains static fields, while `dyn_fields` contains permissions created by calls to `alloc`. Additionally, `dyn_fields` will contain permissions that were statically verified for a different function, passed to the current one, and weren't part of any static specification in the current function.
 
-```
-void example(Node* n){
-    //@requires acc(n.value) && acc(n.next)
-    //@ensures acc(n.next)
+ Note that each `OwnedFields` struct is initialized with a reference to `_id_counter` to reduce the number of injected parameters. When a struct is allocated in an imprecise context, all of its fields are marked as accessible within `dyn_fields`, and it is assigned a unique ID. 
 
-    OwnedFields* fields = alloc(OwnedFields);
-    initOwnedFields(*fields);
+We maintain the invariant that `static_fields` and `dyn_fields` are disjoint to handle the separating conjunction. We can verify that a field is accessible and disjoint from the statically-verified fields of a given specification by ensuring that it is only an element of `dyn_fields` and not of `static_fields`.
 
-    inheritAccess(fields, n->_id, ["value", "next"]);
+## Handling Imprecision
 
-    ...
-}
-```
+If a `?` appears in any context within a function, then `OwnedFields` structs must be created and adjusted for the function's precondition, its postcondition, and any other imprecise contracts within its body. 
 
-Partially verified functions are differentiated based on the precision of their specifications. A partially verified function is **fully imprecise** if both its precondition and postcondition are imprecise, and it is **partially imprecise** if only one is imprecise. Fully imprecise functions are passed the entire `OwnedFields` struct without modification. However, partially imprecise functions require additional handling at call sites and returns.
-
-### Imprecise Precondition, Precise Postcondition
+### Precise Precondition
 
-If a function's precondition is imprecise, then `OwnedFields` will be passed in without modification. However, if its postcondition is precise, then only the specified permissions will be returned to the caller. This is accomplished by replacing the current `OwnedFields` struct with a new one that contains only the specified permissions using `addAccess`.
+When a function with a precise precondition is called, all static permissions given by the precondition of the function are removed from the current `OwnedFields` structs. Then, the current `static_fields` and `dyn_fields` structs are stored in temporary variables and replaced by new ones. The new `static_fields` contains only the statically-verified component given by the new function's precondition, and the new `dyn_fields` is empty.
 
-```
-void example(Node* node, OwnedFields** fields) {
-    //@requires ?;
-    //@ensures acc(node->value);
-    
-    ...
+After the function returns, the current `static_fields` and `dyn_fields` are merged with their older versions, and then all permissions that are shared between the two structs are removed from `dyn_fields` to preserve separation.
 
-    *fields = alloc(OwnedFields);
-    initOwnedFields(*fields);
-    addAccess(*fields, node->_id, ["value"]);
-}
-```
-
-### Precise Precondition, Imprecise Postcondition
-
-For partially verified functions with precise preconditions and imprecise postconditions, a secondary `OwnedFields` struct is created before the function is called and it receives only the permissions specified in the function's precondition. It is passed as a parameter, and after the function returns, the secondary `OwnedFields` is combined with the preexisting one via a call to `merge`. The `merge` function takes the union of two sets of permissions and assigns them to the first set.
-
-
-```
-
-void call_example(Node* node){
-    //@requires true;
-    //@ensures true;
-
-    OwnedFields * fields = alloc(OwnedFields);
-    initOwnedFields(fields);
-    addAccess(fields, node->_id, ["value", "next"]);
-
-    ...
-
-    OwnedFields* fields_1 = alloc(OwnedFields);
-    initOwnedFields(fields_1);
-    addAccess(fields_1, node_id, ["value", "next"]);
+### Imprecise Precondition
 
-    example(&fields_1);
-
-    merge(fields, fields_1);
+Similarly, all static permissions given by the precondition of the function are removed from the current `OwnedFields` structs. However, the remaining contents of `static_fields` are also added to `dyn_fields`. Then, `static_fields` is replaced with a new `OwnedFields` instance containing the static component of the new function's precondition. No temporary variables are created. 
 
-}
-void example(Node* node, OwnedFields** fields){
-    //@requires acc(node->value) * acc(node->next);
-    //@ensures ?;
-    ...
-}
+When the function returns, permissions are similarly separated so that `static_fields` contains only the static component of the returning function's postcondition, and `dyn_fields` contains all other permissions. However, if the postcondition is precise, then `dyn_fields` is emptied.
 
-```
+### Assertions
 
-
-## Inserting Runtime Checks
-Each runtime check is a tuple containing the boolean expression to be checked, a flag indicating whether the check might overlap with a statically verified field, and the context in which the check occurs. For an unverified field to "overlap" with a statically verified field means that there is a possibility that both fields are aliases to the same heap location. Additionally, note that the context for a runtime check is derived from the current function's static specifications and information from the verifier, similar to what occurs when `OwnedFields` is initialized in a fully verified function.
+To handle assertions, all permissions in the static component of the assertion are appended to the existing `static_fields` object, and separation is preserved by removing shared permissions from `dyn_fields`. Both steps occur prior to the runtime check.
 
-If a field access check doesn't overlap, then runtime checks can be discharged without any extra handling. To verify that a field is accessible, `assertAcc` is called:
+## Runtime Checks
 
-```
-int getValue(Node* node, OwnedFields* fields){
-    //@requires ?;
-    //@ensures ?;
-
-    assertAcc(fields, node->_id, ["value"]);
-    return node->value;
-}
-```
-The `assertAcc` function has no effect if the field is accessible, but it will terminate execution if not.
-
-When multiple accessibility predicates are joined by the separating conjunction, it is necessary to ensure that none of the predicates use different aliases to the same memory location. This is guaranteed to occur if the runtime checks overlap, but also can occur without the overlap flag being set if the runtime check includes multiple conjoined accessibiliy predicates. Consider the following function:
-
-```
-void call_example(Node* x, Node* y){
-    //@requires ? && acc(x.value);
-    //@ensures ?;
-
-    int sum = x->value + y->value;
-
-    example(x);
-    ...
-}
-void example(Node* a){
-    //@requires ?
-    //@ensures ?
-    ...
-}
-
-```
-Only the accessibility of `x.value` has been statically ensured; it might be an alias for `y.value`. To satisfy the separating conjunction (`&&`), we must ensure that `y.value` is a separate heap location.
-
-This can be accomplished by removing the accessibility permission for `x.value` from `OwnedFields` before `assert` is called. However, it is necessary to retain the permission for `x.value` so that it can be passed to the partially verified function `example`.  
-
-To temporarily hide a permission, a call to `mask` is injected. Calling `unmask` unhides all previously `mask`ed permissions so that they can be available later on. 
-```
-void call_example(Node* x, Node* y, OwnedFields ** fields){
-    //@requires ? && acc(x.value);
-    //@ensures ?;
-    
-    mask(*fields, x->_id, ["value"]);
-    assertAcc(*fields, y->_id, ["value"]);
-
-    unmask(*fields);
-
-    example(x, fields);
-    ...
-}
-
-void example(Node* a, OwnedFields ** fields){
-    //@requires ?
-    //@ensures ?
-    ...
-}
-```
-Any time that an accessibility check involves the separating conjunction, all previously verified permissions must be `mask`ed before the current permission can be verified. This procedure applies to all cases involving separately conjoined predicates in runtime checks. Statically verified conjuncts are identified by examining the context of the runtime check, and all are masked before the check is executed. When a runtime check involves two or more unverified conjuncts, each conjunct is checked independently with interleaved calls to mask to ensure separation:
-
-```
-void example(Node* x, Node* y, OwnedFields** fields){
-    //@requires ?;
-    //@ensures ?;
-
-    assertAcc(*fields, x->_id, ["value"]);
-    
-    mask(*fields, x->_id, ["value"]);
-
-    assertAcc(*fields, y->_id, ["value"]);
-    
-    unmask(*fields);
-
-    int sum = x->value + y->value;
-    ...
-}
-```
-
-## Abstract Predicates
-
-Abstract predicates are treated isorecursively during static verification, meaning that at runtime some accessibility permissions may be present but hidden within the body of the predicate. As such, all abstract predicates present in runtime checks or sets of statically available permissions must be unfolded competely to ensure soundness.
-Consider the following predicates:
-
-```
-predicate acyclic (List l) = acc(l.head) && listSeg(l.head, NULL);
-
-predicate listSeg (Node from, Node to) =
-    if (from == to) then true else
-    acc(from.val) && acc(from.next) && listSeg(from.next, to)
-```
-
-Then, a statically specified function with `acyclic(l)` as a precondition calls an `imprecise` function.
-
-```
-void printList(List * l, int val){
-    //@requires acyclic(*l) && unfolding acyclic(l) in l->head != NULL;
-    //@ensures acyclic(*l);
-
-    unfold acyclic(*l);
-    Node * current = l->head;
-
-    fold listSeg(l->head, current);
-    unfold listSeg(current, NULL);
-
-    while(current->next != NULL){
-        @loop_invariant current != NULL && acc(l->head) && listSeg(l->head, current)
-            && acc(y->val) && acc(y->next) && listSeg(y->next, NULL)
-
-        imprecise()
-
-        printf("%d\n", val);
-
-        Node * prev = current;
-        current = current->next;
-        
-        unfold listSeg(current, NULL);
-        fold listSeg(prev->next, current);
-        fold listSeg(prev, current);
-        appendLemma(l->head, current, NULL);
-    }
-                
-                 ...
-
-}
-```
-Because of the imprecise function, an `OwnedFields` struct must be created, intialized with all accessibility permissions available to `printList`, and passed in the call to `imprecise`. However, many of `printList`'s permissions are hidden in `acyclic` and `listSeg`. To dynamically unfold `acyclic`, it is translated into a `c0` function. If the predicate has been statically verified, then permissions are collected for each `acc` within `acyclic` without any additional checking, because it is safe to assume that the separating conjunction is satisfied.
-
-```
-void acyclic(List l, OwnedFields* fields){
-    addAccess(fields, l._id, ["head"]);       // acc(l.head)
-    listSeg(l.head, NULL, fields);
-}
-
-void listSeg(Node from, Node to, OwnedFields* fields){
-    if(from == to){
-        return true;
-    }else{
-        addAccess(fields, from._id, ["val", "next"]);
-        listSeg(from.next, to, fields);
-    }
-}
-```
-
-If a predicate is part of a runtime check, then `mask` and `assertAcc` must be used in place of each `acc` to satisfy the separating conjunction.
-
-```
-void acyclic(List l, OwnedFields* fields){
-    assertAcc(fields, l._id, ["head"]);
-
-    mask(fields, l._id, ["head"]);
-
-    listSeg(l.head, NULL, fields);
-}
-
-void listSeg(Node from, Node to, OwnedFields* fields){
-    if(from == to){
-        return;
-    }else{
-        assertAcc(fields, from._id, ["val"]);
-        mask(fields, from._id, ["val"]);
-
-        assertAcc(fields, from._id, ["next"]);
-        mask(fields, from._id, ["next"]);
-
-        listSeg(from.next, to, fields);
-    }
-}
-
-```
-In either case, the transformed predicate functions via its side effects of initializing permissions or aborting execution when a permission isn't present. A return value isn't necessary. As shown previously, once the runtime check completes, `unmask` is called to ensure that all permissions are available later on.
+There are two types of runtime checks that can occur. A disjoint check verifies accessibility and separation, ensuring that a field is present in `dyn_fields` but not in `static_fields`. This happens for assertions that have both a precise and imprecise component. When a specification only contains `?`, separation isn't guaranteed, so we can skip the additional check against `static_fields`.
