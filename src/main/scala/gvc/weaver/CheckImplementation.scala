@@ -5,12 +5,6 @@ import viper.silver.{ast => vpr}
 import gvc.transformer.IRGraphSilver
 
 object CheckImplementation {
-
-  def generate(check: vpr.Exp, method: Method, returnValue: Option[Expression]): Seq[Op] = {
-    val exp = expression(check, method, returnValue)
-    Seq(new Assert(exp, AssertKind.Imperative))
-  }
-
   def expression(exp: vpr.Exp, method: Method, returnValue: Option[Expression]): Expression = {
     val expr = expression(_, method, returnValue)
 

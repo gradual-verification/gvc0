@@ -151,8 +151,28 @@ object Weaver {
     private def inspect(node: vpr.Node, op: Op, method: Method, returnValue: Option[Expression] = None): Unit = {
       checks.get(node).toSeq
         .flatten
-        .map(_.checks)
-        .flatMap(CheckImplementation.generate(_, method, returnValue))
+        .map({ check =>
+          val checkValue = CheckImplementation.expression(check.checks, method, returnValue)
+          val checkAssert = new Assert(checkValue, AssertKind.Imperative)
+
+          val condition = (check.branch.branch, check.branch.branchOrigin, check.branch.branchPosition)
+            .zipped
+            .foldLeft[Option[Expression]](None)((current, b) => b match {
+              case (branch, origin, position) => {
+                val exp = CheckImplementation.expression(branch, method, None)
+                Some(current.map(new Binary(BinaryOp.And, _, exp)).getOrElse(exp))
+              }
+            })
+
+          condition match {
+            case None => checkAssert
+            case Some(cond) => {
+              val ifIr = new If(cond)
+              ifIr.ifTrue += checkAssert
+              ifIr
+            }
+          }
+        })
         .foreach(op.insertBefore(_))
     }
 
