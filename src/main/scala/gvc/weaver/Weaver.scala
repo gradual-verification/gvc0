@@ -1,12 +1,56 @@
 package gvc.weaver
 import gvc.transformer.IRGraph._
 import viper.silver.{ast => vpr}
+import scala.annotation.tailrec
 
 object Weaver {
   class WeaverException(message: String) extends Exception(message)
 
   def weave(ir: Program, silver: vpr.Program): Unit =
     new Weaver(ir, silver).weave()
+
+  // Produces a list of tuples of an IR Op and its corresponding Silver statement.
+  // Note that this may not include all IR Ops, since not all IR Ops produce a Silver
+  // statement. IR Ops which do not produce a Silver statement are ignored.
+  @tailrec
+  def zipOps(irOps: List[Op], vprOps: List[vpr.Stmt], tail: List[(Op, Option[vpr.Stmt])] = Nil): List[(Op, Option[vpr.Stmt])] =
+    (irOps, vprOps) match {
+      case ((irIf: If) :: irRest, (vprIf: vpr.If) :: vprRest) =>
+        zipOps(irRest, vprRest, (irIf, Some(vprIf)) :: tail)
+      case ((irWhile: While) :: irRest, (vprWhile: vpr.While) :: vprRest) =>
+        zipOps(irRest, vprRest, (irWhile, Some(vprWhile)) :: tail)
+      case ((irInvoke: Invoke) :: irRest, (vprInvoke: vpr.MethodCall) :: vprRest) =>
+         zipOps(irRest, vprRest, (irInvoke, Some(vprInvoke)) :: tail)
+      case ((irAlloc: AllocValue) :: irRest, (vprAlloc: vpr.NewStmt) :: vprRest) =>
+         zipOps(irRest, vprRest, (irAlloc, Some(vprAlloc)) :: tail)
+      case ((irAlloc: AllocStruct) :: irRest, (vprAlloc: vpr.NewStmt) :: vprRest) =>
+        zipOps(irRest, vprRest, (irAlloc, Some(vprAlloc)) :: tail)
+      case ((irAssign: Assign) :: irRest, (vprAssign: vpr.LocalVarAssign) :: vprRest) =>
+        zipOps(irRest, vprRest, (irAssign, Some(vprAssign)) :: tail)
+      case ((irAssign: AssignMember) :: irRest, (vprAssign: vpr.FieldAssign) :: vprRest) =>
+        zipOps(irRest, vprRest, (irAssign, Some(vprAssign)) :: tail)
+      case ((irAssert: Assert) :: irRest, vprRest) if irAssert.kind == AssertKind.Imperative =>
+        zipOps(irRest, vprRest, (irAssert, None) :: tail)
+      case ((irAssert: Assert) :: irRest, (vprAssert: vpr.Assert) :: vprRest) if irAssert.kind == AssertKind.Specification =>
+        zipOps(irRest, vprRest, (irAssert, Some(vprAssert)) :: tail)
+      case ((irFold : Fold) :: irRest, (vprFold: vpr.Fold) :: vprRest) =>
+        zipOps(irRest, vprRest, (irFold, Some(vprFold)) :: tail)
+      case ((irUnfold : Unfold) :: irRest, (vprUnfold: vpr.Unfold) :: vprRest) =>
+        zipOps(irRest, vprRest, (irUnfold, Some(vprUnfold)) :: tail)
+      case ((irError: Error) :: irRest, (vprError: vpr.Assert) :: vprRest) =>
+        zipOps(irRest, vprRest, (irError, Some(vprError)) :: tail)
+      case ((irReturn: Return) :: irRest, vprRest) if irReturn.value.isEmpty =>
+        zipOps(irRest, vprRest, (irReturn, None) :: tail)
+      case ((irReturn: Return) :: irRest, (vprReturn: vpr.LocalVarAssign) :: vprRest) =>
+        zipOps(irRest, vprRest, (irReturn, Some(vprReturn)) :: tail)
+
+      // Termination
+      case (Nil, Nil) => tail
+
+      // Errors
+      case (ir, vprStmt :: _) => throw new WeaverException(s"Unexpected Silver statement: $vprStmt for $ir")
+      case (ir, Nil) => throw new WeaverException("Expected Silver node")
+    }
 
   private class Weaver(ir: Program, silver: vpr.Program) {
 
@@ -16,139 +60,46 @@ object Weaver {
       ir.methods.foreach { method => weave(method, silver.findMethod(method.name)) }
     }
 
-    private def weave(method: Method, silver: vpr.Method): Unit = {
-      weave(method.body, method, silver.body.get, silver)
-    }
+    private def weave(irMethod: Method, vprMethod: vpr.Method): Unit = {
+      weave(irMethod.body, irMethod, vprMethod.body.get, vprMethod)
 
-    private def weave(block: Block, method: Method, silver: vpr.Seqn, silverMethod: vpr.Method): Unit = {
-      val irOps = block.toList
-      var silverOps = silver.ss.toList
-
-      block.toList.foreach { op => silverOps = weaveOp(op, method, silverOps, silverMethod) }
-      
-      silverOps match {
-        case Nil => ()
-        case other => unexpected(other)
+      if (irMethod.returnType.isEmpty) {
+        vprMethod.posts.foreach(inspectDeep(_, None, irMethod))
       }
     }
 
-    private def weaveOp(op: Op, method: Method, silver: List[vpr.Stmt], silverMethod: vpr.Method): List[vpr.Stmt] = {
-      val visit = inspectDeep(_: vpr.Node, op, method)
-
-      op match {
-        case iff: If => silver match {
-          case (stmt: vpr.If) :: rest => {
-            inspect(stmt, op, method)
-            visit(stmt.cond)
-            weave(iff.ifTrue, method, stmt.thn, silverMethod)
-            weave(iff.ifFalse, method, stmt.els, silverMethod)
-            rest
-          }
-          case other => unexpected(other)
+    private def weave(irBlock: Block, irMethod: Method, vprBlock: vpr.Seqn, vprMethod: vpr.Method): Unit = {
+      zipOps(irBlock.toList, vprBlock.ss.toList).foreach {
+        case (irIf: If, Some(vprIf: vpr.If)) => {
+          inspect(vprIf, Some(irIf), irMethod)
+          inspectDeep(vprIf.cond, Some(irIf), irMethod)
+          weave(irIf.ifTrue, irMethod, vprIf.thn, vprMethod)
+          weave(irIf.ifFalse, irMethod, vprIf.els, vprMethod)
         }
 
-        case loop: While => silver match {
-          case (stmt: vpr.While) :: rest => {
-            inspect(stmt, op, method)
-            visit(stmt.cond)
+        case (irWhile: While, Some(vprWhile: vpr.While)) => {
+          inspect(vprWhile, Some(irWhile), irMethod)
+          inspectDeep(vprWhile.cond, Some(irWhile), irMethod)
 
-            // TODO: Do we have runtime checks on loop invariants, and if so, where do they belong?
-            stmt.invs.foreach(visit)
+          // TODO: Do we have runtime checks on loop invariants, and if so, where do they belong?
+          vprWhile.invs.foreach(inspectDeep(_, Some(irWhile), irMethod))
 
-            weave(loop.body, method, stmt.body, silverMethod)
-            rest
-          }
-          case other => unexpected(other)
+          weave(irWhile.body, irMethod, vprWhile.body, vprMethod)
         }
 
-        case _: Invoke  => silver match {
-          case (stmt: vpr.MethodCall) :: rest => {
-            visit(stmt)
-            rest
-          }
-          case other => unexpected(other)
+        case (irReturn: Return, vprReturn) => {
+          vprReturn.foreach(inspectDeep(_, Some(irReturn), irMethod))
+          vprMethod.posts.foreach(inspectDeep(_, Some(irReturn), irMethod, irReturn.value))
         }
 
-        case _: AllocValue | _ : AllocStruct => silver match {
-          case (stmt: vpr.NewStmt) :: rest => {
-            visit(stmt)
-            rest
-          }
-          case other => unexpected(other)
-        }
+        case (irOp, Some(vprStmt)) =>
+          inspectDeep(vprStmt, Some(irOp), irMethod)
 
-        case _: AllocArray => throw new WeaverException("Unsupported array operation")
-
-        case _: Assign => silver match {
-          case (stmt: vpr.LocalVarAssign) :: rest => {
-            visit(stmt)
-            rest
-          }
-          case other => unexpected(other)
-        }
-
-        case _: AssignMember => silver match {
-          case (stmt: vpr.FieldAssign) :: rest => {
-            visit(stmt)
-            rest
-          }
-          case other => unexpected(other)
-        }
-
-        case assert: Assert => assert.kind match {
-          case AssertKind.Imperative => silver
-          case AssertKind.Specification => silver match {
-            case (stmt: vpr.Assert) :: rest => {
-              visit(stmt)
-              rest
-            }
-            case other => unexpected(other)
-          }
-        }
-
-        case _: Fold => silver match {
-          case (stmt: vpr.Fold) :: rest => {
-            visit(stmt)
-            rest
-          }
-          case other => unexpected(other)
-        }
-
-        case _: Unfold => silver match {
-          case (stmt: vpr.Unfold) :: rest => {
-            visit(stmt)
-            rest
-          }
-          case other => unexpected(other)
-        }
-
-        case _: Error => silver match {
-          case (stmt: vpr.Assert) :: rest => {
-            visit(stmt)
-            rest
-          }
-          case other => unexpected(other)
-        }
-
-        case ret: Return => {
-          val rest =  ret.value match {
-            case None => silver
-            case Some(_) => silver match {
-              case (stmt: vpr.LocalVarAssign) :: rest => {
-                visit(stmt)
-                rest
-              }
-              case other => unexpected(other)
-            }
-          }
-
-          silverMethod.posts.foreach(inspectDeep(_, op, method, ret.value))
-          rest
-        }
+        case (irOp, None) => ()
       }
     }
 
-    private def inspect(node: vpr.Node, op: Op, method: Method, returnValue: Option[Expression] = None): Unit = {
+    private def inspect(node: vpr.Node, op: Option[Op], method: Method, returnValue: Option[Expression] = None): Unit = {
       checks.get(node).toSeq
         .flatten
         .map({ check =>
@@ -173,10 +124,13 @@ object Weaver {
             }
           }
         })
-        .foreach(op.insertBefore(_))
+        .foreach(checkOp => op match {
+          case Some(op) => op.insertBefore(checkOp)
+          case None => method.body += checkOp
+        })
     }
 
-    private def inspectDeep(node: vpr.Node, op: Op, method: Method, returnValue: Option[Expression] = None): Unit = {
+    private def inspectDeep(node: vpr.Node, op: Option[Op], method: Method, returnValue: Option[Expression] = None): Unit = {
       node.visit { case n => inspect(n, op, method, returnValue) }
     }
 
