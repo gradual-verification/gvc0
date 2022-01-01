@@ -10,8 +10,8 @@ object Weaver {
     new Weaver(ir, silver).weave()
 
   // Produces a list of tuples of an IR Op and its corresponding Silver statement.
-  // Note that this may not include all IR Ops, since not all IR Ops produce a Silver
-  // statement. IR Ops which do not produce a Silver statement are ignored.
+  // Note that not all IR Ops produce Silver statements; the Silver statement will be
+  // `None` for those Ops.
   @tailrec
   def zipOps(irOps: List[Op], vprOps: List[vpr.Stmt], tail: List[(Op, Option[vpr.Stmt])] = Nil): List[(Op, Option[vpr.Stmt])] =
     (irOps, vprOps) match {

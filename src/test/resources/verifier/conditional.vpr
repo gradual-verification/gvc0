@@ -1,0 +1,14 @@
+method main() returns ($result: Int)
+{
+  $result := 0
+}
+
+method test(x: Int, y: Int)
+  requires ? && true
+{
+  if (x > 1) {
+    if (x > 2) {
+      assert y == 0
+    }
+  }
+}
