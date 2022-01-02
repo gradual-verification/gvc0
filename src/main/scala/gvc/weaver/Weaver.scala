@@ -2,12 +2,16 @@ package gvc.weaver
 import gvc.transformer.IRGraph._
 import viper.silver.{ast => vpr}
 import scala.annotation.tailrec
+import scala.collection.mutable
+import viper.silicon.state.BranchInfo
 
 object Weaver {
   class WeaverException(message: String) extends Exception(message)
 
   def weave(ir: Program, silver: vpr.Program): Unit =
-    new Weaver(ir, silver).weave()
+    ir.methods.foreach { method =>
+      new Weaver(method, silver.findMethod(method.name)).weave()
+    }
 
   // Produces a list of tuples of an IR Op and its corresponding Silver statement.
   // Note that not all IR Ops produce Silver statements; the Silver statement will be
@@ -52,91 +56,128 @@ object Weaver {
       case (ir, Nil) => throw new WeaverException("Expected Silver node")
     }
 
-  private class Weaver(ir: Program, silver: vpr.Program) {
+  def flattenOps(irOps: List[Op], vprOps: List[vpr.Stmt]): Seq[(Op, Option[vpr.Stmt])] =
+    zipOps(irOps, vprOps).toSeq.flatMap {
+      case (irIf: If, Some(vprIf: vpr.If)) =>
+        Seq((irIf, Some(vprIf))) ++ 
+          flattenOps(irIf.ifTrue.toList, vprIf.thn.ss.toList) ++
+          flattenOps(irIf.ifFalse.toList, vprIf.els.ss.toList)
+      case (irWhile: While, Some(vprWhile: vpr.While)) =>
+        Seq((irWhile, Some(vprWhile))) ++
+          flattenOps(irWhile.body.toList, vprWhile.body.ss.toList)
+      case (op, vprOp) => Seq((op, vprOp))
+    }
 
-    val checks = viper.silicon.state.runtimeChecks.getChecks
+  private class Weaver(irMethod: Method, vprMethod: vpr.Method) {
+    private case class ConditionVersion(
+      value: vpr.Exp,
+      variable: Var,
+      previous: Option[Var]
+    )
+
+    private val checks = viper.silicon.state.runtimeChecks.getChecks
+    private val versioning = new mutable.HashMap[vpr.Node, mutable.Set[ConditionVersion]] with mutable.MultiMap[vpr.Node, ConditionVersion]
+
+    val ops = flattenOps(irMethod.body.toList, vprMethod.body.get.ss.toList).toList
 
     def weave(): Unit = {
-      ir.methods.foreach { method => weave(method, silver.findMethod(method.name)) }
+      addChecks()
+      insertVersioning()
     }
 
-    private def weave(irMethod: Method, vprMethod: vpr.Method): Unit = {
-      weave(irMethod.body, irMethod, vprMethod.body.get, vprMethod)
+    private def visit(visitor: (vpr.Node, Option[Op], Option[Expression]) => Unit): Unit = {
+      def recurse(node: vpr.Node, op: Option[Op], returnVal: Option[Expression]) =
+        node.visit { case n => visitor(n, op, returnVal) }
 
-      if (irMethod.returnType.isEmpty) {
-        vprMethod.posts.foreach(inspectDeep(_, None, irMethod))
-      }
-    }
-
-    private def weave(irBlock: Block, irMethod: Method, vprBlock: vpr.Seqn, vprMethod: vpr.Method): Unit = {
-      zipOps(irBlock.toList, vprBlock.ss.toList).foreach {
+      ops.foreach {
         case (irIf: If, Some(vprIf: vpr.If)) => {
-          inspect(vprIf, Some(irIf), irMethod)
-          inspectDeep(vprIf.cond, Some(irIf), irMethod)
-          weave(irIf.ifTrue, irMethod, vprIf.thn, vprMethod)
-          weave(irIf.ifFalse, irMethod, vprIf.els, vprMethod)
+          visitor(vprIf, Some(irIf), None)
+          recurse(vprIf.cond, Some(irIf), None)
         }
 
         case (irWhile: While, Some(vprWhile: vpr.While)) => {
-          inspect(vprWhile, Some(irWhile), irMethod)
-          inspectDeep(vprWhile.cond, Some(irWhile), irMethod)
+          visitor(vprWhile, Some(irWhile), None)
+          recurse(vprWhile.cond, Some(irWhile), None)
 
-          // TODO: Do we have runtime checks on loop invariants, and if so, where do they belong?
-          vprWhile.invs.foreach(inspectDeep(_, Some(irWhile), irMethod))
-
-          weave(irWhile.body, irMethod, vprWhile.body, vprMethod)
+          // TODO: Where do loop invariant checks belong?
+          vprWhile.invs.foreach(recurse(_, Some(irWhile), None))
         }
 
         case (irReturn: Return, vprReturn) => {
-          vprReturn.foreach(inspectDeep(_, Some(irReturn), irMethod))
-          vprMethod.posts.foreach(inspectDeep(_, Some(irReturn), irMethod, irReturn.value))
+          vprReturn.foreach(recurse(_, Some(irReturn), None))
+          vprMethod.posts.foreach(recurse(_, Some(irReturn), irReturn.value))
         }
 
         case (irOp, Some(vprStmt)) =>
-          inspectDeep(vprStmt, Some(irOp), irMethod)
+          recurse(vprStmt, Some(irOp), None)
 
         case (irOp, None) => ()
       }
+
+      if (irMethod.returnType.isEmpty) {
+        vprMethod.posts.foreach(recurse(_, None, None))
+      }
     }
 
-    private def inspect(node: vpr.Node, op: Option[Op], method: Method, returnValue: Option[Expression] = None): Unit = {
-      checks.get(node).toSeq
-        .flatten
-        .map({ check =>
-          val checkValue = CheckImplementation.expression(check.checks, method, returnValue)
-          val checkAssert = new Assert(checkValue, AssertKind.Imperative)
+    private def addChecks(): Unit = {
+      visit((node, op, returnVal) =>
+        checks.get(node).toSeq
+          .flatten
+          .map(check => conditional(assert(check.checks, returnVal), check.branch))
+          .foreach(insertAt(_, op)))
+    }
 
-          val condition = (check.branch.branch, check.branch.branchOrigin, check.branch.branchPosition)
-            .zipped
-            .foldLeft[Option[Expression]](None)((current, b) => b match {
-              case (branch, origin, position) => {
-                val exp = CheckImplementation.expression(branch, method, None)
-                Some(current.map(new Binary(BinaryOp.And, _, exp)).getOrElse(exp))
-              }
-            })
+    private def assert(check: vpr.Exp, returnVal: Option[Expression]): Op = {
+      val checkValue = CheckImplementation.expression(check, irMethod, returnVal)
+      new Assert(checkValue, AssertKind.Imperative)
+    }
 
-          condition match {
-            case None => checkAssert
-            case Some(cond) => {
-              val ifIr = new If(cond)
-              ifIr.ifTrue += checkAssert
-              ifIr
-            }
+    private def conditional(check: Op, branch: BranchInfo): Op = {
+      var prevCondition: Option[Var] = None
+
+      (branch.branch, branch.branchOrigin, branch.branchPosition)
+        .zipped.toSeq
+        .reverseIterator
+        .foreach {
+          case (branch, origin, position) => {
+            System.out.println(s"Origin: $origin, Position: $position")
+            val variable = irMethod.addVar(BoolType, "_cond")
+            val insertAt = origin.getOrElse(position)
+
+            val version = ConditionVersion(branch, variable, prevCondition)
+            versioning.addBinding(insertAt, version)
+
+            prevCondition = Some(variable)
           }
-        })
-        .foreach(checkOp => op match {
-          case Some(op) => op.insertBefore(checkOp)
-          case None => method.body += checkOp
-        })
+        }
+
+      wrapIf(check, prevCondition)
     }
 
-    private def inspectDeep(node: vpr.Node, op: Option[Op], method: Method, returnValue: Option[Expression] = None): Unit = {
-      node.visit { case n => inspect(n, op, method, returnValue) }
+    private def insertVersioning(): Unit = {
+      visit((node, op, returnVal) =>
+        versioning.getOrElse(node, Seq.empty)
+          .foreach(c => {
+            val value = CheckImplementation.expression(c.value, irMethod, None)
+            val assign = new Assign(c.variable, value)
+            insertAt(wrapIf(assign, c.previous), op)
+          }))
     }
 
-    private def unexpected(nodes: List[vpr.Node]): Nothing = nodes match {
-      case node :: _ => throw new WeaverException("Encountered unexpected Silver node: " + node.toString())
-      case Nil => throw new WeaverException("Expected Silver node")
+    private def wrapIf(op: Op, condition: Option[Expression]) = {
+      condition match {
+        case None => op
+        case Some(condition) => {
+          val ifIr = new If(condition)
+          ifIr.ifTrue += op
+          ifIr
+        }
+      }
+    }
+
+    private def insertAt(op: Op, at: Option[Op]): Unit = at match {
+      case Some(at) => at.insertBefore(op)
+      case None => irMethod.body += op
     }
   }
 }
