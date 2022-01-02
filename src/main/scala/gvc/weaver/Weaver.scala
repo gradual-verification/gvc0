@@ -68,15 +68,11 @@ object Weaver {
       case (op, vprOp) => Seq((op, vprOp))
     }
 
-  private class Weaver(irMethod: Method, vprMethod: vpr.Method) {
-    private case class ConditionVersion(
-      value: vpr.Exp,
-      variable: Var,
-      previous: Option[Var]
-    )
+  case class Conditional(variable: Var, when: mutable.ListBuffer[Expression])
 
+  private class Weaver(irMethod: Method, vprMethod: vpr.Method) {
     private val checks = viper.silicon.state.runtimeChecks.getChecks
-    private val versioning = new mutable.HashMap[vpr.Node, mutable.Set[ConditionVersion]] with mutable.MultiMap[vpr.Node, ConditionVersion]
+    val conditions = mutable.Map[vpr.Node, mutable.Map[vpr.Exp, Conditional]]()
 
     val ops = flattenOps(irMethod.body.toList, vprMethod.body.get.ss.toList).toList
 
@@ -132,8 +128,58 @@ object Weaver {
       new Assert(checkValue, AssertKind.Imperative)
     }
 
+    def defineConditional(location: vpr.Node, value: vpr.Exp, previous: Option[Expression]): Expression = {
+      val (unwrapped, flag) = unwrapValue(value)
+      val cond = conditions
+        .getOrElseUpdate(location, mutable.ListMap())
+        .getOrElseUpdate(unwrapped, Conditional(irMethod.addVar(BoolType, "_cond"), mutable.ListBuffer()))
+
+      cond.when += (previous match {
+        case None => new Bool(true)
+        case Some(w) => w
+      })
+
+      wrapValue(cond.variable, flag)
+    }
+
+    def unwrapValue(value: vpr.Exp): (vpr.Exp, Boolean) =
+      value match {
+        case n: vpr.Not => unwrapValue(n.exp) match {
+          case (e, b) => (e, !b)
+        }
+        case other => (other, true)
+      }
+
+    def wrapValue(value: Expression, flag: Boolean): Expression = {
+      if (flag) value
+      else new Unary(UnaryOp.Not, value)
+    }
+
+    def addVersioning(location: vpr.Node, op: Option[Op]): Unit = {
+      conditions
+        .get(location).map(_.toSeq).getOrElse(Seq.empty)
+        .map { case (exp, cond) => {
+          val value = CheckImplementation.expression(exp, irMethod, None)
+
+          val when = cond.when.foldLeft[Option[Expression]](None) { (prev, c) =>
+            prev match {
+              case None => Some(c)
+              case Some(e) => Some(new Binary(BinaryOp.Or, e, c))
+            }
+          }
+
+          val conditionalValue = when match {
+            case None => value
+            case Some(cond) => new Binary(BinaryOp.And, cond, value)
+          }
+
+          new Assign(cond.variable, conditionalValue)
+        }}
+        .foreach(insertAt(_, op))
+    }
+
     private def conditional(check: Op, branch: BranchInfo): Op = {
-      var prevCondition: Option[Var] = None
+      var when: Option[Expression] = None
 
       (branch.branch, branch.branchOrigin, branch.branchPosition)
         .zipped.toSeq
@@ -141,27 +187,21 @@ object Weaver {
         .foreach {
           case (branch, origin, position) => {
             System.out.println(s"Origin: $origin, Position: $position")
-            val variable = irMethod.addVar(BoolType, "_cond")
             val insertAt = origin.getOrElse(position)
+            val condition = defineConditional(insertAt, branch, when)
 
-            val version = ConditionVersion(branch, variable, prevCondition)
-            versioning.addBinding(insertAt, version)
-
-            prevCondition = Some(variable)
+            when = when match {
+              case None => Some(condition)
+              case Some(prev) => Some(new Binary(BinaryOp.And, prev, condition))
+            }
           }
         }
 
-      wrapIf(check, prevCondition)
+      wrapIf(check, when)
     }
 
     private def insertVersioning(): Unit = {
-      visit((node, op, returnVal) =>
-        versioning.getOrElse(node, Seq.empty)
-          .foreach(c => {
-            val value = CheckImplementation.expression(c.value, irMethod, None)
-            val assign = new Assign(c.variable, value)
-            insertAt(wrapIf(assign, c.previous), op)
-          }))
+      visit((node, op, returnVal) => addVersioning(node, op))
     }
 
     private def wrapIf(op: Op, condition: Option[Expression]) = {
