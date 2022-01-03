@@ -239,6 +239,20 @@ object AccessChecks {
       val returns: mutable.ArrayBuffer[Op]
   )
 
+  def needsStaticTracking(method: Method) = {
+    val preStatic = method.precondition.isDefined && method.precondition.get
+      .isInstanceOf[Imprecise] && method.precondition.get
+      .asInstanceOf[Imprecise]
+      .precise
+      .isDefined
+    val postStatic = method.postcondition.isDefined && method.postcondition.get
+      .isInstanceOf[Imprecise] && method.postcondition.get
+      .asInstanceOf[Imprecise]
+      .precise
+      .isDefined
+    postStatic || preStatic
+  }
+
   class InvokeInfo(
       val callingMethod: Method,
       val vprNode: MethodCall
@@ -307,9 +321,6 @@ object AccessChecks {
      *  AccessTracker.
      */
     if (tracker.requiresTracking) {
-      ir.structs.foreach((st) => {
-        st.addField(Names.ID, IntType)
-      })
       for ((method: Method, edge: Edge) <- tracker.callGraph) {
         /* Modify the parameters of each method to accept OwnedFields objects as necessary */
 
@@ -332,6 +343,8 @@ object AccessChecks {
               .name == "assertDisjointAcc")
           ) afterwards = afterwards.getNext.get
 
+          val needsStatic = needsStaticTracking(method)
+
           if (isImprecise(method)) {
 
             if (!isImprecise(info.callingMethod)) {
@@ -339,7 +352,7 @@ object AccessChecks {
               info.callingMethod.body.head
                 .insertBefore(Commands.InitDynamic)
 
-              if (tracker.requiresStaticSeparation.contains(method.name)) {
+              if (needsStatic) {
                 info.callingMethod.addExistingVar(
                   Vars.TempStaticOwnedFields
                 )
@@ -348,20 +361,17 @@ object AccessChecks {
               info.callingMethod.addExistingVar(Vars.TempDynamicOwnedFields)
             }
 
-            invoke_op.arguments = invoke_op.arguments ++ List(
-              Vars.DynamicOwnedFields,
-              Vars.StaticOwnedFields
-            )
-
             if (optionImprecise(method.precondition)) {
 
-              invocation.insertBefore(Commands.StoreStatic)
-              invocation.insertBefore(
-                Commands.Join(
-                  Commands.GetDynamicOwnedFields,
-                  Vars.StaticOwnedFields
+              if (needsStatic) {
+                invocation.insertBefore(Commands.StoreStatic)
+                invocation.insertBefore(
+                  Commands.Join(
+                    Commands.GetDynamicOwnedFields,
+                    Vars.StaticOwnedFields
+                  )
                 )
-              )
+              }
 
               invocation.insertBefore(Commands.InitStatic)
               invocation.insertBefore(
@@ -375,16 +385,16 @@ object AccessChecks {
                 )
               )
 
-              if (optionImprecise(method.postcondition)) {
-
+              if (needsStatic) {
                 afterwards.insertAfter(
                   Commands.Disjoin(
                     Commands.GetDynamicOwnedFields,
                     Vars.StaticOwnedFields
                   )
                 )
-
                 afterwards.insertAfter(Commands.LoadStatic)
+              }
+              if (optionImprecise(method.postcondition)) {
 
                 afterwards.insertAfter(
                   Commands.Join(
@@ -401,15 +411,6 @@ object AccessChecks {
               } else {
 
                 afterwards.insertAfter(
-                  Commands.Disjoin(
-                    Commands.GetDynamicOwnedFields,
-                    Vars.StaticOwnedFields
-                  )
-                )
-
-                afterwards.insertAfter(Commands.LoadStatic)
-
-                afterwards.insertAfter(
                   populateStatic(
                     Commands.GetDynamicOwnedFields,
                     method.postcondition
@@ -419,8 +420,9 @@ object AccessChecks {
                 afterwards.insertAfter(Commands.InitDynamic)
               }
             } else {
-              afterwards.insertAfter(Commands.StoreStatic)
-
+              if (needsStatic) {
+                afterwards.insertAfter(Commands.StoreStatic)
+              }
               invocation.insertBefore(Commands.InitStatic)
               invocation.insertBefore(
                 populateStatic(Vars.StaticOwnedFields, method.precondition)
@@ -429,14 +431,17 @@ object AccessChecks {
               invocation.insertBefore(Commands.StoreDynamic)
               invocation.insertBefore(Commands.InitDynamic)
 
-              afterwards.insertAfter(
-                Commands.Disjoin(
-                  Vars.DynamicOwnedFields,
-                  Vars.StaticOwnedFields
-                )
-              )
-              afterwards.insertAfter(Commands.LoadStatic)
+              if (needsStatic) {
+                afterwards.insertAfter(Commands.StoreStatic)
 
+                afterwards.insertAfter(
+                  Commands.Disjoin(
+                    Vars.DynamicOwnedFields,
+                    Vars.StaticOwnedFields
+                  )
+                )
+                afterwards.insertAfter(Commands.LoadStatic)
+              }
               afterwards.insertAfter(
                 Commands.Join(
                   Vars.DynamicOwnedFields,
@@ -657,7 +662,13 @@ object AccessChecks {
         Vars.StaticOwnedFields.valueType,
         Names.StaticOwnedFields
       )
-
+      edge.callsites.foreach(site => {
+        val invoke_op = site._1.asInstanceOf[Invoke]
+        invoke_op.arguments = invoke_op.arguments ++ List(
+          Vars.DynamicOwnedFields,
+          Vars.StaticOwnedFields
+        )
+      })
       /* when an imprecise method returns, if its postcondition is precise, then only the statically verified fields of the
        * postcondition will be returned to the caller.
        */

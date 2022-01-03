@@ -31,11 +31,19 @@ class CC0Options {
 class CC0WrapperException(message: String) extends Exception(message)
 
 object CC0Wrapper {
+  val c0DependencyName = "runtime"
+  val sourcePath = Paths
+    .get(
+      getClass.getResource("/" + c0DependencyName + ".c0").getPath
+    )
+    .toAbsolutePath
+  val resourceDir = sourcePath.getRoot
+
   def exec(
-            filename: String,
-            program: String,
-            options: CC0Options
-          ): Int = {
+      filename: String,
+      program: String,
+      options: CC0Options
+  ): Int = {
     val verifiedFilename =
       if (options.copy) copyFile(filename, program) else filename
     val command: String = formatCommand(verifiedFilename, options)
@@ -43,10 +51,10 @@ object CC0Wrapper {
   }
 
   def execCaptureOutput(
-                         filename: String,
-                         program: String,
-                         options: CC0Options
-                       ): String = {
+      filename: String,
+      program: String,
+      options: CC0Options
+  ): String = {
     val verifiedFilename =
       if (options.copy) copyFile(filename, program) else filename
     val command: String = formatCommand(verifiedFilename, options)
