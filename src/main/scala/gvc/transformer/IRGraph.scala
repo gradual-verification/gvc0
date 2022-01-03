@@ -215,7 +215,10 @@ object IRGraph {
     def method = op.block.method
   }
 
-  sealed trait Expression
+  sealed trait Expression {
+    def contains(exp: Expression): Boolean =
+      exp == this
+  }
 
   class Parameter(valueType: Type, name: String) extends Var(valueType, name)
   class Var(var valueType: Type, val name: String) extends Expression
@@ -223,6 +226,9 @@ object IRGraph {
   sealed trait Member extends Expression {
     var root: Expression
     def valueType: Type
+
+    override def contains(exp: Expression) =
+      super.contains(exp) || root.contains(exp)
   }
 
   class FieldMember(var root: Expression, var field: StructField) extends Member {
@@ -232,17 +238,27 @@ object IRGraph {
   // TODO: Index should be Expression
   class ArrayMember(var root: Expression, var valueType: Type, var index: Int) extends Member
 
-  class Accessibility(var member: Member) extends Expression
+  class Accessibility(var member: Member) extends Expression {
+    override def contains(exp: Expression) =
+      super.contains(exp) || member.contains(exp)
+  }
 
   class PredicateInstance(
     var predicate: Predicate,
-    var arguments: List[IRGraph.Expression]) extends Expression
+    var arguments: List[IRGraph.Expression]
+  ) extends Expression {
+    override def contains(exp: Expression) =
+      super.contains(exp) || arguments.exists(_.contains(exp))
+  }
 
   // Represents a \result expression in a specification
   class Result(var method: Method) extends Expression
 
   // Wraps another expression and adds imprecision (i.e. `? && precise`)
-  class Imprecise(var precise: Option[IRGraph.Expression]) extends Expression
+  class Imprecise(var precise: Option[IRGraph.Expression]) extends Expression {
+    override def contains(exp: Expression) =
+      super.contains(exp) || precise.exists(_.contains(exp))
+  }
 
   sealed trait Literal extends Expression
   class Int(val value: scala.Int) extends Literal
@@ -254,13 +270,19 @@ object IRGraph {
     var condition: Expression,
     var ifTrue: Expression,
     var ifFalse: Expression
-  ) extends Expression
+  ) extends Expression {
+    override def contains(exp: Expression) =
+      super.contains(exp) || condition.contains(exp) || ifTrue.contains(exp) || ifFalse.contains(exp)
+  }
 
   class Binary(
     var operator: BinaryOp,
     var left: Expression,
     var right: Expression
-  ) extends Expression
+  ) extends Expression {
+    override def contains(exp: Expression) =
+      super.contains(exp) || left.contains(exp) || right.contains(exp)
+  }
 
   sealed trait BinaryOp
   object BinaryOp {
@@ -281,7 +303,10 @@ object IRGraph {
   class Unary(
     var operator: UnaryOp,
     var operand: Expression
-  ) extends Expression
+  ) extends Expression {
+    override def contains(exp: Expression) =
+      super.contains(exp) || operand.contains(exp)
+  }
 
   sealed trait UnaryOp
   object UnaryOp {

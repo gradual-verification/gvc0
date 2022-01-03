@@ -1,0 +1,82 @@
+int echo(int value)
+{
+  return value;
+}
+
+void use(int value)
+{
+}
+
+int main()
+{
+  int test = 123;
+
+  // Simple
+  int a = 1;
+  a = echo(a);
+  a = echo(a + 1);
+  use(a);
+
+  // Conditional
+  int b = 2;
+  if (test == 0)
+  {
+    b = echo(b);
+  }
+  use(b);
+
+  // Conditional and assignment
+  int c = 3;
+  if (test == 0)
+  {
+    c = echo(c + 1);
+  }
+  else
+  {
+    c = c + 1;
+  }
+  use(c);
+
+  // Nested conditionals
+  int d = 4;
+  if (test > 0)
+  {
+    if (test > 1)
+    {
+      d = echo(d + 1);
+    }
+    else
+    {
+      d = echo(d + 2);
+    }
+  }
+  else
+  {
+    if (test < -1)
+    {
+      d = echo(d + 3);
+    }
+
+    d = echo(d + 4);
+  }
+  use(d);
+
+  // Loop
+  int e = 5;
+  while (e < 10)
+  {
+    e = echo(e + 1);
+  }
+  use(e);
+
+  // Conditional inside Loop
+  int f = 6;
+  while (f < 10)
+  {
+    if (test > 0)
+      f = echo(f + 1);
+  }
+  use(f);
+
+  return 0;
+}

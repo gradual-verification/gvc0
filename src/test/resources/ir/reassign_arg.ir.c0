@@ -1,0 +1,104 @@
+int echo(int value);
+int main();
+void use(int value);
+
+int echo(int value)
+{
+  return value;
+}
+
+int main()
+{
+  int test = 0;
+  int a = 0;
+  int b = 0;
+  int c = 0;
+  int d = 0;
+  int e = 0;
+  int f = 0;
+  int a1 = 0;
+  int a11 = 0;
+  int b1 = 0;
+  int c1 = 0;
+  int d1 = 0;
+  int d11 = 0;
+  int e1 = 0;
+  int f1 = 0;
+  test = 123;
+  a = 1;
+  a1 = echo(a);
+  a11 = echo(a1 + 1);
+  use(a1);
+  b = 2;
+  if (test == 0)
+  {
+    b1 = echo(b);
+  }
+  else
+  {
+    b1 = b;
+  }
+  use(b1);
+  c = 3;
+  if (test == 0)
+  {
+    c1 = echo(c + 1);
+  }
+  else
+  {
+    c1 = c + 1;
+  }
+  use(c1);
+  d = 4;
+  if (test > 0)
+  {
+    if (test > 1)
+    {
+      d1 = echo(d + 1);
+    }
+    else
+    {
+      d1 = echo(d + 2);
+    }
+    d11 = d1;
+  }
+  else
+  {
+    if (test < -1)
+    {
+      d1 = echo(d + 3);
+    }
+    else
+    {
+      d1 = d;
+    }
+    d11 = echo(d1 + 4);
+  }
+  use(d1);
+  e = 5;
+  while (e < 10)
+  {
+    e1 = echo(e + 1);
+    e = e1;
+  }
+  use(e);
+  f = 6;
+  while (f < 10)
+  {
+    if (test > 0)
+    {
+      f1 = echo(f + 1);
+    }
+    else
+    {
+      f1 = f;
+    }
+    f = f1;
+  }
+  use(f);
+  return 0;
+}
+
+void use(int value)
+{
+}
