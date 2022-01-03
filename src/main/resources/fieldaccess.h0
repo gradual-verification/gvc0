@@ -1,0 +1,26 @@
+struct OwnedFields {
+    struct FieldArray*[] contents;
+    int capacity;
+    int length;
+    int* instanceCounter;
+};
+
+typedef struct OwnedFields OwnedFields;
+
+void initOwnedFields(OwnedFields* fields, int * instanceCounter);
+int initStructAccess(OwnedFields * fields, int numFields);
+void inheritAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex);
+
+void merge(OwnedFields* target, OwnedFields* source);
+
+bool assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage);
+
+int runTests();
+
+struct FieldArray {
+  bool[] contents;
+  int length;
+  int _id;
+};
+
+typedef struct FieldArray FieldArray;
