@@ -10,6 +10,11 @@ object IRGraph {
     private val _structs = mutable.Map[String, Struct]()
     private val _methods = mutable.Map[String, Method]()
     private val _predicates = mutable.Map[String, Predicate]()
+    private val _dependencies = mutable.Map[String, Dependency]()
+
+    def addDependency(path: String, isLibrary: Boolean): Unit = {
+      _dependencies += (path -> Dependency(path, isLibrary))
+    }
 
     def addStruct(name: String): Struct = {
       val struct = new Struct(name)
@@ -35,6 +40,8 @@ object IRGraph {
     def structs: Seq[Struct] = _structs.values.toSeq.sortBy(_.name)
     def methods: Seq[Method] = _methods.values.toSeq.sortBy(_.name)
     def predicates: Seq[Predicate] = _predicates.values.toSeq.sortBy(_.name)
+    def dependencies: Seq[Dependency] =
+      _dependencies.values.toSeq.sortBy(_.name)
 
     // Structs can be used even if they are never declared
     def struct(name: String): Struct =
@@ -134,6 +141,8 @@ object IRGraph {
       newParam
     }
   }
+
+  case class Dependency(name: String, isLibrary: Boolean)
 
   class Block extends Iterable[Op] {
     private[IRGraph] var blockHead: Option[Op] = None

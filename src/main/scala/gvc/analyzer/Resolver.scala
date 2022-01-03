@@ -7,27 +7,31 @@ trait ResolvedNode {
 }
 
 case class ResolvedProgram(
-  methodDeclarations: List[ResolvedMethodDeclaration],
-  methodDefinitions: List[ResolvedMethodDefinition],
-  predicateDeclarations: List[ResolvedPredicateDeclaration],
-  predicateDefinitions: List[ResolvedPredicateDefinition],
-  structDefinitions: List[ResolvedStructDefinition],
-  types: List[ResolvedTypeDef],
+    methodDeclarations: List[ResolvedMethodDeclaration],
+    methodDefinitions: List[ResolvedMethodDefinition],
+    predicateDeclarations: List[ResolvedPredicateDeclaration],
+    predicateDefinitions: List[ResolvedPredicateDefinition],
+    structDefinitions: List[ResolvedStructDefinition],
+    types: List[ResolvedTypeDef],
+    dependencies: List[ResolvedUseDeclaration]
 )
 
 case class Scope(
-  variables: Map[String, ResolvedVariable],
-  methodDeclarations: Map[String, ResolvedMethodDeclaration],
-  methodDefinitions: Map[String, ResolvedMethodDefinition],
-  predicateDeclarations: Map[String, ResolvedPredicateDeclaration],
-  predicateDefinitions: Map[String, ResolvedPredicateDefinition],
-  structDefinitions: Map[String, ResolvedStructDefinition],
-  typeDefs: Map[String, ResolvedTypeDef],
-  errors: ErrorSink
+    variables: Map[String, ResolvedVariable],
+    methodDeclarations: Map[String, ResolvedMethodDeclaration],
+    methodDefinitions: Map[String, ResolvedMethodDefinition],
+    predicateDeclarations: Map[String, ResolvedPredicateDeclaration],
+    predicateDefinitions: Map[String, ResolvedPredicateDefinition],
+    structDefinitions: Map[String, ResolvedStructDefinition],
+    typeDefs: Map[String, ResolvedTypeDef],
+    errors: ErrorSink
 ) {
   def defineStruct(struct: ResolvedStructDefinition): Scope = {
     if (structDefinitions.contains(struct.name)) {
-      errors.error(struct.parsed, "'struct " + struct.name + "' is already defined")
+      errors.error(
+        struct.parsed,
+        "'struct " + struct.name + "' is already defined"
+      )
       this
     } else {
       copy(structDefinitions = structDefinitions + (struct.name -> struct))
@@ -41,7 +45,10 @@ case class Scope(
     } else {
       if (methodDeclarations.contains(typeDef.name)) {
         // Log error but add to scope
-        errors.error(typeDef.parsed, "Type name '" + typeDef.name + "' already used as a method")
+        errors.error(
+          typeDef.parsed,
+          "Type name '" + typeDef.name + "' already used as a method"
+        )
       }
 
       copy(typeDefs = typeDefs + (typeDef.name -> typeDef))
@@ -63,7 +70,10 @@ case class Scope(
     } else {
       if (typeDefs.contains(method.name)) {
         // Log error but add to scope
-        errors.error(method.parsed, "Method '" + method.name + "' already used as a type name")
+        errors.error(
+          method.parsed,
+          "Method '" + method.name + "' already used as a type name"
+        )
       }
       copy(methodDefinitions = methodDefinitions + (method.name -> method))
     }
@@ -71,7 +81,10 @@ case class Scope(
 
   def declarePredicate(predicate: ResolvedPredicateDeclaration): Scope = {
     if (predicateDeclarations.contains(predicate.name)) this
-    else copy(predicateDeclarations = predicateDeclarations + (predicate.name -> predicate))
+    else
+      copy(predicateDeclarations =
+        predicateDeclarations + (predicate.name -> predicate)
+      )
   }
 
   def definePredicate(predicate: ResolvedPredicateDefinition): Scope = {
@@ -79,19 +92,27 @@ case class Scope(
       errors.error(predicate, s"'${predicate.name}' is already defined")
       this
     } else {
-      copy(predicateDefinitions = predicateDefinitions + (predicate.name -> predicate))
+      copy(predicateDefinitions =
+        predicateDefinitions + (predicate.name -> predicate)
+      )
     }
   }
 
   def declareVariable(variable: ResolvedVariable): Scope = {
     if (variables.contains(variable.name)) {
-      errors.error(variable.parsed, "'" + variable.name + "' is already declared")
+      errors.error(
+        variable.parsed,
+        "'" + variable.name + "' is already declared"
+      )
       this
     } else {
       // If it shadows a type name, log an error but add it to the scope to avoid
       // extra undeclared-variable errors
       if (typeDefs.contains(variable.name)) {
-        errors.error(variable.parsed, "Type name '" + variable.name + "' used as a variable")
+        errors.error(
+          variable.parsed,
+          "Type name '" + variable.name + "' used as a variable"
+        )
       }
 
       copy(variables = variables + (variable.name -> variable))
@@ -106,7 +127,13 @@ case class Scope(
 
 object Resolver {
   val reservedWords = Set(
-    "int", "string", "char", "bool", "\result", "struct", "typedef"
+    "int",
+    "string",
+    "char",
+    "bool",
+    "\result",
+    "struct",
+    "typedef"
   )
 
   sealed trait Context
@@ -116,10 +143,12 @@ object Resolver {
 
   def resolveType(input: Type, scope: Scope): ResolvedType = {
     input match {
-      case ArrayType(valueType, _) => ResolvedArray(resolveType(valueType, scope))
-      case PointerType(valueType, _) => ResolvedPointer(resolveType(valueType, scope))
+      case ArrayType(valueType, _) =>
+        ResolvedArray(resolveType(valueType, scope))
+      case PointerType(valueType, _) =>
+        ResolvedPointer(resolveType(valueType, scope))
       case NamedStructType(id, _) => resolveStruct(id, scope)
-      case NamedType(id, _) => resolveNamedType(id, scope)
+      case NamedType(id, _)       => resolveNamedType(id, scope)
     }
   }
 
@@ -132,21 +161,28 @@ object Resolver {
     val name = id.name
     BuiltinType.lookup.get(name) match {
       case Some(value) => value
-      case None => scope.typeDefs.get(name) match {
-        case Some(typeDef) => typeDef.actualType
-        case None => {
-          scope.errors.error(id, "Undefined type " + name)
-          MissingNamedType(name)
+      case None =>
+        scope.typeDefs.get(name) match {
+          case Some(typeDef) => typeDef.actualType
+          case None => {
+            scope.errors.error(id, "Undefined type " + name)
+            MissingNamedType(name)
+          }
         }
-      }
     }
   }
 
-  def resolveStructDefinition(input: StructDefinition, scope: Scope): ResolvedStructDefinition = {
+  def resolveStructDefinition(
+      input: StructDefinition,
+      scope: Scope
+  ): ResolvedStructDefinition = {
     val fields = ListBuffer[ResolvedStructField]()
     for (field <- input.fields.get) {
       if (fields.exists(_.name == field.id.name)) {
-        scope.errors.error(field, "Field '" + field.id.name + "' is already defined")
+        scope.errors.error(
+          field,
+          "Field '" + field.id.name + "' is already defined"
+        )
       }
 
       fields += ResolvedStructField(
@@ -188,12 +224,12 @@ object Resolver {
             )
           }
 
-          case _ => ResolvedExpressionStatement(
-            parsed = expr,
-            value = resolveExpression(expr.expression, scope, MethodContext)
-          )
+          case _ =>
+            ResolvedExpressionStatement(
+              parsed = expr,
+              value = resolveExpression(expr.expression, scope, MethodContext)
+            )
         }
-        
 
       case assign: AssignmentStatement =>
         ResolvedAssignment(
@@ -210,7 +246,7 @@ object Resolver {
           ifTrue = resolveScopedStatement(iff.ifTrue, scope),
           ifFalse = iff.ifFalse.map(resolveScopedStatement(_, scope))
         )
-    
+
       case w: WhileStatement => {
         val (invariant, body) = resolveLoopInvariants(w.body, scope)
         ResolvedWhile(
@@ -225,7 +261,10 @@ object Resolver {
         // Parse does not allow blocks in the incrementor, but does allow variable declarations,
         // which are disallowed by the spec
         if (f.incrementor.isInstanceOf[VariableStatement]) {
-          scope.errors.error(f.incrementor, "Invalid declaration in for loop step")
+          scope.errors.error(
+            f.incrementor,
+            "Invalid declaration in for loop step"
+          )
         }
 
         // Rewrite for into a while loop
@@ -262,7 +301,7 @@ object Resolver {
           parsed = r,
           value = r.value.map(resolveExpression(_, scope, MethodContext))
         )
-      
+
       case a: AssertStatement =>
         ResolvedAssert(a, resolveExpression(a.value, scope, MethodContext))
 
@@ -273,11 +312,14 @@ object Resolver {
     }
   }
 
-  def convertAssignOp(stmt: AssignmentStatement, scope: Scope): Option[ArithmeticOperation] =
+  def convertAssignOp(
+      stmt: AssignmentStatement,
+      scope: Scope
+  ): Option[ArithmeticOperation] =
     stmt.operator match {
-      case AssignOperator.Assign => None
-      case AssignOperator.Add => Some(ArithmeticOperation.Add)
-      case AssignOperator.Divide => Some(ArithmeticOperation.Divide)
+      case AssignOperator.Assign   => None
+      case AssignOperator.Add      => Some(ArithmeticOperation.Add)
+      case AssignOperator.Divide   => Some(ArithmeticOperation.Divide)
       case AssignOperator.Multiply => Some(ArithmeticOperation.Multiply)
       case AssignOperator.Subtract => Some(ArithmeticOperation.Subtract)
       case _ => {
@@ -287,11 +329,11 @@ object Resolver {
     }
 
   def resolveBlock(
-    parsed: Statement,
-    scope: Scope,
-    body: List[Statement],
-    specifications: List[SpecExprification] = List.empty,
-    trailingSpecExprifications: List[SpecExprification] = List.empty
+      parsed: Statement,
+      scope: Scope,
+      body: List[Statement],
+      specifications: List[SpecExprification] = List.empty,
+      trailingSpecExprifications: List[SpecExprification] = List.empty
   ): ResolvedBlock = {
     var blockScope = scope
     var defs = ListBuffer[ResolvedVariable]()
@@ -307,7 +349,8 @@ object Resolver {
           val varDef = ResolvedVariable(
             parsed = v,
             name = v.id.name,
-            valueType = resolveType(v.valueType, scope))
+            valueType = resolveType(v.valueType, scope)
+          )
 
           defs += varDef
 
@@ -318,10 +361,11 @@ object Resolver {
                 parsed = v,
                 left = ResolvedVariableRef(v.id, Some(varDef)),
                 value = resolveExpression(value, blockScope, MethodContext),
-                operation = None)
+                operation = None
+              )
             }
           }
-          
+
           blockScope = blockScope.declareVariable(varDef)
         }
 
@@ -347,19 +391,28 @@ object Resolver {
     // Because we are handling all variable definitions at the block level, just rewrite the
     // single statement to always be a block statement.
     val (body, trailing) = input match {
-      case block: BlockStatement => (block.body, block.trailingSpecExprifications)
+      case block: BlockStatement =>
+        (block.body, block.trailingSpecExprifications)
       case _ => (List(input), List.empty)
     }
 
     resolveBlock(input, scope, body, input.specifications, trailing)
   }
 
-  def resolveExpression(input: Expression, scope: Scope, context: Context): ResolvedExpression = {
+  def resolveExpression(
+      input: Expression,
+      scope: Scope,
+      context: Context
+  ): ResolvedExpression = {
     input match {
-      case variable: VariableExpression => resolveVariable(variable.variable, scope)
+      case variable: VariableExpression =>
+        resolveVariable(variable.variable, scope)
 
       case increment: IncrementExpression => {
-        scope.errors.error(increment, "Increment/decrement operators cannot be used as an expression")
+        scope.errors.error(
+          increment,
+          "Increment/decrement operators cannot be used as an expression"
+        )
         return resolveExpression(increment.value, scope, context)
       }
 
@@ -368,47 +421,114 @@ object Resolver {
         val right = resolveExpression(binary.right, scope, context)
 
         binary.operator match {
-          case BinaryOperator.Add => ResolvedArithmetic(binary, left, right, ArithmeticOperation.Add)
-          case BinaryOperator.Subtract => ResolvedArithmetic(binary, left, right, ArithmeticOperation.Subtract)
-          case BinaryOperator.Divide => ResolvedArithmetic(binary, left, right, ArithmeticOperation.Divide)
-          case BinaryOperator.Multiply => ResolvedArithmetic(binary, left, right, ArithmeticOperation.Multiply)
-          case BinaryOperator.Equal => ResolvedComparison(binary, left, right, ComparisonOperation.EqualTo)
-          case BinaryOperator.NotEqual => ResolvedComparison(binary, left, right, ComparisonOperation.NotEqualTo)
-          case BinaryOperator.Greater => ResolvedComparison(binary, left, right, ComparisonOperation.GreaterThan)
-          case BinaryOperator.GreaterEqual => ResolvedComparison(binary, left, right, ComparisonOperation.GreaterThanOrEqualTo)
-          case BinaryOperator.Less => ResolvedComparison(binary, left, right, ComparisonOperation.LessThan)
-          case BinaryOperator.LessEqual => ResolvedComparison(binary, left, right, ComparisonOperation.LessThanOrEqualTo)
-          case BinaryOperator.LogicalAnd => ResolvedLogical(binary, left, right, LogicalOperation.And)
-          case BinaryOperator.LogicalOr => ResolvedLogical(binary, left, right, LogicalOperation.Or)
+          case BinaryOperator.Add =>
+            ResolvedArithmetic(binary, left, right, ArithmeticOperation.Add)
+          case BinaryOperator.Subtract =>
+            ResolvedArithmetic(
+              binary,
+              left,
+              right,
+              ArithmeticOperation.Subtract
+            )
+          case BinaryOperator.Divide =>
+            ResolvedArithmetic(binary, left, right, ArithmeticOperation.Divide)
+          case BinaryOperator.Multiply =>
+            ResolvedArithmetic(
+              binary,
+              left,
+              right,
+              ArithmeticOperation.Multiply
+            )
+          case BinaryOperator.Equal =>
+            ResolvedComparison(binary, left, right, ComparisonOperation.EqualTo)
+          case BinaryOperator.NotEqual =>
+            ResolvedComparison(
+              binary,
+              left,
+              right,
+              ComparisonOperation.NotEqualTo
+            )
+          case BinaryOperator.Greater =>
+            ResolvedComparison(
+              binary,
+              left,
+              right,
+              ComparisonOperation.GreaterThan
+            )
+          case BinaryOperator.GreaterEqual =>
+            ResolvedComparison(
+              binary,
+              left,
+              right,
+              ComparisonOperation.GreaterThanOrEqualTo
+            )
+          case BinaryOperator.Less =>
+            ResolvedComparison(
+              binary,
+              left,
+              right,
+              ComparisonOperation.LessThan
+            )
+          case BinaryOperator.LessEqual =>
+            ResolvedComparison(
+              binary,
+              left,
+              right,
+              ComparisonOperation.LessThanOrEqualTo
+            )
+          case BinaryOperator.LogicalAnd =>
+            ResolvedLogical(binary, left, right, LogicalOperation.And)
+          case BinaryOperator.LogicalOr =>
+            ResolvedLogical(binary, left, right, LogicalOperation.Or)
           case _ => {
             // Log the error and return a mock that assumes add
-            scope.errors.error(binary, "Unsupported operator " + binary.operator.toString())
+            scope.errors.error(
+              binary,
+              "Unsupported operator " + binary.operator.toString()
+            )
             ResolvedArithmetic(binary, left, right, ArithmeticOperation.Add)
           }
         }
       }
 
-      case unary: UnaryExpression => unary.operator match {
-        case UnaryOperator.Not => ResolvedNot(unary, resolveExpression(unary.operand, scope, context))
-        case UnaryOperator.Negate => ResolvedNegation(unary, resolveExpression(unary.operand, scope, context))
-        case UnaryOperator.Deref => ResolvedDereference(unary, resolveExpression(unary.operand, scope, context))
-        case op => {
-          // Log the error and return the base expression
-          scope.errors.error(unary, "Unsupported operator " + op.toString())
-          resolveExpression(unary.operand, scope, context)
+      case unary: UnaryExpression =>
+        unary.operator match {
+          case UnaryOperator.Not =>
+            ResolvedNot(unary, resolveExpression(unary.operand, scope, context))
+          case UnaryOperator.Negate =>
+            ResolvedNegation(
+              unary,
+              resolveExpression(unary.operand, scope, context)
+            )
+          case UnaryOperator.Deref =>
+            ResolvedDereference(
+              unary,
+              resolveExpression(unary.operand, scope, context)
+            )
+          case op => {
+            // Log the error and return the base expression
+            scope.errors.error(unary, "Unsupported operator " + op.toString())
+            resolveExpression(unary.operand, scope, context)
+          }
         }
-      }
-      
+
       case ternary: TernaryExpression =>
         ResolvedTernary(
           ternary,
           resolveExpression(ternary.condition, scope, context),
           resolveExpression(ternary.ifTrue, scope, context),
-          resolveExpression(ternary.ifFalse, scope, context))
+          resolveExpression(ternary.ifFalse, scope, context)
+        )
 
       case invoke: InvokeExpression if context != MethodContext => {
         // Invokes in a specification must refer to a predicate
-        resolvePredicate(invoke, invoke.method, invoke.arguments, scope, context)
+        resolvePredicate(
+          invoke,
+          invoke.method,
+          invoke.arguments,
+          scope,
+          context
+        )
       }
 
       case invoke: InvokeExpression => {
@@ -419,7 +539,10 @@ object Resolver {
             scope.errors.error(invoke, s"'$name' is a variable, not a function")
             None
           } else if (scope.predicateDeclarations.contains(name)) {
-            scope.errors.error(invoke, s"'$name' is a predicate, not a function")
+            scope.errors.error(
+              invoke,
+              s"'$name' is a predicate, not a function"
+            )
             None
           } else {
             val decl = scope.methodDeclarations.get(name)
@@ -433,7 +556,7 @@ object Resolver {
           parsed = invoke,
           method = method,
           methodName = name,
-          arguments = invoke.arguments.map(resolveExpression(_, scope, context)),
+          arguments = invoke.arguments.map(resolveExpression(_, scope, context))
         )
       }
 
@@ -446,17 +569,28 @@ object Resolver {
       case alloc: AllocArrayExpression => {
         val valueType = resolveType(alloc.valueType, scope)
         verifyDefinedType(valueType, alloc, scope)
-        ResolvedAllocArray(alloc, valueType, resolveExpression(alloc.length, scope, context))
+        ResolvedAllocArray(
+          alloc,
+          valueType,
+          resolveExpression(alloc.length, scope, context)
+        )
       }
 
       case index: IndexExpression =>
-        ResolvedArrayIndex(index, resolveExpression(index.parent, scope, context), resolveExpression(index.index, scope, context))
+        ResolvedArrayIndex(
+          index,
+          resolveExpression(index.parent, scope, context),
+          resolveExpression(index.index, scope, context)
+        )
 
       case result: ResultExpression => {
         val retType = context match {
           case PostConditionContext(returnType) => returnType
           case _ => {
-            scope.errors.error(result, "\\result expressions can only be used in 'ensures'")
+            scope.errors.error(
+              result,
+              "\\result expressions can only be used in 'ensures'"
+            )
             UnknownType
           }
         }
@@ -466,20 +600,29 @@ object Resolver {
 
       case length: LengthExpression => {
         if (context == MethodContext)
-          scope.errors.error(length, "\\length expressions can only be used in specifications")
+          scope.errors.error(
+            length,
+            "\\length expressions can only be used in specifications"
+          )
         ResolvedLength(length, resolveExpression(length.value, scope, context))
       }
 
       case acc: AccessibilityExpression => {
         if (context == MethodContext) {
-          scope.errors.error(acc, "acc() expressions can only be used in specifications")
+          scope.errors.error(
+            acc,
+            "acc() expressions can only be used in specifications"
+          )
         }
         ResolvedAccessibility(acc, resolveExpression(acc.field, scope, context))
       }
 
       case imprecision: ImprecisionExpression => {
         if (context == MethodContext)
-          scope.errors.error(imprecision, "? expressions can only be used in specifications")
+          scope.errors.error(
+            imprecision,
+            "? expressions can only be used in specifications"
+          )
         ResolvedImprecision(imprecision)
       }
 
@@ -490,9 +633,12 @@ object Resolver {
             parent.valueType match {
               case ResolvedPointer(ResolvedStructType(struct)) => Some(struct)
               case _ => {
-                scope.errors.error(member, "Subject of '->' is not a pointer to a struct")
+                scope.errors.error(
+                  member,
+                  "Subject of '->' is not a pointer to a struct"
+                )
                 None
-              } 
+              }
             }
           } else {
             parent.valueType match {
@@ -508,21 +654,29 @@ object Resolver {
         val field = struct match {
           case None => None
 
-          case Some(struct) => scope.structDefinitions.get(struct) match {
-            case None => {
-              scope.errors.error(member, "'struct " + struct + "' is not defined")
-              None
-            }
-
-            case Some(definition) => definition.fields.find(_.name == fieldName) match {
+          case Some(struct) =>
+            scope.structDefinitions.get(struct) match {
               case None => {
-                scope.errors.error(member, "'" + fieldName + "' is not defined in '" + parent.valueType.name)
+                scope.errors.error(
+                  member,
+                  "'struct " + struct + "' is not defined"
+                )
                 None
               }
 
-              case Some(field) => Some(field)
+              case Some(definition) =>
+                definition.fields.find(_.name == fieldName) match {
+                  case None => {
+                    scope.errors.error(
+                      member,
+                      "'" + fieldName + "' is not defined in '" + parent.valueType.name
+                    )
+                    None
+                  }
+
+                  case Some(field) => Some(field)
+                }
             }
-          }
         }
 
         ResolvedMember(
@@ -534,11 +688,11 @@ object Resolver {
         )
       }
 
-      case string: StringExpression => ResolvedString(string)
+      case string: StringExpression  => ResolvedString(string)
       case char: CharacterExpression => ResolvedChar(char)
-      case int: IntegerExpression => ResolvedInt(int)
-      case bool: BooleanExpression => ResolvedBool(bool)
-      case n: NullExpression => ResolvedNull(n)
+      case int: IntegerExpression    => ResolvedInt(int)
+      case bool: BooleanExpression   => ResolvedBool(bool)
+      case n: NullExpression         => ResolvedNull(n)
     }
   }
 
@@ -559,26 +713,43 @@ object Resolver {
         }
       }
 
-      case ResolvedPointer(valueType) => verifyDefinedType(valueType, node, scope)
+      case ResolvedPointer(valueType) =>
+        verifyDefinedType(valueType, node, scope)
       case ResolvedArray(valueType) => verifyDefinedType(valueType, node, scope)
-      case _ => ()
+      case _                        => ()
     }
   }
 
-  def resolveSpecExprs(specs: List[SpecExprification], scope: Scope): List[ResolvedStatement] = {
+  def resolveSpecExprs(
+      specs: List[SpecExprification],
+      scope: Scope
+  ): List[ResolvedStatement] = {
     specs.flatMap {
       case assert: AssertSpecExprification => {
-        val value = resolveExpression(assert.value, scope, SpecExprificationContext)
+        val value =
+          resolveExpression(assert.value, scope, SpecExprificationContext)
         Some(ResolvedAssertSpecExprification(assert, value))
       }
 
       case unfold: UnfoldSpecExprification => {
-        val predicate = resolvePredicate(unfold, unfold.predicate, unfold.arguments, scope, SpecExprificationContext)
+        val predicate = resolvePredicate(
+          unfold,
+          unfold.predicate,
+          unfold.arguments,
+          scope,
+          SpecExprificationContext
+        )
         Some(ResolvedUnfoldPredicate(unfold, predicate))
       }
 
       case fold: FoldSpecExprification => {
-        val predicate = resolvePredicate(fold, fold.predicate, fold.arguments, scope, SpecExprificationContext)
+        val predicate = resolvePredicate(
+          fold,
+          fold.predicate,
+          fold.arguments,
+          scope,
+          SpecExprificationContext
+        )
         Some(ResolvedFoldPredicate(fold, predicate))
       }
       case other => {
@@ -589,11 +760,11 @@ object Resolver {
   }
 
   def resolvePredicate(
-    parsed: Node,
-    id: Identifier,
-    args: List[Expression],
-    scope: Scope,
-    context: Context
+      parsed: Node,
+      id: Identifier,
+      args: List[Expression],
+      scope: Scope,
+      context: Context
   ): ResolvedPredicate = {
     val name = id.name
     val predicate =
@@ -621,34 +792,53 @@ object Resolver {
     )
   }
 
-  def combineBooleans(expressions: Seq[ResolvedExpression]): Option[ResolvedExpression] = {
+  def combineBooleans(
+      expressions: Seq[ResolvedExpression]
+  ): Option[ResolvedExpression] = {
     expressions.foldLeft[Option[ResolvedExpression]](None)((current, expr) => {
       current match {
         case None => Some(expr)
-        case Some(value) => Some(ResolvedLogical(
-          parsed = expr.parsed,
-          left = value,
-          right = expr,
-          operation = LogicalOperation.And
-        ))
+        case Some(value) =>
+          Some(
+            ResolvedLogical(
+              parsed = expr.parsed,
+              left = value,
+              right = expr,
+              operation = LogicalOperation.And
+            )
+          )
       }
     })
   }
 
-  def resolveLoopInvariants(stmt: Statement, scope: Scope): (Option[ResolvedExpression], Statement) = {
+  def resolveLoopInvariants(
+      stmt: Statement,
+      scope: Scope
+  ): (Option[ResolvedExpression], Statement) = {
     // Rewrite the loop body removing loop invariant specifications
     val loopInvariants = stmt.specifications.collect {
       case li: LoopInvariantSpecExprification => li
     }
-    val invariant = combineBooleans(loopInvariants.map(spec => resolveExpression(spec.value, scope, SpecExprificationContext)))
-    val otherSpecExprs = stmt.specifications.filterNot(_.isInstanceOf[LoopInvariantSpecExprification])
+    val invariant = combineBooleans(
+      loopInvariants.map(spec =>
+        resolveExpression(spec.value, scope, SpecExprificationContext)
+      )
+    )
+    val otherSpecExprs = stmt.specifications.filterNot(
+      _.isInstanceOf[LoopInvariantSpecExprification]
+    )
     (invariant, stmt.withSpecExprifications(otherSpecExprs))
   }
 
   def resolveMethodArguments(args: List[MemberDefinition], scope: Scope) =
-    args.map(arg => ResolvedVariable(arg, arg.id.name, resolveType(arg.valueType, scope)))
+    args.map(arg =>
+      ResolvedVariable(arg, arg.id.name, resolveType(arg.valueType, scope))
+    )
 
-  def resolveMethodDeclaration(input: MethodDefinition, scope: Scope): ResolvedMethodDeclaration = {
+  def resolveMethodDeclaration(
+      input: MethodDefinition,
+      scope: Scope
+  ): ResolvedMethodDeclaration = {
     val retType = resolveType(input.returnType, scope)
     val parameters = resolveMethodArguments(input.arguments, scope)
 
@@ -659,13 +849,27 @@ object Resolver {
     val postconditions = ListBuffer[ResolvedExpression]()
     for (spec <- input.specifications) {
       spec match {
-        case requires: RequiresSpecExprification => preconditions += resolveExpression(requires.value, specScope, SpecExprificationContext)
-        case ensures: EnsuresSpecExprification => postconditions += resolveExpression(ensures.value, specScope, PostConditionContext(retType))
+        case requires: RequiresSpecExprification =>
+          preconditions += resolveExpression(
+            requires.value,
+            specScope,
+            SpecExprificationContext
+          )
+        case ensures: EnsuresSpecExprification =>
+          postconditions += resolveExpression(
+            ensures.value,
+            specScope,
+            PostConditionContext(retType)
+          )
 
         // Continue checking values for resolving errors, even if invalid
         // TODO: Should invalid values also be type-checked?
         case invariant: LoopInvariantSpecExprification => {
-          resolveExpression(invariant.value, specScope, SpecExprificationContext)
+          resolveExpression(
+            invariant.value,
+            specScope,
+            SpecExprificationContext
+          )
           scope.errors.error(invariant, "Invalid loop_invariant")
         }
         case assert: AssertSpecExprification => {
@@ -673,11 +877,15 @@ object Resolver {
           scope.errors.error(assert, "Invalid assert")
         }
         case fold: FoldSpecExprification => {
-          fold.arguments.foreach(resolveExpression(_, specScope, SpecExprificationContext))
+          fold.arguments.foreach(
+            resolveExpression(_, specScope, SpecExprificationContext)
+          )
           scope.errors.error(fold, "Invalid fold")
         }
         case unfold: UnfoldSpecExprification => {
-          unfold.arguments.foreach(resolveExpression(_, specScope, SpecExprificationContext))
+          unfold.arguments.foreach(
+            resolveExpression(_, specScope, SpecExprificationContext)
+          )
           scope.errors.error(unfold, "Invalid unfold")
         }
       }
@@ -693,7 +901,11 @@ object Resolver {
     )
   }
 
-  def resolveMethodDefinition(input: MethodDefinition, localDecl: ResolvedMethodDeclaration, scope: Scope): ResolvedMethodDefinition = {
+  def resolveMethodDefinition(
+      input: MethodDefinition,
+      localDecl: ResolvedMethodDeclaration,
+      scope: Scope
+  ): ResolvedMethodDefinition = {
     // Add method parameters to variable scope
     val methodScope = scope.declareVariables(localDecl.arguments)
 
@@ -709,25 +921,50 @@ object Resolver {
     ResolvedMethodDefinition(input, localDecl, resolvedBlock)
   }
 
-  def resolvePredicateDeclaration(input: PredicateDefinition, scope: Scope): ResolvedPredicateDeclaration = {
+  def resolvePredicateDeclaration(
+      input: PredicateDefinition,
+      scope: Scope
+  ): ResolvedPredicateDeclaration = {
     val parameters = resolveMethodArguments(input.arguments, scope)
-    ResolvedPredicateDeclaration(parsed = input, name = input.id.name, arguments = parameters)
+    ResolvedPredicateDeclaration(
+      parsed = input,
+      name = input.id.name,
+      arguments = parameters
+    )
   }
 
-  def resolvePredicateDefinition(input: PredicateDefinition, localDecl: ResolvedPredicateDeclaration, scope: Scope): ResolvedPredicateDefinition = {
+  def resolvePredicateDefinition(
+      input: PredicateDefinition,
+      localDecl: ResolvedPredicateDeclaration,
+      scope: Scope
+  ): ResolvedPredicateDefinition = {
     val predicateScope = scope.declareVariables(localDecl.arguments)
-    val body = resolveExpression(input.body.get, predicateScope, SpecExprificationContext)
+    val body = resolveExpression(
+      input.body.get,
+      predicateScope,
+      SpecExprificationContext
+    )
     ResolvedPredicateDefinition(input, localDecl, body)
   }
 
-  def resolveProgram(program: List[Definition], errors: ErrorSink): ResolvedProgram = {
+  def resolveUseDeclaration(
+      use: UseDeclaration,
+      scope: Scope
+  ): ResolvedUseDeclaration = {
+    ResolvedUseDeclaration(use, use.path.value, use.isLibrary)
+  }
+
+  def resolveProgram(
+      program: List[Definition],
+      errors: ErrorSink
+  ): ResolvedProgram = {
     val methodDeclarations = ListBuffer[ResolvedMethodDeclaration]()
     val methodDefinitions = ListBuffer[ResolvedMethodDefinition]()
     val predicateDeclarations = ListBuffer[ResolvedPredicateDeclaration]()
     val predicateDefinitions = ListBuffer[ResolvedPredicateDefinition]()
     val structDefinitions = ListBuffer[ResolvedStructDefinition]()
     val types = ListBuffer[ResolvedTypeDef]()
-
+    val dependencies = ListBuffer[ResolvedUseDeclaration]()
     var scope = Scope(
       variables = Map.empty,
       methodDeclarations = Map.empty,
@@ -742,8 +979,10 @@ object Resolver {
     for (definition <- program) {
       definition match {
         // TODO: Implement use declarations
-        case _: UseDeclaration => ???
-
+        case u: UseDeclaration => {
+          val dep = resolveUseDeclaration(u, scope)
+          dependencies += dep
+        }
         case t: TypeDefinition => {
           val typeDef = resolveTypeDef(t, scope)
           types += typeDef
@@ -790,7 +1029,8 @@ object Resolver {
       predicateDeclarations = predicateDeclarations.toList,
       predicateDefinitions = predicateDefinitions.toList,
       structDefinitions = structDefinitions.toList,
-      types = types.toList
+      types = types.toList,
+      dependencies = dependencies.toList
     )
   }
 }
