@@ -18,7 +18,7 @@ class Weaver(ir: Program, silver: vpr.Program) {
     ir.methods.foreach { method =>
       weave(method, silver.findMethod(method.name))
     }
-    AccessChecks.injectSupport(tracker)
+    AccessChecks.injectSupport(ir, tracker)
   }
 
   private def weave(method: Method, silver: vpr.Method): Unit = {
@@ -190,7 +190,7 @@ class Weaver(ir: Program, silver: vpr.Program) {
 
   private def inspect(
       node: vpr.Node,
-      op: Op,
+      insertionPoint: Op,
       method: Method,
       returnValue: Option[Expression] = None
   ): Unit = {
@@ -204,7 +204,7 @@ class Weaver(ir: Program, silver: vpr.Program) {
             this.tracker
           )
         ) {
-          op.insertBefore(impl)
+          insertionPoint.insertBefore(impl)
         }
     } catch {
       case ex: NoSuchElementException => //no runtime checks present for the given Node (thrown by TrieMap)

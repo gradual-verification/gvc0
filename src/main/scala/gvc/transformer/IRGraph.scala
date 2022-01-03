@@ -17,7 +17,7 @@ object IRGraph {
         throw new IRException(s"Struct '${struct.name}' already exists")
       struct
     }
-    
+
     def addMethod(name: String, returnType: Option[Type]): Method = {
       val method = new Method(name, returnType)
       if (_methods.getOrElseUpdate(method.name, method) != method)
@@ -37,9 +37,16 @@ object IRGraph {
     def predicates: Seq[Predicate] = _predicates.values.toSeq.sortBy(_.name)
 
     // Structs can be used even if they are never declared
-    def struct(name: String): Struct = _structs.getOrElseUpdate(name, new Struct(name))
-    def method(name: String): Method = _methods.getOrElse(name, throw new IRException(s"Method '$name' not found"))
-    def predicate(name: String): Predicate = _predicates.getOrElse(name, throw new IRException(s"Predicate '$name' not found"))
+    def struct(name: String): Struct =
+      _structs.getOrElseUpdate(name, new Struct(name))
+    def method(name: String): Method = _methods.getOrElse(
+      name,
+      throw new IRException(s"Method '$name' not found")
+    )
+    def predicate(name: String): Predicate = _predicates.getOrElse(
+      name,
+      throw new IRException(s"Predicate '$name' not found")
+    )
   }
 
   class Struct(var name: String) extends Node {
@@ -55,16 +62,16 @@ object IRGraph {
   }
 
   class StructField(
-    var struct: Struct,
-    var name: String,
-    var valueType: Type
+      var struct: Struct,
+      var name: String,
+      var valueType: Type
   ) extends Node
 
   class Method(
-    var name: String,
-    var returnType: Option[Type],
-    var precondition: Option[Expression] = None,
-    var postcondition: Option[Expression] = None
+      var name: String,
+      var returnType: Option[Type],
+      var precondition: Option[Expression] = None,
+      var postcondition: Option[Expression] = None
   ) extends Node {
     private val params = mutable.ArrayBuffer[Parameter]()
     private val vars = mutable.ArrayBuffer[Var]()
@@ -95,24 +102,31 @@ object IRGraph {
     def getVar(name: String) = scope.get(name)
 
     private def getAvailableName(name: String) =
-      Iterator.from(0).map {
-        case 0 => name
-        case n => name + n
-      }.find(!scope.contains(_)).get
+      Iterator
+        .from(0)
+        .map {
+          case 0 => name
+          case n => name + n
+        }
+        .find(!scope.contains(_))
+        .get
 
     def variable(name: String): Var =
-      scope.getOrElse(name, throw new IRException(s"Variable '$name' not found"))
+      scope.getOrElse(
+        name,
+        throw new IRException(s"Variable '$name' not found")
+      )
 
     def variables: Seq[Var] = vars
   }
 
   class Predicate(
-    var name: String,
-    var expression: IRGraph.Expression
+      var name: String,
+      var expression: IRGraph.Expression
   ) {
     private val params = mutable.ArrayBuffer[Parameter]()
 
-    def parameters:Seq[Parameter] = params
+    def parameters: Seq[Parameter] = params
 
     def addParameter(valueType: Type, name: String): Parameter = {
       val newParam = new Parameter(valueType, name)
@@ -133,7 +147,7 @@ object IRGraph {
       op.block = Some(this)
     }
 
-    def += (op: Op): Unit = blockTail match {
+    def +=(op: Op): Unit = blockTail match {
       case Some(tailOp) => tailOp.insertAfter(op)
       case None => {
         claim(op)
@@ -148,7 +162,7 @@ object IRGraph {
       def next(): Op = {
         val value = current.get
         current = value.next
-        value        
+        value
       }
     }
   }
@@ -163,15 +177,18 @@ object IRGraph {
   }
 
   class FieldMember(var root: Expression, var field: StructField) extends Member
-  class DereferenceMember(var root: Expression, var valueType: Type) extends Member
+  class DereferenceMember(var root: Expression, var valueType: Type)
+      extends Member
   // TODO: Index should be Expression
-  class ArrayMember(var root: Expression, var valueType: Type, var index: Int) extends Member
+  class ArrayMember(var root: Expression, var valueType: Type, var index: Int)
+      extends Member
 
   class Accessibility(var member: Member) extends Expression
 
   class PredicateInstance(
-    var predicate: Predicate,
-    var arguments: List[IRGraph.Expression]) extends Expression
+      var predicate: Predicate,
+      var arguments: List[IRGraph.Expression]
+  ) extends Expression
 
   class Result(var method: Method) extends Expression
 
@@ -184,15 +201,15 @@ object IRGraph {
   class Null extends Literal
 
   class Conditional(
-    var condition: Expression,
-    var ifTrue: Expression,
-    var ifFalse: Expression
+      var condition: Expression,
+      var ifTrue: Expression,
+      var ifFalse: Expression
   ) extends Expression
 
   class Binary(
-    var operator: BinaryOp,
-    var left: Expression,
-    var right: Expression
+      var operator: BinaryOp,
+      var left: Expression,
+      var right: Expression
   ) extends Expression
 
   sealed trait BinaryOp
@@ -212,8 +229,8 @@ object IRGraph {
   }
 
   class Unary(
-    var operator: UnaryOp,
-    var operand: Expression
+      var operator: UnaryOp,
+      var operand: Expression
   ) extends Expression
 
   sealed trait UnaryOp
@@ -226,7 +243,6 @@ object IRGraph {
     def name: String
     def default: IRGraph.Literal
   }
-
 
   class ReferenceType(val struct: Struct) extends Type {
     def name: String = "struct " + struct.name + "*"
@@ -268,8 +284,15 @@ object IRGraph {
     private[IRGraph] var previous: Option[Op] = None
     private[IRGraph] var next: Option[Op] = None
 
+    def getPrevious: Option[Op] = this.previous
+    def getNext: Option[Op] = this.next
+
     def insertBefore(op: Op): Unit = {
-      val b = block.getOrElse(throw new IRException("Cannot insert before an Op that has not been added to a Block"))
+      val b = block.getOrElse(
+        throw new IRException(
+          "Cannot insert before an Op that has not been added to a Block"
+        )
+      )
       b.claim(op)
 
       previous match {
@@ -291,7 +314,11 @@ object IRGraph {
     }
 
     def insertAfter(op: Op): Unit = {
-      val b = block.getOrElse(throw new IRException("Cannot insert before an Op that has not been added to a Block"))
+      val b = block.getOrElse(
+        throw new IRException(
+          "Cannot insert before an Op that has not been added to a Block"
+        )
+      )
       b.claim(op)
 
       op.previous = Some(this)
@@ -317,37 +344,40 @@ object IRGraph {
   }
 
   class Invoke(
-    var method: Method,
-    var arguments: List[Expression],
-    var target: Option[Expression]) extends Op
+      var method: Method,
+      var arguments: List[Expression],
+      var target: Option[Expression]
+  ) extends Op
 
   class AllocValue(
-    var valueType: Type,
-    var target: Var
+      var valueType: Type,
+      var target: Var
   ) extends Op
 
   class AllocStruct(
-    var struct: Struct,
-    var target: Expression
+      var struct: Struct,
+      var target: Expression
   ) extends Op
 
-  class AllocArray(var valueType: Type, var length: Int, var target: Var) extends Op
+  class AllocArray(var valueType: Type, var length: Int, var target: Var)
+      extends Op
 
   class Assign(
-    var target: Var,
-    var value: Expression
+      var target: Var,
+      var value: Expression
   ) extends Op
 
   class AssignMember(
-    var member: Member,
-    var value: Expression
+      var member: Member,
+      var value: Expression
   ) extends Op
 
-  class AssignIndex(var target: Var, var index: Int, var value: Expression) extends Op
+  class AssignIndex(var target: Var, var index: Int, var value: Expression)
+      extends Op
 
   class Assert(
-    var value: Expression,
-    var method: AssertMethod
+      var value: Expression,
+      var method: AssertMethod
   ) extends Op
 
   sealed trait AssertMethod
@@ -357,40 +387,40 @@ object IRGraph {
   }
 
   class Fold(
-    var instance: PredicateInstance
+      var instance: PredicateInstance
   ) extends Op
 
   class Unfold(
-    var instance: PredicateInstance
+      var instance: PredicateInstance
   ) extends Op
 
   class Error(
-    var value: Expression
+      var value: Expression
   ) extends Op
 
   class Return(var method: Method) extends Op
 
   class ReturnValue(
-    var value: Expression,
-    method: Method
+      var value: Expression,
+      method: Method
   ) extends Return(method)
 
   class ReturnInvoke(
-    var invoke: Method,
-    var arguments: List[Expression],
-    method: Method
+      var invoke: Method,
+      var arguments: List[Expression],
+      method: Method
   ) extends Return(method)
 
   class If(
-    var condition: Expression
+      var condition: Expression
   ) extends Op {
     val ifTrue = new Block()
     val ifFalse = new Block()
   }
 
   class While(
-    var condition: Expression,
-    var invariant: Option[Expression]
+      var condition: Expression,
+      var invariant: Option[Expression]
   ) extends Op {
     val body = new Block()
   }

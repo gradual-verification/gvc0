@@ -3,7 +3,6 @@ package gvc.weaver
 import gvc.transformer.IRGraph._
 import gvc.weaver.AccessChecks.AccessTracker
 import viper.silicon.state.CheckInfo
-import viper.silver.ast.MethodCall
 import viper.silver.{ast => vpr}
 
 object CheckImplementation {
@@ -16,8 +15,12 @@ object CheckImplementation {
   ): Seq[Op] = {
     check.checks match {
       case vpr.FieldAccessPredicate(loc, _) =>
-        tracker.visited += method.name
-        AccessChecks.assertFieldAccess(check, loc, method, tracker)
+        AccessChecks.assertFieldAccess(
+          check,
+          loc,
+          method,
+          tracker
+        )
       case _ =>
         Seq(
           new Assert(
