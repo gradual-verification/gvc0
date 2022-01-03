@@ -8,7 +8,6 @@ import gvc.analyzer._
 import gvc.transformer._
 import viper.silicon.Silicon
 import viper.silver.verifier
-import viper.silver.verifier
 import gvc.weaver.Weaver
 
 object Main extends App {
@@ -33,11 +32,13 @@ object Main extends App {
   var printC0 = false
   var printSilver = false
   var printWeaving = false
+  var exec = false
 
   for (arg <- args) arg match {
     case "--c0" => printC0 = true
     case "--silver" => printSilver = true
     case "--weave" => printWeaving = true
+    case "--exec" => exec = true
     case flag if flag.startsWith("--") => {
       println(s"Invalid flag '$flag'")
       sys.exit(1)
@@ -97,11 +98,16 @@ object Main extends App {
     silicon.verify(silver) match {
       case verifier.Success => {
         println(s"Verified successfully!")
-
-        if (printWeaving) {
+        if(printWeaving || exec){
           Weaver.weave(ir, silver)
-          println(s"Woven output for '$name':")
-          println(GraphPrinter.print(ir))
+          val wovenProgram = GraphPrinter.print(ir)
+          if(printWeaving) println(wovenProgram)
+          if(exec){
+            val options = new CC0Options()
+            options.exec = true
+            options.copy = true
+            CC0Wrapper.exec(name, wovenProgram, options)
+          }
         }
       }
       case verifier.Failure(errors) => {
