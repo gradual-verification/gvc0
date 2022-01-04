@@ -1,0 +1,14 @@
+int test(int x)
+{
+  x = x + 1;
+  if (false)
+    x = x + 2;
+  while (false)
+    x = x + 3;
+  return x;
+}
+
+int main()
+{
+  return 0;
+}

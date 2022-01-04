@@ -217,6 +217,7 @@ object GraphTransformer {
       method.postcondition = input.declaration.postcondition.map(transformSpec(_, scope))
 
       ReassignmentElimination.transform(method)
+      ParameterAssignmentElimination.transform(method)
     }
 
     def transformStatement(input: ResolvedStatement, scope: MethodScope): Unit = {
