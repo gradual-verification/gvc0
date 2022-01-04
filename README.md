@@ -20,14 +20,21 @@ Install [z3](https://github.com/Z3Prover/z3/releases) and set the Z3_PATH enviro
 
 ## Running
 
-Run the C0 frontend and verify using Silicon in SBT:
+By default, running the frontend will statically verify the input program and compile the resulting output, including the required dynamic verification. To run the frontend in SBT while developing:
 
-```sh
-sbt
-  run <file.c0> [--c0] [--silver] [--weave]
 ```
+sbt
+  > run [OPTION...] SOURCEFILE
 
-Use `--c0` or `--silver` to print the generated C0 or Silver source code, respectively. Use `--weave` to insert the required runtime checks and print the resulting C0 source code.
+where OPTION is
+  -h         --help           Give short usage message and exit
+  -d <type>  --dump=<type>    Print the generated code and exit, where <type> specifies
+                              the type of code to print: ir, silver, c0
+  -o <file>  --output=<file>  Place the executable output into <file>
+  -v         --only-verify    Stop after static verification
+  -s         --save-files     Save the intermediate files produced (IR, Silver, C0, and C)
+  -x         --exec           Execute the compiled file"""
+```
 
 ## Testing
 
