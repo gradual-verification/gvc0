@@ -145,6 +145,31 @@ object IRGraph {
       }
     }
 
+    // Prepends an Op to the beginning of the block
+    def +=: (newOp: Op): Unit = {
+      claim(newOp)
+
+      // Check if there is a existing head
+      headNode match {
+        // If there is, new.next becomes the old head
+        // and the head becomes the new node
+        case Some(headOp) => {
+          // From: headOp ->
+          // To:   newOp -> headOp ->
+          newOp.next = headNode
+          headNode = Some(newOp)
+          headOp.previous = headNode
+        }
+
+        // Otherwise, it becomes a one-element list
+        case None => {
+          // There is no next or previous, and tail and head are the same
+          headNode = Some(newOp)
+          tailNode = headNode
+        }
+      }
+    }
+
     private[IRGraph] def insertBefore(op: Op, newOp: Op): Unit = {
       claim(newOp)
 

@@ -41,6 +41,22 @@ class IRGraphSpec extends AnyFunSuite {
     assert(method.body.toList == List(first, second))
   }
 
+  test("prepend single op") {
+    val method = new Method("test", None)
+    val errOp = new Error(new Null())
+    errOp +=: method.body
+    assert(method.body.toList == List(errOp))
+  }
+
+  test("prepend two ops") {
+    val method = new Method("test", None)
+    val first = new Return(None)
+    val second = new Error(new Null())
+    first +=: method.body
+    second +=: method.body
+    assert(method.body.toList == List(second, first))
+  }
+
   test("remove single op") {
     val method = new Method("test", None)
     val errOp = new Error(new Null())
@@ -115,8 +131,8 @@ class IRGraphSpec extends AnyFunSuite {
     val two = new Error(new Int(2))
     val three = new Error(new Int(3))
     val four = new Error(new Int(4))
-    method.body += one
     method.body += four
+    one +=: method.body
 
     four.insertBefore(three)
     one.insertAfter(two)
