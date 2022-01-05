@@ -2,7 +2,7 @@ import org.scalatest.funsuite._
 import gvc.parser._
 import fastparse.Parsed.{Success, Failure}
 
-class ExpressionsSpecExpr extends AnyFunSuite {
+class ExpressionsSpec extends AnyFunSuite {
   test("Parse variable") {
     val Success(expr: VariableExpression, _) = Parser.parseExpr("abc")
     assert(expr.variable == "abc")

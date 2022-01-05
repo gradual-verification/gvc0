@@ -138,7 +138,7 @@ object Resolver {
 
   sealed trait Context
   case object MethodContext extends Context
-  case object SpecExprificationContext extends Context
+  case object SpecificationContext extends Context
   case class PostConditionContext(returnType: ResolvedType) extends Context
 
   def resolveType(input: Type, scope: Scope): ResolvedType = {
@@ -211,7 +211,7 @@ object Resolver {
 
       case expr: ExpressionStatement =>
         expr.expression match {
-          // SpecExprial-case increment inside an ExpressionStatement since that is the only
+          // Special-case increment inside an ExpressionStatement since that is the only
           // valid position to encounter an increment expression
           case increment: IncrementExpression => {
             ResolvedIncrement(
@@ -283,12 +283,12 @@ object Resolver {
                 // Move body specs to the while body so that loop invariants
                 // are in the right place
                 body = List(
-                  f.body.withSpecExprifications(List.empty),
+                  f.body.withSpecifications(List.empty),
                   f.incrementor
                 ),
                 span = f.body.span,
                 specifications = f.body.specifications,
-                trailingSpecExprifications = List.empty
+                trailingSpecifications = List.empty
               )
             )
           ),
@@ -329,20 +329,20 @@ object Resolver {
     }
 
   def resolveBlock(
-      parsed: Statement,
-      scope: Scope,
-      body: List[Statement],
-      specifications: List[SpecExprification] = List.empty,
-      trailingSpecExprifications: List[SpecExprification] = List.empty
+    parsed: Statement,
+    scope: Scope,
+    body: List[Statement],
+    specifications: List[Specification] = List.empty,
+    trailingSpecifications: List[Specification] = List.empty
   ): ResolvedBlock = {
     var blockScope = scope
     var defs = ListBuffer[ResolvedVariable]()
     var resolved = ListBuffer[ResolvedStatement]()
 
-    resolved ++= resolveSpecExprs(specifications, blockScope)
+    resolved ++= resolveSpecs(specifications, blockScope)
 
     for (stmt <- body) {
-      resolved ++= resolveSpecExprs(stmt.specifications, blockScope)
+      resolved ++= resolveSpecs(stmt.specifications, blockScope)
 
       stmt match {
         case v: VariableStatement => {
@@ -375,7 +375,7 @@ object Resolver {
       }
     }
 
-    resolved ++= resolveSpecExprs(trailingSpecExprifications, blockScope)
+    resolved ++= resolveSpecs(trailingSpecifications, blockScope)
 
     ResolvedBlock(
       parsed = parsed,
@@ -391,8 +391,7 @@ object Resolver {
     // Because we are handling all variable definitions at the block level, just rewrite the
     // single statement to always be a block statement.
     val (body, trailing) = input match {
-      case block: BlockStatement =>
-        (block.body, block.trailingSpecExprifications)
+      case block: BlockStatement => (block.body, block.trailingSpecifications)
       case _ => (List(input), List.empty)
     }
 
@@ -720,36 +719,20 @@ object Resolver {
     }
   }
 
-  def resolveSpecExprs(
-      specs: List[SpecExprification],
-      scope: Scope
-  ): List[ResolvedStatement] = {
+  def resolveSpecs(specs: List[Specification], scope: Scope): List[ResolvedStatement] = {
     specs.flatMap {
-      case assert: AssertSpecExprification => {
-        val value =
-          resolveExpression(assert.value, scope, SpecExprificationContext)
-        Some(ResolvedAssertSpecExprification(assert, value))
+      case assert: AssertSpecification => {
+        val value = resolveExpression(assert.value, scope, SpecificationContext)
+        Some(ResolvedAssertSpecification(assert, value))
       }
 
-      case unfold: UnfoldSpecExprification => {
-        val predicate = resolvePredicate(
-          unfold,
-          unfold.predicate,
-          unfold.arguments,
-          scope,
-          SpecExprificationContext
-        )
+      case unfold: UnfoldSpecification => {
+        val predicate = resolvePredicate(unfold, unfold.predicate, unfold.arguments, scope, SpecificationContext)
         Some(ResolvedUnfoldPredicate(unfold, predicate))
       }
 
-      case fold: FoldSpecExprification => {
-        val predicate = resolvePredicate(
-          fold,
-          fold.predicate,
-          fold.arguments,
-          scope,
-          SpecExprificationContext
-        )
+      case fold: FoldSpecification => {
+        val predicate = resolvePredicate(fold, fold.predicate, fold.arguments, scope, SpecificationContext)
         Some(ResolvedFoldPredicate(fold, predicate))
       }
       case other => {
@@ -817,17 +800,11 @@ object Resolver {
   ): (Option[ResolvedExpression], Statement) = {
     // Rewrite the loop body removing loop invariant specifications
     val loopInvariants = stmt.specifications.collect {
-      case li: LoopInvariantSpecExprification => li
+      case li: LoopInvariantSpecification => li
     }
-    val invariant = combineBooleans(
-      loopInvariants.map(spec =>
-        resolveExpression(spec.value, scope, SpecExprificationContext)
-      )
-    )
-    val otherSpecExprs = stmt.specifications.filterNot(
-      _.isInstanceOf[LoopInvariantSpecExprification]
-    )
-    (invariant, stmt.withSpecExprifications(otherSpecExprs))
+    val invariant = combineBooleans(loopInvariants.map(spec => resolveExpression(spec.value, scope, SpecificationContext)))
+    val otherSpecs = stmt.specifications.filterNot(_.isInstanceOf[LoopInvariantSpecification])
+    (invariant, stmt.withSpecifications(otherSpecs))
   }
 
   def resolveMethodArguments(args: List[MemberDefinition], scope: Scope) =
@@ -849,43 +826,25 @@ object Resolver {
     val postconditions = ListBuffer[ResolvedExpression]()
     for (spec <- input.specifications) {
       spec match {
-        case requires: RequiresSpecExprification =>
-          preconditions += resolveExpression(
-            requires.value,
-            specScope,
-            SpecExprificationContext
-          )
-        case ensures: EnsuresSpecExprification =>
-          postconditions += resolveExpression(
-            ensures.value,
-            specScope,
-            PostConditionContext(retType)
-          )
+        case requires: RequiresSpecification => preconditions += resolveExpression(requires.value, specScope, SpecificationContext)
+        case ensures: EnsuresSpecification => postconditions += resolveExpression(ensures.value, specScope, PostConditionContext(retType))
 
         // Continue checking values for resolving errors, even if invalid
         // TODO: Should invalid values also be type-checked?
-        case invariant: LoopInvariantSpecExprification => {
-          resolveExpression(
-            invariant.value,
-            specScope,
-            SpecExprificationContext
-          )
+        case invariant: LoopInvariantSpecification => {
+          resolveExpression(invariant.value, specScope, SpecificationContext)
           scope.errors.error(invariant, "Invalid loop_invariant")
         }
-        case assert: AssertSpecExprification => {
-          resolveExpression(assert.value, specScope, SpecExprificationContext)
+        case assert: AssertSpecification => {
+          resolveExpression(assert.value, specScope, SpecificationContext)
           scope.errors.error(assert, "Invalid assert")
         }
-        case fold: FoldSpecExprification => {
-          fold.arguments.foreach(
-            resolveExpression(_, specScope, SpecExprificationContext)
-          )
+        case fold: FoldSpecification => {
+          fold.arguments.foreach(resolveExpression(_, specScope, SpecificationContext))
           scope.errors.error(fold, "Invalid fold")
         }
-        case unfold: UnfoldSpecExprification => {
-          unfold.arguments.foreach(
-            resolveExpression(_, specScope, SpecExprificationContext)
-          )
+        case unfold: UnfoldSpecification => {
+          unfold.arguments.foreach(resolveExpression(_, specScope, SpecificationContext))
           scope.errors.error(unfold, "Invalid unfold")
         }
       }
@@ -915,7 +874,7 @@ object Resolver {
       scope = methodScope,
       body = block.body,
       specifications = block.specifications,
-      trailingSpecExprifications = block.trailingSpecExprifications
+      trailingSpecifications = block.trailingSpecifications
     )
 
     ResolvedMethodDefinition(input, localDecl, resolvedBlock)
@@ -939,11 +898,7 @@ object Resolver {
       scope: Scope
   ): ResolvedPredicateDefinition = {
     val predicateScope = scope.declareVariables(localDecl.arguments)
-    val body = resolveExpression(
-      input.body.get,
-      predicateScope,
-      SpecExprificationContext
-    )
+    val body = resolveExpression(input.body.get, predicateScope, SpecificationContext)
     ResolvedPredicateDefinition(input, localDecl, body)
   }
 

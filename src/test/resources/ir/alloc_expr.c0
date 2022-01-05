@@ -1,0 +1,28 @@
+// Tests alloc used as an expression
+
+struct Test {
+  int value;
+};
+
+void something(struct Test* value)
+{
+}
+
+int main()
+{
+  // Bare expressions
+  alloc(struct Test);
+  alloc(int);
+  true && alloc(int) == NULL;
+
+  // Passed to functions
+  something(alloc(struct Test));
+
+
+  // Used in conditions
+  if (true && alloc(struct Test) == NULL)
+    return 1;
+
+
+  return 0;
+}

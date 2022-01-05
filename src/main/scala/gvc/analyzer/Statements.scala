@@ -53,7 +53,7 @@ case class ResolvedAssert(
   value: ResolvedExpression,
 ) extends ResolvedStatement
 
-case class ResolvedAssertSpecExprification(
+case class ResolvedAssertSpecification(
   parsed: Node,
   specification: ResolvedExpression
 ) extends ResolvedStatement

@@ -1,0 +1,39 @@
+struct Test;
+
+struct Test
+{
+  int value;
+};
+
+int main();
+void something(struct Test* value);
+
+int main()
+{
+  struct Test* _ = NULL;
+  int* _1 = NULL;
+  int* _2 = NULL;
+  struct Test* _3 = NULL;
+  struct Test* _4 = NULL;
+  _ = alloc(struct Test);
+  _1 = alloc(int);
+  if (true)
+  {
+    _2 = alloc(int);
+  }
+  _3 = alloc(struct Test);
+  something(_3);
+  if (true)
+  {
+    _4 = alloc(struct Test);
+  }
+  if (true && _4 == NULL)
+  {
+    return 1;
+  }
+  return 0;
+}
+
+void something(struct Test* value)
+{
+}

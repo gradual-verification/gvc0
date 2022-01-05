@@ -1,0 +1,22 @@
+struct inner;
+struct outer;
+
+struct inner
+{
+  int value;
+};
+
+struct outer
+{
+  int test_value;
+  int test_value1;
+};
+
+int main();
+
+int main()
+{
+  struct outer* test = NULL;
+  test = alloc(struct outer);
+  return test->test_value1;
+}

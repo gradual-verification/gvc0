@@ -1,4 +1,4 @@
-//test unsupported
+//test return 5
 
 int f (int x);
 

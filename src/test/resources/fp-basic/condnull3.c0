@@ -1,4 +1,4 @@
-//test unsupported
+//test return 0
 
 typedef int* elem;
 

@@ -1,0 +1,35 @@
+int main();
+int something();
+
+int main()
+{
+  int _ = 0;
+  int _1 = 0;
+  int _2 = 0;
+  _ = something();
+  while (_ != 0)
+  {
+    return 1;
+    _ = something();
+  }
+  _1 = something();
+  if (_1 > 0)
+  {
+    _2 = something();
+  }
+  while (_1 > 0 && _2 < 2)
+  {
+    return 2;
+    _1 = something();
+    if (_1 > 0)
+    {
+      _2 = something();
+    }
+  }
+  return 0;
+}
+
+int something()
+{
+  return 0;
+}

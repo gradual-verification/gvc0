@@ -3,7 +3,7 @@ import gvc.parser.{ParserState, SourcePosition}
 import gvc.parser.MultiLineAnnotation
 import gvc.parser.SingleLineAnnotation
 
-class ParserStateSpecExpr extends AnyFunSuite {
+class ParserStateSpec extends AnyFunSuite {
   test("start position") {
     val state = new ParserState("this is a test")
     val SourcePosition(line, col, i) = state.position(0)

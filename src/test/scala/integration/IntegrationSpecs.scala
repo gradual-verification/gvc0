@@ -2,14 +2,14 @@ package gvc.integration
 
 import gvc.parser._
 import org.scalatest.funsuite._
-import scala.util.{Try,Success,Failure}
+import scala.util.{Try, Success, Failure}
 import fastparse.Parsed
 import gvc.weaver.Weaver
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.specs.BaseFileSpecs
+import gvc.specs.BaseFileSpec
 
-class IntegrationSpecs extends AnyFunSuite with BaseFileSpecs {
+class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
   val testDirs = List(
     // The test files are copied with some modifications in the test header
     // from tests/fp-basic in the cc0 repository
@@ -28,14 +28,12 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpecs {
     "fp-basic/parallel-decl.c0",
     // TODO: while(true); should be a parse error
     "fp-basic/semi.c0",
-
     // Arrays
     "cases/length.c0",
     "fp-basic/annoc.c0",
     "fp-basic/annok.c0",
     "fp-basic/annoj.c0",
     "fp-basic/annog.c0",
-
     // RESOLVING
     // TODO: implement #use
     "fp-basic/libfuns1.c0",
@@ -43,11 +41,10 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpecs {
     "fp-basic/pragma1.c0",
     "fp-basic/usetest0.c0",
     "fp-basic/usetest.c0",
-
     // TYPE CHECKING
 
     // WELL-FORMEDNESS
-    
+
     // UNSUPPORTED STUFF
     // Modulus operator
     "fp-basic/arith03.c0",
@@ -67,20 +64,23 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpecs {
     "fp-basic/compound5.c0",
     "fp-basic/compound7.c0",
     "fp-basic/compound8.c0",
-
     // Not used as test file
-    "fp-basic/pragma1_aux.c0",
+    "fp-basic/pragma1_aux.c0"
   )
 
   val testFiles = testDirs
     .flatMap(getFiles)
-    .filterNot { name => exclusions.contains(name) || name.endsWith(".ir.c0") || name.endsWith(".vpr") }
+    .filterNot { name =>
+      exclusions.contains(name) || name.endsWith(".ir.c0") || name.endsWith(
+        ".vpr"
+      )
+    }
 
   for (name <- testFiles) {
     test("test " + name) {
       val src = getFile(name).get
       val result = runIntegrationTest(src, name)
-      
+
       if (src.startsWith("//test error")) {
         assert(result.isInstanceOf[ParseError])
       } else if (src.startsWith("//test resolve_error")) {
@@ -126,7 +126,7 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpecs {
                   assertFile(name.replace(".c0", ".ir.c0"), irSrc)
                   assertFile(name.replace(".c0", ".vpr"), silver.toString())
 
-                  new Weaver(ir, silver).weave()
+                  Weaver.weave(ir, silver)
                   ValidProgram
                 }
               }
@@ -145,4 +145,3 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpecs {
   case class UnsupportedError(message: String) extends IntegrationResult
   case object ValidProgram extends IntegrationResult
 }
-

@@ -29,9 +29,9 @@ object GraphPrinter {
     def printDependency(dependency: Dependency): Unit = {
       p.print("#use ")
       if (dependency.isLibrary) {
-        p.print("<" + dependency.name + ">")
+        p.print("<" + dependency.path + ">")
       } else {
-        p.print("\"" + dependency.name + "\"")
+        p.print("\"" + dependency.path + "\"")
       }
     }
     def printStructHeader(struct: Struct): Unit = {
@@ -123,12 +123,12 @@ object GraphPrinter {
       p.println("}")
     }
 
-    def printVar(decl: Var): Unit = {
-      printType(decl.valueType)
+    def printVar(v: Var): Unit = {
+      p.print(v.valueType.name)
       p.print(" ")
-      p.print(decl.name)
+      p.print(v.name)
       p.print(" = ")
-      printExpr(decl.valueType.default)
+      printExpr(v.valueType.default)
       p.println(";")
     }
 
@@ -145,7 +145,7 @@ object GraphPrinter {
           p.print(" = ")
         }
 
-        p.print(invoke.method.name)
+        p.print(invoke.callee.name)
         p.print("(")
 
         printList(invoke.arguments) { arg =>
@@ -208,23 +208,28 @@ object GraphPrinter {
         p.println(";")
       }
 
-      case assign: AssignIndex => {
-        printExpr(assign.target)
-        p.print("[")
-        printExpr(assign.index)
-        p.print("] = ")
-        printExpr(assign.value)
-        p.println(";")
-      }
-
       case assert: Assert =>
-        assert.method match {
-          case AssertMethod.Specification => {
+        assert.kind match {
+          case AssertKind.Specification => {
             p.print("//@assert ")
             printExpr(assert.value)
             p.println(";")
           }
-          case AssertMethod.Imperative => {
+          case AssertKind.Imperative => {
+            p.print("assert(")
+            printExpr(assert.value)
+            p.println(");")
+          }
+        }
+
+      case assert: Assert =>
+        assert.kind match {
+          case AssertKind.Specification => {
+            p.print("//@assert ")
+            printExpr(assert.value)
+            p.println(";")
+          }
+          case AssertKind.Imperative => {
             p.print("assert(")
             printExpr(assert.value)
             p.println(");")
@@ -249,21 +254,14 @@ object GraphPrinter {
         p.println(");")
       }
 
-      case ret: ReturnValue => {
-        p.print("return ")
-        printExpr(ret.value)
+      case ret: Return => {
+        p.print("return")
+        ret.value.foreach { value =>
+          p.print(" ")
+          printExpr(value)
+        }
         p.println(";")
       }
-
-      case ret: ReturnInvoke => {
-        p.print("return ")
-        p.print(ret.invoke.name)
-        p.print("(")
-        printList(ret.arguments) { arg => printExpr(arg) }
-        p.println(");")
-      }
-
-      case _: Return => p.println("return;")
 
       case iff: If => {
         p.print("if (")

@@ -1,6 +1,8 @@
 method main() returns ($result: Int)
 {
-  $result := negate(1)
+  var _: Int
+  _ := negate(1)
+  $result := _
 }
 
 method negate(value: Int) returns ($result: Int)

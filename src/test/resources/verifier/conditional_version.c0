@@ -1,0 +1,26 @@
+int testCall(int a)
+//@ensures ? && (a == 0 ? \result == 0 : true);
+{
+  return a;
+}
+
+void test(int x, int y)
+//@requires ?;
+{
+  if (x > 1)
+  {
+    if (x > 2)
+    {
+      int z = testCall(y);
+      if (z == 0)
+      {
+        //@assert x > 3;
+      }
+    }
+  }
+}
+
+int main()
+{
+  return 0;
+}

@@ -1,0 +1,23 @@
+int main();
+int test(int x);
+
+int main()
+{
+  return 0;
+}
+
+int test(int x)
+{
+  int x1 = 0;
+  x1 = x;
+  x1 = x1 + 1;
+  if (false)
+  {
+    x1 = x1 + 2;
+  }
+  while (false)
+  {
+    x1 = x1 + 3;
+  }
+  return x1;
+}

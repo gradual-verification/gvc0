@@ -1,0 +1,13 @@
+field Test$value: Int
+
+method main() returns ($result: Int)
+{
+  $result := 0
+}
+
+method test(value: Ref)
+  requires ? && acc(value.Test$value, write)
+  ensures ? && true
+{
+  assert value.Test$value == 0
+}

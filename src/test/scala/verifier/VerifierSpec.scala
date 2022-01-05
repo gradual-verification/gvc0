@@ -12,14 +12,14 @@ import org.scalatest.funsuite._
 import viper.silicon.Silicon
 import viper.silver.verifier.Failure
 
-import gvc.specs.BaseFileSpecs
+import gvc.specs.BaseFileSpec
 import org.scalatest.ConfigMap
 
-class VerifierSpecs extends AnyFunSuite with BaseFileSpecs {
+class VerifierSpec extends AnyFunSuite with BaseFileSpec {
   var silicon: Silicon = null
 
   val testFiles = getFiles("verifier")
-      .filter { name => name.endsWith(".c0") && !name.endsWith(".output.c0") }
+    .filter { name => name.endsWith(".c0") && !name.endsWith(".output.c0") }
 
   for (name <- testFiles) {
     test("test " + name) {
@@ -37,25 +37,32 @@ class VerifierSpecs extends AnyFunSuite with BaseFileSpecs {
 
     var ir = GraphTransformer.transform(result.get)
     val silver = IRGraphSilver.toSilver(ir)
-    
+
     assertFile(name.replace(".c0", ".vpr"), silver.toString)
 
     silicon.verify(silver) match {
       case viper.silver.verifier.Success => ()
-      case Failure(errors) => fail(errors.map(e => e.toString()).mkString("\n"))
+      case Failure(errors)               => fail(errors.map(e => e.toString()).mkString("\n"))
     }
 
-    new Weaver(ir, silver).weave()
+    Weaver.weave(ir, silver)
     assertFile(name.replace(".c0", ".output.c0"), GraphPrinter.print(ir))
   }
 
   override protected def beforeAll(config: ConfigMap): Unit = {
     super.beforeAll(config)
     val z3 = sys.env.get("Z3_EXE")
-    assert(z3.isDefined, "Configure the Z3_EXE variable with the full path to Z3")
+    assert(
+      z3.isDefined,
+      "Configure the Z3_EXE variable with the full path to Z3"
+    )
 
     val reporter = viper.silver.reporter.NoopReporter
-    silicon = Silicon.fromPartialCommandLineArguments(Seq("--z3Exe", z3.get), reporter, Seq())
+    silicon = Silicon.fromPartialCommandLineArguments(
+      Seq("--z3Exe", z3.get),
+      reporter,
+      Seq()
+    )
     silicon.start()
   }
 
@@ -65,4 +72,3 @@ class VerifierSpecs extends AnyFunSuite with BaseFileSpecs {
     silicon = null
   }
 }
-

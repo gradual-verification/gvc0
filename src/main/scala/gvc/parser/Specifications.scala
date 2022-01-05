@@ -1,57 +1,57 @@
 package gvc.parser
 import fastparse._
 
-trait SpecExprifications extends Expressions {
-  def specification[_: P]: P[SpecExprification] =
+trait Specifications extends Expressions {
+  def specification[_: P]: P[Specification] =
     P(
-      requiresSpecExprification |
-      ensuresSpecExprification |
-      loopInvariantSpecExprification |
-      assertSpecExprification |
-      foldSpecExprification |
-      unfoldSpecExprification
+      requiresSpecification |
+      ensuresSpecification |
+      loopInvariantSpecification |
+      assertSpecification |
+      foldSpecification |
+      unfoldSpecification
     ).opaque("<specification>")
 
   // Explicitly add space tokens here because whitespace handling is may be different
   // when invoked in a sub-parser
-  def specifications[_: P]: P[Seq[SpecExprification]] =
+  def specifications[_: P]: P[Seq[Specification]] =
     P(space ~~ specification.rep ~~ space)
   
-  def requiresSpecExprification[_: P]: P[RequiresSpecExprification] =
+  def requiresSpecification[_: P]: P[RequiresSpecification] =
     P(span(kw("requires") ~/ expression ~ ";")).map({
-      case (e, span) => RequiresSpecExprification(e, span)
+      case (e, span) => RequiresSpecification(e, span)
     })
 
-  def ensuresSpecExprification[_: P]: P[EnsuresSpecExprification] =
+  def ensuresSpecification[_: P]: P[EnsuresSpecification] =
     P(span(kw("ensures") ~/ expression ~ ";")).map({
-      case (e, span) => EnsuresSpecExprification(e, span)
+      case (e, span) => EnsuresSpecification(e, span)
     })
   
-  def loopInvariantSpecExprification[_: P]: P[LoopInvariantSpecExprification] =
+  def loopInvariantSpecification[_: P]: P[LoopInvariantSpecification] =
     P(span(kw("loop_invariant") ~/ expression ~/ ";")).map({
-      case (e, span) => LoopInvariantSpecExprification(e, span)
+      case (e, span) => LoopInvariantSpecification(e, span)
     })
   
-  def assertSpecExprification[_: P]: P[AssertSpecExprification] =
+  def assertSpecification[_: P]: P[AssertSpecification] =
     P(span(kw("assert") ~/ expression ~/ ";")).map({
-      case (e, span) => AssertSpecExprification(e, span)
+      case (e, span) => AssertSpecification(e, span)
     })
 
-  def foldSpecExprification[_: P]: P[FoldSpecExprification] =
+  def foldSpecification[_: P]: P[FoldSpecification] =
     P(span(kw("fold") ~/ identifier ~ "(" ~ expression.rep(sep = ",") ~ ")" ~ ";"))
-      .map { case ((ident, args), span) => FoldSpecExprification(ident, args.toList, span) }
+      .map { case ((ident, args), span) => FoldSpecification(ident, args.toList, span) }
   
-  def unfoldSpecExprification[_: P]: P[UnfoldSpecExprification] =
+  def unfoldSpecification[_: P]: P[UnfoldSpecification] =
     P(span(kw("unfold") ~/ identifier ~ "(" ~ expression.rep(sep=",") ~ ")" ~ ";"))
-      .map { case ((ident, args), span) => UnfoldSpecExprification(ident, args.toList, span) }
+      .map { case ((ident, args), span) => UnfoldSpecification(ident, args.toList, span) }
   
-  def annotations[_: P]: P[List[SpecExprification]] =
+  def annotations[_: P]: P[List[Specification]] =
     P(annotation.rep).map(a => a.flatten.toList)
 
-  def annotation[_: P]: P[Seq[SpecExprification]] =
+  def annotation[_: P]: P[Seq[Specification]] =
     P(singleLineAnnotation | multiLineAnnotation)
-  def singleLineAnnotation[_: P]: P[Seq[SpecExprification]] =
+  def singleLineAnnotation[_: P]: P[Seq[Specification]] =
     P("//@"./.flatMapX(_ => new Parser(state.inSingleLineAnnotation()).specifications) ~~/ ("\n" | End))
-  def multiLineAnnotation[_: P]: P[Seq[SpecExprification]] =
+  def multiLineAnnotation[_: P]: P[Seq[Specification]] =
     P("/*@"./.flatMapX(_ => new Parser(state.inAnnotation()).specifications) ~/ "@*/")
 }

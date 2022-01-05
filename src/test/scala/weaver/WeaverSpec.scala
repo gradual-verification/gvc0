@@ -3,9 +3,9 @@ package gvc.weaver
 import org.scalatest.funsuite.AnyFunSuite
 import gvc.transformer._
 import gvc.analyzer._
-import fastparse.Parsed.{Success,Failure}
+import fastparse.Parsed.{Success, Failure}
 
-class WeaverTests extends AnyFunSuite {
+class WeaverSpec extends AnyFunSuite {
 
   test("resolve empty method") {
     val (c0, silver) = createProgram(
@@ -17,16 +17,18 @@ class WeaverTests extends AnyFunSuite {
       """
     )
 
-    new Weaver(c0, silver).weave()
+    Weaver.weave(c0, silver)
     val output = GraphPrinter.print(c0)
-    assert(output ==
-      """|int main();
+    assert(
+      output ==
+        """|int main();
          |
          |int main()
          |{
          |  return 0;
          |}
-         |""".stripMargin)
+         |""".stripMargin
+    )
   }
 
   def createProgram(source: String) = {
@@ -45,4 +47,3 @@ class WeaverTests extends AnyFunSuite {
     }
   }
 }
-

@@ -1,0 +1,47 @@
+int main();
+void test(int x, int y);
+int testCall(int a);
+
+int main()
+{
+  return 0;
+}
+
+void test(int x, int y)
+  //@requires ?;
+{
+  int z = 0;
+  bool _cond = false;
+  bool _cond1 = false;
+  bool _cond2 = false;
+  bool _cond3 = false;
+  _cond = (true || true) && x > 1;
+  if (x > 1)
+  {
+    _cond1 = (_cond || _cond) && x > 2;
+    if (x > 2)
+    {
+      _cond2 = (_cond && _cond1 || _cond && _cond1) && y == 0;
+      z = testCall(y);
+      _cond3 = (_cond && _cond1 && !_cond2 || _cond && _cond1 && _cond2) && z == 0;
+      if (z == 0)
+      {
+        if (_cond && _cond1 && !_cond2 && _cond3)
+        {
+          assert(x > 3);
+        }
+        if (_cond && _cond1 && _cond2 && _cond3)
+        {
+          assert(x > 3);
+        }
+        //@assert x > 3;
+      }
+    }
+  }
+}
+
+int testCall(int a)
+  //@ensures ? && (a == 0 ? \result == 0 : true);
+{
+  return a;
+}

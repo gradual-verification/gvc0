@@ -1,4 +1,4 @@
-//test unsupported
+//test return 1
 
 bool flse () {
   return false;

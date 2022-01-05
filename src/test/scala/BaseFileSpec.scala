@@ -6,7 +6,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.BeforeAndAfterAllConfigMap
 import org.scalatest.ConfigMap
 
-trait BaseFileSpecs extends BeforeAndAfterAllConfigMap {
+trait BaseFileSpec extends BeforeAndAfterAllConfigMap {
   this: AnyFunSuite =>
   var UPDATE = false
   

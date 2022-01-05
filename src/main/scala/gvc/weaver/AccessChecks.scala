@@ -20,6 +20,13 @@ object AccessChecks {
     val ID = "_id"
   }
 
+  private object Types {
+    val StaticOwnedFields = new ReferenceType(Structs.OwnedFields)
+    val DynamicOwnedFields = new ArrayType(
+      new ReferenceType(Structs.OwnedFields)
+    )
+  }
+
   private object Structs {
     def OwnedFields = new Struct("OwnedFields")
   }
@@ -348,17 +355,27 @@ object AccessChecks {
           if (isImprecise(method)) {
 
             if (!isImprecise(info.callingMethod)) {
-              info.callingMethod.addExistingVar(Vars.DynamicOwnedFields)
+              info.callingMethod.addVar(
+                new ArrayType(new ReferenceType(Structs.OwnedFields)),
+                Names.DynamicOwnedFields
+              )
               info.callingMethod.body.head
                 .insertBefore(Commands.InitDynamic)
 
               if (needsStatic) {
-                info.callingMethod.addExistingVar(
-                  Vars.TempStaticOwnedFields
+                info.callingMethod.addVar(
+                  new ReferenceType(Structs.OwnedFields),
+                  Names.TempStaticOwnedFields
                 )
               }
-              info.callingMethod.addExistingVar(Vars.StaticOwnedFields)
-              info.callingMethod.addExistingVar(Vars.TempDynamicOwnedFields)
+              info.callingMethod.addVar(
+                new ReferenceType(Structs.OwnedFields),
+                Names.StaticOwnedFields
+              )
+              info.callingMethod.addVar(
+                new ArrayType(new ReferenceType(Structs.OwnedFields)),
+                Names.TempDynamicOwnedFields
+              )
             }
 
             if (optionImprecise(method.precondition)) {
@@ -540,7 +557,7 @@ object AccessChecks {
        */
       tracker.entry match {
         case Some(mainMethod) =>
-          mainMethod.addExistingVar(Vars.InstanceCounter)
+          mainMethod.addVar(new PointerType(IntType), Names.InstanceCounter)
           mainMethod.body.head.insertBefore(Commands.InitCounter)
       }
     }
@@ -624,12 +641,12 @@ object AccessChecks {
               case acc: Accessibility =>
                 access += toAccessPermission(acc)
                 access ++ getStaticComponent(Some(bin.left))
-              case _ => throw new WeaverException("Unknown conjunct type.")
+              case _ => throw new AccessCheckException("Unknown conjunct type.")
             }
           case acc: Accessibility =>
             access += toAccessPermission(acc)
             access
-          case _ => throw new WeaverException("Unknown conjunct type.")
+          case _ => throw new AccessCheckException("Unknown conjunct type.")
         }
       case None => access
     }

@@ -1,0 +1,22 @@
+struct Test;
+
+struct Test
+{
+  int value;
+};
+
+int main();
+void test(struct Test* value);
+
+int main()
+{
+  return 0;
+}
+
+void test(struct Test* value)
+  //@requires ? && acc(value->value);
+  //@ensures ?;
+{
+  assert(value->value == 0);
+  //@assert value->value == 0;
+}

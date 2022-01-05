@@ -6,20 +6,26 @@ import IRGraph._
 object IRGraphSilver {
   def toSilver(program: IRGraph.Program) = new Converter(program).convert()
 
+  object Names {
+    val ResultVar = "$result"
+    val RefPointerValue = "$refValue"
+    val IntPointerValue = "$intValue"
+    val BoolPointerValue = "$boolValue"
+  }
+
   class Converter(ir: IRGraph.Program) {
-    private val RESULT = "$result"
     val fields = mutable.ListBuffer[vpr.Field]()
     val structFields = mutable.Map[StructField, vpr.Field]()
 
     def declareField(name: String, typ: vpr.Type): vpr.Field = {
-      val field = vpr.Field(name, vpr.Ref)()
+      val field = vpr.Field(name, typ)()
       fields += field
       field
     }
 
-    lazy val refPointer = declareField("$refValue", vpr.Ref)
-    lazy val intPointer = declareField("$intValue", vpr.Int)
-    lazy val boolPointer = declareField("$boolValue", vpr.Bool)
+    lazy val refPointer = declareField(Names.RefPointerValue, vpr.Ref)
+    lazy val intPointer = declareField(Names.IntPointerValue, vpr.Int)
+    lazy val boolPointer = declareField(Names.BoolPointerValue, vpr.Bool)
 
     def convert(): vpr.Program = {
       val predicates = ir.predicates.map(convertPredicate).toList
@@ -32,7 +38,7 @@ object IRGraphSilver {
     def convertMethod(method: Method): vpr.Method = {
       val params = method.parameters.map(convertDecl).toList
       val vars = method.variables.map(convertDecl).toList
-      val ret = method.returnType.map({ ret => vpr.LocalVarDecl(RESULT, convertType(ret))() }).toSeq
+      val ret = method.returnType.map({ ret => vpr.LocalVarDecl(Names.ResultVar, convertType(ret))() }).toSeq
       val pre = method.precondition.map(convertExpr).toSeq
       val post = method.postcondition.map(convertExpr).toSeq
       val body = method.body.flatMap(convertOp).toList
@@ -64,7 +70,7 @@ object IRGraphSilver {
     }
 
     def getReturnVar(method: Method): vpr.LocalVar =
-      vpr.LocalVar(RESULT, convertType(method.returnType.get))()
+      vpr.LocalVar(Names.ResultVar, convertType(method.returnType.get))()
 
     def convertOp(op: Op): Seq[vpr.Stmt] = op match {
       case iff: If => {
@@ -87,7 +93,7 @@ object IRGraphSilver {
         })
 
         val args = invoke.arguments.map(convertExpr).toList
-        Seq(vpr.MethodCall(invoke.method.name, args, target.toSeq)(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
+        Seq(vpr.MethodCall(invoke.callee.name, args, target.toSeq)(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
       }
 
       case alloc: AllocValue => {
@@ -114,24 +120,19 @@ object IRGraphSilver {
       case assign: AssignMember =>
         Seq(vpr.FieldAssign(convertMember(assign.member), convertExpr(assign.value))())
 
-      case assert: Assert => assert.method match {
-        case AssertMethod.Imperative => Seq.empty
-        case AssertMethod.Specification => Seq(vpr.Assert(convertExpr(assert.value))())
+      case assert: Assert => assert.kind match {
+        case AssertKind.Imperative => Seq.empty
+        case AssertKind.Specification => Seq(vpr.Assert(convertExpr(assert.value))())
       }
 
       case fold: Fold => Seq(vpr.Fold(convertPredicateInstance(fold.instance))())
       case unfold: Unfold => Seq(vpr.Unfold(convertPredicateInstance(unfold.instance))())
       case error: Error => Seq(vpr.Assert(vpr.FalseLit()())())
 
-      case ret: ReturnValue =>
-          Seq(vpr.LocalVarAssign(getReturnVar(ret.method), convertExpr(ret.value))())
-      case ret: ReturnInvoke =>
-        Seq(vpr.MethodCall(
-          ret.invoke.name,
-          ret.arguments.map(convertExpr),
-          Seq(getReturnVar(ret.method))
-        )(vpr.NoPosition, vpr.NoInfo, vpr.NoTrafos))
-      case _: Return => Seq.empty
+      case ret: Return => ret.value match {
+        case None => Seq.empty
+        case Some(value) => Seq(vpr.LocalVarAssign(getReturnVar(ret.method), convertExpr(value))())
+      }
     }
 
     def convertVar(v: Var): vpr.LocalVar =

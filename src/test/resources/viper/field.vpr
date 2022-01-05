@@ -1,4 +1,4 @@
-field Test$value: Ref
+field Test$value: Int
 
 method doTest(input: Ref)
   requires acc(input.Test$value, write)

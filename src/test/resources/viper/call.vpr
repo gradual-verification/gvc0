@@ -1,6 +1,8 @@
 method main() returns ($result: Int)
 {
-  $result := test()
+  var _: Int
+  _ := test()
+  $result := _
 }
 
 method test() returns ($result: Int)
