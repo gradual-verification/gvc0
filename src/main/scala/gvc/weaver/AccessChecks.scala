@@ -2,9 +2,10 @@ package gvc.weaver
 import gvc.transformer.IRGraph._
 import viper.silicon.state.reconstructedPermissions.getPermissionsFor
 import viper.silicon.state.CheckInfo
-import viper.silver.ast.{Exp, FieldAccess, LocalVar, MethodCall}
+import viper.silver.ast.{FieldAccess, LocalVar, MethodCall}
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 class AccessCheckException(message: String) extends Exception(message)
 
@@ -16,15 +17,7 @@ object AccessChecks {
     val StaticOwnedFields = "static_fields"
     val TempStaticOwnedFields = "temp_static_fields"
     val TempDynamicOwnedFields = "temp_dyn_fields"
-
     val ID = "_id"
-  }
-
-  private object Types {
-    val StaticOwnedFields = new ReferenceType(Structs.OwnedFields)
-    val DynamicOwnedFields = new ArrayType(
-      new ReferenceType(Structs.OwnedFields)
-    )
   }
 
   private object Structs {
@@ -219,22 +212,81 @@ object AccessChecks {
     }
   }
 
-  class AccessTracker() {
+  class ProgramAccessTracker(){
+    var callGraph: Map[Method, MethodAccessTracker] = Map[Method, MethodAccessTracker]()
+    var invocations: Map[Method, ArrayBuffer[Invoke]] = Map[Method, ArrayBuffer[Invoke]]()
+    var runtimeChecksInserted: Boolean = false
+    var entry: Option[Method] = None
+
+    var visitedStructs: Set[Struct] = Set[Struct]()
+    def register(method: Method, tracker: MethodAccessTracker): Unit = {
+      callGraph += (method -> tracker)
+      if(tracker.bodyContainsRuntimeCheck) runtimeChecksInserted = true
+      if(method.name == "main") entry = Some(method)
+      tracker.invocations.foreach(inv => {
+        if(invocations.contains(inv.method)){
+          invocations(inv.method) += inv
+        }else{
+          invocations += (inv.method -> ArrayBuffer(inv))
+        }
+      })
+    }
+  }
+
+  class MethodAccessTracker(method: Method) {
     val callGraph = new CallGraph()
     var entry: Option[Method] = None
-    val visited: mutable.Set[String] = mutable.Set[String]()
-    val visitedStructs: mutable.Set[String] = mutable.Set[String]()
-    val allocations: mutable.Set[(Method, Op)] = mutable.Set[(Method, Op)]()
-    def requiresTracking: Boolean = visited.nonEmpty
+    val allocations: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
+    var invocations: mutable.ArrayBuffer[Invoke] = mutable.ArrayBuffer[Invoke]()
+    var returns: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
+    var bodyContainsRuntimeCheck: Boolean = false
+    def callsImprecise:Boolean = invocations.exists(inv => isImprecise(inv.method))
 
-    def requiresStaticSeparation: mutable.Set[String] = mutable.Set[String]()
-
-    def visitedStruct(structName: String): Boolean = {
-      visitedStructs.contains(structName)
-    }
-
-    def visitedMethod(method: Method): Boolean = {
-      visited.contains(method.name)
+    def assertFieldAccess(
+       check: CheckInfo,
+       loc: FieldAccess,
+     ): Op = {
+      bodyContainsRuntimeCheck = true
+      val fieldName =
+        loc.field.name.substring(loc.field.name.lastIndexOf('$') + 1)
+      loc.rcv match {
+        case LocalVar(name, _) =>
+          method.getVar(name) match {
+            case Some(variable) =>
+              val structType =
+                variable.valueType.asInstanceOf[ReferenceType].struct
+              if (check.overlaps) {
+                new Invoke(
+                  Methods.AssertDisjoint,
+                  List(
+                    Vars.StaticOwnedFields,
+                    Commands.GetDynamicOwnedFields,
+                    new FieldMember(variable, structType.fields.last),
+                    getFieldIndex(structType, fieldName)
+                  ),
+                  None
+                )
+              } else {
+                new Invoke(
+                  Methods.Assert,
+                  List(
+                    Commands.GetDynamicOwnedFields,
+                    new FieldMember(variable, structType.fields.last),
+                    getFieldIndex(structType, fieldName)
+                  ),
+                  None
+                )
+              }
+            case None =>
+              throw new AccessCheckException(
+                "No local variable exists for the given field permission."
+              )
+          }
+        case _ =>
+          throw new AccessCheckException(
+            "Only field permissions for structs that are LocalVars have been implemented."
+          )
+      }
     }
   }
 
@@ -246,7 +298,7 @@ object AccessChecks {
       val returns: mutable.ArrayBuffer[Op]
   )
 
-  def needsStaticTracking(method: Method) = {
+  def needsStaticTracking(method: Method):Boolean = {
     val preStatic = method.precondition.isDefined && method.precondition.get
       .isInstanceOf[Imprecise] && method.precondition.get
       .asInstanceOf[Imprecise]
@@ -283,10 +335,10 @@ object AccessChecks {
         vprNode: MethodCall,
         callingMethod: Method
     ): Unit = {
-      val entry = (callPosition -> new InvokeInfo(
+      val entry = callPosition -> new InvokeInfo(
         callingMethod,
         vprNode
-      ))
+      )
       if (graph isDefinedAt calledMethod) {
         graph(calledMethod).callsites += entry
       } else {
@@ -322,194 +374,24 @@ object AccessChecks {
     }
   }
 
-  def injectSupport(ir: Program, tracker: AccessTracker): Unit = {
+  def injectSupport(ir: Program, tracker: ProgramAccessTracker): Unit = {
     /*  it's only necessary to add tracking if a field access check was inserted,
      *  at which point the method where the check occurs is marked as 'visited' by the
      *  AccessTracker.
      */
-    if (tracker.requiresTracking) {
-      for ((method: Method, edge: Edge) <- tracker.callGraph) {
+    if (tracker.runtimeChecksInserted) {
+      for ((caller: Method, edge: MethodAccessTracker) <- tracker.callGraph) {
         /* Modify the parameters of each method to accept OwnedFields objects as necessary */
 
-        if (isImprecise(method) && edge.callsImprecise)
-          injectParameters(method, edge)
-
-        /* Pass the necessary OwnedFields objects when each method is called */
-        for ((invocation, info) <- edge.callsites) {
-          val invoke_op = invocation.asInstanceOf[Invoke]
-          var afterwards = invocation
-          while (
-            afterwards.getNext.isDefined
-            && afterwards.getNext.get.isInstanceOf[Invoke]
-            && (afterwards.getNext.get
-              .asInstanceOf[Invoke]
-              .method
-              .name == "assertAcc" || afterwards.getNext.get
-              .asInstanceOf[Invoke]
-              .method
-              .name == "assertDisjointAcc")
-          ) afterwards = afterwards.getNext.get
-
-          val needsStatic = needsStaticTracking(method)
-
-          if (isImprecise(method)) {
-
-            if (!isImprecise(info.callingMethod)) {
-              info.callingMethod.addVar(
-                new ArrayType(new ReferenceType(Structs.OwnedFields)),
-                Names.DynamicOwnedFields
-              )
-              info.callingMethod.body.head
-                .insertBefore(Commands.InitDynamic)
-
-              if (needsStatic) {
-                info.callingMethod.addVar(
-                  new ReferenceType(Structs.OwnedFields),
-                  Names.TempStaticOwnedFields
-                )
-              }
-              info.callingMethod.addVar(
-                new ReferenceType(Structs.OwnedFields),
-                Names.StaticOwnedFields
-              )
-              info.callingMethod.addVar(
-                new ArrayType(new ReferenceType(Structs.OwnedFields)),
-                Names.TempDynamicOwnedFields
-              )
-            }
-
-            if (optionImprecise(method.precondition)) {
-
-              if (needsStatic) {
-                invocation.insertBefore(Commands.StoreStatic)
-                invocation.insertBefore(
-                  Commands.Join(
-                    Commands.GetDynamicOwnedFields,
-                    Vars.StaticOwnedFields
-                  )
-                )
-              }
-
-              invocation.insertBefore(Commands.InitStatic)
-              invocation.insertBefore(
-                populateStatic(Vars.StaticOwnedFields, method.precondition)
-              )
-
-              invocation.insertBefore(
-                Commands.Disjoin(
-                  Commands.GetDynamicOwnedFields,
-                  Vars.StaticOwnedFields
-                )
-              )
-
-              if (needsStatic) {
-                afterwards.insertAfter(
-                  Commands.Disjoin(
-                    Commands.GetDynamicOwnedFields,
-                    Vars.StaticOwnedFields
-                  )
-                )
-                afterwards.insertAfter(Commands.LoadStatic)
-              }
-              if (optionImprecise(method.postcondition)) {
-
-                afterwards.insertAfter(
-                  Commands.Join(
-                    Commands.GetDynamicOwnedFields,
-                    Vars.StaticOwnedFields
-                  )
-                )
-                afterwards.insertAfter(
-                  populateStatic(
-                    Commands.GetDynamicOwnedFields,
-                    method.postcondition
-                  )
-                )
-              } else {
-
-                afterwards.insertAfter(
-                  populateStatic(
-                    Commands.GetDynamicOwnedFields,
-                    method.postcondition
-                  )
-                )
-
-                afterwards.insertAfter(Commands.InitDynamic)
-              }
-            } else {
-              if (needsStatic) {
-                afterwards.insertAfter(Commands.StoreStatic)
-              }
-              invocation.insertBefore(Commands.InitStatic)
-              invocation.insertBefore(
-                populateStatic(Vars.StaticOwnedFields, method.precondition)
-              )
-
-              invocation.insertBefore(Commands.StoreDynamic)
-              invocation.insertBefore(Commands.InitDynamic)
-
-              if (needsStatic) {
-                afterwards.insertAfter(Commands.StoreStatic)
-
-                afterwards.insertAfter(
-                  Commands.Disjoin(
-                    Vars.DynamicOwnedFields,
-                    Vars.StaticOwnedFields
-                  )
-                )
-                afterwards.insertAfter(Commands.LoadStatic)
-              }
-              afterwards.insertAfter(
-                Commands.Join(
-                  Vars.DynamicOwnedFields,
-                  Vars.TempDynamicOwnedFields
-                )
-              )
-              afterwards.insertAfter(
-                populateStatic(
-                  Vars.StaticOwnedFields,
-                  method.precondition
-                )
-              )
-
-              if (optionImprecise(method.postcondition)) {
-                afterwards.insertAfter(
-                  Commands.Join(
-                    Vars.DynamicOwnedFields,
-                    Vars.StaticOwnedFields
-                  )
-                )
-                afterwards.insertAfter(
-                  Commands.Join(
-                    Vars.DynamicOwnedFields,
-                    Vars.StaticOwnedFields
-                  )
-                )
-              }
-            }
-          } else {
-            //TODO: optimize so that _instance_counter is only passed to methods that eventually allocate memory
-            invoke_op.arguments =
-              invoke_op.arguments ++ List(Vars.InstanceCounter)
-          }
-        }
-      }
-      /* track each allocation, using _instance_counter or dynamic_fields as appropriate
+        /* track each allocation, using _instance_counter or dynamic_fields as appropriate
        * to assign unique IDs to struct instances
        * */
-      tracker.allocations.foreach(alloc => {
-        val method = alloc._1
-        val alloc_op = alloc._2
-        alloc_op match {
+        edge.allocations.foreach {
           case structAlloc: AllocStruct =>
             /* if a struct allocation occurs in an imprecise context, it's unique identifier is provided
              * by the dynamic_fields object, and permissions to each of its fields are recorded.
              */
-            val callsImprecise = tracker.callGraph.getEdge(method) match {
-              case Some(value) => value.callsImprecise
-              case None        => false
-            }
-            if (isImprecise(method) || callsImprecise) {
+            if (isImprecise(caller) || edge.callsImprecise) {
               injectIDField(structAlloc.struct, tracker)
               structAlloc.insertAfter(
                 addDynamicStructAccess(
@@ -549,8 +431,174 @@ object AccessChecks {
                 )
               )
             }
+          case _ => throw new AccessCheckException("Access tracking has only implemented for Struct allocations.")
         }
-      })
+
+
+        if (isImprecise(caller) && edge.callsImprecise)
+          injectParameters(caller, tracker.invocations.get(caller), edge.returns)
+
+        /* Pass the necessary OwnedFields objects when each method is called */
+        for (invocation <- edge.invocations) {
+          var afterwards:Op = invocation
+          val callee = invocation.callee
+          while (
+            afterwards.getNext.isDefined
+            && afterwards.getNext.get.isInstanceOf[Invoke]
+            && (afterwards.getNext.get
+              .asInstanceOf[Invoke]
+              .method
+              .name == "assertAcc" || afterwards.getNext.get
+              .asInstanceOf[Invoke]
+              .method
+              .name == "assertDisjointAcc")
+          ) afterwards = afterwards.getNext.get
+
+          val needsStatic = needsStaticTracking(callee)
+
+          if (isImprecise(callee)) {
+
+            if (!isImprecise(caller)) {
+              caller.addVar(
+                new ArrayType(new ReferenceType(Structs.OwnedFields)),
+                Names.DynamicOwnedFields
+              )
+              caller.body.head
+                .insertBefore(Commands.InitDynamic)
+
+              if (needsStatic) {
+                caller.addVar(
+                  new ReferenceType(Structs.OwnedFields),
+                  Names.TempStaticOwnedFields
+                )
+              }
+              caller.addVar(
+                new ReferenceType(Structs.OwnedFields),
+                Names.StaticOwnedFields
+              )
+              caller.addVar(
+                new ArrayType(new ReferenceType(Structs.OwnedFields)),
+                Names.TempDynamicOwnedFields
+              )
+            }
+
+            if (optionImprecise(callee.precondition)) {
+
+              if (needsStatic) {
+                invocation.insertBefore(Commands.StoreStatic)
+                invocation.insertBefore(
+                  Commands.Join(
+                    Commands.GetDynamicOwnedFields,
+                    Vars.StaticOwnedFields
+                  )
+                )
+              }
+
+              invocation.insertBefore(Commands.InitStatic)
+              invocation.insertBefore(
+                populateStatic(Vars.StaticOwnedFields, callee.precondition)
+              )
+
+              invocation.insertBefore(
+                Commands.Disjoin(
+                  Commands.GetDynamicOwnedFields,
+                  Vars.StaticOwnedFields
+                )
+              )
+
+              if (needsStatic) {
+                afterwards.insertAfter(
+                  Commands.Disjoin(
+                    Commands.GetDynamicOwnedFields,
+                    Vars.StaticOwnedFields
+                  )
+                )
+                afterwards.insertAfter(Commands.LoadStatic)
+              }
+              if (optionImprecise(callee.postcondition)) {
+
+                afterwards.insertAfter(
+                  Commands.Join(
+                    Commands.GetDynamicOwnedFields,
+                    Vars.StaticOwnedFields
+                  )
+                )
+                afterwards.insertAfter(
+                  populateStatic(
+                    Commands.GetDynamicOwnedFields,
+                    callee.postcondition
+                  )
+                )
+              } else {
+
+                afterwards.insertAfter(
+                  populateStatic(
+                    Commands.GetDynamicOwnedFields,
+                    callee.postcondition
+                  )
+                )
+
+                afterwards.insertAfter(Commands.InitDynamic)
+              }
+            } else {
+              if (needsStatic) {
+                afterwards.insertAfter(Commands.StoreStatic)
+              }
+              invocation.insertBefore(Commands.InitStatic)
+              invocation.insertBefore(
+                populateStatic(Vars.StaticOwnedFields, callee.precondition)
+              )
+
+              invocation.insertBefore(Commands.StoreDynamic)
+              invocation.insertBefore(Commands.InitDynamic)
+
+              if (needsStatic) {
+                afterwards.insertAfter(Commands.StoreStatic)
+
+                afterwards.insertAfter(
+                  Commands.Disjoin(
+                    Vars.DynamicOwnedFields,
+                    Vars.StaticOwnedFields
+                  )
+                )
+                afterwards.insertAfter(Commands.LoadStatic)
+              }
+              afterwards.insertAfter(
+                Commands.Join(
+                  Vars.DynamicOwnedFields,
+                  Vars.TempDynamicOwnedFields
+                )
+              )
+              afterwards.insertAfter(
+                populateStatic(
+                  Vars.StaticOwnedFields,
+                  callee.precondition
+                )
+              )
+
+              if (optionImprecise(callee.postcondition)) {
+                afterwards.insertAfter(
+                  Commands.Join(
+                    Vars.DynamicOwnedFields,
+                    Vars.StaticOwnedFields
+                  )
+                )
+                afterwards.insertAfter(
+                  Commands.Join(
+                    Vars.DynamicOwnedFields,
+                    Vars.StaticOwnedFields
+                  )
+                )
+              }
+            }
+          } else {
+            //TODO: optimize so that _instance_counter is only passed to methods that eventually allocate memory
+            invocation.arguments =
+              invocation.arguments ++ List(Vars.InstanceCounter)
+          }
+        }
+      }
+
       /*  initialize _instance_counter at the beginning of main. if a runtime check is required in main,
        *  instructions to create the necessary OwnedFields objects will have already been inserted, so it is safe
        *  to initialize _instance_counter as the final step here.
@@ -559,6 +607,7 @@ object AccessChecks {
         case Some(mainMethod) =>
           mainMethod.addVar(new PointerType(IntType), Names.InstanceCounter)
           mainMethod.body.head.insertBefore(Commands.InitCounter)
+        case None => throw new AccessCheckException("The current ProgramAccessTracker instance hasn't detected a main method for the given program.")
       }
     }
   }
@@ -585,7 +634,9 @@ object AccessChecks {
                 val structType =
                   variable.valueType.asInstanceOf[ReferenceType].struct
                 accessSet += AccessPermission(variable, structType, fieldName)
+              case None => throw new AccessCheckException(s"The variable $name, which is required for access tracking, hasn't been declared in the current method.")
             }
+          case _ => throw new AccessCheckException("Access tracking is only enabled for local variables.")
         }
       case _ =>
         throw new AccessCheckException(
@@ -595,15 +646,14 @@ object AccessChecks {
     accessSet
   }
   def populateOwnedFields(
-      info: InvokeInfo,
+      call: MethodCall,
+      caller: Method,
       spec: Option[Expression]
   ): Seq[Op] = {
-    val call = info.vprNode
-    val callingMethod = info.callingMethod
 
     val static: mutable.Set[AccessPermission] = getStaticComponent(spec)
     val available_permissions: mutable.Set[AccessPermission] =
-      getAccessPermissionsAt(call, callingMethod)
+      getAccessPermissionsAt(call, caller)
     val dynamic = available_permissions.diff(static)
     val ops: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
     dynamic.foreach(perm => {
@@ -612,7 +662,7 @@ object AccessChecks {
     static.foreach(perm => {
       ops += addFieldAccess(Vars.StaticOwnedFields, perm)
     })
-    ops.to[Seq]
+    ops
   }
 
   def populateStatic(
@@ -624,7 +674,7 @@ object AccessChecks {
     accessSet.foreach(perm => {
       ops += addFieldAccess(target, perm)
     })
-    ops.to[Seq]
+    ops
   }
 
   def getStaticComponent(
@@ -654,9 +704,8 @@ object AccessChecks {
 
   def toAccessPermission(acc: Accessibility): AccessPermission = {
     acc.member match {
-      case member: FieldMember => {
+      case member: FieldMember =>
         AccessPermission(member.root, member.field.struct, member.field.name)
-      }
       case _ =>
         throw new AccessCheckException("Unimplemented field access type.")
     }
@@ -664,7 +713,8 @@ object AccessChecks {
 
   def injectParameters(
       method: Method,
-      edge: Edge
+      callsites: Option[Iterable[Invoke]],
+      returns: Iterable[Op]
   ): Unit = {
     /* imprecise methods are passed two disjoint OwnedFields structs: one containing the fields that are statically
      * accessible at the method's callsite, and the other containing all other field access permissions that have been
@@ -679,20 +729,25 @@ object AccessChecks {
         Vars.StaticOwnedFields.valueType,
         Names.StaticOwnedFields
       )
-      edge.callsites.foreach(site => {
-        val invoke_op = site._1.asInstanceOf[Invoke]
-        invoke_op.arguments = invoke_op.arguments ++ List(
-          Vars.DynamicOwnedFields,
-          Vars.StaticOwnedFields
-        )
-      })
+
+      callsites match {
+        case Some(sites) =>
+          sites.foreach(site => {
+            site.arguments = site.arguments ++ List(
+              Vars.DynamicOwnedFields,
+              Vars.StaticOwnedFields
+            )
+          })
+        case None =>
+      }
+
       /* when an imprecise method returns, if its postcondition is precise, then only the statically verified fields of the
        * postcondition will be returned to the caller.
        */
       if (
         method.postcondition.isDefined && !optionImprecise(method.postcondition)
       ) {
-        for (ret <- edge.returns) {
+        returns.foreach(ret => {
           ret.insertBefore(
             new AssignIndex(
               Vars.DynamicOwnedFields,
@@ -700,7 +755,7 @@ object AccessChecks {
               Vars.StaticOwnedFields
             )
           )
-        }
+        })
       }
     } else {
       /* fully verified methods are passed the _instance_counter to assign unique IDs to each struct allocation */
@@ -716,77 +771,13 @@ object AccessChecks {
     new Int(index)
   }
 
-  def injectIDField(structType: Struct, tracker: AccessTracker): Unit = {
-    if (!tracker.visitedStruct(structType.name)) {
+  def injectIDField(structType: Struct, tracker: ProgramAccessTracker): Unit = {
+    if (!tracker.visitedStructs.contains(structType)) {
       structType.addField(Names.ID, IntType)
-      tracker.visitedStructs += structType.name
+      tracker.visitedStructs += structType
     }
   }
 
-  def assertFieldAccess(
-      check: CheckInfo,
-      loc: FieldAccess,
-      method: Method,
-      tracker: AccessTracker
-  ): Seq[Op] = {
-    if (check.overlaps) tracker.requiresStaticSeparation += method.name
-    tracker.visited += method.name
-    val fieldName =
-      loc.field.name.substring(loc.field.name.lastIndexOf('$') + 1)
-    loc.rcv match {
-      case LocalVar(name, _) =>
-        method.getVar(name) match {
-          case Some(variable) =>
-            val structType =
-              variable.valueType.asInstanceOf[ReferenceType].struct
-            if (check.overlaps) {
-              val check = new Invoke(
-                Methods.AssertDisjoint,
-                List(
-                  Vars.StaticOwnedFields,
-                  Commands.GetDynamicOwnedFields,
-                  new FieldMember(variable, structType.fields.last),
-                  getFieldIndex(structType, fieldName)
-                ),
-                None
-              )
-              Seq(check)
-              Seq(
-                new Invoke(
-                  Methods.AssertDisjoint,
-                  List(
-                    Vars.StaticOwnedFields,
-                    Commands.GetDynamicOwnedFields,
-                    new FieldMember(variable, structType.fields.last),
-                    getFieldIndex(structType, fieldName)
-                  ),
-                  None
-                )
-              )
-            } else {
-              Seq(
-                new Invoke(
-                  Methods.Assert,
-                  List(
-                    Commands.GetDynamicOwnedFields,
-                    new FieldMember(variable, structType.fields.last),
-                    getFieldIndex(structType, fieldName)
-                  ),
-                  None
-                )
-              )
-            }
-          case None =>
-            throw new AccessCheckException(
-              "No local variable exists for the given field permission."
-            )
-        }
-      case _ =>
-        throw new AccessCheckException(
-          "Only field permissions for structs that are LocalVars have been implemented."
-        )
-    }
-  }
 
   private def addFieldAccess(
       fields: Expression,

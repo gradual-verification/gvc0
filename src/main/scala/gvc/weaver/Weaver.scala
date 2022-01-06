@@ -1,10 +1,7 @@
 package gvc.weaver
 import gvc.transformer.IRGraph._
-import gvc.weaver.AccessChecks.AccessTracker
-import viper.silicon.Stack
-import viper.silicon.state.runtimeChecks
-import viper.silicon.state.BranchInfo
-import viper.silver.ast.{Exp, Node}
+import gvc.weaver.AccessChecks.{MethodAccessTracker, ProgramAccessTracker}
+import viper.silicon.state.{BranchInfo, CheckInfo}
 import viper.silver.{ast => vpr}
 
 import scala.annotation.tailrec
@@ -13,101 +10,22 @@ import scala.collection.mutable
 object Weaver {
   class WeaverException(message: String) extends Exception(message)
 
-  def weave(ir: Program, silver: vpr.Program): Unit =
+  def weave(ir: Program, silver: vpr.Program): Unit = {
+    val tracker = new ProgramAccessTracker()
     ir.methods.foreach { method =>
-      new Weaver(method, silver.findMethod(method.name)).weave()
+      val weaver = new Weaver(method, silver.findMethod(method.name))
+      weaver.weave()
+      tracker.register(method, weaver.tracker)
     }
+    AccessChecks.injectSupport(ir, tracker)
+  }
 
-  // Produces a list of tuples of an IR Op and its corresponding Silver statement.
-  // Note that not all IR Ops produce Silver statements; the Silver statement will be
-  // `None` for those Ops.
-  @tailrec
-  def zipOps(
-      irOps: List[Op],
-      vprOps: List[vpr.Stmt],
-      tail: List[(Op, Option[vpr.Stmt])] = Nil
-  ): List[(Op, Option[vpr.Stmt])] =
-    (irOps, vprOps) match {
-      case ((irIf: If) :: irRest, (vprIf: vpr.If) :: vprRest) =>
-        zipOps(irRest, vprRest, (irIf, Some(vprIf)) :: tail)
-      case ((irWhile: While) :: irRest, (vprWhile: vpr.While) :: vprRest) =>
-        zipOps(irRest, vprRest, (irWhile, Some(vprWhile)) :: tail)
-      case (
-            (irInvoke: Invoke) :: irRest,
-            (vprInvoke: vpr.MethodCall) :: vprRest
-          ) =>
-        zipOps(irRest, vprRest, (irInvoke, Some(vprInvoke)) :: tail)
-      case (
-            (irAlloc: AllocValue) :: irRest,
-            (vprAlloc: vpr.NewStmt) :: vprRest
-          ) =>
-        zipOps(irRest, vprRest, (irAlloc, Some(vprAlloc)) :: tail)
-      case (
-            (irAlloc: AllocStruct) :: irRest,
-            (vprAlloc: vpr.NewStmt) :: vprRest
-          ) =>
-        zipOps(irRest, vprRest, (irAlloc, Some(vprAlloc)) :: tail)
-      case (
-            (irAssign: Assign) :: irRest,
-            (vprAssign: vpr.LocalVarAssign) :: vprRest
-          ) =>
-        zipOps(irRest, vprRest, (irAssign, Some(vprAssign)) :: tail)
-      case (
-            (irAssign: AssignMember) :: irRest,
-            (vprAssign: vpr.FieldAssign) :: vprRest
-          ) =>
-        zipOps(irRest, vprRest, (irAssign, Some(vprAssign)) :: tail)
-      case ((irAssert: Assert) :: irRest, vprRest)
-          if irAssert.kind == AssertKind.Imperative =>
-        zipOps(irRest, vprRest, (irAssert, None) :: tail)
-      case ((irAssert: Assert) :: irRest, (vprAssert: vpr.Assert) :: vprRest)
-          if irAssert.kind == AssertKind.Specification =>
-        zipOps(irRest, vprRest, (irAssert, Some(vprAssert)) :: tail)
-      case ((irFold: Fold) :: irRest, (vprFold: vpr.Fold) :: vprRest) =>
-        zipOps(irRest, vprRest, (irFold, Some(vprFold)) :: tail)
-      case ((irUnfold: Unfold) :: irRest, (vprUnfold: vpr.Unfold) :: vprRest) =>
-        zipOps(irRest, vprRest, (irUnfold, Some(vprUnfold)) :: tail)
-      case ((irError: Error) :: irRest, (vprError: vpr.Assert) :: vprRest) =>
-        zipOps(irRest, vprRest, (irError, Some(vprError)) :: tail)
-      case ((irReturn: Return) :: irRest, vprRest) if irReturn.value.isEmpty =>
-        zipOps(irRest, vprRest, (irReturn, None) :: tail)
-      case (
-            (irReturn: Return) :: irRest,
-            (vprReturn: vpr.LocalVarAssign) :: vprRest
-          ) =>
-        zipOps(irRest, vprRest, (irReturn, Some(vprReturn)) :: tail)
-
-      // Termination
-      case (Nil, Nil) => tail
-
-      // Errors
-      case (ir, vprStmt :: _) =>
-        throw new WeaverException(
-          s"Unexpected Silver statement: $vprStmt for $ir"
-        )
-      case (ir, Nil) => throw new WeaverException("Expected Silver node")
-    }
-
-  def flattenOps(
-      irOps: List[Op],
-      vprOps: List[vpr.Stmt]
-  ): Seq[(Op, Option[vpr.Stmt])] =
-    zipOps(irOps, vprOps).toSeq.flatMap {
-      case (irIf: If, Some(vprIf: vpr.If)) =>
-        Seq((irIf, Some(vprIf))) ++
-          flattenOps(irIf.ifTrue.toList, vprIf.thn.ss.toList) ++
-          flattenOps(irIf.ifFalse.toList, vprIf.els.ss.toList)
-      case (irWhile: While, Some(vprWhile: vpr.While)) =>
-        Seq((irWhile, Some(vprWhile))) ++
-          flattenOps(irWhile.body.toList, vprWhile.body.ss.toList)
-      case (op, vprOp) => Seq((op, vprOp))
-    }
-
-  case class Conditional(variable: Var, when: mutable.ListBuffer[Expression])
 
   private class Weaver(irMethod: Method, vprMethod: vpr.Method) {
+
     private val checks = viper.silicon.state.runtimeChecks.getChecks
     val conditions = mutable.Map[vpr.Node, mutable.Map[vpr.Exp, Conditional]]()
+    val tracker: MethodAccessTracker = new MethodAccessTracker(irMethod)
 
     val ops =
       flattenOps(irMethod.body.toList, vprMethod.body.get.ss.toList).toList
@@ -116,6 +34,98 @@ object Weaver {
       addChecks()
       insertVersioning()
     }
+
+    // Produces a list of tuples of an IR Op and its corresponding Silver statement.
+    // Note that not all IR Ops produce Silver statements; the Silver statement will be
+    // `None` for those Ops.
+    @tailrec
+    private final def zipOps(
+                irOps: List[Op],
+                vprOps: List[vpr.Stmt],
+                tail: List[(Op, Option[vpr.Stmt])] = Nil
+              ): List[(Op, Option[vpr.Stmt])] =
+      (irOps, vprOps) match {
+        case ((irIf: If) :: irRest, (vprIf: vpr.If) :: vprRest) =>
+          zipOps(irRest, vprRest, (irIf, Some(vprIf)) :: tail)
+        case ((irWhile: While) :: irRest, (vprWhile: vpr.While) :: vprRest) =>
+          zipOps(irRest, vprRest, (irWhile, Some(vprWhile)) :: tail)
+        case (
+          (irInvoke: Invoke) :: irRest,
+          (vprInvoke: vpr.MethodCall) :: vprRest
+          ) =>
+          tracker.invocations += irInvoke
+          zipOps(irRest, vprRest, (irInvoke, Some(vprInvoke)) :: tail)
+        case (
+          (irAlloc: AllocValue) :: irRest,
+          (vprAlloc: vpr.NewStmt) :: vprRest
+          ) =>
+          tracker.allocations += irAlloc
+          zipOps(irRest, vprRest, (irAlloc, Some(vprAlloc)) :: tail)
+        case (
+          (irAlloc: AllocStruct) :: irRest,
+          (vprAlloc: vpr.NewStmt) :: vprRest
+          ) =>
+          tracker.allocations += irAlloc
+          zipOps(irRest, vprRest, (irAlloc, Some(vprAlloc)) :: tail)
+        case (
+          (irAssign: Assign) :: irRest,
+          (vprAssign: vpr.LocalVarAssign) :: vprRest
+          ) =>
+          zipOps(irRest, vprRest, (irAssign, Some(vprAssign)) :: tail)
+        case (
+          (irAssign: AssignMember) :: irRest,
+          (vprAssign: vpr.FieldAssign) :: vprRest
+          ) =>
+          zipOps(irRest, vprRest, (irAssign, Some(vprAssign)) :: tail)
+        case ((irAssert: Assert) :: irRest, vprRest)
+          if irAssert.kind == AssertKind.Imperative =>
+          zipOps(irRest, vprRest, (irAssert, None) :: tail)
+        case ((irAssert: Assert) :: irRest, (vprAssert: vpr.Assert) :: vprRest)
+          if irAssert.kind == AssertKind.Specification =>
+          zipOps(irRest, vprRest, (irAssert, Some(vprAssert)) :: tail)
+        case ((irFold: Fold) :: irRest, (vprFold: vpr.Fold) :: vprRest) =>
+          zipOps(irRest, vprRest, (irFold, Some(vprFold)) :: tail)
+        case ((irUnfold: Unfold) :: irRest, (vprUnfold: vpr.Unfold) :: vprRest) =>
+          zipOps(irRest, vprRest, (irUnfold, Some(vprUnfold)) :: tail)
+        case ((irError: Error) :: irRest, (vprError: vpr.Assert) :: vprRest) =>
+          zipOps(irRest, vprRest, (irError, Some(vprError)) :: tail)
+        case ((irReturn: Return) :: irRest, vprRest) if irReturn.value.isEmpty =>
+          zipOps(irRest, vprRest, (irReturn, None) :: tail)
+        case (
+          (irReturn: Return) :: irRest,
+          (vprReturn: vpr.LocalVarAssign) :: vprRest
+          ) =>
+          tracker.returns += irReturn
+          zipOps(irRest, vprRest, (irReturn, Some(vprReturn)) :: tail)
+
+        // Termination
+        case (Nil, Nil) => tail
+
+        // Errors
+        case (ir, vprStmt :: _) =>
+          throw new WeaverException(
+            s"Unexpected Silver statement: $vprStmt for $ir"
+          )
+        case (ir, Nil) => throw new WeaverException("Expected Silver node")
+      }
+
+    def flattenOps(
+                    irOps: List[Op],
+                    vprOps: List[vpr.Stmt]
+                  ): Seq[(Op, Option[vpr.Stmt])] =
+      zipOps(irOps, vprOps).toSeq.flatMap {
+        case (irIf: If, Some(vprIf: vpr.If)) =>
+          Seq((irIf, Some(vprIf))) ++
+            flattenOps(irIf.ifTrue.toList, vprIf.thn.ss.toList) ++
+            flattenOps(irIf.ifFalse.toList, vprIf.els.ss.toList)
+        case (irWhile: While, Some(vprWhile: vpr.While)) =>
+          Seq((irWhile, Some(vprWhile))) ++
+            flattenOps(irWhile.body.toList, vprWhile.body.ss.toList)
+        case (op, vprOp) => Seq((op, vprOp))
+      }
+
+    case class Conditional(variable: Var, when: mutable.ListBuffer[Expression])
+
 
     private def visit(
         visitor: (vpr.Node, Option[Op], Option[Expression]) => Unit
@@ -164,16 +174,14 @@ object Weaver {
           .toSeq
           .flatten
           .map(check =>
-            conditional(assert(check.checks, returnVal), check.branch)
+            conditional(assert(check, returnVal), check.branch)
           )
           .foreach(insertAt(_, op))
       )
     }
 
-    private def assert(check: vpr.Exp, returnVal: Option[Expression]): Op = {
-      val checkValue =
-        CheckImplementation.expression(check, irMethod, returnVal)
-      new Assert(checkValue, AssertKind.Imperative)
+    private def assert(check: CheckInfo, returnVal: Option[Expression]): Op = {
+        CheckImplementation.generate(check, irMethod, returnVal, tracker)
     }
 
     def defineConditional(

@@ -1,12 +1,32 @@
 package gvc.weaver
 
 import gvc.transformer.IRGraph._
-import gvc.weaver.AccessChecks.AccessTracker
+import gvc.weaver.AccessChecks.{MethodAccessTracker}
 import viper.silicon.state.CheckInfo
 import viper.silver.{ast => vpr}
 import gvc.transformer.IRGraphSilver
 
 object CheckImplementation {
+  def generate(
+    check: CheckInfo,
+    method: Method,
+    returnValue: Option[Expression],
+    tracker: MethodAccessTracker
+  ): Op = {
+    check.checks match {
+      case vpr.FieldAccessPredicate(loc, _) =>
+        tracker.assertFieldAccess(
+          check,
+          loc
+        )
+      case _ =>
+        new Assert(
+          expression(check.checks, method, returnValue),
+          AssertKind.Imperative
+        )
+    }
+  }
+
   def expression(exp: vpr.Exp, method: Method, returnValue: Option[Expression]): Expression = {
     val expr = expression(_, method, returnValue)
 

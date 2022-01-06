@@ -1,6 +1,7 @@
 package gvc.verifier
 
 import fastparse.Parsed.Success
+import gvc.Config
 import gvc.analyzer.ErrorSink
 import gvc.analyzer.Validator
 import gvc.parser._
@@ -11,7 +12,6 @@ import gvc.weaver.Weaver
 import org.scalatest.funsuite._
 import viper.silicon.Silicon
 import viper.silver.verifier.Failure
-
 import gvc.specs.BaseFileSpec
 import org.scalatest.ConfigMap
 
@@ -51,15 +51,15 @@ class VerifierSpec extends AnyFunSuite with BaseFileSpec {
 
   override protected def beforeAll(config: ConfigMap): Unit = {
     super.beforeAll(config)
-    val z3 = sys.env.get("Z3_EXE")
+    val z3 = Config.resolveToolPath("z3", "Z3_EXE")
     assert(
-      z3.isDefined,
-      "Configure the Z3_EXE variable with the full path to Z3"
+      !z3.isEmpty,
+      "Add z3 to $PATH or configure the Z3_EXE variable with the full path to Z3"
     )
 
     val reporter = viper.silver.reporter.NoopReporter
     silicon = Silicon.fromPartialCommandLineArguments(
-      Seq("--z3Exe", z3.get),
+      Seq("--z3Exe", z3),
       reporter,
       Seq()
     )
