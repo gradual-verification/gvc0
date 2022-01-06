@@ -25,7 +25,7 @@ object Main extends App {
       if (sourceFile.toLowerCase().endsWith(".c0"))
         sourceFile.slice(0, sourceFile.length() - 3)
       else sourceFile
-    var irFileName = baseName + ".ir.c0"
+    val irFileName = baseName + ".ir.c0"
     val silverFileName = baseName + ".vpr"
     val c0FileName = baseName + ".verified.c0"
 
@@ -34,7 +34,7 @@ object Main extends App {
     val parsed = Parser.parseProgram(inputSource) match {
       case fail: Failure =>
         Config.error(s"Parse error:\n${fail.trace().longAggregateMsg}")
-      case Success(value, index) => value
+      case Success(value, _) => value
     }
 
     val errors = new ErrorSink()
@@ -48,8 +48,8 @@ object Main extends App {
       )
 
     val ir = GraphTransformer.transform(resolved)
-    if (config.dump == Some(Config.DumpIR)) dump(GraphPrinter.print(ir, true))
-    else if (config.saveFiles) writeFile(irFileName, GraphPrinter.print(ir, true))
+    if (config.dump == Some(Config.DumpIR)) dump(GraphPrinter.print(ir, includeSpecs = true))
+    else if (config.saveFiles) writeFile(irFileName, GraphPrinter.print(ir, includeSpecs = true))
 
     val silver = IRGraphSilver.toSilver(ir)
     if (config.dump == Some(Config.DumpSilver)) dump(silver.toString())
@@ -81,7 +81,7 @@ object Main extends App {
 
     silicon.stop()
 
-    val c0Source = GraphPrinter.print(ir, false)
+    val c0Source = GraphPrinter.print(ir, includeSpecs = false)
     if (config.dump == Some(Config.DumpC0)) dumpC0(c0Source)
 
     val outputExe = config.output.getOrElse("a.out")

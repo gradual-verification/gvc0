@@ -515,31 +515,19 @@ object AccessChecks {
                 )
                 afterwards.insertAfter(Commands.LoadStatic)
               }
-              if (optionImprecise(callee.postcondition)) {
 
-                afterwards.insertAfter(
-                  Commands.Join(
-                    Commands.GetDynamicOwnedFields,
-                    Vars.StaticOwnedFields
-                  )
+              afterwards.insertAfter(
+                Commands.Join(
+                  Commands.GetDynamicOwnedFields,
+                  Vars.StaticOwnedFields
                 )
-                afterwards.insertAfter(
-                  populateStatic(
-                    Commands.GetDynamicOwnedFields,
-                    callee.postcondition
-                  )
+              )
+              afterwards.insertAfter(
+                populateStatic(
+                  Commands.GetDynamicOwnedFields,
+                  callee.postcondition
                 )
-              } else {
-
-                afterwards.insertAfter(
-                  populateStatic(
-                    Commands.GetDynamicOwnedFields,
-                    callee.postcondition
-                  )
-                )
-
-                afterwards.insertAfter(Commands.InitDynamic)
-              }
+              )
             } else {
               if (needsStatic) {
                 afterwards.insertAfter(Commands.StoreStatic)
