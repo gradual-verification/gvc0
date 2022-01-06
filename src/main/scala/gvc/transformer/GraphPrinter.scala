@@ -14,7 +14,7 @@ object GraphPrinter {
     val Top = 9
   }
 
-  def print(program: Program): String = {
+  def print(program: Program, includeSpecs: Boolean): String = {
     val p = new Printer()
 
     def printList[T](values: Seq[T])(action: T => Unit): Unit = {
@@ -99,19 +99,21 @@ object GraphPrinter {
       printMethodHeader(method)
       p.println()
 
-      method.precondition.foreach { pre =>
-        p.withIndent {
-          p.print("//@requires ")
-          printExpr(pre)
-          p.println(";")
+      if (includeSpecs) {
+        method.precondition.foreach { pre =>
+          p.withIndent {
+            p.print("//@requires ")
+            printExpr(pre)
+            p.println(";")
+          }
         }
-      }
 
-      method.postcondition.foreach { post =>
-        p.withIndent {
-          p.print("//@ensures ")
-          printExpr(post)
-          p.println(";")
+        method.postcondition.foreach { post =>
+          p.withIndent {
+            p.print("//@ensures ")
+            printExpr(post)
+            p.println(";")
+          }
         }
       }
 
@@ -209,32 +211,19 @@ object GraphPrinter {
       }
 
       case assert: Assert =>
-        assert.kind match {
-          case AssertKind.Specification => {
-            p.print("//@assert ")
-            printExpr(assert.value)
-            p.println(";")
+          assert.kind match {
+            case AssertKind.Specification =>
+              if(includeSpecs) {
+                p.print ("//@assert ")
+                printExpr (assert.value)
+                p.println (";")
+              }
+            case AssertKind.Imperative => {
+              p.print("assert(")
+              printExpr(assert.value)
+              p.println(");")
+            }
           }
-          case AssertKind.Imperative => {
-            p.print("assert(")
-            printExpr(assert.value)
-            p.println(");")
-          }
-        }
-
-      case assert: Assert =>
-        assert.kind match {
-          case AssertKind.Specification => {
-            p.print("//@assert ")
-            printExpr(assert.value)
-            p.println(";")
-          }
-          case AssertKind.Imperative => {
-            p.print("assert(")
-            printExpr(assert.value)
-            p.println(");")
-          }
-        }
 
       case fold: Fold => {
         p.print("fold ")
@@ -280,13 +269,14 @@ object GraphPrinter {
         printExpr(w.condition)
         p.println(")")
         w.invariant.foreach { inv =>
-          p.withIndent {
-            p.print("//@loop_invariant ")
-            printExpr(inv)
-            p.println(";")
+          if(includeSpecs){
+            p.withIndent {
+              p.print("//@loop_invariant ")
+              printExpr(inv)
+              p.println(";")
+            }
           }
         }
-
         printBlock(w.body)
       }
     }

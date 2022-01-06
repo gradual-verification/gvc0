@@ -48,8 +48,8 @@ object Main extends App {
       )
 
     val ir = GraphTransformer.transform(resolved)
-    if (config.dump == Some(Config.DumpIR)) dump(GraphPrinter.print(ir))
-    else if (config.saveFiles) writeFile(irFileName, GraphPrinter.print(ir))
+    if (config.dump == Some(Config.DumpIR)) dump(GraphPrinter.print(ir, true))
+    else if (config.saveFiles) writeFile(irFileName, GraphPrinter.print(ir, true))
 
     val silver = IRGraphSilver.toSilver(ir)
     if (config.dump == Some(Config.DumpSilver)) dump(silver.toString())
@@ -81,7 +81,7 @@ object Main extends App {
 
     silicon.stop()
 
-    val c0Source = GraphPrinter.print(ir)
+    val c0Source = GraphPrinter.print(ir, false)
     if (config.dump == Some(Config.DumpC0)) dumpC0(c0Source)
 
     val outputExe = config.output.getOrElse("a.out")

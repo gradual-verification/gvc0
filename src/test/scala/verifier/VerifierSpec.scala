@@ -46,7 +46,7 @@ class VerifierSpec extends AnyFunSuite with BaseFileSpec {
     }
 
     Weaver.weave(ir, silver)
-    assertFile(name.replace(".c0", ".output.c0"), GraphPrinter.print(ir))
+    assertFile(name.replace(".c0", ".output.c0"), GraphPrinter.print(ir, true))
   }
 
   override protected def beforeAll(config: ConfigMap): Unit = {

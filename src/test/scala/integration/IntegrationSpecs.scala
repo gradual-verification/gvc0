@@ -120,7 +120,7 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
               Try(GraphTransformer.transform(result)) match {
                 case Failure(ex) => UnsupportedError(ex.getMessage())
                 case Success(ir) => {
-                  val irSrc = GraphPrinter.print(ir)
+                  val irSrc = GraphPrinter.print(ir, true)
                   val silver = IRGraphSilver.toSilver(ir)
 
                   assertFile(name.replace(".c0", ".ir.c0"), irSrc)

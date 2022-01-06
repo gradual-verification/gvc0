@@ -18,7 +18,7 @@ class WeaverSpec extends AnyFunSuite {
     )
 
     Weaver.weave(c0, silver)
-    val output = GraphPrinter.print(c0)
+    val output = GraphPrinter.print(c0, false)
     assert(
       output ==
         """|int main();
