@@ -2,31 +2,31 @@ package gvc.transformer
 import scala.collection.mutable
 
 object IRGraph {
-  class IRException(message: String) extends Exception(message)
+  class IRException(message: java.lang.String) extends Exception(message)
 
   // Note that names of methods, vars, etc. are immutable, since they are also copied in their respective Maps
 
   class Program {
-    private val _structs = mutable.Map[String, Struct]()
-    private val _methods = mutable.Map[String, Method]()
-    private val _predicates = mutable.Map[String, Predicate]()
-    private val _dependencies = mutable.Map[String, Dependency]()
+    private val _structs = mutable.Map[java.lang.String, Struct]()
+    private val _methods = mutable.Map[java.lang.String, Method]()
+    private val _predicates = mutable.Map[java.lang.String, Predicate]()
+    private val _dependencies = mutable.Map[java.lang.String, Dependency]()
 
-    def addDependency(path: String, isLibrary: Boolean): Dependency = {
+    def addDependency(path: java.lang.String, isLibrary: Boolean): Dependency = {
       val dep = Dependency(path, isLibrary)
       if (_dependencies.getOrElseUpdate(path, dep) != dep)
         throw new IRException(s"Dependency '${dep.path}' already exists")
       dep
     }
 
-    def addMethod(name: String, returnType: Option[Type]): Method = {
+    def addMethod(name: java.lang.String, returnType: Option[Type]): Method = {
       val method = new Method(name, returnType)
       if (_methods.getOrElseUpdate(method.name, method) != method)
         throw new IRException(s"Method '${method.name}' already exists")
       method
     }
 
-    def addPredicate(name: String): Predicate = {
+    def addPredicate(name: java.lang.String): Predicate = {
       val predicate = new Predicate(name, new IRGraph.Bool(true))
       if (_predicates.getOrElseUpdate(predicate.name, predicate) != predicate)
         throw new IRException(s"Predicate '${predicate.name}' already exists")
@@ -40,22 +40,22 @@ object IRGraph {
       _dependencies.values.toSeq.sortBy(_.path)
 
     // Structs can be used even if they are never declared
-    def struct(name: String): Struct =
+    def struct(name: java.lang.String): Struct =
       _structs.getOrElseUpdate(name, new Struct(name))
-    def method(name: String): Method = _methods.getOrElse(
+    def method(name: java.lang.String): Method = _methods.getOrElse(
       name,
       throw new IRException(s"Method '$name' not found")
     )
-    def predicate(name: String): Predicate = _predicates.getOrElse(
+    def predicate(name: java.lang.String): Predicate = _predicates.getOrElse(
       name,
       throw new IRException(s"Predicate '$name' not found")
     )
   }
 
-  class Struct(val name: String) {
+  class Struct(val name: java.lang.String) {
     private val _fields = mutable.ListBuffer[StructField]()
 
-    def addField(name: String, valueType: Type): StructField = {
+    def addField(name: java.lang.String, valueType: Type): StructField = {
       val field = new StructField(
         this,
         Helpers.findAvailableName(_fields.map(_.name), name),
@@ -70,12 +70,12 @@ object IRGraph {
 
   class StructField(
       val struct: Struct,
-      val name: String,
+      val name: java.lang.String,
       var valueType: Type
   )
 
   class Method(
-      val name: String,
+      val name: java.lang.String,
       var returnType: Option[Type],
       var precondition: Option[Expression] = None,
       var postcondition: Option[Expression] = None
@@ -84,20 +84,20 @@ object IRGraph {
     // Scope is a map of both parameters and variables
     private val _parameters = mutable.ListBuffer[Parameter]()
     private val _variables = mutable.ListBuffer[Var]()
-    private val scope = mutable.Map[String, Var]()
+    private val scope = mutable.Map[java.lang.String, Var]()
 
     val body = new MethodBlock(this)
 
     def parameters: Seq[Parameter] = _parameters
     def variables: Seq[Var] = _variables
 
-    def variable(name: String): Var =
+    def variable(name: java.lang.String): Var =
       scope.getOrElse(
         name,
         throw new IRException(s"Variable '$name' not found")
       )
 
-    def addParameter(valueType: Type, name: String): Parameter = {
+    def addParameter(valueType: Type, name: java.lang.String): Parameter = {
       val newParam =
         new Parameter(valueType, Helpers.findAvailableName(scope, name))
       scope += newParam.name -> newParam
@@ -105,25 +105,25 @@ object IRGraph {
       newParam
     }
 
-    def addVar(valueType: Type, name: String = "_"): Var = {
+    def addVar(valueType: Type, name: java.lang.String = "_"): Var = {
       val newVar = new Var(valueType, Helpers.findAvailableName(scope, name))
       scope += newVar.name -> newVar
       _variables += newVar
       newVar
     }
 
-    def getVar(name: String): Option[Var] = scope.get(name)
+    def getVar(name: java.lang.String): Option[Var] = scope.get(name)
   }
 
   class Predicate(
-      val name: String,
+      val name: java.lang.String,
       var expression: IRGraph.Expression
   ) {
     private val _parameters = mutable.ListBuffer[Parameter]()
 
     def parameters: Seq[Parameter] = _parameters
 
-    def addParameter(valueType: Type, name: String): Parameter = {
+    def addParameter(valueType: Type, name: java.lang.String): Parameter = {
       val newParam = new Parameter(valueType, name)
       _parameters += newParam
       newParam
@@ -270,8 +270,8 @@ object IRGraph {
       exp == this
   }
 
-  class Parameter(valueType: Type, name: String) extends Var(valueType, name)
-  class Var(var valueType: Type, val name: String) extends Expression
+  class Parameter(valueType: Type, name: java.lang.String) extends Var(valueType, name)
+  class Var(var valueType: Type, val name: java.lang.String) extends Expression
 
   sealed trait Member extends Expression {
     var root: Expression
@@ -317,6 +317,7 @@ object IRGraph {
   class Int(val value: scala.Int) extends Literal
   class Char(val value: scala.Char) extends Literal
   class Bool(val value: scala.Boolean) extends Literal
+  class String(val value: java.lang.String) extends Literal
   class Null extends Literal
 
   class Conditional(
@@ -370,31 +371,31 @@ object IRGraph {
   }
 
   sealed trait Type {
-    def name: String
+    def name: java.lang.String
     def default: IRGraph.Literal
   }
 
   // A pointer to a struct value
   class ReferenceType(val struct: Struct) extends Type {
-    def name: String = "struct " + struct.name + "*"
+    def name: java.lang.String = "struct " + struct.name + "*"
     def default = new IRGraph.Null()
   }
 
   // A pointer to a primitive value
   class PointerType(val valueType: Type) extends Type {
-    def name: String = valueType.name + "*"
+    def name: java.lang.String = valueType.name + "*"
     def default = new IRGraph.Null()
   }
 
   // An array of primitive values
   class ArrayType(val valueType: Type) extends Type {
-    def name: String = valueType.name + "[]"
+    def name: java.lang.String = valueType.name + "[]"
     def default = new IRGraph.Null()
   }
 
   // An array of struct values
   class ReferenceArrayType(val struct: Struct) extends Type {
-    def name: String = "struct " + struct.name + "[]"
+    def name: java.lang.String = "struct " + struct.name + "[]"
     def default = new IRGraph.Null()
   }
 
@@ -410,6 +411,11 @@ object IRGraph {
 
   object CharType extends Type {
     def name = "char"
+    def default = new IRGraph.Char(0)
+  }
+
+  object StringType extends Type {
+    def name = "string"
     def default = new IRGraph.Char(0)
   }
 
@@ -487,11 +493,6 @@ object IRGraph {
     def copy = new AssignMember(member, value)
   }
 
-  class AssignIndex(var target: Var, var index: Int, var value: Expression)
-      extends Op {
-    def copy = new AssignIndex(target, index, value)
-  }
-
   class Assert(
       var value: Expression,
       var kind: AssertKind
@@ -553,5 +554,5 @@ object IRGraph {
       newWhile
     }
   }
-  case class Dependency(path: String, isLibrary: Boolean)
+  case class Dependency(path: java.lang.String, isLibrary: Boolean)
 }

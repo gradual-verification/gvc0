@@ -7,9 +7,11 @@ import gvc.transformer._
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silver.verifier
+
+import scala.io.Source
 import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets
-import java.io.IOException
+import java.io.{File, IOException}
 import sys.process._
 import scala.language.postfixOps
 
@@ -77,7 +79,7 @@ object Main extends App {
 
     if (config.onlyVerify) sys.exit(0)
 
-    Weaver.weave(ir, silver)
+    val fieldChecksInserted = Weaver.weave(ir, silver)
 
     silicon.stop()
 
@@ -85,12 +87,23 @@ object Main extends App {
     if (config.dump == Some(Config.DumpC0)) dumpC0(c0Source)
 
     val outputExe = config.output.getOrElse("a.out")
-    val cc0Options = CC0Options(
-      compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-      saveIntermediateFiles = config.saveFiles,
-      output = Some(outputExe)
-    )
 
+    val cc0Options = if(fieldChecksInserted) {
+      val runtimeInput = Paths.get(getClass().getResource("/runtime.c0").getPath)
+      val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
+      CC0Options(
+        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+        saveIntermediateFiles = config.saveFiles,
+        output = Some(outputExe),
+        includeDirs = List(runtimeIncludeDir.toString + "/")
+      )
+    } else {
+      CC0Options(
+        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+        saveIntermediateFiles = config.saveFiles,
+        output = Some(outputExe),
+      )
+    }
     // Always write the intermediate C0 file, but then delete it
     // if not saving intermediate files
     writeFile(c0FileName, c0Source)

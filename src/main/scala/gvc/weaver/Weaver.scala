@@ -8,16 +8,19 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 object Weaver {
-  class WeaverException(message: String) extends Exception(message)
+  class WeaverException(message: java.lang.String) extends Exception(message)
 
-  def weave(ir: Program, silver: vpr.Program): Unit = {
-    val tracker = new ProgramAccessTracker()
+  def weave(ir: Program, silver: vpr.Program): Boolean = {
+    val tracker = new ProgramAccessTracker(ir)
     ir.methods.foreach { method =>
       val weaver = new Weaver(method, silver.findMethod(method.name))
       weaver.weave()
       tracker.register(method, weaver.tracker)
     }
-    AccessChecks.injectSupport(ir, tracker)
+    if(tracker.runtimeChecksInserted){
+      tracker.injectSupport
+    }
+    tracker.runtimeChecksInserted
   }
 
 

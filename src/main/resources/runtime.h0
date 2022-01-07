@@ -3,6 +3,7 @@ struct OwnedFields {
     int capacity;
     int length;
     int* instanceCounter;
+
 };
 
 typedef struct OwnedFields OwnedFields;
@@ -11,9 +12,10 @@ void initOwnedFields(OwnedFields* fields, int * instanceCounter);
 int initStructAccess(OwnedFields * fields, int numFields);
 void inheritAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex);
 
-void merge(OwnedFields* target, OwnedFields* source);
-
-bool assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage);
+void join(OwnedFields* target, OwnedFields* source);
+void disjoin(OwnedFields* target, OwnedFields* source);
+void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage);
+void assertDisjointAcc(struct OwnedFields* static, struct OwnedFields* dynamic, int _id, int fieldIndex, string errorMessage);
 
 int runTests();
 
@@ -21,6 +23,8 @@ struct FieldArray {
   bool[] contents;
   int length;
   int _id;
+  int numAccessible;
+  bool deleted;
 };
 
 typedef struct FieldArray FieldArray;

@@ -14,7 +14,7 @@ object GraphPrinter {
     val Top = 9
   }
 
-  def print(program: Program, includeSpecs: Boolean): String = {
+  def print(program: Program, includeSpecs: Boolean): java.lang.String = {
     val p = new Printer()
 
     def printList[T](values: Seq[T])(action: T => Unit): Unit = {
@@ -129,8 +129,10 @@ object GraphPrinter {
       p.print(v.valueType.name)
       p.print(" ")
       p.print(v.name)
-      p.print(" = ")
-      printExpr(v.valueType.default)
+      if(!v.valueType.isInstanceOf[ArrayType] && !v.valueType.isInstanceOf[ReferenceArrayType]){
+        p.print(" = ")
+        printExpr(v.valueType.default)
+      }
       p.println(";")
     }
 
@@ -185,6 +187,7 @@ object GraphPrinter {
         printExpr(assign.value)
         p.println(";")
       }
+
 
       case assign: AssignMember => {
         assign.member match {
@@ -336,6 +339,10 @@ object GraphPrinter {
             }
         }
       case int: Int => p.print(int.value.toString())
+      case str: String =>
+        p.print("\"")
+        p.print(str.value)
+        p.print("\"")
       case char: Char => {
         p.print("'")
         p.print(char.value match {
@@ -402,7 +409,7 @@ object GraphPrinter {
 
     for (dep <- program.dependencies) {
       printDependency(dep)
-      p.println(";")
+      p.println()
     }
 
     for (struct <- program.structs) {
@@ -472,12 +479,12 @@ object GraphPrinter {
       indentLevel -= 1
     }
 
-    def print(value: String): Unit = {
+    def print(value: java.lang.String): Unit = {
       startLine()
       builder ++= value
     }
 
-    def println(value: String): Unit = {
+    def println(value: java.lang.String): Unit = {
       startLine()
       builder ++= value
       builder += '\n'
@@ -489,6 +496,6 @@ object GraphPrinter {
       startedLine = false
     }
 
-    override def toString(): String = builder.toString()
+    override def toString(): java.lang.String = builder.toString()
   }
 }
