@@ -15,6 +15,8 @@ object AccessChecks {
     val StaticOwnedFields = "static_fields"
     val TempStaticOwnedFields = "temp_static_fields"
     val TempDynamicOwnedFields = "temp_dyn_fields"
+    val AssertAcc = "assertAcc"
+    val AssertDisjointAcc = "assertDisjointAcc"
     val ID = "_id"
   }
 
@@ -71,7 +73,7 @@ object AccessChecks {
     }
     def Assert: Method = {
       new Method(
-        "assertAcc",
+        Names.AssertAcc,
         Some(BoolType),
         None,
         None
@@ -80,7 +82,7 @@ object AccessChecks {
 
     def AssertDisjoint: Method = {
       new Method(
-        "assertDisjointAcc",
+        Names.AssertDisjointAcc,
         Some(BoolType),
         None,
         None
@@ -272,10 +274,10 @@ object AccessChecks {
                 && (afterwards.getNext.get
                 .asInstanceOf[Invoke]
                 .method
-                .name == "assertAcc" || afterwards.getNext.get
+                .name == Names.AssertAcc || afterwards.getNext.get
                 .asInstanceOf[Invoke]
                 .method
-                .name == "assertDisjointAcc")
+                .name == Names.AssertDisjointAcc)
             ) afterwards = afterwards.getNext.get
 
             val needsStatic = needsStaticTracking(callee)
