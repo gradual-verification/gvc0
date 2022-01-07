@@ -106,7 +106,7 @@ void debugOwnedFields(OwnedFields* fields, string name) {
     print("]\n");
 }
 
-int initStructAccess(OwnedFields * fields, int numFields){
+int addStructAccess(OwnedFields * fields, int numFields){
     newFieldArray(fields, *fields->instanceCounter, numFields, true);
     *(fields->instanceCounter) += 1;
     return *(fields->instanceCounter) - 1;
