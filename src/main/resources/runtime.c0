@@ -106,7 +106,7 @@ void debugOwnedFields(OwnedFields* fields, string name) {
     print("]\n");
 }
 
-int initStructAccess(OwnedFields * fields, int numFields){
+int addStructAccess(OwnedFields * fields, int numFields){
     newFieldArray(fields, *fields->instanceCounter, numFields, true);
     *(fields->instanceCounter) += 1;
     return *(fields->instanceCounter) - 1;
@@ -219,10 +219,10 @@ bool testStructCreation(string header){
     OwnedFields* fields = alloc(OwnedFields);
     initOwnedFields(fields, _id_counter);
 
-    int _id = initStructAccess(fields, 80);
+    int _id = addStructAccess(fields, 80);
 
     for(int i = 0; i<80; i += 1){
-        assertAcc(fields, _id, i, "(initStructAccess) Failed to verify access to the fields of a newly created struct.");
+        assertAcc(fields, _id, i, "(addStructAccess) Failed to verify access to the fields of a newly created struct.");
     }
     return true;
 }
@@ -239,7 +239,7 @@ bool testFieldAddition(string header){
     OwnedFields* fields_2 = alloc(OwnedFields);
     initOwnedFields(fields_2, _id_counter);
 
-    int _id = initStructAccess(fields_1, 4);
+    int _id = addStructAccess(fields_1, 4);
 
     addAccess(fields_2, _id, 4, 2);
     assertAcc(fields_2, _id, 2, "(addAccess/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.");
@@ -256,8 +256,8 @@ bool testFieldMerging(string header){
     OwnedFields* source = alloc(OwnedFields);
     initOwnedFields(source, _id_counter);
 
-    int _id_node_1 = initStructAccess(source, num_fields);
-    int _id_node_2 = initStructAccess(source, num_fields);
+    int _id_node_1 = addStructAccess(source, num_fields);
+    int _id_node_2 = addStructAccess(source, num_fields);
 
     OwnedFields* fields_1 = alloc(OwnedFields);
     initOwnedFields(fields_1, _id_counter);
