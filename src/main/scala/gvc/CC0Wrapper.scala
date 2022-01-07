@@ -1,5 +1,8 @@
 package gvc
 
+import gvc.Main.getClass
+
+import java.io.File
 import sys.process._
 import scala.language.postfixOps
 
@@ -32,11 +35,14 @@ case class CC0Options(
   val runtime: Option[String] = None,
   val architecture: Option[CC0Architecture] = None,
   val onlyTypecheck: Boolean = false,
+  val includeRuntime: Boolean = false,
+  val inputFiles: List[String] = Nil,
 )
 
 object CC0Wrapper {
   def exec(sourceFile: String, options: CC0Options): Int = {
-    formatCommand(sourceFile, options) !
+    val command = formatCommand(sourceFile, options)
+    command !
   }
 
   private def formatCommand(sourceFile: String, options: CC0Options): List[String] = {
@@ -67,6 +73,8 @@ object CC0Wrapper {
       flag("--warn", options.warn),
       flag("--exec", options.exec),
       flag("--only-typecheck", options.onlyTypecheck),
-      Seq(sourceFile)).flatten.toList
+      options.inputFiles.flatMap(value => Seq(value)),
+      Seq(sourceFile)
+    ).flatten.toList
   }
 }

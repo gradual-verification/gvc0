@@ -9,6 +9,10 @@ dot_input.dot
 .bloop
 .bsp
 
+.scalafmt.conf
+
+test.c0
+
 # metals
 project/metals.sbt
 .metals

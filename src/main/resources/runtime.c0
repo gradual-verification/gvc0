@@ -1,4 +1,3 @@
-#use "fieldaccess.h0"
 #use <conio>
 #use <string>
 
@@ -35,7 +34,7 @@ void grow(OwnedFields* fields)
   fields->capacity = GROW_CAPACITY(oldCapacity);
   FieldArray*[] newContents = alloc_array(FieldArray*, fields->capacity);
   for(int i = 0; i<oldCapacity; i += 1){
-    if(fields->contents[i] != NULL){
+    if(fields->contents[i] != NULL && !fields->contents[i]->deleted){
         int _id = fields->contents[i]->_id;
         int newIndex = hash(_id, fields->capacity);
         newContents[newIndex] = fields->contents[i];
@@ -46,7 +45,11 @@ void grow(OwnedFields* fields)
 
 FieldArray* find(OwnedFields* fields, int _id){
   int index = hash(_id, fields->capacity);
-  return fields->contents[index];
+  if(fields->contents[index] != NULL && !fields->contents[index]->deleted){
+    return fields->contents[index];
+  }else{
+    return NULL;
+  }
 }
 
 FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool accAll)
@@ -65,11 +68,12 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   array->contents = alloc_array(bool, numFields);
   array->length = numFields;
   array->_id = _id;
+  array->deleted = false;
 
   for(int i = 0; i<array->length; i += 1){
     array->contents[i] = accAll;
   }
-  
+  if(accAll) array->numAccessible = array->length;
   return fields->contents[fieldIndex];
 }
 
@@ -116,20 +120,62 @@ void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex){
     array = newFieldArray(fields, _id, numFields, false);
     array->contents[fieldIndex] = true;
   }
+  array->numAccessible += 1;
 }
 
 
-bool assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
+void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
     FieldArray* toCheck = find(fields, _id);
     if(toCheck != NULL){
         if(fieldIndex >= toCheck->length){
-            println("[INTERNAL] Field index exceeds maximum for the given struct.\n");
+            error("[INTERNAL] Field index exceeds maximum for the given struct.\n");
         }else if(toCheck->contents[fieldIndex]){
-            return true;
+            return;
         }
     }
-    println(errorMessage);
-    return false;
+    error(errorMessage);
+}
+
+void assertDisjointAcc(OwnedFields* static, OwnedFields* dynamic, int _id, int fieldIndex, string errorMessage){
+    FieldArray* toCheck = find(static, _id);
+    if(static == NULL){
+        assertAcc(dynamic, _id, fieldIndex, errorMessage);
+    }else{
+        error(errorMessage);
+    }
+}
+
+void join(OwnedFields* target, OwnedFields* source){
+    for(int i = 0; i<source->capacity; i += 1){
+        FieldArray* currFields = source->contents[i];
+        if(currFields != NULL){
+            for(int j = 0; j< currFields->length; j += 1){
+                addAccess(target, currFields->_id, currFields->length, j);
+            }
+        }
+    }
+}
+
+void disjoin(OwnedFields* target, OwnedFields* source){
+    for(int i = 0; i<source->capacity; i += 1){
+        FieldArray* currFields = source->contents[i];
+        if(currFields != NULL){
+            FieldArray* inTarget = find(target, currFields->_id);
+            if(currFields->numAccessible == currFields->length && inTarget->numAccessible == inTarget->length) {
+                inTarget->deleted = true;
+            }else{
+                for(int j = 0; j<currFields->length; j += 1){
+                    if(inTarget->contents[j] && currFields->contents[j]){
+                        inTarget->contents[j] = false;
+                        inTarget->numAccessible -= 1;
+                    }
+                }
+                if(inTarget->numAccessible == 0){
+                    inTarget->deleted = true;
+                }
+            }
+        }
+    }
 }
 
 bool test(string header, bool condition, string message){
@@ -176,9 +222,7 @@ bool testStructCreation(string header){
     int _id = initStructAccess(fields, 80);
 
     for(int i = 0; i<80; i += 1){
-        if(!assertAcc(fields, _id, i, "(initStructAccess) Failed to verify access to the fields of a newly created struct.")){
-            return false;
-        }
+        assertAcc(fields, _id, i, "(initStructAccess) Failed to verify access to the fields of a newly created struct.");
     }
     return true;
 }
@@ -198,23 +242,10 @@ bool testFieldAddition(string header){
     int _id = initStructAccess(fields_1, 4);
 
     addAccess(fields_2, _id, 4, 2);
-    if(!assertAcc(fields_2, _id, 2, "(addAccess/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.")){
-        return false;
-    }
-
+    assertAcc(fields_2, _id, 2, "(addAccess/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.");
     return true;
 }
 
-void merge(OwnedFields* target, OwnedFields* source){
-    for(int i = 0; i<source->capacity; i += 1){
-        FieldArray* currFields = source->contents[i];
-        if(currFields != NULL){
-            for(int j = 0; j< currFields->length; j += 1){
-                addAccess(target, currFields->_id, currFields->length, j);
-            }
-        }
-    }
-}
 
 bool testFieldMerging(string header){
     int * _id_counter = alloc(int);
@@ -236,26 +267,18 @@ bool testFieldMerging(string header){
 
     for(int i = 0; i<num_fields; i += 1){
         addAccess(fields_1, _id_node_1, num_fields, i);
-        if(!assertAcc(fields_1, _id_node_1, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.")){
-            return false;
-        }
+        assertAcc(fields_1, _id_node_1, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
 
         addAccess(fields_2, _id_node_2, num_fields, i);
-        if(!assertAcc(fields_2, _id_node_2, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.")){
-            return false;
-        }
+        assertAcc(fields_2, _id_node_2, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
     }
 
 
-    merge(fields_1, fields_2);
+    join(fields_1, fields_2);
 
     for(int i = 0; i<num_fields; i += 1){
-        if(!assertAcc(fields_1, _id_node_1, i, "(merge/assertAcc) Failed to preserve existing permissions after merge.")){
-            return false;
-        }
-        if(!assertAcc(fields_1, _id_node_2, i, "(merge/assertAcc) Failed to add new permissions from merge.")){
-            return false;
-        }
+        assertAcc(fields_1, _id_node_1, i, "(join/assertAcc) Failed to preserve existing permissions after join.");
+        assertAcc(fields_1, _id_node_2, i, "(join/assertAcc) Failed to add new permissions from join.");
     }
     return true;
 }

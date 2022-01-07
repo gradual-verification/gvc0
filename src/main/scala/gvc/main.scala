@@ -7,9 +7,11 @@ import gvc.transformer._
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silver.verifier
-import java.nio.file.{Files,Paths}
+
+import scala.io.Source
+import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets
-import java.io.IOException
+import java.io.{File, IOException}
 import sys.process._
 import scala.language.postfixOps
 
@@ -22,27 +24,34 @@ object Main extends App {
     val sourceFile = config.sourceFile.get
 
     val baseName =
-      if (sourceFile.toLowerCase().endsWith(".c0")) sourceFile.slice(0, sourceFile.length() - 3)
+      if (sourceFile.toLowerCase().endsWith(".c0"))
+        sourceFile.slice(0, sourceFile.length() - 3)
       else sourceFile
-    var irFileName = baseName + ".ir.c0"
+    val irFileName = baseName + ".ir.c0"
     val silverFileName = baseName + ".vpr"
     val c0FileName = baseName + ".verified.c0"
 
     val inputSource = readFile(config.sourceFile.get)
 
     val parsed = Parser.parseProgram(inputSource) match {
-      case fail: Failure => Config.error(s"Parse error:\n${fail.trace().longAggregateMsg}")
-      case Success(value, index) => value
+      case fail: Failure =>
+        Config.error(s"Parse error:\n${fail.trace().longAggregateMsg}")
+      case Success(value, _) => value
     }
-    
+
     val errors = new ErrorSink()
-    val resolved = Validator.validateParsed(parsed, errors)
-      .getOrElse(Config.error(s"Errors:\n" +
-          errors.errors.map(_.toString()).mkString("\n")))
+    val resolved = Validator
+      .validateParsed(parsed, errors)
+      .getOrElse(
+        Config.error(
+          s"Errors:\n" +
+            errors.errors.map(_.toString()).mkString("\n")
+        )
+      )
 
     val ir = GraphTransformer.transform(resolved)
-    if (config.dump == Some(Config.DumpIR)) dump(GraphPrinter.print(ir))
-    else if (config.saveFiles) writeFile(irFileName, GraphPrinter.print(ir))
+    if (config.dump == Some(Config.DumpIR)) dump(GraphPrinter.print(ir, includeSpecs = true))
+    else if (config.saveFiles) writeFile(irFileName, GraphPrinter.print(ir, includeSpecs = true))
 
     val silver = IRGraphSilver.toSilver(ir)
     if (config.dump == Some(Config.DumpSilver)) dump(silver.toString())
@@ -50,33 +59,51 @@ object Main extends App {
 
     val reporter = viper.silver.reporter.StdIOReporter()
     val z3Exe = Config.resolveToolPath("z3", "Z3_EXE")
-    val silicon = Silicon.fromPartialCommandLineArguments(Seq("--z3Exe", z3Exe), reporter, Seq())
+    val silicon = Silicon.fromPartialCommandLineArguments(
+      Seq("--z3Exe", z3Exe),
+      reporter,
+      Seq()
+    )
 
     silicon.start()
 
     silicon.verify(silver) match {
       case verifier.Success => ()
       case verifier.Failure(errors) => {
-        Config.error(s"Verification errors:\n" +
-          errors.map(_.readableMessage).mkString("\n"))
+        Config.error(
+          s"Verification errors:\n" +
+            errors.map(_.readableMessage).mkString("\n")
+        )
       }
     }
 
     if (config.onlyVerify) sys.exit(0)
 
-    Weaver.weave(ir, silver)
+    val fieldChecksInserted = Weaver.weave(ir, silver)
 
     silicon.stop()
 
-    val c0Source = GraphPrinter.print(ir)
+    val c0Source = GraphPrinter.print(ir, includeSpecs = false)
     if (config.dump == Some(Config.DumpC0)) dumpC0(c0Source)
 
     val outputExe = config.output.getOrElse("a.out")
-    val cc0Options = CC0Options(
-      compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-      saveIntermediateFiles = config.saveFiles,
-      output = Some(outputExe))
-    
+
+    val cc0Options = if(fieldChecksInserted) {
+      val runtimeInput = Paths.get(getClass().getResource("/runtime.c0").getPath)
+      val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
+      CC0Options(
+        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+        saveIntermediateFiles = config.saveFiles,
+        output = Some(outputExe),
+        includeDirs = List(runtimeIncludeDir.toString + "/")
+      )
+    } else {
+      CC0Options(
+        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+        saveIntermediateFiles = config.saveFiles,
+        output = Some(outputExe),
+      )
+    }
     // Always write the intermediate C0 file, but then delete it
     // if not saving intermediate files
     writeFile(c0FileName, c0Source)
@@ -117,7 +144,7 @@ object Main extends App {
     } catch {
       case _: IOException => Config.error(s"Could not delete file 'file'")
     }
-  
+
   def dump(output: String): Nothing = {
     println(output)
     sys.exit(0)
@@ -129,10 +156,17 @@ object Main extends App {
     for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
       println("Runtime checks required for " + exp.toString() + ":")
       println(
-      checks.map(
-        b =>
-          "  if " + (if (b.branch.branch.isEmpty) "true" else b.branch.branch.map(c => "(" + c.toString() + ")").mkString(" && ")) + ": " +
-          b.checks.toString()).mkString("\n"))
+        checks
+          .map(b =>
+            "  if " + (if (b.branch.branch.isEmpty) "true"
+                       else
+                         b.branch.branch
+                           .map(c => "(" + c.toString() + ")")
+                           .mkString(" && ")) + ": " +
+              b.checks.toString()
+          )
+          .mkString("\n")
+      )
     }
 
     dump(output)

@@ -3,7 +3,7 @@ package gvc.weaver
 import org.scalatest.funsuite.AnyFunSuite
 import gvc.transformer._
 import gvc.analyzer._
-import fastparse.Parsed.{Success,Failure}
+import fastparse.Parsed.{Success, Failure}
 
 class WeaverSpec extends AnyFunSuite {
 
@@ -18,15 +18,17 @@ class WeaverSpec extends AnyFunSuite {
     )
 
     Weaver.weave(c0, silver)
-    val output = GraphPrinter.print(c0)
-    assert(output ==
-      """|int main();
+    val output = GraphPrinter.print(c0, false)
+    assert(
+      output ==
+        """|int main();
          |
          |int main()
          |{
          |  return 0;
          |}
-         |""".stripMargin)
+         |""".stripMargin
+    )
   }
 
   def createProgram(source: String) = {
@@ -45,4 +47,3 @@ class WeaverSpec extends AnyFunSuite {
     }
   }
 }
-

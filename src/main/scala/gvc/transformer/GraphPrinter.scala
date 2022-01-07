@@ -14,7 +14,7 @@ object GraphPrinter {
     val Top = 9
   }
 
-  def print(program: Program): String = {
+  def print(program: Program, includeSpecs: Boolean): java.lang.String = {
     val p = new Printer()
 
     def printList[T](values: Seq[T])(action: T => Unit): Unit = {
@@ -26,6 +26,14 @@ object GraphPrinter {
       }
     }
 
+    def printDependency(dependency: Dependency): Unit = {
+      p.print("#use ")
+      if (dependency.isLibrary) {
+        p.print("<" + dependency.path + ">")
+      } else {
+        p.print("\"" + dependency.path + "\"")
+      }
+    }
     def printStructHeader(struct: Struct): Unit = {
       p.print("struct ")
       p.print(struct.name)
@@ -69,7 +77,7 @@ object GraphPrinter {
 
     def printMethodHeader(method: Method): Unit = {
       method.returnType match {
-        case None => p.print("void")
+        case None      => p.print("void")
         case Some(ret) => printType(ret)
       }
 
@@ -91,19 +99,21 @@ object GraphPrinter {
       printMethodHeader(method)
       p.println()
 
-      method.precondition.foreach {pre =>
-        p.withIndent {
-          p.print("//@requires ")
-          printExpr(pre)
-          p.println(";")
+      if (includeSpecs) {
+        method.precondition.foreach { pre =>
+          p.withIndent {
+            p.print("//@requires ")
+            printExpr(pre)
+            p.println(";")
+          }
         }
-      }
 
-      method.postcondition.foreach { post =>
-        p.withIndent {
-          p.print("//@ensures ")
-          printExpr(post)
-          p.println(";")
+        method.postcondition.foreach { post =>
+          p.withIndent {
+            p.print("//@ensures ")
+            printExpr(post)
+            p.println(";")
+          }
         }
       }
 
@@ -119,8 +129,10 @@ object GraphPrinter {
       p.print(v.valueType.name)
       p.print(" ")
       p.print(v.name)
-      p.print(" = ")
-      printExpr(v.valueType.default)
+      if(!v.valueType.isInstanceOf[ArrayType] && !v.valueType.isInstanceOf[ReferenceArrayType]){
+        p.print(" = ")
+        printExpr(v.valueType.default)
+      }
       p.println(";")
     }
 
@@ -176,6 +188,7 @@ object GraphPrinter {
         p.println(";")
       }
 
+
       case assign: AssignMember => {
         assign.member match {
           case member: FieldMember => {
@@ -194,24 +207,26 @@ object GraphPrinter {
             p.print("]")
           }
         }
-        
+
         p.print(" = ")
         printExpr(assign.value)
         p.println(";")
       }
 
-      case assert: Assert => assert.kind match {
-        case AssertKind.Specification => {
-          p.print("//@assert ")
-          printExpr(assert.value)
-          p.println(";")
-        }
-        case AssertKind.Imperative => {
-          p.print("assert(")
-          printExpr(assert.value)
-          p.println(");")
-        }
-      }
+      case assert: Assert =>
+          assert.kind match {
+            case AssertKind.Specification =>
+              if(includeSpecs) {
+                p.print ("//@assert ")
+                printExpr (assert.value)
+                p.println (";")
+              }
+            case AssertKind.Imperative => {
+              p.print("assert(")
+              printExpr(assert.value)
+              p.println(");")
+            }
+          }
 
       case fold: Fold => {
         p.print("fold ")
@@ -257,18 +272,21 @@ object GraphPrinter {
         printExpr(w.condition)
         p.println(")")
         w.invariant.foreach { inv =>
-          p.withIndent {
-            p.print("//@loop_invariant ")
-            printExpr(inv)
-            p.println(";")
+          if(includeSpecs){
+            p.withIndent {
+              p.print("//@loop_invariant ")
+              printExpr(inv)
+              p.println(";")
+            }
           }
         }
-
         printBlock(w.body)
       }
     }
 
-    def wrapExpr(currentPrecedence: scala.Int, exprPrecedence: scala.Int)(action: => Unit): Unit = {
+    def wrapExpr(currentPrecedence: scala.Int, exprPrecedence: scala.Int)(
+        action: => Unit
+    ): Unit = {
       if (currentPrecedence < exprPrecedence) {
         p.print("(")
         action
@@ -278,17 +296,21 @@ object GraphPrinter {
       }
     }
 
-    def printExpr(expr: Expression, precedence: scala.Int = Precedence.Top): Unit = expr match {
+    def printExpr(
+        expr: Expression,
+        precedence: scala.Int = Precedence.Top
+    ): Unit = expr match {
       case v: Var => p.print(v.name)
       case m: FieldMember => {
         printExpr(m.root)
         p.print("->")
         p.print(m.field.name)
       }
-      case deref: DereferenceMember => wrapExpr(precedence, Precedence.Unary) {
-        p.print("*")
-        printExpr(deref.root, Precedence.Unary)
-      }
+      case deref: DereferenceMember =>
+        wrapExpr(precedence, Precedence.Unary) {
+          p.print("*")
+          printExpr(deref.root, Precedence.Unary)
+        }
       case acc: Accessibility => {
         p.print("acc(")
         printExpr(acc.member)
@@ -307,49 +329,56 @@ object GraphPrinter {
         p.print("]")
       }
       case res: Result => p.print("\\result")
-      case imp: Imprecise => imp.precise match {
-        case None => p.print("?")
-        case Some(precise) => wrapExpr(precedence, Precedence.And) {
-          p.print("? && ")
-          printExpr(precise, Precedence.And)
+      case imp: Imprecise =>
+        imp.precise match {
+          case None => p.print("?")
+          case Some(precise) =>
+            wrapExpr(precedence, Precedence.And) {
+              p.print("? && ")
+              printExpr(precise, Precedence.And)
+            }
         }
-      }
       case int: Int => p.print(int.value.toString())
+      case str: String =>
+        p.print("\"")
+        p.print(str.value)
+        p.print("\"")
       case char: Char => {
         p.print("'")
         p.print(char.value match {
-          case '\\' => "\\\\"
-          case '\n' => "\\n"
-          case '\r' => "\\r"
-          case '\t' => "\\t"
+          case '\\'  => "\\\\"
+          case '\n'  => "\\n"
+          case '\r'  => "\\r"
+          case '\t'  => "\\t"
           case other => other.toString()
         })
         p.print("'")
       }
       case bool: Bool => p.print(if (bool.value) "true" else "false")
-      case _: Null => p.print("NULL")
+      case _: Null    => p.print("NULL")
 
-      case cond: Conditional => wrapExpr(precedence, Precedence.Conditional) {
-        printExpr(cond.condition, Precedence.Conditional)
-        p.print(" ? ")
-        printExpr(cond.ifTrue, Precedence.Conditional)
-        p.print(" : ")
-        printExpr(cond.ifFalse, Precedence.Conditional)
-      }
+      case cond: Conditional =>
+        wrapExpr(precedence, Precedence.Conditional) {
+          printExpr(cond.condition, Precedence.Conditional)
+          p.print(" ? ")
+          printExpr(cond.ifTrue, Precedence.Conditional)
+          p.print(" : ")
+          printExpr(cond.ifFalse, Precedence.Conditional)
+        }
 
       case binary: Binary => {
         val (sep, opPrecedence) = binary.operator match {
-          case BinaryOp.Add => (" + ", Precedence.Add)
-          case BinaryOp.Subtract => (" - ", Precedence.Add)
-          case BinaryOp.Divide => (" / ", Precedence.Multiply)
-          case BinaryOp.Multiply => (" * ", Precedence.Multiply)
-          case BinaryOp.And => (" && ", Precedence.And)
-          case BinaryOp.Or => (" || ", Precedence.Or)
-          case BinaryOp.Equal => (" == ", Precedence.Equality)
-          case BinaryOp.NotEqual => (" != ", Precedence.Equality)
-          case BinaryOp.Less => (" < ", Precedence.Inequality)
-          case BinaryOp.LessOrEqual => (" <= ", Precedence.Inequality)
-          case BinaryOp.Greater => (" > ", Precedence.Inequality)
+          case BinaryOp.Add            => (" + ", Precedence.Add)
+          case BinaryOp.Subtract       => (" - ", Precedence.Add)
+          case BinaryOp.Divide         => (" / ", Precedence.Multiply)
+          case BinaryOp.Multiply       => (" * ", Precedence.Multiply)
+          case BinaryOp.And            => (" && ", Precedence.And)
+          case BinaryOp.Or             => (" || ", Precedence.Or)
+          case BinaryOp.Equal          => (" == ", Precedence.Equality)
+          case BinaryOp.NotEqual       => (" != ", Precedence.Equality)
+          case BinaryOp.Less           => (" < ", Precedence.Inequality)
+          case BinaryOp.LessOrEqual    => (" <= ", Precedence.Inequality)
+          case BinaryOp.Greater        => (" > ", Precedence.Inequality)
           case BinaryOp.GreaterOrEqual => (" >= ", Precedence.Inequality)
         }
 
@@ -360,13 +389,14 @@ object GraphPrinter {
         }
       }
 
-      case unary: Unary => wrapExpr(precedence, Precedence.Unary) {
-        p.print(unary.operator match {
-          case UnaryOp.Not => "!"
-          case UnaryOp.Negate => "-"
-        })
-        printExpr(unary.operand, Precedence.Unary)
-      }
+      case unary: Unary =>
+        wrapExpr(precedence, Precedence.Unary) {
+          p.print(unary.operator match {
+            case UnaryOp.Not    => "!"
+            case UnaryOp.Negate => "-"
+          })
+          printExpr(unary.operand, Precedence.Unary)
+        }
     }
 
     var empty = true
@@ -375,6 +405,11 @@ object GraphPrinter {
         empty = true
         p.println()
       }
+    }
+
+    for (dep <- program.dependencies) {
+      printDependency(dep)
+      p.println()
     }
 
     for (struct <- program.structs) {
@@ -404,8 +439,8 @@ object GraphPrinter {
     }
 
     printSeparator()
-    
-    for(method <- program.methods) {
+
+    for (method <- program.methods) {
       printMethodHeader(method)
       p.println(";")
       empty = false
@@ -444,12 +479,12 @@ object GraphPrinter {
       indentLevel -= 1
     }
 
-    def print(value: String): Unit = {
+    def print(value: java.lang.String): Unit = {
       startLine()
       builder ++= value
     }
 
-    def println(value: String): Unit = {
+    def println(value: java.lang.String): Unit = {
       startLine()
       builder ++= value
       builder += '\n'
@@ -461,6 +496,6 @@ object GraphPrinter {
       startedLine = false
     }
 
-    override def toString(): String = builder.toString()
+    override def toString(): java.lang.String = builder.toString()
   }
 }

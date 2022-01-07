@@ -2,23 +2,31 @@ package gvc.transformer
 import scala.collection.mutable
 
 object IRGraph {
-  class IRException(message: String) extends Exception(message)
+  class IRException(message: java.lang.String) extends Exception(message)
 
   // Note that names of methods, vars, etc. are immutable, since they are also copied in their respective Maps
 
   class Program {
-    private val _structs = mutable.Map[String, Struct]()
-    private val _methods = mutable.Map[String, Method]()
-    private val _predicates = mutable.Map[String, Predicate]()
+    private val _structs = mutable.Map[java.lang.String, Struct]()
+    private val _methods = mutable.Map[java.lang.String, Method]()
+    private val _predicates = mutable.Map[java.lang.String, Predicate]()
+    private val _dependencies = mutable.Map[java.lang.String, Dependency]()
 
-    def addMethod(name: String, returnType: Option[Type]): Method = {
+    def addDependency(path: java.lang.String, isLibrary: Boolean): Dependency = {
+      val dep = Dependency(path, isLibrary)
+      if (_dependencies.getOrElseUpdate(path, dep) != dep)
+        throw new IRException(s"Dependency '${dep.path}' already exists")
+      dep
+    }
+
+    def addMethod(name: java.lang.String, returnType: Option[Type]): Method = {
       val method = new Method(name, returnType)
       if (_methods.getOrElseUpdate(method.name, method) != method)
         throw new IRException(s"Method '${method.name}' already exists")
       method
     }
 
-    def addPredicate(name: String): Predicate = {
+    def addPredicate(name: java.lang.String): Predicate = {
       val predicate = new Predicate(name, new IRGraph.Bool(true))
       if (_predicates.getOrElseUpdate(predicate.name, predicate) != predicate)
         throw new IRException(s"Predicate '${predicate.name}' already exists")
@@ -28,18 +36,31 @@ object IRGraph {
     def structs: Seq[Struct] = _structs.values.toSeq.sortBy(_.name)
     def methods: Seq[Method] = _methods.values.toSeq.sortBy(_.name)
     def predicates: Seq[Predicate] = _predicates.values.toSeq.sortBy(_.name)
+    def dependencies: Seq[Dependency] =
+      _dependencies.values.toSeq.sortBy(_.path)
 
     // Structs can be used even if they are never declared
-    def struct(name: String): Struct = _structs.getOrElseUpdate(name, new Struct(name))
-    def method(name: String): Method = _methods.getOrElse(name, throw new IRException(s"Method '$name' not found"))
-    def predicate(name: String): Predicate = _predicates.getOrElse(name, throw new IRException(s"Predicate '$name' not found"))
+    def struct(name: java.lang.String): Struct =
+      _structs.getOrElseUpdate(name, new Struct(name))
+    def method(name: java.lang.String): Method = _methods.getOrElse(
+      name,
+      throw new IRException(s"Method '$name' not found")
+    )
+    def predicate(name: java.lang.String): Predicate = _predicates.getOrElse(
+      name,
+      throw new IRException(s"Predicate '$name' not found")
+    )
   }
 
-  class Struct(val name: String) {
+  class Struct(val name: java.lang.String) {
     private val _fields = mutable.ListBuffer[StructField]()
 
-    def addField(name: String, valueType: Type): StructField = {
-      val field = new StructField(this, Helpers.findAvailableName(_fields.map(_.name), name), valueType)
+    def addField(name: java.lang.String, valueType: Type): StructField = {
+      val field = new StructField(
+        this,
+        Helpers.findAvailableName(_fields.map(_.name), name),
+        valueType
+      )
       _fields += field
       field
     }
@@ -48,57 +69,61 @@ object IRGraph {
   }
 
   class StructField(
-    val struct: Struct,
-    val name: String,
-    var valueType: Type
+      val struct: Struct,
+      val name: java.lang.String,
+      var valueType: Type
   )
 
   class Method(
-    val name: String,
-    var returnType: Option[Type],
-    var precondition: Option[Expression] = None,
-    var postcondition: Option[Expression] = None
+      val name: java.lang.String,
+      var returnType: Option[Type],
+      var precondition: Option[Expression] = None,
+      var postcondition: Option[Expression] = None
   ) {
     // Variables/parameters are added to both a list and a map to preserve order and speedup lookup
     // Scope is a map of both parameters and variables
     private val _parameters = mutable.ListBuffer[Parameter]()
     private val _variables = mutable.ListBuffer[Var]()
-    private val scope = mutable.Map[String, Var]()
+    private val scope = mutable.Map[java.lang.String, Var]()
 
     val body = new MethodBlock(this)
 
     def parameters: Seq[Parameter] = _parameters
     def variables: Seq[Var] = _variables
 
-    def variable(name: String): Var =
-      scope.getOrElse(name, throw new IRException(s"Variable '$name' not found"))
+    def variable(name: java.lang.String): Var =
+      scope.getOrElse(
+        name,
+        throw new IRException(s"Variable '$name' not found")
+      )
 
-    def addParameter(valueType: Type, name: String): Parameter = {
-      val newParam = new Parameter(valueType, Helpers.findAvailableName(scope, name))
+    def addParameter(valueType: Type, name: java.lang.String): Parameter = {
+      val newParam =
+        new Parameter(valueType, Helpers.findAvailableName(scope, name))
       scope += newParam.name -> newParam
       _parameters += newParam
       newParam
     }
 
-    def addVar(valueType: Type, name: String = "_"): Var = {
+    def addVar(valueType: Type, name: java.lang.String = "_"): Var = {
       val newVar = new Var(valueType, Helpers.findAvailableName(scope, name))
       scope += newVar.name -> newVar
       _variables += newVar
       newVar
     }
 
-    def getVar(name: String): Option[Var] = scope.get(name)
+    def getVar(name: java.lang.String): Option[Var] = scope.get(name)
   }
 
   class Predicate(
-    val name: String,
-    var expression: IRGraph.Expression
+      val name: java.lang.String,
+      var expression: IRGraph.Expression
   ) {
     private val _parameters = mutable.ListBuffer[Parameter]()
 
     def parameters: Seq[Parameter] = _parameters
 
-    def addParameter(valueType: Type, name: String): Parameter = {
+    def addParameter(valueType: Type, name: java.lang.String): Parameter = {
       val newParam = new Parameter(valueType, name)
       _parameters += newParam
       newParam
@@ -121,7 +146,7 @@ object IRGraph {
     }
 
     // Appends an Op to the end of the block
-    def += (newOp: Op): Unit = {
+    def +=(newOp: Op): Unit = {
       claim(newOp)
 
       // Check if there is a existing tail
@@ -146,7 +171,7 @@ object IRGraph {
     }
 
     // Prepends an Op to the beginning of the block
-    def +=: (newOp: Op): Unit = {
+    def +=:(newOp: Op): Unit = {
       claim(newOp)
 
       // Check if there is a existing head
@@ -192,7 +217,7 @@ object IRGraph {
       claim(newOp)
 
       newOp.previous = Some(op)
- 
+
       op.next match {
         case None => {
           tailNode = Some(newOp)
@@ -209,12 +234,12 @@ object IRGraph {
 
     private[IRGraph] def remove(op: Op): Unit = {
       op.previous match {
-        case None => headNode = op.next
+        case None         => headNode = op.next
         case Some(prevOp) => prevOp.next = op.next
       }
 
       op.next match {
-        case None => tailNode = op.previous
+        case None         => tailNode = op.previous
         case Some(nextOp) => nextOp.previous = op.previous
       }
 
@@ -245,8 +270,8 @@ object IRGraph {
       exp == this
   }
 
-  class Parameter(valueType: Type, name: String) extends Var(valueType, name)
-  class Var(var valueType: Type, val name: String) extends Expression
+  class Parameter(valueType: Type, name: java.lang.String) extends Var(valueType, name)
+  class Var(var valueType: Type, val name: java.lang.String) extends Expression
 
   sealed trait Member extends Expression {
     var root: Expression
@@ -256,12 +281,15 @@ object IRGraph {
       super.contains(exp) || root.contains(exp)
   }
 
-  class FieldMember(var root: Expression, var field: StructField) extends Member {
+  class FieldMember(var root: Expression, var field: StructField)
+      extends Member {
     def valueType: Type = field.valueType
   }
-  class DereferenceMember(var root: Expression, var valueType: Type) extends Member
+  class DereferenceMember(var root: Expression, var valueType: Type)
+      extends Member
   // TODO: Index should be Expression
-  class ArrayMember(var root: Expression, var valueType: Type, var index: Int) extends Member
+  class ArrayMember(var root: Expression, var valueType: Type, var index: Int)
+      extends Member
 
   class Accessibility(var member: Member) extends Expression {
     override def contains(exp: Expression) =
@@ -269,8 +297,8 @@ object IRGraph {
   }
 
   class PredicateInstance(
-    var predicate: Predicate,
-    var arguments: List[IRGraph.Expression]
+      var predicate: Predicate,
+      var arguments: List[IRGraph.Expression]
   ) extends Expression {
     override def contains(exp: Expression) =
       super.contains(exp) || arguments.exists(_.contains(exp))
@@ -289,21 +317,24 @@ object IRGraph {
   class Int(val value: scala.Int) extends Literal
   class Char(val value: scala.Char) extends Literal
   class Bool(val value: scala.Boolean) extends Literal
+  class String(val value: java.lang.String) extends Literal
   class Null extends Literal
 
   class Conditional(
-    var condition: Expression,
-    var ifTrue: Expression,
-    var ifFalse: Expression
+      var condition: Expression,
+      var ifTrue: Expression,
+      var ifFalse: Expression
   ) extends Expression {
     override def contains(exp: Expression) =
-      super.contains(exp) || condition.contains(exp) || ifTrue.contains(exp) || ifFalse.contains(exp)
+      super.contains(exp) || condition.contains(exp) || ifTrue.contains(
+        exp
+      ) || ifFalse.contains(exp)
   }
 
   class Binary(
-    var operator: BinaryOp,
-    var left: Expression,
-    var right: Expression
+      var operator: BinaryOp,
+      var left: Expression,
+      var right: Expression
   ) extends Expression {
     override def contains(exp: Expression) =
       super.contains(exp) || left.contains(exp) || right.contains(exp)
@@ -326,8 +357,8 @@ object IRGraph {
   }
 
   class Unary(
-    var operator: UnaryOp,
-    var operand: Expression
+      var operator: UnaryOp,
+      var operand: Expression
   ) extends Expression {
     override def contains(exp: Expression) =
       super.contains(exp) || operand.contains(exp)
@@ -340,31 +371,31 @@ object IRGraph {
   }
 
   sealed trait Type {
-    def name: String
+    def name: java.lang.String
     def default: IRGraph.Literal
   }
 
   // A pointer to a struct value
   class ReferenceType(val struct: Struct) extends Type {
-    def name: String = "struct " + struct.name + "*"
+    def name: java.lang.String = "struct " + struct.name + "*"
     def default = new IRGraph.Null()
   }
 
   // A pointer to a primitive value
   class PointerType(val valueType: Type) extends Type {
-    def name: String = valueType.name + "*"
+    def name: java.lang.String = valueType.name + "*"
     def default = new IRGraph.Null()
   }
 
   // An array of primitive values
   class ArrayType(val valueType: Type) extends Type {
-    def name: String = valueType.name + "[]"
+    def name: java.lang.String = valueType.name + "[]"
     def default = new IRGraph.Null()
   }
 
   // An array of struct values
   class ReferenceArrayType(val struct: Struct) extends Type {
-    def name: String = "struct " + struct.name + "[]"
+    def name: java.lang.String = "struct " + struct.name + "[]"
     def default = new IRGraph.Null()
   }
 
@@ -383,17 +414,31 @@ object IRGraph {
     def default = new IRGraph.Char(0)
   }
 
+  object StringType extends Type {
+    def name = "string"
+    def default = new IRGraph.Char(0)
+  }
+
   // Represents a single operation, roughly equivalent to a C0 statement
   sealed trait Op {
     private[IRGraph] var _block: Option[Block] = None
     private[IRGraph] var previous: Option[Op] = None
     private[IRGraph] var next: Option[Op] = None
 
-    def block: Block = _block.getOrElse(throw new IRException("Op does not belong to a block"))
+    def getPrev: Option[Op] = previous
+    def getNext: Option[Op] = next
+
+    def block: Block =
+      _block.getOrElse(throw new IRException("Op does not belong to a block"))
     def method: Method = block.method
 
     def insertBefore(newOp: Op): Unit = block.insertBefore(this, newOp)
+    def insertBefore(opList: Seq[Op]): Unit =
+      opList.foreach(newOp => block.insertBefore(this, newOp))
+
     def insertAfter(newOp: Op): Unit = block.insertAfter(this, newOp)
+    def insertAfter(opList: Seq[Op]): Unit =
+      opList.foreach(newOp => block.insertAfter(this, newOp))
 
     // If this Op is not in a block, this is a no-op
     def remove(): Unit = _block.foreach(_.remove(this))
@@ -404,53 +449,53 @@ object IRGraph {
   }
 
   class Invoke(
-    var callee: Method,
-    var arguments: List[Expression],
-    var target: Option[Expression]
+      var callee: Method,
+      var arguments: List[Expression],
+      var target: Option[Expression]
   ) extends Op {
     def copy = new Invoke(callee, arguments, target)
   }
 
   class AllocValue(
-    var valueType: Type,
-    var target: Var
+      var valueType: Type,
+      var target: Var
   ) extends Op {
     def copy = new AllocValue(valueType, target)
   }
 
   class AllocStruct(
-    var struct: Struct,
-    var target: Expression
+      var struct: Struct,
+      var target: Expression
   ) extends Op {
     def copy = new AllocStruct(struct, target)
   }
 
   // TODO: Length should be an expression
   class AllocArray(
-    var valueType: Type,
-    var length: Int,
-    var target: Var
+      var valueType: Type,
+      var length: Int,
+      var target: Var
   ) extends Op {
     def copy = new AllocArray(valueType, length, target)
   }
 
   class Assign(
-    var target: Var,
-    var value: Expression
+      var target: Var,
+      var value: Expression
   ) extends Op {
     def copy = new Assign(target, value)
   }
 
   class AssignMember(
-    var member: Member,
-    var value: Expression
+      var member: Member,
+      var value: Expression
   ) extends Op {
     def copy = new AssignMember(member, value)
   }
 
   class Assert(
-    var value: Expression,
-    var kind: AssertKind
+      var value: Expression,
+      var kind: AssertKind
   ) extends Op {
     def copy = new Assert(value, kind)
   }
@@ -462,19 +507,19 @@ object IRGraph {
   }
 
   class Fold(
-    var instance: PredicateInstance
+      var instance: PredicateInstance
   ) extends Op {
     def copy = new Fold(instance)
   }
 
   class Unfold(
-    var instance: PredicateInstance
+      var instance: PredicateInstance
   ) extends Op {
     def copy = new Unfold(instance)
   }
 
   class Error(
-    var value: Expression
+      var value: Expression
   ) extends Op {
     def copy = new Error(value)
   }
@@ -484,7 +529,7 @@ object IRGraph {
   }
 
   class If(
-    var condition: Expression
+      var condition: Expression
   ) extends Op {
     val ifTrue = new ChildBlock(this)
     val ifFalse = new ChildBlock(this)
@@ -498,8 +543,8 @@ object IRGraph {
   }
 
   class While(
-    var condition: Expression,
-    var invariant: Option[Expression]
+      var condition: Expression,
+      var invariant: Option[Expression]
   ) extends Op {
     val body = new ChildBlock(this)
 
@@ -509,4 +554,5 @@ object IRGraph {
       newWhile
     }
   }
+  case class Dependency(path: java.lang.String, isLibrary: Boolean)
 }

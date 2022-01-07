@@ -17,7 +17,7 @@ object IRGraphSilver {
     val fields = mutable.ListBuffer[vpr.Field]()
     val structFields = mutable.Map[StructField, vpr.Field]()
 
-    def declareField(name: String, typ: vpr.Type): vpr.Field = {
+    def declareField(name: java.lang.String, typ: vpr.Type): vpr.Field = {
       val field = vpr.Field(name, typ)()
       fields += field
       field
@@ -157,6 +157,7 @@ object IRGraphSilver {
       case int: Int => vpr.IntLit(BigInt(int.value))()
       case char: Char => vpr.IntLit(BigInt(char.value))()
       case bool: Bool => vpr.BoolLit(bool.value)()
+      case str: String => throw new IRException("Strings are not supported.")
       case n: Null => vpr.NullLit()()
       case cond: Conditional => vpr.CondExp(convertExpr(cond.condition), convertExpr(cond.ifTrue), convertExpr(cond.ifFalse))()
       case bin: Binary => {
