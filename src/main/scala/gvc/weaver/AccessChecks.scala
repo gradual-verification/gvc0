@@ -217,7 +217,7 @@ object AccessChecks {
     var invocations: Map[Method, ArrayBuffer[Invoke]] = Map[Method, ArrayBuffer[Invoke]]()
     var runtimeChecksInserted: Boolean = false
     var entry: Option[Method] = None
-
+    var allocatesMemory: Set[Method] = Set[Method]()
     var visitedStructs: Set[Struct] = Set[Struct]()
     def register(method: Method, tracker: MethodAccessTracker): Unit = {
       callGraph += (method -> tracker)
@@ -230,14 +230,11 @@ object AccessChecks {
           invocations += (inv.callee -> ArrayBuffer(inv))
         }
       })
+      if(!tracker.allocations.isEmpty) allocatesMemory += method
       visitedStructs = visitedStructs.union(tracker.visitedStructs)
 
     }
 
-
-    def injectAllocationTracking: Unit = {
-
-    }
     def injectSupport:Unit = {
       /*  it's only necessary to add tracking if a field access check was inserted,
        *  at which point the method where the check occurs is marked as 'visited' by the
@@ -410,7 +407,7 @@ object AccessChecks {
     var returns: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
     var bodyContainsRuntimeCheck: Boolean = false
     var visitedStructs: Set[Struct] = Set[Struct]()
-    def callsImprecise:Boolean = invocations.exists(inv => isImprecise(inv.method))
+    def callsImprecise:Boolean = invocations.exists(inv => isImprecise(inv.callee))
 
     def injectAllocationTracking: Unit = {
         allocations.foreach {
