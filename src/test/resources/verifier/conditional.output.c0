@@ -11,7 +11,7 @@ void test(int x, int y)
 {
   bool _cond = false;
   bool _cond1 = false;
-  _cond = true && x > 1;
+  _cond = x > 1;
   if (x > 1)
   {
     _cond1 = _cond && x > 2;
