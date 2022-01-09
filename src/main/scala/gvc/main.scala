@@ -8,10 +8,9 @@ import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silver.verifier
 
-import scala.io.Source
 import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets
-import java.io.{File, IOException}
+import java.io.IOException
 import sys.process._
 import scala.language.postfixOps
 
