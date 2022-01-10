@@ -11,7 +11,7 @@ dot_input.dot
 
 .scalafmt.conf
 
-test.c0
+
 
 # metals
 project/metals.sbt
@@ -67,3 +67,4 @@ docker.sh
 
 *.dSYM
 *.out
+sandbox.c0
