@@ -109,7 +109,8 @@ void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage
 
 void assertDisjointAcc(OwnedFields* static, OwnedFields* dynamic, int _id, int fieldIndex, string errorMessage){
     FieldArray* toCheck = find(static, _id);
-    if(toCheck == NULL){
+    if(toCheck != NULL && toCheck->length <= fieldIndex) error("[INTERNAL] Field index exceeds maximum for the static OwnedFields struct.\n");
+    if(toCheck == NULL || !toCheck->contents[fieldIndex]){
         assertAcc(dynamic, _id, fieldIndex, errorMessage);
     }else{
         error(errorMessage);
