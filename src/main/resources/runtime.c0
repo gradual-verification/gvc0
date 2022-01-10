@@ -118,32 +118,38 @@ void assertDisjointAcc(OwnedFields* static, OwnedFields* dynamic, int _id, int f
 }
 
 void join(OwnedFields* target, OwnedFields* source){
-    for(int i = 0; i<source->capacity; i += 1){
-        FieldArray* currFields = source->contents[i];
-        if(currFields != NULL){
-            for(int j = 0; j< currFields->length; j += 1){
-                addAccess(target, currFields->_id, currFields->length, j);
+    if(source != NULL && target != NULL){
+        for(int i = 0; i<source->capacity; i += 1){
+            FieldArray* currFields = source->contents[i];
+            if(currFields != NULL){
+                for(int j = 0; j< currFields->length; j += 1){
+                    addAccess(target, currFields->_id, currFields->length, j);
+                }
             }
         }
     }
 }
 
-void disjoin(OwnedFields* source, OwnedFields* target){
-    for(int i = 0; i<source->capacity; i += 1){
-        FieldArray* currFields = source->contents[i];
-        if(currFields != NULL){
-            FieldArray* inTarget = find(target, currFields->_id);
-            if(currFields->numAccessible == currFields->length && inTarget->numAccessible == inTarget->length) {
-                inTarget->deleted = true;
-            }else{
-                for(int j = 0; j<currFields->length; j += 1){
-                    if(inTarget->contents[j] && currFields->contents[j]){
-                        inTarget->contents[j] = false;
-                        inTarget->numAccessible -= 1;
+void disjoin(OwnedFields* target, OwnedFields* source){
+    if(source != NULL && target != NULL){
+        for(int i = 0; i<source->capacity; i += 1){
+            FieldArray* currFields = source->contents[i];
+            if(currFields != NULL){
+                FieldArray* inTarget = find(target, currFields->_id);
+                if(inTarget != NULL){
+                    if(currFields->numAccessible == currFields->length && inTarget->numAccessible == inTarget->length) {
+                        inTarget->deleted = true;
+                    }else{
+                        for(int j = 0; j<currFields->length; j += 1){
+                            if(inTarget->contents[j] && currFields->contents[j]){
+                                inTarget->contents[j] = false;
+                                inTarget->numAccessible -= 1;
+                            }
+                        }
+                        if(inTarget->numAccessible == 0){
+                            inTarget->deleted = true;
+                        }
                     }
-                }
-                if(inTarget->numAccessible == 0){
-                    inTarget->deleted = true;
                 }
             }
         }

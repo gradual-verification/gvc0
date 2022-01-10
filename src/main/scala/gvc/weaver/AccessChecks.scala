@@ -1,6 +1,5 @@
 package gvc.weaver
 import gvc.transformer.IRGraph._
-import gvc.weaver.AccessChecks.populateStatic
 import viper.silicon.state.reconstructedPermissions.getPermissionsFor
 import viper.silicon.state.CheckInfo
 import viper.silver.ast.{FieldAccess, LocalVar, MethodCall}
@@ -256,9 +255,6 @@ object AccessChecks {
           edge.injectAllocationTracking
           injectParameters(caller, invocations.get(caller), edge.returns)
 
-          if(!caller.body.isEmpty) {
-            caller.body.head.insertBefore(populateStatic(Vars.StaticOwnedFields, caller.precondition))
-          }
           edge.returns.foreach (ret => {
             ret.insertBefore(populateStatic(Vars.StaticOwnedFields, caller.postcondition))
           })
@@ -321,12 +317,12 @@ object AccessChecks {
 
                 invocation.insertBefore(Commands.InitStatic)
 
-                invocation.insertBefore(
-                  Commands.Disjoin(
-                    Commands.GetDynamicOwnedFields,
-                    Vars.StaticOwnedFields
-                  )
-                )
+                callee.body.head.insertBefore(Commands.Disjoin(
+                  Commands.GetDynamicOwnedFields,
+                  Vars.StaticOwnedFields
+                ))
+
+                callee.body.head.insertBefore(populateStatic(Vars.StaticOwnedFields, callee.precondition))
 
                 if (needsStatic) {
                   afterwards.insertAfter(
