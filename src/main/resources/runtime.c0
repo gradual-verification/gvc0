@@ -77,35 +77,6 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   return fields->contents[fieldIndex];
 }
 
-void debugOwnedFields(OwnedFields* fields, string name) {
-    print("---[ ");
-    print(name);
-    print(" ]---\n");
-    print("* Num. of structs: ");
-    printint(fields->length);
-    print("\n");
-    print("* Capacity: ");
-    printint(fields->capacity);
-    print("\n");
-    print("[");
-    if(fields->capacity > 0){
-        if(fields->contents[0] != NULL){
-            printint(fields->contents[0]->_id);
-        }else{
-            print("NULL");
-        }
-        for(int i = 1; i < fields->capacity; i+=1){
-            print(", ");
-            if(fields->contents[i] != NULL){
-                printint(fields->contents[i]->_id);
-            }else{
-                print("NULL");
-            }
-        }
-    }
-    print("]\n");
-}
-
 int addStructAccess(OwnedFields * fields, int numFields){
     newFieldArray(fields, *fields->instanceCounter, numFields, true);
     *(fields->instanceCounter) += 1;
@@ -138,7 +109,7 @@ void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage
 
 void assertDisjointAcc(OwnedFields* static, OwnedFields* dynamic, int _id, int fieldIndex, string errorMessage){
     FieldArray* toCheck = find(static, _id);
-    if(static == NULL){
+    if(toCheck == NULL){
         assertAcc(dynamic, _id, fieldIndex, errorMessage);
     }else{
         error(errorMessage);
@@ -156,7 +127,7 @@ void join(OwnedFields* target, OwnedFields* source){
     }
 }
 
-void disjoin(OwnedFields* target, OwnedFields* source){
+void disjoin(OwnedFields* source, OwnedFields* target){
     for(int i = 0; i<source->capacity; i += 1){
         FieldArray* currFields = source->contents[i];
         if(currFields != NULL){
@@ -176,139 +147,4 @@ void disjoin(OwnedFields* target, OwnedFields* source){
             }
         }
     }
-}
-
-bool test(string header, bool condition, string message){
-    if(!condition){
-        error(string_join(string_join(header, " - "), message));
-        return false;
-    }else{
-        return true;
-    }
-}
-
-bool testOwnedFieldsInitialization(string header){
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-
-    OwnedFields* fields = alloc(OwnedFields);
-    initOwnedFields(fields, _id_counter);
-    if(!test(header, fields->capacity > 0, "(initOwnedFields) OwnedFields must have a nonzero default capacity after intialization.")){
-        return false;
-    }
-    if(!test(header, fields->length == 0, "(initOwnedFields) OwnedFields must have a length of zero after initialization.")){
-        return false;
-    }
-
-    bool allNULL = true;
-    for(int i = 0; i < fields->length; i+=1){
-        if(fields->contents[i] != NULL){
-            allNULL = false;
-        }
-    }
-    if(!test(header, allNULL, "(initOwnedFields) The contents of OwnedFields must all be set to NULL after initialization.")){
-        return false;
-    }
-    return true;
-}
-
-bool testStructCreation(string header){
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-
-    OwnedFields* fields = alloc(OwnedFields);
-    initOwnedFields(fields, _id_counter);
-
-    int _id = addStructAccess(fields, 80);
-
-    for(int i = 0; i<80; i += 1){
-        assertAcc(fields, _id, i, "(addStructAccess) Failed to verify access to the fields of a newly created struct.");
-    }
-    return true;
-}
-
-
-
-bool testFieldAddition(string header){
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-    
-    OwnedFields* fields_1 = alloc(OwnedFields);
-    initOwnedFields(fields_1, _id_counter);
-
-    OwnedFields* fields_2 = alloc(OwnedFields);
-    initOwnedFields(fields_2, _id_counter);
-
-    int _id = addStructAccess(fields_1, 4);
-
-    addAccess(fields_2, _id, 4, 2);
-    assertAcc(fields_2, _id, 2, "(addAccess/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.");
-    return true;
-}
-
-
-bool testFieldMerging(string header){
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-    
-    int num_fields = 20;
-
-    OwnedFields* source = alloc(OwnedFields);
-    initOwnedFields(source, _id_counter);
-
-    int _id_node_1 = addStructAccess(source, num_fields);
-    int _id_node_2 = addStructAccess(source, num_fields);
-
-    OwnedFields* fields_1 = alloc(OwnedFields);
-    initOwnedFields(fields_1, _id_counter);
-
-    OwnedFields* fields_2 = alloc(OwnedFields);
-    initOwnedFields(fields_2, _id_counter);
-
-    for(int i = 0; i<num_fields; i += 1){
-        addAccess(fields_1, _id_node_1, num_fields, i);
-        assertAcc(fields_1, _id_node_1, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
-
-        addAccess(fields_2, _id_node_2, num_fields, i);
-        assertAcc(fields_2, _id_node_2, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
-    }
-
-
-    join(fields_1, fields_2);
-
-    for(int i = 0; i<num_fields; i += 1){
-        assertAcc(fields_1, _id_node_1, i, "(join/assertAcc) Failed to preserve existing permissions after join.");
-        assertAcc(fields_1, _id_node_2, i, "(join/assertAcc) Failed to add new permissions from join.");
-    }
-    return true;
-}
-
-int runTests() {
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-    if(testOwnedFieldsInitialization("OwnedFields Initialization")){
-        println("PASS: OwnedFields Initialization");
-    }else{
-        println("FAIL: OwnedFields Initialization");
-        return 1;
-    }
-    if(testStructCreation("Field Creation")){
-        println("PASS: Field Creation");
-    }else{
-        println("FAIL: Field Creation");
-        return 1;
-    }
-    if(testFieldAddition("Field Addition")){
-        println("PASS: Field Addition");
-    }else{
-        println("FAIL: Field Addition");
-        return 1;
-    }
-    if(testFieldMerging("Field Merging")){
-        println("PASS: Field Merging");
-    }else{
-        println("FAIL: Field Merging");
-        return 1;
-    }
-    return 0;
 }

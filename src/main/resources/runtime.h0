@@ -8,17 +8,6 @@ struct OwnedFields {
 
 typedef struct OwnedFields OwnedFields;
 
-void initOwnedFields(OwnedFields* fields, int * instanceCounter);
-int initStructAccess(OwnedFields * fields, int numFields);
-void inheritAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex);
-
-void join(OwnedFields* target, OwnedFields* source);
-void disjoin(OwnedFields* target, OwnedFields* source);
-void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage);
-void assertDisjointAcc(struct OwnedFields* static, struct OwnedFields* dynamic, int _id, int fieldIndex, string errorMessage);
-
-int runTests();
-
 struct FieldArray {
   bool[] contents;
   int length;
@@ -28,3 +17,14 @@ struct FieldArray {
 };
 
 typedef struct FieldArray FieldArray;
+
+void initOwnedFields(OwnedFields* fields, int * instanceCounter);
+int initStructAccess(OwnedFields * fields, int numFields);
+void inheritAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex);
+
+void join(OwnedFields* target, OwnedFields* source);
+void disjoin(OwnedFields* target, OwnedFields* source);
+void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage);
+void assertDisjointAcc(struct OwnedFields* static, struct OwnedFields* dynamic, int _id, int fieldIndex, string errorMessage);
+
+FieldArray* find(OwnedFields* fields, int _id);

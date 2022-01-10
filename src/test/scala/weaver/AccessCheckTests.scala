@@ -8,6 +8,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import java.nio.file.{Files, Paths}
 import sys.process._
 import scala.language.postfixOps
+
 class AccessCheckTests extends AnyFunSuite with BaseFileSpec {
   val dependency = getFile("c0/test.c0")
   val dep: String = Paths.get(getClass.getResource("/c0/test.c0").getPath).toAbsolutePath.toString
@@ -26,6 +27,7 @@ class AccessCheckTests extends AnyFunSuite with BaseFileSpec {
       "Unable to located c0/test.c0 in test resources directory."
     )
   }
+
   test("Runtime check infrastructure"){
     val compileExitCode: Int = cmd !
 
