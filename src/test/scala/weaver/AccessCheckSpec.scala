@@ -9,7 +9,7 @@ import java.nio.file.{Files, Paths}
 import sys.process._
 import scala.language.postfixOps
 
-class AccessCheckTests extends AnyFunSuite with BaseFileSpec {
+class AccessCheckSpec extends AnyFunSuite with BaseFileSpec {
   val dependency = getFile("c0/test.c0")
   val dep: String = Paths.get(getClass.getResource("/c0/test.c0").getPath).toAbsolutePath.toString
   var cc0Path:String = "cc0"
