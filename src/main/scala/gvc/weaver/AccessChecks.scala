@@ -1,8 +1,10 @@
 package gvc.weaver
 import gvc.transformer.IRGraph._
+import gvc.weaver.AccessChecks.populateStatic
 import viper.silicon.state.reconstructedPermissions.getPermissionsFor
 import viper.silicon.state.CheckInfo
 import viper.silver.ast.{FieldAccess, LocalVar, MethodCall}
+
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
@@ -218,8 +220,9 @@ object AccessChecks {
     var runtimeChecksInserted: Boolean = false
     var entry: Option[Method] = None
     var allocatesMemory: Set[Method] = Set[Method]()
-    var visitedStructs: Set[Struct] = Set[Struct]()
-    def register(method: Method, tracker: MethodAccessTracker): Unit = {
+    val visitedStructs: mutable.Set[Struct] = mutable.Set[Struct]()
+
+    def mergeTracker(method: Method, tracker: MethodAccessTracker): Unit = {
       callGraph += (method -> tracker)
       if(tracker.bodyContainsRuntimeCheck) runtimeChecksInserted = true
       if(method.name == "main") entry = Some(method)
@@ -231,8 +234,10 @@ object AccessChecks {
         }
       })
       if(!tracker.allocations.isEmpty) allocatesMemory += method
-      visitedStructs = visitedStructs.union(tracker.visitedStructs)
+    }
 
+    def spawnTracker(method: Method): MethodAccessTracker ={
+      new MethodAccessTracker(method, visitedStructs)
     }
 
     def injectSupport:Unit = {
@@ -240,9 +245,6 @@ object AccessChecks {
        *  at which point the method where the check occurs is marked as 'visited' by the
        *  AccessTracker.
        */
-      for (elem <- visitedStructs) {
-        elem.addField(Names.ID, IntType)
-      }
 
         for ((caller: Method, edge: MethodAccessTracker) <- callGraph) {
           /* Modify the parameters of each method to accept OwnedFields objects as necessary */
@@ -254,9 +256,9 @@ object AccessChecks {
           edge.injectAllocationTracking
           injectParameters(caller, invocations.get(caller), edge.returns)
 
-          caller.body.head.insertBefore(
-            populateStatic(Vars.StaticOwnedFields, caller.precondition)
-          )
+          if(!caller.body.isEmpty) {
+            caller.body.head.insertBefore(populateStatic(Vars.StaticOwnedFields, caller.precondition))
+          }
           edge.returns.foreach (ret => {
             ret.insertBefore(populateStatic(Vars.StaticOwnedFields, caller.postcondition))
           })
@@ -270,10 +272,10 @@ object AccessChecks {
                 && afterwards.getNext.get.isInstanceOf[Invoke]
                 && (afterwards.getNext.get
                 .asInstanceOf[Invoke]
-                .method
+                .callee
                 .name == Names.AssertAcc || afterwards.getNext.get
                 .asInstanceOf[Invoke]
-                .method
+                .callee
                 .name == Names.AssertDisjointAcc)
             ) afterwards = afterwards.getNext.get
 
@@ -393,20 +395,21 @@ object AccessChecks {
         entry match {
           case Some(mainMethod) =>
             mainMethod.addVar(new PointerType(IntType), Names.InstanceCounter)
-            mainMethod.body.head.insertBefore(Commands.InitCounter)
+            if(!mainMethod.body.isEmpty){
+              mainMethod.body.head.insertBefore(Commands.InitCounter)
+            }
           case None => throw new AccessCheckException("The current ProgramAccessTracker instance hasn't detected a main method for the given program.")
         }
       ir.addDependency("runtime", true)
     }
   }
 
-  class MethodAccessTracker(method: Method) {
+  class MethodAccessTracker(method: Method, visitedStructs: mutable.Set[Struct]) {
     var entry: Option[Method] = None
     val allocations: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
     var invocations: mutable.ArrayBuffer[Invoke] = mutable.ArrayBuffer[Invoke]()
     var returns: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
     var bodyContainsRuntimeCheck: Boolean = false
-    var visitedStructs: Set[Struct] = Set[Struct]()
     def callsImprecise:Boolean = invocations.exists(inv => isImprecise(inv.callee))
 
     def injectAllocationTracking: Unit = {
@@ -472,7 +475,10 @@ object AccessChecks {
             case Some(variable) =>
               val structType =
                 variable.valueType.asInstanceOf[ReferenceType].struct
-              visitedStructs += structType
+              if (!visitedStructs.contains(structType)) {
+                structType.addField(Names.ID, IntType)
+                visitedStructs += structType
+              }
               val structAndField = loc.field.name
               val errorMessage: String = new String(s"Field access check failed for $structAndField.")
               if (check.overlaps) {
@@ -687,13 +693,6 @@ object AccessChecks {
     val index =
       structType.fields.indexWhere(field => field.name.equals(fieldName))
     new Int(index)
-  }
-
-  def injectIDField(structType: Struct, tracker: ProgramAccessTracker): Unit = {
-    if (!tracker.visitedStructs.contains(structType)) {
-      structType.addField(Names.ID, IntType)
-      tracker.visitedStructs += structType
-    }
   }
 
   private def addFieldAccess(

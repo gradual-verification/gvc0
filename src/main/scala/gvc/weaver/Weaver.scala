@@ -13,9 +13,10 @@ object Weaver {
   def weave(ir: Program, silver: vpr.Program): Boolean = {
     val tracker = new ProgramAccessTracker(ir)
     ir.methods.foreach { method =>
-      val weaver = new Weaver(method, silver.findMethod(method.name))
+      val methodAccessTracker = tracker.spawnTracker(method)
+      val weaver = new Weaver(method, silver.findMethod(method.name), methodAccessTracker)
       weaver.weave()
-      tracker.register(method, weaver.tracker)
+      tracker.mergeTracker(method, methodAccessTracker)
     }
     if(tracker.runtimeChecksInserted){
       tracker.injectSupport
@@ -24,11 +25,10 @@ object Weaver {
   }
 
 
-  private class Weaver(irMethod: Method, vprMethod: vpr.Method) {
+  private class Weaver(irMethod: Method, vprMethod: vpr.Method, tracker: MethodAccessTracker) {
 
     private val checks = viper.silicon.state.runtimeChecks.getChecks
     val conditions = mutable.Map[vpr.Node, mutable.Map[vpr.Exp, Conditional]]()
-    val tracker: MethodAccessTracker = new MethodAccessTracker(irMethod)
 
     val ops =
       flattenOps(irMethod.body.toList, vprMethod.body.get.ss.toList).toList
