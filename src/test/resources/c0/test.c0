@@ -152,7 +152,7 @@ bool testDisjoin(string header){
     assertAcc(source, _id_node_1, 0, "(addAccess/assertAcc) Failed to add permission to new OwnedFields");
     assertAcc(target, _id_node_1, 0, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
 
-    disjoin(source, target);
+    disjoin(target, source);
     assertAcc(source, _id_node_1, 0, "(addAccess/assertAcc) Disjoin failed to preserve permissions in source OwnedFields");
 
     FieldArray* disjoined = find(target, _id_node_1);

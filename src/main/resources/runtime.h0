@@ -19,8 +19,9 @@ struct FieldArray {
 typedef struct FieldArray FieldArray;
 
 void initOwnedFields(OwnedFields* fields, int * instanceCounter);
-int initStructAccess(OwnedFields * fields, int numFields);
-void inheritAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex);
+int addStructAccess(OwnedFields * fields, int numFields);
+void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex);
+void loseAccess(OwnedFields* static, OwnedFields* dynamic, int _id, int fieldIndex);
 
 void join(OwnedFields* target, OwnedFields* source);
 void disjoin(OwnedFields* target, OwnedFields* source);

@@ -155,3 +155,26 @@ void disjoin(OwnedFields* target, OwnedFields* source){
         }
     }
 }
+
+void deleteAccess(OwnedFields* fields, int _id, int fieldIndex){
+    FieldArray* toRemove = find(fields, _id);
+    if(toRemove != NULL){
+        if(fieldIndex < toRemove->length){
+            toRemove->contents[fieldIndex] = false;
+            toRemove->numAccessible -= 1;
+        }
+        if(toRemove->numAccessible == 0){
+            toRemove->deleted = true;
+        }
+    }
+}
+
+void loseAccess(OwnedFields* static, OwnedFields* dynamic, int _id, int fieldIndex){
+    if(static != NULL){
+        deleteAccess(static, _id, fieldIndex);
+    }
+    if(dynamic != NULL){
+        deleteAccess(dynamic, _id, fieldIndex);
+    }
+}
+

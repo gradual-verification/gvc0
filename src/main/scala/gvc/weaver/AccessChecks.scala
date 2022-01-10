@@ -72,6 +72,16 @@ object AccessChecks {
         None
       )
     }
+
+    def LoseFieldAccess: Method = {
+      new Method(
+        "loseAccess",
+        Some(BoolType),
+        None,
+        None
+      )
+    }
+
     def Assert: Method = {
       new Method(
         Names.AssertAcc,
@@ -380,6 +390,20 @@ object AccessChecks {
               //TODO: optimize so that _instance_counter is only passed to methods that eventually allocate memory
               invocation.arguments =
                 invocation.arguments ++ List(Vars.InstanceCounter)
+              if(edge.callsImprecise){
+                val byPrecondition = getStaticComponent(callee.precondition)
+                val byPostcondition = getStaticComponent(callee.postcondition)
+
+                val toRemove = byPrecondition.diff(byPostcondition)
+                val toAdd = byPostcondition.diff(byPrecondition)
+
+                toRemove.foreach(perm => {
+                  invocation.insertAfter(loseFieldAccess(perm))
+                })
+                toAdd.foreach(perm => {
+                  invocation.insertAfter(loseFieldAccess(perm))
+                })
+              }
             }
           }
         }
@@ -701,6 +725,19 @@ object AccessChecks {
         fields,
         new FieldMember(perm.root, perm.struct.fields.last),
         new Int(perm.struct.fields.length - 1),
+        getFieldIndex(perm.struct, perm.fieldName)
+      ),
+      None
+    )
+  }
+
+  private def loseFieldAccess(perm: AccessChecks.AccessPermission): Invoke = {
+    new Invoke(
+      Methods.LoseFieldAccess,
+      List(
+        Vars.StaticOwnedFields,
+        Commands.GetDynamicOwnedFields,
+        new FieldMember(perm.root, perm.struct.fields.last),
         getFieldIndex(perm.struct, perm.fieldName)
       ),
       None
