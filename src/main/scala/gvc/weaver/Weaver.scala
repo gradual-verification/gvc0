@@ -24,14 +24,15 @@ object Weaver {
     tracker.runtimeChecksInserted
   }
 
+  case class Conditional(id: Integer, when: mutable.ListBuffer[Logic.Conjunction])
 
   private class Weaver(irMethod: Method, vprMethod: vpr.Method, tracker: MethodAccessTracker) {
 
     private val checks = viper.silicon.state.runtimeChecks.getChecks
+    val conditionVars = mutable.ArrayBuffer[Var]()
     val conditions = mutable.Map[vpr.Node, mutable.Map[vpr.Exp, Conditional]]()
 
-    val ops =
-      flattenOps(irMethod.body.toList, vprMethod.body.get.ss.toList).toList
+    val ops = flattenOps(irMethod.body.toList, vprMethod.body.get.ss.toList).toList
 
     def weave(): Unit = {
       addChecks()
@@ -127,9 +128,6 @@ object Weaver {
         case (op, vprOp) => Seq((op, vprOp))
       }
 
-    case class Conditional(variable: Var, when: mutable.ListBuffer[Expression])
-
-
     private def visit(
         visitor: (vpr.Node, Option[Op], Option[Expression]) => Unit
     ): Unit = {
@@ -187,25 +185,24 @@ object Weaver {
         CheckImplementation.generate(check, irMethod, returnVal, tracker)
     }
 
+    def addCondition() = {
+      val i = conditionVars.length
+      conditionVars += irMethod.addVar(BoolType, "_cond")
+      Conditional(i, mutable.ListBuffer())
+    }
+
     def defineConditional(
         location: vpr.Node,
         value: vpr.Exp,
-        previous: Option[Expression]
-    ): Expression = {
+        when: Logic.Conjunction
+    ): Logic.Term = {
       val (unwrapped, flag) = unwrapValue(value)
       val cond = conditions
         .getOrElseUpdate(location, mutable.ListMap())
-        .getOrElseUpdate(
-          unwrapped,
-          Conditional(irMethod.addVar(BoolType, "_cond"), mutable.ListBuffer())
-        )
+        .getOrElseUpdate(unwrapped, addCondition())
 
-      cond.when += (previous match {
-        case None    => new Bool(true)
-        case Some(w) => w
-      })
-
-      wrapValue(cond.variable, flag)
+      cond.when += when
+      Logic.Term(cond.id, flag)
     }
 
     def unwrapValue(value: vpr.Exp): (vpr.Exp, Boolean) =
@@ -222,6 +219,22 @@ object Weaver {
       else new Unary(UnaryOp.Not, value)
     }
 
+    def conditionalToExpression(t: Logic.Term): Expression = wrapValue(conditionVars(t.id), t.value)
+    def conditionalToExpression(conj: Logic.Conjunction): Option[Expression] =
+      conj.terms.toSeq.sorted
+      .foldLeft[Option[Expression]](None) { (prev, t) => prev match {
+        case None => Some(conditionalToExpression(t))
+        case Some(e) => Some(new Binary(BinaryOp.And, e, conditionalToExpression(t)))
+      }}
+    def conditionalToExpression(disj: Logic.Disjunction): Option[Expression] =
+      disj.conjuncts.toSeq.sorted
+      .foldLeft[Option[Expression]](None) { (prev, conj) =>
+        conditionalToExpression(conj).map(conj => prev match {
+          case None => conj
+          case Some(e) => new Binary(BinaryOp.Or, e, conj)
+        })
+      }
+
     def addVersioning(location: vpr.Node, op: Option[Op]): Unit = {
       conditions
         .get(location)
@@ -230,48 +243,32 @@ object Weaver {
         .map {
           case (exp, cond) => {
             val value = CheckImplementation.expression(exp, irMethod, None)
-
-            val when = cond.when.foldLeft[Option[Expression]](None) {
-              (prev, c) =>
-                prev match {
-                  case None    => Some(c)
-                  case Some(e) => Some(new Binary(BinaryOp.Or, e, c))
-                }
-            }
-
-            val conditionalValue = when match {
+            val when = Logic.simplify(Logic.Disjunction(cond.when.toSet))
+            val whenExpr = conditionalToExpression(when)
+            val conditionalValue = whenExpr match {
               case None       => value
               case Some(cond) => new Binary(BinaryOp.And, cond, value)
             }
 
-            new Assign(cond.variable, conditionalValue)
+            new Assign(conditionVars(cond.id), conditionalValue)
           }
         }
         .foreach(insertAt(_, op))
     }
 
     private def conditional(check: Op, branch: BranchInfo): Op = {
-      var when: Option[Expression] = None
-
-      (
+      val when = (
         branch.branch,
         branch.branchOrigin,
         branch.branchPosition
-      ).zipped.toSeq.reverseIterator
-        .foreach {
+      ).zipped.toSeq.foldRight(Logic.Conjunction())((branch, conj) => branch match {
           case (branch, origin, position) => {
-            System.out.println(s"Origin: $origin, Position: $position")
             val insertAt = origin.getOrElse(position)
-            val condition = defineConditional(insertAt, branch, when)
-
-            when = when match {
-              case None       => Some(condition)
-              case Some(prev) => Some(new Binary(BinaryOp.And, prev, condition))
-            }
+            conj & defineConditional(insertAt, branch, conj)
           }
-        }
+        })
 
-      wrapIf(check, when)
+      wrapIf(check, conditionalToExpression(when))
     }
 
     private def insertVersioning(): Unit = {

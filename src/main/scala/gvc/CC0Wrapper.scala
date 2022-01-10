@@ -1,8 +1,5 @@
 package gvc
 
-import gvc.Main.getClass
-
-import java.io.File
 import sys.process._
 import scala.language.postfixOps
 

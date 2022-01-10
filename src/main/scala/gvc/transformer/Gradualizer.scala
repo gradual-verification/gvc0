@@ -19,6 +19,7 @@ object Gradualizer {
 
   def crossJoin[T](list: List[List[T]]): List[List[T]] = {
     list match {
+      case Nil => Nil
       case xs :: Nil => xs map (List(_))
       case x :: xs =>
         for {
