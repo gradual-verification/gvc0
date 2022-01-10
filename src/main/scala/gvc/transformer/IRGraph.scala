@@ -255,6 +255,9 @@ object IRGraph {
         value
       }
     }
+
+    override def lastOption: Option[Op] = tailNode
+    override def last: Op = tailNode.get
   }
 
   class MethodBlock(_method: Method) extends Block {

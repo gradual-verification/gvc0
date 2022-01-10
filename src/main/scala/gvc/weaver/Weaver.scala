@@ -1,294 +1,368 @@
 package gvc.weaver
 import gvc.transformer.IRGraph._
-import gvc.weaver.AccessChecks.{MethodAccessTracker, ProgramAccessTracker}
-import viper.silicon.state.{BranchInfo, CheckInfo}
+import viper.silicon.state.BranchInfo
 import viper.silver.{ast => vpr}
 
-import scala.annotation.tailrec
 import scala.collection.mutable
 
 object Weaver {
   class WeaverException(message: java.lang.String) extends Exception(message)
 
-  def weave(ir: Program, silver: vpr.Program): Boolean = {
-    val tracker = new ProgramAccessTracker(ir)
+  def weave(ir: Program, silver: vpr.Program): Unit = {
     ir.methods.foreach { method =>
-      val weaver = new Weaver(method, silver.findMethod(method.name))
+      val weaver = new Collector(method, silver.findMethod(method.name), ir, silver)
       weaver.weave()
-      tracker.register(method, weaver.tracker)
     }
-    if(tracker.runtimeChecksInserted){
-      tracker.injectSupport
-    }
-    tracker.runtimeChecksInserted
   }
 
-  case class Conditional(id: Integer, when: mutable.ListBuffer[Logic.Conjunction])
+  object Collector {
+    private sealed trait Location
+    private case class Pre(val op: Op) extends Location
+    private case class Post(val op: Op) extends Location
+    private case class Invariant(val op: Op) extends Location
+    private case object MethodPre extends Location
+    private case object MethodPost extends Location
 
-  private class Weaver(irMethod: Method, vprMethod: vpr.Method) {
-    private val checks = viper.silicon.state.runtimeChecks.getChecks
-    val conditionVars = mutable.ArrayBuffer[Var]()
-    val conditions = mutable.Map[vpr.Node, mutable.Map[vpr.Exp, Conditional]]()
-    val tracker: MethodAccessTracker = new MethodAccessTracker(irMethod)
-
-    val ops = flattenOps(irMethod.body.toList, vprMethod.body.get.ss.toList).toList
-
-    def weave(): Unit = {
-      addChecks()
-      insertVersioning()
+    private case class ViperLocation(node: Integer, child: Option[Integer])
+    private object ViperLocation {
+      def apply(node: vpr.Node, child: vpr.Node) =
+        new ViperLocation(node.uniqueIdentifier, Some(child.uniqueIdentifier))
+      def apply(node: vpr.Node) =
+        new ViperLocation(node.uniqueIdentifier, None)
     }
 
-    // Produces a list of tuples of an IR Op and its corresponding Silver statement.
-    // Note that not all IR Ops produce Silver statements; the Silver statement will be
-    // `None` for those Ops.
-    @tailrec
-    private final def zipOps(
-                irOps: List[Op],
-                vprOps: List[vpr.Stmt],
-                tail: List[(Op, Option[vpr.Stmt])] = Nil
-              ): List[(Op, Option[vpr.Stmt])] =
-      (irOps, vprOps) match {
-        case ((irIf: If) :: irRest, (vprIf: vpr.If) :: vprRest) =>
-          zipOps(irRest, vprRest, (irIf, Some(vprIf)) :: tail)
-        case ((irWhile: While) :: irRest, (vprWhile: vpr.While) :: vprRest) =>
-          zipOps(irRest, vprRest, (irWhile, Some(vprWhile)) :: tail)
-        case (
-          (irInvoke: Invoke) :: irRest,
-          (vprInvoke: vpr.MethodCall) :: vprRest
-          ) =>
-          tracker.invocations += irInvoke
-          zipOps(irRest, vprRest, (irInvoke, Some(vprInvoke)) :: tail)
-        case (
-          (irAlloc: AllocValue) :: irRest,
-          (vprAlloc: vpr.NewStmt) :: vprRest
-          ) =>
-          tracker.allocations += irAlloc
-          zipOps(irRest, vprRest, (irAlloc, Some(vprAlloc)) :: tail)
-        case (
-          (irAlloc: AllocStruct) :: irRest,
-          (vprAlloc: vpr.NewStmt) :: vprRest
-          ) =>
-          tracker.allocations += irAlloc
-          zipOps(irRest, vprRest, (irAlloc, Some(vprAlloc)) :: tail)
-        case (
-          (irAssign: Assign) :: irRest,
-          (vprAssign: vpr.LocalVarAssign) :: vprRest
-          ) =>
-          zipOps(irRest, vprRest, (irAssign, Some(vprAssign)) :: tail)
-        case (
-          (irAssign: AssignMember) :: irRest,
-          (vprAssign: vpr.FieldAssign) :: vprRest
-          ) =>
-          zipOps(irRest, vprRest, (irAssign, Some(vprAssign)) :: tail)
-        case ((irAssert: Assert) :: irRest, vprRest)
-          if irAssert.kind == AssertKind.Imperative =>
-          zipOps(irRest, vprRest, (irAssert, None) :: tail)
-        case ((irAssert: Assert) :: irRest, (vprAssert: vpr.Assert) :: vprRest)
-          if irAssert.kind == AssertKind.Specification =>
-          zipOps(irRest, vprRest, (irAssert, Some(vprAssert)) :: tail)
-        case ((irFold: Fold) :: irRest, (vprFold: vpr.Fold) :: vprRest) =>
-          zipOps(irRest, vprRest, (irFold, Some(vprFold)) :: tail)
-        case ((irUnfold: Unfold) :: irRest, (vprUnfold: vpr.Unfold) :: vprRest) =>
-          zipOps(irRest, vprRest, (irUnfold, Some(vprUnfold)) :: tail)
-        case ((irError: Error) :: irRest, (vprError: vpr.Assert) :: vprRest) =>
-          zipOps(irRest, vprRest, (irError, Some(vprError)) :: tail)
-        case ((irReturn: Return) :: irRest, vprRest) if irReturn.value.isEmpty =>
-          zipOps(irRest, vprRest, (irReturn, None) :: tail)
-        case (
-          (irReturn: Return) :: irRest,
-          (vprReturn: vpr.LocalVarAssign) :: vprRest
-          ) =>
-          tracker.returns += irReturn
-          zipOps(irRest, vprRest, (irReturn, Some(vprReturn)) :: tail)
+    private class Condition(val id: scala.Int) {
+      val conditions = mutable.Set[Logic.Conjunction]()
+    }
+  }
 
-        // Termination
-        case (Nil, Nil) => tail
+  private class Collector(irMethod: Method, vprMethod: vpr.Method, irProgram: Program, vprProgram: vpr.Program) {
+    import Collector._
 
-        // Errors
-        case (ir, vprStmt :: _) =>
-          throw new WeaverException(
-            s"Unexpected Silver statement: $vprStmt for $ir"
-          )
-        case (ir, Nil) => throw new WeaverException("Expected Silver node")
-      }
+    private val viperChecks = viper.silicon.state.runtimeChecks.getChecks
 
-    def flattenOps(
-                    irOps: List[Op],
-                    vprOps: List[vpr.Stmt]
-                  ): Seq[(Op, Option[vpr.Stmt])] =
-      zipOps(irOps, vprOps).toSeq.flatMap {
-        case (irIf: If, Some(vprIf: vpr.If)) =>
-          Seq((irIf, Some(vprIf))) ++
-            flattenOps(irIf.ifTrue.toList, vprIf.thn.ss.toList) ++
-            flattenOps(irIf.ifFalse.toList, vprIf.els.ss.toList)
-        case (irWhile: While, Some(vprWhile: vpr.While)) =>
-          Seq((irWhile, Some(vprWhile))) ++
-            flattenOps(irWhile.body.toList, vprWhile.body.ss.toList)
-        case (op, vprOp) => Seq((op, vprOp))
-      }
+    // A mapping of Viper nodes to the corresponding location in the IR.
+    // This is used for locating the correct insertion of conditionals.
+    private val locations = mutable.Map[ViperLocation, Location]()
 
-    private def visit(
-        visitor: (vpr.Node, Option[Op], Option[Expression]) => Unit
-    ): Unit = {
-      def recurse(
-          node: vpr.Node,
-          op: Option[Op],
-          returnVal: Option[Expression]
-      ) =
-        node.visit { case n => visitor(n, op, returnVal) }
+    // A list of `return` statements in the IR method, used for inserting any runtime checks that
+    // the postcondition may require.
+    private val exits = mutable.ListBuffer[Return]()
 
-      ops.foreach {
-        case (irIf: If, Some(vprIf: vpr.If)) => {
-          visitor(vprIf, Some(irIf), None)
-          recurse(vprIf.cond, Some(irIf), None)
-        }
+    // The collection of conditions that are used in runtime checks. Not all conditions may be
+    // necessary after simplification.
+    private val conditions = mutable.Map[(Location, CheckExpression), Condition]()
 
-        case (irWhile: While, Some(vprWhile: vpr.While)) => {
-          visitor(vprWhile, Some(irWhile), None)
-          recurse(vprWhile.cond, Some(irWhile), None)
+    // The collection of runtime checks that are required, mapping a runtime check to the list of
+    // conjuncts where one conjunct must be true in order for the runtime check to occur.
+    private val checks = mutable.Map[(Location, Check), mutable.Set[Logic.Conjunction]]()
 
-          // TODO: Where do loop invariant checks belong?
-          vprWhile.invs.foreach(recurse(_, Some(irWhile), None))
-        }
-
-        case (irReturn: Return, vprReturn) => {
-          vprReturn.foreach(recurse(_, Some(irReturn), None))
-          vprMethod.posts.foreach(recurse(_, Some(irReturn), irReturn.value))
-        }
-
-        case (irOp, Some(vprStmt)) =>
-          recurse(vprStmt, Some(irOp), None)
-
-        case (irOp, None) => ()
-      }
-
-      if (irMethod.returnType.isEmpty) {
-        vprMethod.posts.foreach(recurse(_, None, None))
-      }
+    def visit(): Unit = {
+      visit(irMethod.body, vprMethod.body.get)
     }
 
-    private def addChecks(): Unit = {
-      visit((node, op, returnVal) =>
-        checks
-          .get(node)
-          .toSeq
-          .flatten
-          .map(check =>
-            conditional(assert(check, returnVal), check.branch)
-          )
-          .foreach(insertAt(_, op))
-      )
-    }
-
-    private def assert(check: CheckInfo, returnVal: Option[Expression]): Op = {
-        CheckImplementation.generate(check, irMethod, returnVal, tracker)
-    }
-
-    def addCondition() = {
-      val i = conditionVars.length
-      conditionVars += irMethod.addVar(BoolType, "_cond")
-      Conditional(i, mutable.ListBuffer())
-    }
-
-    def defineConditional(
-        location: vpr.Node,
-        value: vpr.Exp,
-        when: Logic.Conjunction
-    ): Logic.Term = {
-      val (unwrapped, flag) = unwrapValue(value)
-      val cond = conditions
-        .getOrElseUpdate(location, mutable.ListMap())
-        .getOrElseUpdate(unwrapped, addCondition())
-
-      cond.when += when
-      Logic.Term(cond.id, flag)
-    }
-
-    def unwrapValue(value: vpr.Exp): (vpr.Exp, Boolean) =
-      value match {
-        case n: vpr.Not =>
-          unwrapValue(n.exp) match {
-            case (e, b) => (e, !b)
+    private def visit(irBlock: Block, vprBlock: vpr.Seqn): Unit = {
+      var vprOps = vprBlock.ss.toList
+      for (irOp <- irBlock) {
+        vprOps = (irOp, vprOps) match {
+          case (irIf: If, (vprIf: vpr.If) :: vprRest) => {
+            visit(irIf, vprIf)
+            visit(irIf.ifTrue, vprIf.thn)
+            visit(irIf.ifFalse, vprIf.els)
+            vprRest
           }
-        case other => (other, true)
+          case (irWhile: While, (vprWhile: vpr.While) :: vprRest) => {
+            visit(irWhile, vprWhile)
+            visit(irWhile.body, vprWhile.body)
+            vprRest
+          }
+          case (irInvoke: Invoke, (vprInvoke: vpr.MethodCall) :: vprRest) => {
+            visit(irInvoke, vprInvoke)
+            vprRest
+          }
+          case (irAlloc: AllocValue, (vprAlloc: vpr.NewStmt) :: vprRest) => {
+            visit(irAlloc, vprAlloc)
+            vprRest
+          }
+          case (irAlloc: AllocStruct, (vprAlloc: vpr.NewStmt) :: vprRest) => {
+            visit(irAlloc, vprAlloc)
+            vprRest
+          }
+          case (irAssign: Assign, (vprAssign: vpr.LocalVarAssign) :: vprRest) => {
+            visit(irAssign, vprAssign)
+            vprRest
+          }
+          case (irAssign: AssignMember, (vprAssign: vpr.FieldAssign) :: vprRest) => {
+            visit(irAssign, vprAssign)
+            vprRest
+          }
+          case (irAssert: Assert, vprRest) if irAssert.kind == AssertKind.Imperative =>
+            vprRest
+          case (irAssert: Assert, (vprAssert: vpr.Assert) :: vprRest)
+            if irAssert.kind == AssertKind.Specification => {
+              visit(irAssert, vprAssert)
+              vprRest
+            }
+          case (irFold: Fold, (vprFold: vpr.Fold) :: vprRest) => {
+            visit(irFold, vprFold)
+            vprRest
+          }
+          case (irUnfold: Unfold, (vprUnfold: vpr.Unfold) :: vprRest) => {
+            visit(irUnfold, vprUnfold)
+            vprRest
+          }
+          case (irError: Error, (vprError: vpr.Assert) :: vprRest) => {
+            visit(irError, vprError)
+            vprRest
+          }
+          case (irReturn: Return, vprRest) if irReturn.value.isEmpty => {
+            exits += irReturn
+            vprRest
+          }
+          case (irReturn: Return, (vprReturn: vpr.LocalVarAssign) :: vprRest) if irReturn.value.isDefined => {
+            exits += irReturn
+            vprRest
+          }
+
+          // Errors
+          case (ir, vprStmt :: _) =>
+            throw new WeaverException(s"Unexpected Silver statement: $vprStmt for $ir")
+          case (_, Nil) => throw new WeaverException("Expected Silver statement")
+        }
       }
 
-    def wrapValue(value: Expression, flag: Boolean): Expression = {
-      if (flag) value
-      else new Unary(UnaryOp.Not, value)
+      if (vprOps.nonEmpty) {
+        throw new WeaverException(s"Unexpected Silver statement: ${vprOps.head}")
+      }
     }
 
-    def conditionalToExpression(t: Logic.Term): Expression = wrapValue(conditionVars(t.id), t.value)
-    def conditionalToExpression(conj: Logic.Conjunction): Option[Expression] =
-      conj.terms.toSeq.sorted
-      .foldLeft[Option[Expression]](None) { (prev, t) => prev match {
-        case None => Some(conditionalToExpression(t))
-        case Some(e) => Some(new Binary(BinaryOp.And, e, conditionalToExpression(t)))
-      }}
-    def conditionalToExpression(disj: Logic.Disjunction): Option[Expression] =
-      disj.conjuncts.toSeq.sorted
-      .foldLeft[Option[Expression]](None) { (prev, conj) =>
-        conditionalToExpression(conj).map(conj => prev match {
-          case None => conj
-          case Some(e) => new Binary(BinaryOp.Or, e, conj)
-        })
-      }
+    // Combines indexing and runtime check collection for a given Viper node. Indexing must be
+    // completed first, since the conditions on a runtime check may be at locations contained in
+    // the same node.
+    private def visit(op: Op, node: vpr.Node): Unit = {
+      val loc = Pre(op)
+      node match {
+        case iff: vpr.If => {
+          index(iff, loc)
+          indexAll(iff.cond, loc)
 
-    def addVersioning(location: vpr.Node, op: Option[Op]): Unit = {
-      conditions
-        .get(location)
-        .map(_.toSeq)
-        .getOrElse(Seq.empty)
-        .map {
-          case (exp, cond) => {
-            val value = CheckImplementation.expression(exp, irMethod, None)
-            val when = Logic.simplify(Logic.Disjunction(cond.when.toSet))
-            val whenExpr = conditionalToExpression(when)
-            val conditionalValue = whenExpr match {
-              case None       => value
-              case Some(cond) => new Binary(BinaryOp.And, cond, value)
+          check(iff, loc)
+          checkAll(iff.cond, loc)
+        }
+
+        case call: vpr.MethodCall => {
+          val method = vprProgram.findMethod(call.methodName)
+          indexAll(call, loc)
+          method.pres.foreach { p =>
+            p.visit { case pre => locations += ViperLocation(node, pre) -> Pre(op) }
+          }
+          method.posts.foreach { p =>
+            p.visit { case post => locations += ViperLocation(node, post) -> Post(op) }
+          }
+
+          checkAll(call, loc)
+        }
+
+        case loop: vpr.While => {
+          index(loop, loc)
+          indexAll(loop.cond, loc)
+          loop.invs.foreach(indexAll(_, Invariant(op)))
+
+          check(loop, loc)
+          checkAll(loop.cond, loc)
+          loop.invs.foreach { i => checkAll(i, Invariant(op)) }
+        }
+
+        case n => {
+          indexAll(n, loc)
+          checkAll(n, loc)
+        }
+      }
+    }
+
+    // Adds the node to the mapping of Viper locations to IR locations
+    private def index(node: vpr.Node, loc: Location): Unit =
+      locations += ViperLocation(node) -> loc
+
+    // Indexes the given node and all of its child nodes
+    private def indexAll(node: vpr.Node, loc: Location): Unit =
+      node.visit { case n => locations += ViperLocation(n) -> loc }
+
+    // Finds all the runtime checks required by the given Viper node
+    private def check(node: vpr.Node, loc: Location): Unit = {
+      for (check <- viperChecks.get(node).toSeq.flatten) {
+        val condition = branchCondition(check.branch)
+        
+        val returnValue = loc match {
+          case Pre(ret: Return) => ret.value
+          case _ => None
+        }
+
+        // TODO: Split apart ANDed checks?
+        val checkValue = CheckExpression.fromViper(check.checks, irMethod, returnValue)
+        checks.getOrElseUpdate((loc, checkValue), mutable.Set()) += condition
+      }
+    }
+
+    // Recursively collects all runtime checks
+    private def checkAll(node: vpr.Node, loc: Location): Unit =
+      node.visit { case n => check(n, loc) }
+
+    // Checks if execution can fall-through a given Op
+    private def hasImplicitReturn(tailOp: Op): Boolean = tailOp match {
+      case r: Return => false
+      case _: While => true
+      case iff: If => (iff.ifTrue.lastOption, iff.ifFalse.lastOption) match {
+        case (Some(t), Some(f)) => hasImplicitReturn(t) || hasImplicitReturn(f)
+        case _ => true
+      }
+      case _ => true
+    }
+
+    // Checks if execution can fall-through to the end of the method
+    private def hasImplicitReturn: Boolean = irMethod.body.lastOption match {
+      case None => true
+      case Some(tailOp) => hasImplicitReturn(tailOp)
+    }
+
+    // Converts the stack of branch conditions to a logical conjunction
+    private def branchCondition(branch: BranchInfo): Logic.Conjunction = {
+      (branch.branch, branch.branchOrigin, branch.branchPosition)
+        .zipped
+        .foldRight(Logic.Conjunction())((b, conj) => b match {
+          case (branch, origin, position) => {
+            val vprLoc = origin match {
+              case None => ViperLocation(position)
+              case Some(origin) => ViperLocation(origin, position)
             }
 
-            new Assign(conditionVars(cond.id), conditionalValue)
-          }
-        }
-        .foreach(insertAt(_, op))
-    }
+            val loc = locations.getOrElse(vprLoc, throw new WeaverException(s"Could not find location for $origin, $position"))
+            val value = CheckExpression.fromViper(branch, irMethod)
+            val (unwrapped, flag) = value match {
+              case CheckExpression.Not(n) => (n, false)
+              case other => (other, true)
+            }
 
-    private def conditional(check: Op, branch: BranchInfo): Op = {
-      val when = (
-        branch.branch,
-        branch.branchOrigin,
-        branch.branchPosition
-      ).zipped.toSeq.foldRight(Logic.Conjunction())((branch, conj) => branch match {
-          case (branch, origin, position) => {
-            val insertAt = origin.getOrElse(position)
-            conj & defineConditional(insertAt, branch, conj)
+            val nextId = conditions.size
+            val cond = conditions.getOrElseUpdate((loc, unwrapped), new Condition(nextId))
+            cond.conditions += conj
+            
+            conj & Logic.Term(cond.id, flag)
           }
         })
-
-      wrapIf(check, conditionalToExpression(when))
     }
 
-    private def insertVersioning(): Unit = {
-      visit((node, op, returnVal) => addVersioning(node, op))
+    // TODO: pull out common factors?
+    private def irCondition(disjunction: Logic.Disjunction, terms: scala.Int => Var): Option[Expression] =
+      disjunction.conjuncts
+      .foldLeft[Option[Expression]](None) { (expr, conj) =>
+        irCondition(conj, terms).map(conjExpr => expr match {
+          case None => conjExpr
+          case Some(expr) => new Binary(BinaryOp.Or, expr, conjExpr)
+        })
+      }
+
+    private def irCondition(conjunction: Logic.Conjunction, terms: scala.Int => Var): Option[Expression] =
+      conjunction.terms.foldLeft[Option[Expression]](None) { (expr, term) =>
+        expr match {
+          case None => Some(irCondition(term, terms))
+          case Some(expr) => Some(new Binary(BinaryOp.And, expr, irCondition(term, terms)))
+        }
+      }
+
+    private def irCondition(term: Logic.Term, terms: scala.Int => Var): Expression =
+      if (term.value) terms(term.id)
+      else new Unary(UnaryOp.Not, terms(term.id))
+
+    def weave(): Unit = {
+        // Index pre-conditions and add required runtime checks
+      vprMethod.pres.foreach(indexAll(_, MethodPre))
+      vprMethod.pres.foreach(checkAll(_, MethodPre))
+
+      // Loop through each operation and collect checks
+      // NOTE: Ops **must not** be mutated during check collection
+      visit()
+
+      // Index post-conditions and add required runtime checks
+      vprMethod.posts.foreach(indexAll(_, MethodPost))
+      vprMethod.posts.foreach(checkAll(_, MethodPost))
+
+      // Mutate the IR by adding the runtime checks and conditions
+      insertChecks()
     }
 
-    private def wrapIf(op: Op, condition: Option[Expression]) = {
-      condition match {
-        case None => op
-        case Some(condition) => {
-          val ifIr = new If(condition)
-          ifIr.ifTrue += op
-          ifIr
+    private def insertChecks(): Unit = {
+      val conditionVars = mutable.Map[scala.Int, Var]()
+      val conditionIndex = conditions.map {
+        case ((loc, value), cond) => (cond.id, (loc, value, Logic.Disjunction(cond.conditions.toSet)))
+      }
+
+      def getCondition(id: scala.Int): Var = {
+        conditionVars.get(id) match {
+          case Some(v) => v
+          case None => {
+            // Define and add before recursing
+            val newVar = irMethod.addVar(BoolType, "_cond_" + id)
+            conditionVars += id -> newVar
+
+            val (loc, value, when) = conditionIndex(id)
+            val simplified = Logic.simplify(when)
+            val simplifiedExpr = irCondition(simplified, getCondition(_))
+
+            val fullExpr = simplifiedExpr match {
+              case None => value.toIR(irProgram, irMethod)
+              case Some(cond) => new Binary(BinaryOp.And, cond, value.toIR(irProgram, irMethod))
+            }
+
+            insertAt(loc, Seq(new Assign(newVar, fullExpr)))
+            newVar
+          }
+        }
+      }
+
+      checks
+        .map {
+          case ((loc, check), conditions) => (loc, Logic.simplify(Logic.Disjunction(conditions.toSet)), check)
+        }
+        .groupBy {
+          case (loc, cond, _) => (loc, cond)
+        }
+        .foreach {
+          case ((loc, cond), checks) => {
+            insertChecks(loc, irCondition(cond, getCondition(_)), checks.toSeq.map { case (_, _, c) => c })
+          }
+        }
+    }
+
+    private def generateChecks(cond: Option[Expression], checks: Seq[Check]): Seq[Op] = {
+      val ops = checks.flatMap(_.toAssert(irProgram, irMethod))
+      cond match {
+        case None => ops
+        case Some(cond) => {
+          val iff = new If(cond)
+          iff.condition = cond
+          ops.foreach(iff.ifTrue += _)
+          Seq(iff)
         }
       }
     }
 
-    private def insertAt(op: Op, at: Option[Op]): Unit = at match {
-      case Some(at) => at.insertBefore(op)
-      case None     => irMethod.body += op
+    // NOTE: Ops are call-by-name, since multiple copies of them may be necessary. DO NOT construct
+    // the Ops before passing them to this method.
+    private def insertAt(at: Location, ops: => Seq[Op]): Unit = at match {
+      case Invariant(op) => ???
+      case Pre(op) => op.insertBefore(ops)
+      case Post(op) => op.insertAfter(ops)
+      case MethodPre => ops.foreach(_ +=: irMethod.body)
+      case MethodPost => {
+        exits.foreach(e => e.insertBefore(ops))
+        if (hasImplicitReturn) {
+          ops.foreach(irMethod.body += _)
+        }
+      }
     }
 
+    def insertChecks(at: Location, cond: Option[Expression], checks: Seq[Check]): Unit =
+      insertAt(at, generateChecks(cond, checks))
   }
 }

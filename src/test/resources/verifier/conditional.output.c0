@@ -9,15 +9,15 @@ int main()
 void test(int x, int y)
   //@requires ?;
 {
-  bool _cond = false;
-  bool _cond1 = false;
-  _cond = x > 1;
+  bool _cond_0 = false;
+  bool _cond_1 = false;
+  _cond_0 = x > 1;
   if (x > 1)
   {
-    _cond1 = _cond && x > 2;
+    _cond_1 = _cond_0 && x > 2;
     if (x > 2)
     {
-      if (_cond && _cond1)
+      if (_cond_0 && _cond_1)
       {
         assert(y == 0);
       }

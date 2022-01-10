@@ -87,22 +87,16 @@ object Main extends App {
 
     val outputExe = config.output.getOrElse("a.out")
 
-    val cc0Options = if(fieldChecksInserted) {
-      val runtimeInput = Paths.get(getClass().getResource("/runtime.c0").getPath)
-      val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
-      CC0Options(
-        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-        saveIntermediateFiles = config.saveFiles,
-        output = Some(outputExe),
-        includeDirs = List(runtimeIncludeDir.toString + "/")
-      )
-    } else {
-      CC0Options(
-        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-        saveIntermediateFiles = config.saveFiles,
-        output = Some(outputExe),
-      )
-    }
+    val runtimeInput = Paths.get(getClass().getResource("/runtime.c0").getPath)
+    val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
+
+    val cc0Options = CC0Options(
+      compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+      saveIntermediateFiles = config.saveFiles,
+      output = Some(outputExe),
+      includeDirs = List(runtimeIncludeDir.toString + "/")
+    )
+
     // Always write the intermediate C0 file, but then delete it
     // if not saving intermediate files
     writeFile(c0FileName, c0Source)
