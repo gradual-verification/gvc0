@@ -11,7 +11,7 @@ class RuntimeSpec extends AnyFunSuite {
 
     assert(GraphPrinter.print(program, true).trim() == "#use <runtime>")
 
-    assert(runtime.methods.contains(program.method(CheckRuntime.Names.assertAcc)))
-    assert(runtime.structs.contains(program.struct(CheckRuntime.Names.ownedFields)))
+    assert(program.method(CheckRuntime.Names.assertAcc) == runtime.assertAcc)
+    assert(program.struct(CheckRuntime.Names.ownedFields) == runtime.ownedFields)
   }
 }

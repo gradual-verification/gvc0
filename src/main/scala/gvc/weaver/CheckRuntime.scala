@@ -24,10 +24,10 @@ object CheckRuntime {
     resolved
   }
 
-  def addToIR(program: IRGraph.Program): IRGraph.Dependency = {
+  def addToIR(program: IRGraph.Program): CheckRuntime = {
     val dependency = program.addDependency(name, isLibrary = true)
     DependencyTransformer.transform(program, dependency, header)
-    dependency
+    new CheckRuntime(program)
   }
 
   object Names {
@@ -44,4 +44,21 @@ object CheckRuntime {
     val assertDisjointAcc = "assertDisjointAcc"
     val find = "find"
   }
+}
+
+class CheckRuntime private (program: IRGraph.Program) {
+  import CheckRuntime.Names
+
+  val ownedFields = program.struct(Names.ownedFields)
+  val ownedFieldsRef = new IRGraph.ReferenceType(ownedFields)
+
+  val initOwnedFields = program.method(Names.initOwnedFields)
+  val addStructAccess = program.method(Names.addStructAccess)
+  val addAccess = program.method(Names.addAccess)
+  val loseAccess = program.method(Names.loseAccess)
+  val join = program.method(Names.join)
+  val disjoin = program.method(Names.disjoin)
+  val assertAcc = program.method(Names.assertAcc)
+  val assertDisjointAcc = program.method(Names.assertDisjointAcc)
+  val find = program.method(Names.find)
 }
