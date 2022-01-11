@@ -515,7 +515,13 @@ object AccessChecks {
                 visitedStructs += structType
               }
               val structAndField = loc.field.name
-              val errorMessage: String = new String(s"Field access check failed for $structAndField.")
+              val splitIndex = structAndField.indexOf("$")
+              val fieldName = structAndField.substring(splitIndex + 1)
+              val structName = structAndField.substring(0, splitIndex)
+              val expressionPrintout = variable.name + "->" + fieldName + " (struct " + structName + ")"
+              val locationInfo = method.name;
+              val errorMessage: String = new String(s"field access check failed for $expressionPrintout in function $locationInfo")
+
               if (check.overlaps) {
                 new Invoke(
                   Methods.AssertDisjoint,
