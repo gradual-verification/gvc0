@@ -9,7 +9,7 @@ import gvc.transformer.IRGraphSilver
 object CheckImplementation {
   def generate(
     check: CheckInfo,
-    method: Method,
+    method: MethodImplementation,
     returnValue: Option[Expression],
     tracker: MethodAccessTracker
   ): Op = {
@@ -27,7 +27,7 @@ object CheckImplementation {
     }
   }
 
-  def expression(exp: vpr.Exp, method: Method, returnValue: Option[Expression]): Expression = {
+  def expression(exp: vpr.Exp, method: MethodImplementation, returnValue: Option[Expression]): Expression = {
     val expr = expression(_, method, returnValue)
 
     exp match {

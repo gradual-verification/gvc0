@@ -207,7 +207,7 @@ object GraphTransformer {
     }
 
     sealed trait MethodScope extends Scope {
-      def method: IRGraph.Method
+      def method: IRGraph.MethodImplementation
       def vars: Map[String, IRGraph.Var]
 
       def variable(name: String): IRGraph.Var = {
@@ -219,7 +219,7 @@ object GraphTransformer {
     }
 
     class BlockScope(
-        val method: IRGraph.Method,
+        val method: IRGraph.MethodImplementation,
         val output: IRGraph.Block,
         val vars: Map[String, IRGraph.Var]
     ) extends MethodScope {
@@ -259,7 +259,7 @@ object GraphTransformer {
     }
 
     def implementMethod(input: ResolvedMethodDefinition): Unit = {
-      val method = ir.method(input.name)
+      val method = ir.method(input.name).asInstanceOf[IRGraph.MethodImplementation]
       val scope = new BlockScope(
         method,
         method.body,

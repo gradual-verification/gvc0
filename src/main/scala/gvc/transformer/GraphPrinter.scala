@@ -95,7 +95,7 @@ object GraphPrinter {
       p.print(")")
     }
 
-    def printMethod(method: Method): Unit = {
+    def printMethod(method: MethodImplementation): Unit = {
       printMethodHeader(method)
       p.println()
 

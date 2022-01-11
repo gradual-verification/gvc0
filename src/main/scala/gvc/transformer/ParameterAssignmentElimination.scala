@@ -9,7 +9,7 @@ import scala.collection.mutable
 // aliased to the parameter. This pass is necessary because Silver does not
 // allow assignments to parameters.
 object ParameterAssignmentElimination {
-  def transform(method: Method): Unit = {
+  def transform(method: MethodImplementation): Unit = {
     val reassigned = mutable.Set[Parameter]()
     traverse(method.body, reassigned)
 

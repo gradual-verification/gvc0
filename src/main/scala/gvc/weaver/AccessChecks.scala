@@ -59,8 +59,8 @@ object AccessChecks {
   }
 
   private object Methods {
-    def InitOwnedFields: Method = {
-      new Method(
+    def InitOwnedFields: MethodImplementation = {
+      new MethodImplementation(
         "initOwnedFields",
         Some(BoolType),
         None,
@@ -68,8 +68,8 @@ object AccessChecks {
       )
     }
 
-    def AddFieldAccess: Method = {
-      new Method(
+    def AddFieldAccess: MethodImplementation = {
+      new MethodImplementation(
         "addAccess",
         Some(BoolType),
         None,
@@ -77,8 +77,8 @@ object AccessChecks {
       )
     }
 
-    def LoseFieldAccess: Method = {
-      new Method(
+    def LoseFieldAccess: MethodImplementation = {
+      new MethodImplementation(
         "loseAccess",
         Some(BoolType),
         None,
@@ -86,8 +86,8 @@ object AccessChecks {
       )
     }
 
-    def Assert: Method = {
-      new Method(
+    def Assert: MethodImplementation = {
+      new MethodImplementation(
         Names.AssertAcc,
         Some(BoolType),
         None,
@@ -95,8 +95,8 @@ object AccessChecks {
       )
     }
 
-    def AssertDisjoint: Method = {
-      new Method(
+    def AssertDisjoint: MethodImplementation = {
+      new MethodImplementation(
         Names.AssertDisjointAcc,
         Some(BoolType),
         None,
@@ -104,8 +104,8 @@ object AccessChecks {
       )
     }
 
-    def AddStructAccess: Method = {
-      new Method(
+    def AddStructAccess: MethodImplementation = {
+      new MethodImplementation(
         "addStructAccess",
         Some(IntType),
         None,
@@ -113,8 +113,8 @@ object AccessChecks {
       )
     }
 
-    def Join: Method = {
-      new Method(
+    def Join: MethodImplementation = {
+      new MethodImplementation(
         "join",
         Some(BoolType),
         None,
@@ -122,8 +122,8 @@ object AccessChecks {
       )
     }
 
-    def Disjoin: Method = {
-      new Method(
+    def Disjoin: MethodImplementation = {
+      new MethodImplementation(
         "disjoin",
         Some(BoolType),
         None,
@@ -224,7 +224,7 @@ object AccessChecks {
     )
   }
 
-  private def isImprecise(method: Method): Boolean = {
+  private def isImprecise(method: MethodImplementation): Boolean = {
     optionImprecise(method.precondition) || optionImprecise(
       method.postcondition
     )
@@ -238,28 +238,34 @@ object AccessChecks {
   }
 
   class ProgramAccessTracker(ir: Program) {
-    var callGraph: Map[Method, MethodAccessTracker] = Map[Method, MethodAccessTracker]()
-    var invocations: Map[Method, ArrayBuffer[Invoke]] = Map[Method, ArrayBuffer[Invoke]]()
+    var callGraph: Map[MethodImplementation, MethodAccessTracker] = Map[MethodImplementation, MethodAccessTracker]()
+    var invocations: Map[MethodImplementation, ArrayBuffer[Invoke]] = Map[MethodImplementation, ArrayBuffer[Invoke]]()
     var runtimeChecksInserted: Boolean = false
-    var entry: Option[Method] = None
-    var allocatesMemory: Set[Method] = Set[Method]()
+    var entry: Option[MethodImplementation] = None
+    var allocatesMemory: Set[MethodImplementation] = Set[MethodImplementation]()
     val visitedStructs: mutable.Set[Struct] = mutable.Set[Struct]()
 
-    def mergeTracker(method: Method, tracker: MethodAccessTracker): Unit = {
+    def mergeTracker(method: MethodImplementation, tracker: MethodAccessTracker): Unit = {
       callGraph += (method -> tracker)
       if (tracker.bodyContainsRuntimeCheck) runtimeChecksInserted = true
       if (method.name == "main") entry = Some(method)
       tracker.invocations.foreach(inv => {
-        if (invocations.contains(inv.callee)) {
-          invocations(inv.callee) += inv
-        } else {
-          invocations += (inv.callee -> ArrayBuffer(inv))
+        inv.callee match {
+          case callee: MethodImplementation => {
+            if (invocations.contains(callee)) {
+              invocations(callee) += inv
+            } else {
+              invocations += (callee -> ArrayBuffer(inv))
+            }
+          }
+          case _ => ()
         }
+        
       })
       if (tracker.allocations.nonEmpty) allocatesMemory += method
     }
 
-    def spawnTracker(method: Method): MethodAccessTracker = {
+    def spawnTracker(method: MethodImplementation): MethodAccessTracker = {
       new MethodAccessTracker(method, visitedStructs)
     }
 
@@ -269,7 +275,7 @@ object AccessChecks {
        *  AccessTracker.
        */
 
-      for ((caller: Method, edge: MethodAccessTracker) <- callGraph) {
+      for ((caller: MethodImplementation, edge: MethodAccessTracker) <- callGraph) {
         /* Modify the parameters of each method to accept OwnedFields objects as necessary */
 
         /* track each allocation, using _instance_counter or dynamic_fields as appropriate
@@ -286,7 +292,7 @@ object AccessChecks {
         /* Pass the necessary OwnedFields objects when each method is called */
         for (invocation <- edge.invocations) {
           var afterwards: Op = invocation
-          val callee = invocation.callee
+          val callee = invocation.callee.asInstanceOf[MethodImplementation]
           while (
             afterwards.getNext.isDefined
               && afterwards.getNext.get.isInstanceOf[Invoke]
@@ -434,18 +440,18 @@ object AccessChecks {
           }
         case None => throw new AccessCheckException("The current ProgramAccessTracker instance hasn't detected a main method for the given program.")
       }
-      ir.addDependency("runtime", isLibrary=true)
+      // TODO: ir.addDependency("runtime", isLibrary=true)
     }
   }
 
-  class MethodAccessTracker(method: Method, visitedStructs: mutable.Set[Struct]) {
-    var entry: Option[Method] = None
+  class MethodAccessTracker(method: MethodImplementation, visitedStructs: mutable.Set[Struct]) {
+    var entry: Option[MethodImplementation] = None
     val allocations: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
     var invocations: mutable.ArrayBuffer[Invoke] = mutable.ArrayBuffer[Invoke]()
     var returns: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
     var bodyContainsRuntimeCheck: Boolean = false
 
-    def callsImprecise: Boolean = invocations.exists(inv => isImprecise(inv.callee))
+    def callsImprecise: Boolean = invocations.exists(inv => isImprecise(inv.callee.asInstanceOf[MethodImplementation]))
 
     def injectAllocationTracking():Unit = {
       allocations.foreach {
@@ -553,7 +559,7 @@ object AccessChecks {
     }
   }
 
-  private def needsStaticTracking(method: Method): Boolean = {
+  private def needsStaticTracking(method: MethodImplementation): Boolean = {
     val preStatic = method.precondition.isDefined && method.precondition.get
       .isInstanceOf[Imprecise] && method.precondition.get
       .asInstanceOf[Imprecise]
@@ -620,7 +626,7 @@ object AccessChecks {
   }
 
   private def injectParameters(
-                                method: Method,
+                                method: MethodImplementation,
                                 callsites: Option[Iterable[Invoke]],
                                 returns: Iterable[Op]
                               ): Unit = {

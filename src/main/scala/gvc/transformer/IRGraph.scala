@@ -10,17 +10,32 @@ object IRGraph {
     private val _structs = mutable.Map[java.lang.String, Struct]()
     private val _methods = mutable.Map[java.lang.String, Method]()
     private val _predicates = mutable.Map[java.lang.String, Predicate]()
-    private val _dependencies = mutable.Map[java.lang.String, Dependency]()
+    private val _dependencies = mutable.Set[Dependency]()
 
-    def addDependency(path: java.lang.String, isLibrary: Boolean): Dependency = {
-      val dep = Dependency(path, isLibrary)
-      if (_dependencies.getOrElseUpdate(path, dep) != dep)
-        throw new IRException(s"Dependency '${dep.path}' already exists")
-      dep
+    lazy val ownedFieldsStruct = struct(Helpers.findAvailableName(_structs, "OwnedFields"))
+
+    def addDependency(dependency: Dependency): Unit = {
+      if (_dependencies.add(dependency)) {
+        dependency.methods.foreach(method => {
+          if (_methods.contains(method.name)) {
+            throw new IRException(s"Method '${method.name}' already exists (importing from '${dependency.path}'")
+          } else {
+            _methods += method.name -> method
+          }
+        })
+
+        dependency.structs.foreach(struct => {
+          if (_structs.contains(struct.name)) {
+            throw new IRException(s"Struct '${struct.name}' already exists (importing from '${dependency.path}'")
+          } else {
+            _structs += struct.name -> struct
+          }
+        })
+      }
     }
 
-    def addMethod(name: java.lang.String, returnType: Option[Type]): Method = {
-      val method = new Method(name, returnType)
+    def addMethod(name: java.lang.String, returnType: Option[Type]): MethodImplementation = {
+      val method = new MethodImplementation(name, returnType)
       if (_methods.getOrElseUpdate(method.name, method) != method)
         throw new IRException(s"Method '${method.name}' already exists")
       method
@@ -34,10 +49,13 @@ object IRGraph {
     }
 
     def structs: Seq[Struct] = _structs.values.toSeq.sortBy(_.name)
-    def methods: Seq[Method] = _methods.values.toSeq.sortBy(_.name)
+    def methods: Seq[MethodImplementation] = _methods
+      .values
+      .collect { case (m: MethodImplementation) => m }
+      .toSeq
+      .sortBy(_.name)
     def predicates: Seq[Predicate] = _predicates.values.toSeq.sortBy(_.name)
-    def dependencies: Seq[Dependency] =
-      _dependencies.values.toSeq.sortBy(_.path)
+    def dependencies: Seq[Dependency] = _dependencies.toSeq.sortBy(_.path)
 
     // Structs can be used even if they are never declared
     def struct(name: java.lang.String): Struct =
@@ -52,7 +70,7 @@ object IRGraph {
     )
   }
 
-  class Struct(val name: java.lang.String) {
+  class Struct(val name: java.lang.String, val isImported: Boolean = false) {
     private val _fields = mutable.ListBuffer[StructField]()
 
     def addField(name: java.lang.String, valueType: Type): StructField = {
@@ -74,12 +92,31 @@ object IRGraph {
       var valueType: Type
   )
 
-  class Method(
+  sealed trait Method {
+    def name: java.lang.String
+    def returnType: Option[Type]
+    def precondition: Option[Expression]
+    def postcondition: Option[Expression]
+    def parameters: Seq[Parameter]
+    def isImported: Boolean = false
+  }
+
+  class MethodDefinition(
+    val name: java.lang.String,
+    val returnType: Option[Type],
+    val precondition: Option[Expression] = None,
+    val postcondition: Option[Expression] = None,
+    val parameters: List[Parameter]
+  ) extends Method {
+    override def isImported = true
+  }
+
+  class MethodImplementation(
       val name: java.lang.String,
       var returnType: Option[Type],
       var precondition: Option[Expression] = None,
       var postcondition: Option[Expression] = None
-  ) {
+  ) extends Method {
     // Variables/parameters are added to both a list and a map to preserve order and speedup lookup
     // Scope is a map of both parameters and variables
     private val _parameters = mutable.ListBuffer[Parameter]()
@@ -441,7 +478,10 @@ object IRGraph {
 
     def insertAfter(newOp: Op): Unit = block.insertAfter(this, newOp)
     def insertAfter(opList: Seq[Op]): Unit =
-      opList.foreach(newOp => block.insertAfter(this, newOp))
+      opList.foldLeft(this)((at, newOp) => {
+        block.insertAfter(at, newOp)
+        newOp
+      })
 
     // If this Op is not in a block, this is a no-op
     def remove(): Unit = _block.foreach(_.remove(this))
@@ -557,5 +597,11 @@ object IRGraph {
       newWhile
     }
   }
-  case class Dependency(path: java.lang.String, isLibrary: Boolean)
+
+  trait Dependency {
+    def path: java.lang.String
+    def isLibrary: Boolean
+    def methods: Seq[MethodDefinition]
+    def structs: Seq[Struct]
+  }
 }
