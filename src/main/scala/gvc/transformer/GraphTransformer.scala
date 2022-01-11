@@ -2,9 +2,9 @@ package gvc.transformer
 import scala.collection.mutable
 import gvc.analyzer._
 
-object GraphTransformer {
-  class TransformerException(message: String) extends Exception(message)
+class TransformerException(message: String) extends Exception(message)
 
+object GraphTransformer {
   def transform(input: ResolvedProgram): IRGraph.Program = {
     new Transformer(input).transform()
   }
@@ -65,7 +65,10 @@ object GraphTransformer {
     def defineDependency(declaration: ResolvedUseDeclaration): Unit = {}
 
     def implementStruct(input: ResolvedStructDefinition): Unit = {
-      val struct = ir.struct(input.name)
+      val struct = ir.struct(input.name) match {
+        case struct: IRGraph.Struct => struct
+        case struct => throw new TransformerException(s"Invalid struct '${struct.name}")
+      } 
 
       def resolveField(
           field: ResolvedStructField,
@@ -207,7 +210,7 @@ object GraphTransformer {
     }
 
     sealed trait MethodScope extends Scope {
-      def method: IRGraph.MethodImplementation
+      def method: IRGraph.Method
       def vars: Map[String, IRGraph.Var]
 
       def variable(name: String): IRGraph.Var = {
@@ -219,7 +222,7 @@ object GraphTransformer {
     }
 
     class BlockScope(
-        val method: IRGraph.MethodImplementation,
+        val method: IRGraph.Method,
         val output: IRGraph.Block,
         val vars: Map[String, IRGraph.Var]
     ) extends MethodScope {
@@ -259,7 +262,11 @@ object GraphTransformer {
     }
 
     def implementMethod(input: ResolvedMethodDefinition): Unit = {
-      val method = ir.method(input.name).asInstanceOf[IRGraph.MethodImplementation]
+      val method = ir.method(input.name) match {
+        case method: IRGraph.Method => method
+        case method => throw new TransformerException(s"Invalid method '${method.name}'")
+      }
+
       val scope = new BlockScope(
         method,
         method.body,
@@ -652,7 +659,7 @@ object GraphTransformer {
       scope += new IRGraph.Invoke(method, args, None)
     }
 
-    def resolveMethod(invoke: ResolvedInvoke): IRGraph.Method =
+    def resolveMethod(invoke: ResolvedInvoke): IRGraph.MethodDefinition =
       invoke.method
         .map(m => ir.method(m.name))
         .getOrElse(throw new TransformerException("Invalid invoke"))

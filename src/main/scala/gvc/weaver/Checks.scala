@@ -4,13 +4,13 @@ import gvc.transformer.{IRGraph => ir}
 import gvc.transformer.IRGraphSilver.Names
 
 sealed trait Check {
-  def toAssert(p: ir.Program, m: ir.MethodImplementation): Seq[ir.Op]
+  def toAssert(p: ir.Program, m: ir.Method): Seq[ir.Op]
 }
 
 sealed trait CheckExpression extends Check {
-  def toIR(p: ir.Program, m: ir.MethodImplementation): ir.Expression
-  def getIRType(p: ir.Program, m: ir.MethodImplementation): Option[ir.Type]
-  def toAssert(p: ir.Program, m: ir.MethodImplementation): Seq[ir.Op] = Seq(new ir.Assert(toIR(p, m), ir.AssertKind.Imperative))
+  def toIR(p: ir.Program, m: ir.Method): ir.Expression
+  def getIRType(p: ir.Program, m: ir.Method): Option[ir.Type]
+  def toAssert(p: ir.Program, m: ir.Method): Seq[ir.Op] = Seq(new ir.Assert(toIR(p, m), ir.AssertKind.Imperative))
 }
 
 object CheckExpression {
@@ -20,17 +20,17 @@ object CheckExpression {
     val left: CheckExpression
     val right: CheckExpression
     def op: ir.BinaryOp
-    def toIR(p: ir.Program, m: ir.MethodImplementation): ir.Binary = new ir.Binary(op, left.toIR(p, m), right.toIR(p, m))
+    def toIR(p: ir.Program, m: ir.Method): ir.Binary = new ir.Binary(op, left.toIR(p, m), right.toIR(p, m))
   }
 
   sealed trait Logical extends Binary {
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(ir.BoolType)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.BoolType)
   }
   sealed trait Comparison extends Binary {
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(ir.BoolType)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.BoolType)
   }
   sealed trait Arithmetic extends Binary {
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(ir.IntType)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.IntType)
   }
 
   case class And(left: Expr, right: Expr) extends Logical {
@@ -70,20 +70,20 @@ object CheckExpression {
   sealed trait UnaryCheck extends CheckExpression {
     val operand: Expr
     def op: ir.UnaryOp
-    def toIR(p: ir.Program, m: ir.MethodImplementation): ir.Unary = new ir.Unary(op, operand.toIR(p, m))
+    def toIR(p: ir.Program, m: ir.Method): ir.Unary = new ir.Unary(op, operand.toIR(p, m))
   }
   case class Not(operand: Expr) extends UnaryCheck {
     def op = ir.UnaryOp.Not
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(ir.BoolType)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.BoolType)
   }
   case class Neg(operand: Expr) extends UnaryCheck {
     def op = ir.UnaryOp.Negate
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(ir.IntType)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.IntType)
   }
 
   case class Var(name: String) extends Expr {
-    def toIR(p: ir.Program, m: ir.MethodImplementation) = m.variable(name)
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(toIR(p, m).valueType)
+    def toIR(p: ir.Program, m: ir.Method) = m.variable(name)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(toIR(p, m).valueType)
   }
 
   case class Field(root: Expr, structName: String, fieldName: String) extends Expr {
@@ -92,14 +92,14 @@ object CheckExpression {
         .find(_.name == fieldName)
         .getOrElse(throw new WeaverException(s"Field '$fieldName' does not exist"))
 
-    def toIR(p: ir.Program, m: ir.MethodImplementation) = new ir.FieldMember(root.toIR(p, m), getIRField(p))
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(getIRField(p).valueType)
+    def toIR(p: ir.Program, m: ir.Method) = new ir.FieldMember(root.toIR(p, m), getIRField(p))
+    def getIRType(p: ir.Program, m: ir.Method) = Some(getIRField(p).valueType)
   }
 
   case class Deref(operand: Expr) extends Expr {
-    def toIR(p: ir.Program, m: ir.MethodImplementation) = new ir.DereferenceMember(operand.toIR(p, m), getIRType(p, m).get)
+    def toIR(p: ir.Program, m: ir.Method) = new ir.DereferenceMember(operand.toIR(p, m), getIRType(p, m).get)
 
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = operand.getIRType(p, m) match {
+    def getIRType(p: ir.Program, m: ir.Method) = operand.getIRType(p, m) match {
       case Some(ptr: ir.PointerType) => Some(ptr.valueType)
       case _ => throw new WeaverException("Invalid dereference")
     }
@@ -107,25 +107,25 @@ object CheckExpression {
 
   sealed trait Literal extends Expr
   case class IntLit(value: Int) extends Literal {
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(ir.IntType)
-    def toIR(p: ir.Program, m: ir.MethodImplementation) = new ir.Int(value)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.IntType)
+    def toIR(p: ir.Program, m: ir.Method) = new ir.Int(value)
   }
   case class CharLit(value: Char) extends Literal {
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(ir.CharType)
-    def toIR(p: ir.Program, m: ir.MethodImplementation) = new ir.Char(value)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.CharType)
+    def toIR(p: ir.Program, m: ir.Method) = new ir.Char(value)
   }
   case class StrLit(value: String) extends Literal {
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(ir.StringType)
-    def toIR(p: ir.Program, m: ir.MethodImplementation) = new ir.String(value)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.StringType)
+    def toIR(p: ir.Program, m: ir.Method) = new ir.String(value)
   }
   case object NullLit extends Literal {
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = None
-    def toIR(p: ir.Program, m: ir.MethodImplementation) = new ir.Null()
+    def getIRType(p: ir.Program, m: ir.Method) = None
+    def toIR(p: ir.Program, m: ir.Method) = new ir.Null()
   }
   sealed trait BoolLit extends Expr {
     def value: Boolean
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = Some(ir.BoolType)
-    def toIR(p: ir.Program, m: ir.MethodImplementation) = new ir.Bool(value)
+    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.BoolType)
+    def toIR(p: ir.Program, m: ir.Method) = new ir.Bool(value)
   }
   case object TrueLit extends BoolLit {
     def value = true
@@ -135,8 +135,8 @@ object CheckExpression {
   }
 
   case class Cond(cond: Expr, ifTrue: Expr, ifFalse: Expr) extends Expr {
-    def toIR(p: ir.Program, m: ir.MethodImplementation) = new ir.Conditional(cond.toIR(p, m), ifTrue.toIR(p, m), ifFalse.toIR(p, m))
-    def getIRType(p: ir.Program, m: ir.MethodImplementation) = ifTrue.getIRType(p, m).orElse(ifFalse.getIRType(p, m))
+    def toIR(p: ir.Program, m: ir.Method) = new ir.Conditional(cond.toIR(p, m), ifTrue.toIR(p, m), ifFalse.toIR(p, m))
+    def getIRType(p: ir.Program, m: ir.Method) = ifTrue.getIRType(p, m).orElse(ifFalse.getIRType(p, m))
   }
 
   def fromIR(exp: ir.Expression): CheckExpression = {

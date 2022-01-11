@@ -19,7 +19,7 @@ object Collector {
   case class Disjunction(cases: List[Conjunction])
   case class RuntimeCheck(location: Location, check: Check, when: Disjunction)
   class CollectedMethod(
-    val method: MethodImplementation,
+    val method: Method,
     val conditions: List[Condition],
     val checks: List[RuntimeCheck],
     val returns: List[Return],
@@ -37,9 +37,7 @@ object Collector {
     new CollectedProgram(
       program = irProgram,
       methods = irProgram.methods
-        .collect { case m: MethodImplementation =>
-          (m.name, new Collector(m, vprProgram.findMethod(m.name), irProgram, vprProgram).collect())
-        }
+        .map(m => (m.name, new Collector(m, vprProgram.findMethod(m.name), irProgram, vprProgram).collect()))
         .toMap)
 
   private class ConditionTerm(val id: scala.Int) {
@@ -56,7 +54,7 @@ object Collector {
 }
 
 class Collector(
-  irMethod: MethodImplementation,
+  irMethod: Method,
   vprMethod: vpr.Method,
   irProgram: Program,
   vprProgram: vpr.Program

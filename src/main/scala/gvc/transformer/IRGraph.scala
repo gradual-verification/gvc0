@@ -7,35 +7,24 @@ object IRGraph {
   // Note that names of methods, vars, etc. are immutable, since they are also copied in their respective Maps
 
   class Program {
-    private val _structs = mutable.Map[java.lang.String, Struct]()
-    private val _methods = mutable.Map[java.lang.String, Method]()
+    private[IRGraph] val _structs = mutable.Map[java.lang.String, StructDefinition]()
+    private[IRGraph] val _methods = mutable.Map[java.lang.String, MethodDefinition]()
     private val _predicates = mutable.Map[java.lang.String, Predicate]()
-    private val _dependencies = mutable.Set[Dependency]()
+    private val _dependencies = mutable.ListBuffer[Dependency]()
 
     lazy val ownedFieldsStruct = struct(Helpers.findAvailableName(_structs, "OwnedFields"))
 
-    def addDependency(dependency: Dependency): Unit = {
-      if (_dependencies.add(dependency)) {
-        dependency.methods.foreach(method => {
-          if (_methods.contains(method.name)) {
-            throw new IRException(s"Method '${method.name}' already exists (importing from '${dependency.path}'")
-          } else {
-            _methods += method.name -> method
-          }
-        })
-
-        dependency.structs.foreach(struct => {
-          if (_structs.contains(struct.name)) {
-            throw new IRException(s"Struct '${struct.name}' already exists (importing from '${dependency.path}'")
-          } else {
-            _structs += struct.name -> struct
-          }
-        })
-      }
+    def addDependency(path: java.lang.String, isLibrary: Boolean): Dependency = {
+      if (_dependencies.exists(d => d.path == path && d.isLibrary == isLibrary))
+        throw new IRException(s"Dependency '$path' already exists")
+      
+      val newDep = new Dependency(this, path, isLibrary)
+      _dependencies += newDep
+      newDep
     }
 
-    def addMethod(name: java.lang.String, returnType: Option[Type]): MethodImplementation = {
-      val method = new MethodImplementation(name, returnType)
+    def addMethod(name: java.lang.String, returnType: Option[Type]): Method = {
+      val method = new Method(name, returnType)
       if (_methods.getOrElseUpdate(method.name, method) != method)
         throw new IRException(s"Method '${method.name}' already exists")
       method
@@ -48,29 +37,43 @@ object IRGraph {
       predicate
     }
 
-    def structs: Seq[Struct] = _structs.values.toSeq.sortBy(_.name)
-    def methods: Seq[MethodImplementation] = _methods
+    def structs: Seq[Struct] = _structs
       .values
-      .collect { case (m: MethodImplementation) => m }
+      .collect { case (s: Struct) => s }
       .toSeq
       .sortBy(_.name)
+
+    def methods: Seq[Method] = _methods
+      .values
+      .collect { case (m: Method) => m }
+      .toSeq
+      .sortBy(_.name)
+
     def predicates: Seq[Predicate] = _predicates.values.toSeq.sortBy(_.name)
-    def dependencies: Seq[Dependency] = _dependencies.toSeq.sortBy(_.path)
+
+    def dependencies: Seq[Dependency] = _dependencies.toList.sortBy(_.path)
 
     // Structs can be used even if they are never declared
-    def struct(name: java.lang.String): Struct =
+    def struct(name: java.lang.String): StructDefinition =
       _structs.getOrElseUpdate(name, new Struct(name))
-    def method(name: java.lang.String): Method = _methods.getOrElse(
+
+    def method(name: java.lang.String): MethodDefinition = _methods.getOrElse(
       name,
       throw new IRException(s"Method '$name' not found")
     )
+
     def predicate(name: java.lang.String): Predicate = _predicates.getOrElse(
       name,
       throw new IRException(s"Predicate '$name' not found")
     )
   }
 
-  class Struct(val name: java.lang.String, val isImported: Boolean = false) {
+  sealed trait StructDefinition {
+    def name: java.lang.String
+    def fields: Seq[StructField]
+  }
+
+  class Struct(val name: java.lang.String) extends StructDefinition {
     private val _fields = mutable.ListBuffer[StructField]()
 
     def addField(name: java.lang.String, valueType: Type): StructField = {
@@ -87,36 +90,23 @@ object IRGraph {
   }
 
   class StructField(
-      val struct: Struct,
+      val struct: StructDefinition,
       val name: java.lang.String,
       var valueType: Type
   )
 
-  sealed trait Method {
+  sealed trait MethodDefinition {
     def name: java.lang.String
     def returnType: Option[Type]
-    def precondition: Option[Expression]
-    def postcondition: Option[Expression]
     def parameters: Seq[Parameter]
-    def isImported: Boolean = false
   }
 
-  class MethodDefinition(
-    val name: java.lang.String,
-    val returnType: Option[Type],
-    val precondition: Option[Expression] = None,
-    val postcondition: Option[Expression] = None,
-    val parameters: List[Parameter]
-  ) extends Method {
-    override def isImported = true
-  }
-
-  class MethodImplementation(
+  class Method(
       val name: java.lang.String,
       var returnType: Option[Type],
       var precondition: Option[Expression] = None,
       var postcondition: Option[Expression] = None
-  ) extends Method {
+  ) extends MethodDefinition {
     // Variables/parameters are added to both a list and a map to preserve order and speedup lookup
     // Scope is a map of both parameters and variables
     private val _parameters = mutable.ListBuffer[Parameter]()
@@ -416,7 +406,7 @@ object IRGraph {
   }
 
   // A pointer to a struct value
-  class ReferenceType(val struct: Struct) extends Type {
+  class ReferenceType(val struct: StructDefinition) extends Type {
     def name: java.lang.String = "struct " + struct.name + "*"
     def default = new IRGraph.Null()
   }
@@ -434,7 +424,7 @@ object IRGraph {
   }
 
   // An array of struct values
-  class ReferenceArrayType(val struct: Struct) extends Type {
+  class ReferenceArrayType(val struct: StructDefinition) extends Type {
     def name: java.lang.String = "struct " + struct.name + "[]"
     def default = new IRGraph.Null()
   }
@@ -492,7 +482,7 @@ object IRGraph {
   }
 
   class Invoke(
-      var callee: Method,
+      var callee: MethodDefinition,
       var arguments: List[Expression],
       var target: Option[Expression]
   ) extends Op {
@@ -507,7 +497,7 @@ object IRGraph {
   }
 
   class AllocStruct(
-      var struct: Struct,
+      var struct: StructDefinition,
       var target: Expression
   ) extends Op {
     def copy = new AllocStruct(struct, target)
@@ -598,10 +588,72 @@ object IRGraph {
     }
   }
 
-  trait Dependency {
-    def path: java.lang.String
-    def isLibrary: Boolean
-    def methods: Seq[MethodDefinition]
-    def structs: Seq[Struct]
+  class Dependency(
+    program: Program,
+    val path: java.lang.String,
+    val isLibrary: Boolean
+  ) {
+    private val _methods = mutable.ListBuffer[DependencyMethod]()
+    private val _structs = mutable.ListBuffer[DependencyStruct]()
+
+    def methods: Seq[DependencyMethod] = _methods
+    def structs: Seq[DependencyStruct] = _structs
+
+    def defineMethod(
+      name: java.lang.String,
+      returnType: Option[Type]
+    ): DependencyMethod = {
+      if (program._methods.contains(name)) {
+        throw new IRException(s"Method '$name' already exists (importing from '$path'")
+      }
+
+      val method = new DependencyMethod(name, returnType)
+      program._methods += method.name -> method
+      _methods += method
+      method
+    }
+
+    def defineStruct(name: java.lang.String): DependencyStruct = {
+      val struct = new DependencyStruct(name)
+      if (_structs.contains(struct.name)) {
+        // TODO: This should not throw if the struct *fields* have not been defined
+        throw new IRException(s"Struct '${struct.name}' already exists (importing from '$path'")
+      }
+
+      program._structs += struct.name -> struct
+      _structs += struct
+      struct
+    }
+  }
+
+  class DependencyStruct(val name: java.lang.String) extends StructDefinition {
+    private val _fields = mutable.ListBuffer[StructField]()
+
+    def fields: Seq[StructField] = _fields
+
+    def addField(fieldName: java.lang.String, valueType: Type): StructField = {
+      val field = new StructField(this, fieldName, valueType)
+      if (_fields.exists(_.name == fieldName))
+        throw new TransformerException(s"Field '$name.$fieldName' already exists")
+      _fields += field
+      field
+    }
+  }
+
+  class DependencyMethod(
+    val name: java.lang.String,
+    val returnType: Option[Type]
+  ) extends MethodDefinition {
+    val _parameters = mutable.ListBuffer[Parameter]()
+
+    def parameters: Seq[Parameter] = _parameters
+
+    def addParameter(name: java.lang.String, valueType: Type): Parameter = {
+      val param = new Parameter(valueType, name)
+      if (_parameters.exists(_.name == name))
+        throw new TransformerException(s"Parameter '$name' already exists")
+      _parameters += param
+      param
+    }
   }
 }

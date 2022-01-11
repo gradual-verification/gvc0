@@ -8,13 +8,13 @@ import gvc.transformer.IRGraph._
 // variable is used in the following code. This is somewhat challenging when dealing with branches
 // (if) and loops (while).
 object ReassignmentElimination {
-  def transform(method: MethodImplementation): Unit = {
+  def transform(method: Method): Unit = {
     val reassign = new Reassignments(method)
     method.body.foreach(replace(_, reassign))
   }
 
   private class Reassignments(
-    method: MethodImplementation,
+    method: Method,
     var mappings: Map[Var, Var] = Map.empty,
     var created: ListMap[Var, Var] = ListMap.empty,
     var remaining: ListMap[Var, Var] = ListMap.empty,

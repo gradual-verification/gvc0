@@ -59,8 +59,8 @@ object AccessChecks {
   }
 
   private object Methods {
-    def InitOwnedFields: MethodImplementation = {
-      new MethodImplementation(
+    def InitOwnedFields: Method = {
+      new Method(
         "initOwnedFields",
         Some(BoolType),
         None,
@@ -68,8 +68,8 @@ object AccessChecks {
       )
     }
 
-    def AddFieldAccess: MethodImplementation = {
-      new MethodImplementation(
+    def AddFieldAccess: Method = {
+      new Method(
         "addAccess",
         Some(BoolType),
         None,
@@ -77,8 +77,8 @@ object AccessChecks {
       )
     }
 
-    def LoseFieldAccess: MethodImplementation = {
-      new MethodImplementation(
+    def LoseFieldAccess: Method = {
+      new Method(
         "loseAccess",
         Some(BoolType),
         None,
@@ -86,8 +86,8 @@ object AccessChecks {
       )
     }
 
-    def Assert: MethodImplementation = {
-      new MethodImplementation(
+    def Assert: Method = {
+      new Method(
         Names.AssertAcc,
         Some(BoolType),
         None,
@@ -95,8 +95,8 @@ object AccessChecks {
       )
     }
 
-    def AssertDisjoint: MethodImplementation = {
-      new MethodImplementation(
+    def AssertDisjoint: Method = {
+      new Method(
         Names.AssertDisjointAcc,
         Some(BoolType),
         None,
@@ -104,8 +104,8 @@ object AccessChecks {
       )
     }
 
-    def AddStructAccess: MethodImplementation = {
-      new MethodImplementation(
+    def AddStructAccess: Method = {
+      new Method(
         "addStructAccess",
         Some(IntType),
         None,
@@ -113,8 +113,8 @@ object AccessChecks {
       )
     }
 
-    def Join: MethodImplementation = {
-      new MethodImplementation(
+    def Join: Method = {
+      new Method(
         "join",
         Some(BoolType),
         None,
@@ -122,8 +122,8 @@ object AccessChecks {
       )
     }
 
-    def Disjoin: MethodImplementation = {
-      new MethodImplementation(
+    def Disjoin: Method = {
+      new Method(
         "disjoin",
         Some(BoolType),
         None,
@@ -224,7 +224,7 @@ object AccessChecks {
     )
   }
 
-  private def isImprecise(method: MethodImplementation): Boolean = {
+  private def isImprecise(method: Method): Boolean = {
     optionImprecise(method.precondition) || optionImprecise(
       method.postcondition
     )
@@ -238,20 +238,20 @@ object AccessChecks {
   }
 
   class ProgramAccessTracker(ir: Program) {
-    var callGraph: Map[MethodImplementation, MethodAccessTracker] = Map[MethodImplementation, MethodAccessTracker]()
-    var invocations: Map[MethodImplementation, ArrayBuffer[Invoke]] = Map[MethodImplementation, ArrayBuffer[Invoke]]()
+    var callGraph: Map[Method, MethodAccessTracker] = Map[Method, MethodAccessTracker]()
+    var invocations: Map[Method, ArrayBuffer[Invoke]] = Map[Method, ArrayBuffer[Invoke]]()
     var runtimeChecksInserted: Boolean = false
-    var entry: Option[MethodImplementation] = None
-    var allocatesMemory: Set[MethodImplementation] = Set[MethodImplementation]()
+    var entry: Option[Method] = None
+    var allocatesMemory: Set[Method] = Set[Method]()
     val visitedStructs: mutable.Set[Struct] = mutable.Set[Struct]()
 
-    def mergeTracker(method: MethodImplementation, tracker: MethodAccessTracker): Unit = {
+    def mergeTracker(method: Method, tracker: MethodAccessTracker): Unit = {
       callGraph += (method -> tracker)
       if (tracker.bodyContainsRuntimeCheck) runtimeChecksInserted = true
       if (method.name == "main") entry = Some(method)
       tracker.invocations.foreach(inv => {
         inv.callee match {
-          case callee: MethodImplementation => {
+          case callee: Method => {
             if (invocations.contains(callee)) {
               invocations(callee) += inv
             } else {
@@ -265,7 +265,7 @@ object AccessChecks {
       if (tracker.allocations.nonEmpty) allocatesMemory += method
     }
 
-    def spawnTracker(method: MethodImplementation): MethodAccessTracker = {
+    def spawnTracker(method: Method): MethodAccessTracker = {
       new MethodAccessTracker(method, visitedStructs)
     }
 
@@ -275,7 +275,7 @@ object AccessChecks {
        *  AccessTracker.
        */
 
-      for ((caller: MethodImplementation, edge: MethodAccessTracker) <- callGraph) {
+      for ((caller: Method, edge: MethodAccessTracker) <- callGraph) {
         /* Modify the parameters of each method to accept OwnedFields objects as necessary */
 
         /* track each allocation, using _instance_counter or dynamic_fields as appropriate
@@ -292,7 +292,7 @@ object AccessChecks {
         /* Pass the necessary OwnedFields objects when each method is called */
         for (invocation <- edge.invocations) {
           var afterwards: Op = invocation
-          val callee = invocation.callee.asInstanceOf[MethodImplementation]
+          val callee = invocation.callee.asInstanceOf[Method]
           while (
             afterwards.getNext.isDefined
               && afterwards.getNext.get.isInstanceOf[Invoke]
@@ -444,14 +444,14 @@ object AccessChecks {
     }
   }
 
-  class MethodAccessTracker(method: MethodImplementation, visitedStructs: mutable.Set[Struct]) {
-    var entry: Option[MethodImplementation] = None
+  class MethodAccessTracker(method: Method, visitedStructs: mutable.Set[Struct]) {
+    var entry: Option[Method] = None
     val allocations: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
     var invocations: mutable.ArrayBuffer[Invoke] = mutable.ArrayBuffer[Invoke]()
     var returns: mutable.ArrayBuffer[Op] = mutable.ArrayBuffer[Op]()
     var bodyContainsRuntimeCheck: Boolean = false
 
-    def callsImprecise: Boolean = invocations.exists(inv => isImprecise(inv.callee.asInstanceOf[MethodImplementation]))
+    def callsImprecise: Boolean = invocations.exists(inv => isImprecise(inv.callee.asInstanceOf[Method]))
 
     def injectAllocationTracking():Unit = {
       allocations.foreach {
@@ -493,7 +493,7 @@ object AccessChecks {
               new AssignMember(
                 new FieldMember(
                   structAlloc.target,
-                  new StructField(structAlloc.struct, Names.ID, IntType)
+                  new StructField(structAlloc.struct.asInstanceOf[Struct], Names.ID, IntType)
                 ),
                 new DereferenceMember(Vars.InstanceCounter, IntType)
               )
@@ -515,7 +515,7 @@ object AccessChecks {
           method.getVar(name) match {
             case Some(variable) =>
               val structType =
-                variable.valueType.asInstanceOf[ReferenceType].struct
+                variable.valueType.asInstanceOf[ReferenceType].struct.asInstanceOf[Struct]
               if (!visitedStructs.contains(structType)) {
                 structType.addField(Names.ID, IntType)
                 visitedStructs += structType
@@ -559,7 +559,7 @@ object AccessChecks {
     }
   }
 
-  private def needsStaticTracking(method: MethodImplementation): Boolean = {
+  private def needsStaticTracking(method: Method): Boolean = {
     val preStatic = method.precondition.isDefined && method.precondition.get
       .isInstanceOf[Imprecise] && method.precondition.get
       .asInstanceOf[Imprecise]
@@ -618,15 +618,17 @@ object AccessChecks {
 
   private def toAccessPermission(acc: Accessibility): AccessPermission = {
     acc.member match {
-      case member: FieldMember =>
-        AccessPermission(member.root, member.field.struct, member.field.name)
+      case member: FieldMember => member.field.struct match {
+        case struct: Struct => AccessPermission(member.root, struct, member.field.name)
+        case _ => throw new AccessCheckException("Invalid struct type")
+      }
       case _ =>
         throw new AccessCheckException("Unimplemented field access type.")
     }
   }
 
   private def injectParameters(
-                                method: MethodImplementation,
+                                method: Method,
                                 callsites: Option[Iterable[Invoke]],
                                 returns: Iterable[Op]
                               ): Unit = {
@@ -715,7 +717,7 @@ object AccessChecks {
   private def addStructAccess(
     fields: Expression,
     exprToDeref: Expression,
-    structType: Struct
+    structType: StructDefinition
   ): Op = {
     new Invoke(
       Methods.AddStructAccess,
@@ -723,7 +725,7 @@ object AccessChecks {
       Some(
         new FieldMember(
           exprToDeref,
-          new StructField(structType, Names.ID, IntType)
+          new StructField(structType.asInstanceOf[Struct], Names.ID, IntType)
         )
       )
     )
@@ -731,7 +733,7 @@ object AccessChecks {
 
   private def addDynamicStructAccess(
       exprToDeref: Expression,
-      structType: Struct
+      structType: StructDefinition
     ): Op = {
     addStructAccess(
       Commands.GetDynamicOwnedFields,

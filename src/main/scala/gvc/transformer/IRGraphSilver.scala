@@ -35,7 +35,7 @@ object IRGraphSilver {
       vpr.Program(Seq.empty, fields, Seq.empty, predicates, methods, Seq.empty)()
     }
 
-    def convertMethod(method: MethodImplementation): vpr.Method = {
+    def convertMethod(method: Method): vpr.Method = {
       val params = method.parameters.map(convertDecl).toList
       val vars = method.variables.map(convertDecl).toList
       val ret = method.returnType.map({ ret => vpr.LocalVarDecl(Names.ResultVar, convertType(ret))() }).toSeq
