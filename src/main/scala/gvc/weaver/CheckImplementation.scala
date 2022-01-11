@@ -54,7 +54,7 @@ object CheckImplementation {
         val rootType = root match {
           case v: Var => v.valueType
           case m: Member => m.valueType
-          case _ => throw new Weaver.WeaverException("Invalid root value for field access")
+          case _ => throw new WeaverException("Invalid root value for field access")
         }
 
         val fieldName = access.field.name
@@ -67,12 +67,12 @@ object CheckImplementation {
               case BoolType => IRGraphSilver.Names.BoolPointerValue
               case IntType | CharType => IRGraphSilver.Names.IntPointerValue
               case _: ReferenceType => IRGraphSilver.Names.RefPointerValue
-              case _ => throw new Weaver.WeaverException("Invalid value type for dereference")
+              case _ => throw new WeaverException("Invalid value type for dereference")
             }
 
             // Check that it is the expected field name
             if (expected != fieldName)
-              throw new Weaver.WeaverException(s"Invalid dereference field: expected '$expected' but encountered '$fieldName'")
+              throw new WeaverException(s"Invalid dereference field: expected '$expected' but encountered '$fieldName'")
             
             new DereferenceMember(root, ptr.valueType)
           }
@@ -83,17 +83,17 @@ object CheckImplementation {
             val structName = ref.struct.name + "$"
             val structField = ref.struct.fields.filter(f => structName + f.name == fieldName)
               .headOption
-              .getOrElse(throw new Weaver.WeaverException(s"Could not find field $fieldName in struct ${ref.struct.name}"))
+              .getOrElse(throw new WeaverException(s"Could not find field $fieldName in struct ${ref.struct.name}"))
             
             new FieldMember(root, structField)
           }
 
-          case other => throw new Weaver.WeaverException(s"Cannot access member of a value with type '${other.name}'")
+          case other => throw new WeaverException(s"Cannot access member of a value with type '${other.name}'")
         }
       }
         
       case v: vpr.LocalVar => v.name match {
-        case "$return" => returnValue.getOrElse(throw new Weaver.WeaverException("Invalid access to return value"))
+        case "$return" => returnValue.getOrElse(throw new WeaverException("Invalid access to return value"))
         case id => method.variable(id)
       }
 
@@ -101,7 +101,7 @@ object CheckImplementation {
       case lit: vpr.IntLit => new Int(lit.i.toInt) // TODO: This could be used as a char type in some circumstances
       case _: vpr.NullLit => new Null()
 
-      case e => throw new Weaver.WeaverException("Cannot convert Silver expression `" + e.toString() + "`")
+      case e => throw new WeaverException("Cannot convert Silver expression `" + e.toString() + "`")
     }
   }
 }
