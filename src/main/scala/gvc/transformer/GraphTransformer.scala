@@ -550,10 +550,7 @@ object GraphTransformer {
       }
 
       case deref: ResolvedDereference => {
-        new IRGraph.DereferenceMember(
-          transformExpr(deref.value, scope),
-          transformType(deref.valueType)
-        )
+        new IRGraph.DereferenceMember(transformExpr(deref.value, scope))
       }
 
       case not: ResolvedNot =>
@@ -699,10 +696,7 @@ object GraphTransformer {
 
         case deref: ResolvedDereference =>
           new IRGraph.AssignMember(
-            new IRGraph.DereferenceMember(
-              transformExpr(deref.value, scope),
-              transformType(deref.valueType)
-            ),
+            new IRGraph.DereferenceMember(transformExpr(deref.value, scope)),
             value
           )
 

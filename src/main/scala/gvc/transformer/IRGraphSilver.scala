@@ -47,7 +47,7 @@ object IRGraphSilver {
     }
 
     def convertDecl(decl: Var): vpr.LocalVarDecl = {
-      vpr.LocalVarDecl(decl.name, convertType(decl.valueType))()
+      vpr.LocalVarDecl(decl.name, convertType(decl.varType))()
     }
 
     def convertField(field: StructField): vpr.Field =
@@ -136,11 +136,13 @@ object IRGraphSilver {
     }
 
     def convertVar(v: Var): vpr.LocalVar =
-      vpr.LocalVar(v.name, convertType(v.valueType))()
+      vpr.LocalVar(v.name, convertType(v.varType))()
 
     def convertMember(member: Member): vpr.FieldAccess = member match {
       case member: FieldMember => vpr.FieldAccess(convertExpr(member.root), convertField(member.field))()
-      case member: DereferenceMember => vpr.FieldAccess(convertExpr(member.root), getPointerField(member.valueType))()
+      case member: DereferenceMember => vpr.FieldAccess(
+        convertExpr(member.root),
+        getPointerField(member.valueType.getOrElse(throw new IRException("Invalid dereference"))))()
       case _: ArrayMember => throw new IRException("Array operations are not implemented in Silver")
     }
 

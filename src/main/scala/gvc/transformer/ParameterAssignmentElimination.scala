@@ -17,7 +17,7 @@ object ParameterAssignmentElimination {
       val replacements = reassigned.toSeq
         .sortBy(method.parameters.indexOf(_))
         .asInstanceOf[Seq[Var]]
-        .map(p => p -> method.addVar(p.valueType, p.name))
+        .map(p => p -> method.addVar(p.varType, p.name))
       Replacer.replace(method.body, replacements.toMap)
       for ((p, v) <- replacements) {
         new IRGraph.Assign(v, p) +=: method.body

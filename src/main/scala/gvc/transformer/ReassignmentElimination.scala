@@ -25,7 +25,7 @@ object ReassignmentElimination {
           remaining -= v
           newV
         }
-        case None => method.addVar(v.valueType, v.name)
+        case None => method.addVar(v.varType, v.name)
       }
 
       created += v -> newV

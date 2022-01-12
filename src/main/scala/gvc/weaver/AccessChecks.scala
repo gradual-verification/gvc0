@@ -137,7 +137,7 @@ object AccessChecks {
       Seq(
         new AllocValue(IntType, Vars.InstanceCounter),
         new AssignMember(
-          new DereferenceMember(Vars.InstanceCounter, IntType),
+          new DereferenceMember(Vars.InstanceCounter),
           new Int(0)
         )
       )
@@ -165,7 +165,6 @@ object AccessChecks {
           Structs.OwnedFields,
           new ArrayMember(
             Vars.DynamicOwnedFields,
-            Vars.DynamicOwnedFields.valueType,
             new Int(0)
           )
         ),
@@ -183,7 +182,6 @@ object AccessChecks {
     def GetDynamicOwnedFields: ArrayMember = {
       new ArrayMember(
         Vars.DynamicOwnedFields,
-        new ReferenceType(Structs.OwnedFields),
         new Int(0)
       )
     }
@@ -476,7 +474,7 @@ object AccessChecks {
 
             /* increment *(_instance_counter) */
             val deref_inst_counter =
-              new DereferenceMember(Vars.InstanceCounter, IntType)
+              new DereferenceMember(Vars.InstanceCounter)
 
             structAlloc.insertAfter(
               new AssignMember(
@@ -495,7 +493,7 @@ object AccessChecks {
                   structAlloc.target,
                   new StructField(structAlloc.struct.asInstanceOf[Struct], Names.ID, IntType)
                 ),
-                new DereferenceMember(Vars.InstanceCounter, IntType)
+                new DereferenceMember(Vars.InstanceCounter)
               )
             )
           }
@@ -638,11 +636,11 @@ object AccessChecks {
      */
     if (isImprecise(method) && method.name != "main") {
       method.addParameter(
-        Vars.DynamicOwnedFields.valueType,
+        Vars.DynamicOwnedFields.varType,
         Names.DynamicOwnedFields
       )
       method.addParameter(
-        Vars.StaticOwnedFields.valueType,
+        Vars.StaticOwnedFields.varType,
         Names.StaticOwnedFields
       )
 

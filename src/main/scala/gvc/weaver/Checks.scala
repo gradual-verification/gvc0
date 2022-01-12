@@ -2,15 +2,24 @@ package gvc.weaver
 import viper.silver.{ast => vpr}
 import gvc.transformer.{IRGraph => ir}
 import gvc.transformer.IRGraphSilver.Names
+import gvc.transformer.IRGraph
 
-sealed trait Check {
-  def toAssert(p: ir.Program, m: ir.Method): Seq[ir.Op]
+sealed trait Check
+object Check {
+  def fromViper(value: vpr.Exp, method: ir.Method): Check = value match {
+    case acc: vpr.FieldAccessPredicate => CheckExpression.fromViper(acc.loc, method) match {
+      case field: CheckExpression.Field => AccessibilityCheck(field)
+      case _ => throw new WeaverException("Invalid acc()")
+    }
+
+    case e => CheckExpression.fromViper(e, method)
+  }
 }
 
+case class AccessibilityCheck(field: CheckExpression.Field) extends Check
+
 sealed trait CheckExpression extends Check {
-  def toIR(p: ir.Program, m: ir.Method): ir.Expression
-  def getIRType(p: ir.Program, m: ir.Method): Option[ir.Type]
-  def toAssert(p: ir.Program, m: ir.Method): Seq[ir.Op] = Seq(new ir.Assert(toIR(p, m), ir.AssertKind.Imperative))
+  def toIR(p: ir.Program, m: ir.Method, returnValue: Option[ir.Expression]): ir.Expression
 }
 
 object CheckExpression {
@@ -20,70 +29,59 @@ object CheckExpression {
     val left: CheckExpression
     val right: CheckExpression
     def op: ir.BinaryOp
-    def toIR(p: ir.Program, m: ir.Method): ir.Binary = new ir.Binary(op, left.toIR(p, m), right.toIR(p, m))
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]): ir.Binary =
+      new ir.Binary(op, left.toIR(p, m, r), right.toIR(p, m, r))
   }
 
-  sealed trait Logical extends Binary {
-    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.BoolType)
-  }
-  sealed trait Comparison extends Binary {
-    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.BoolType)
-  }
-  sealed trait Arithmetic extends Binary {
-    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.IntType)
-  }
-
-  case class And(left: Expr, right: Expr) extends Logical {
+  case class And(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.And
   }
-  case class Or(left: Expr, right: Expr) extends Logical {
+  case class Or(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.Or
   }
-  case class Add(left: Expr, right: Expr) extends Arithmetic {
+  case class Add(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.Add
   }
-  case class Sub(left: Expr, right: Expr) extends Arithmetic {
+  case class Sub(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.Subtract
   }
-  case class Mul(left: Expr, right: Expr) extends Arithmetic {
+  case class Mul(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.Multiply
   }
-  case class Div(left: Expr, right: Expr) extends Arithmetic {
+  case class Div(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.Divide
   }
-  case class Eq(left: Expr, right: Expr) extends Comparison {
+  case class Eq(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.Equal
   }
-  case class Lt(left: Expr, right: Expr) extends Comparison {
+  case class Lt(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.Less
   }
-  case class LtEq(left: Expr, right: Expr) extends Comparison {
+  case class LtEq(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.LessOrEqual
   }
-  case class Gt(left: Expr, right: Expr) extends Comparison {
+  case class Gt(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.Greater
   }
-  case class GtEq(left: Expr, right: Expr) extends Comparison {
+  case class GtEq(left: Expr, right: Expr) extends Binary {
     def op = ir.BinaryOp.GreaterOrEqual
   }
 
-  sealed trait UnaryCheck extends CheckExpression {
+  sealed trait Unary extends CheckExpression {
     val operand: Expr
     def op: ir.UnaryOp
-    def toIR(p: ir.Program, m: ir.Method): ir.Unary = new ir.Unary(op, operand.toIR(p, m))
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]): ir.Unary =
+      new ir.Unary(op, operand.toIR(p, m, r))
   }
-  case class Not(operand: Expr) extends UnaryCheck {
+  case class Not(operand: Expr) extends Unary {
     def op = ir.UnaryOp.Not
-    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.BoolType)
   }
-  case class Neg(operand: Expr) extends UnaryCheck {
+  case class Neg(operand: Expr) extends Unary {
     def op = ir.UnaryOp.Negate
-    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.IntType)
   }
 
   case class Var(name: String) extends Expr {
-    def toIR(p: ir.Program, m: ir.Method) = m.variable(name)
-    def getIRType(p: ir.Program, m: ir.Method) = Some(toIR(p, m).valueType)
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) = m.variable(name)
   }
 
   case class Field(root: Expr, structName: String, fieldName: String) extends Expr {
@@ -92,40 +90,29 @@ object CheckExpression {
         .find(_.name == fieldName)
         .getOrElse(throw new WeaverException(s"Field '$fieldName' does not exist"))
 
-    def toIR(p: ir.Program, m: ir.Method) = new ir.FieldMember(root.toIR(p, m), getIRField(p))
-    def getIRType(p: ir.Program, m: ir.Method) = Some(getIRField(p).valueType)
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) = new ir.FieldMember(root.toIR(p, m, r), getIRField(p))
   }
 
   case class Deref(operand: Expr) extends Expr {
-    def toIR(p: ir.Program, m: ir.Method) = new ir.DereferenceMember(operand.toIR(p, m), getIRType(p, m).get)
-
-    def getIRType(p: ir.Program, m: ir.Method) = operand.getIRType(p, m) match {
-      case Some(ptr: ir.PointerType) => Some(ptr.valueType)
-      case _ => throw new WeaverException("Invalid dereference")
-    }
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) = new ir.DereferenceMember(operand.toIR(p, m, r))
   }
 
   sealed trait Literal extends Expr
   case class IntLit(value: Int) extends Literal {
-    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.IntType)
-    def toIR(p: ir.Program, m: ir.Method) = new ir.Int(value)
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) = new ir.Int(value)
   }
   case class CharLit(value: Char) extends Literal {
-    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.CharType)
-    def toIR(p: ir.Program, m: ir.Method) = new ir.Char(value)
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) = new ir.Char(value)
   }
   case class StrLit(value: String) extends Literal {
-    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.StringType)
-    def toIR(p: ir.Program, m: ir.Method) = new ir.String(value)
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) = new ir.String(value)
   }
   case object NullLit extends Literal {
-    def getIRType(p: ir.Program, m: ir.Method) = None
-    def toIR(p: ir.Program, m: ir.Method) = new ir.Null()
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) = new ir.Null()
   }
   sealed trait BoolLit extends Expr {
     def value: Boolean
-    def getIRType(p: ir.Program, m: ir.Method) = Some(ir.BoolType)
-    def toIR(p: ir.Program, m: ir.Method) = new ir.Bool(value)
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) = new ir.Bool(value)
   }
   case object TrueLit extends BoolLit {
     def value = true
@@ -135,58 +122,17 @@ object CheckExpression {
   }
 
   case class Cond(cond: Expr, ifTrue: Expr, ifFalse: Expr) extends Expr {
-    def toIR(p: ir.Program, m: ir.Method) = new ir.Conditional(cond.toIR(p, m), ifTrue.toIR(p, m), ifFalse.toIR(p, m))
-    def getIRType(p: ir.Program, m: ir.Method) = ifTrue.getIRType(p, m).orElse(ifFalse.getIRType(p, m))
+    def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) =
+      new ir.Conditional(cond.toIR(p, m, r), ifTrue.toIR(p, m, r), ifFalse.toIR(p, m, r))
   }
 
-  def fromIR(exp: ir.Expression): CheckExpression = {
-    exp match {
-      case n: ir.Var => Var(n.name)
-      case n: ir.FieldMember => Field(fromIR(n.root), n.field.struct.name, n.field.name)
-      case n: ir.DereferenceMember => Deref(fromIR(n.root))
-      case n: ir.Int => IntLit(n.value)
-      case n: ir.Char => CharLit(n.value)
-      case n: ir.Bool => n.value match {
-        case true => TrueLit
-        case false => FalseLit
-      }
-      case n: ir.Null => NullLit
-      case n: ir.String => StrLit(n.value)
-      case n: ir.Conditional => Cond(fromIR(n.condition), fromIR(n.ifTrue), fromIR(n.ifFalse))
-      case n: ir.Binary => {
-        val (l, r) = (fromIR(n.left), fromIR(n.right))
-        n.operator match {
-          case ir.BinaryOp.Add => Add(l, r)
-          case ir.BinaryOp.Subtract => Sub(l, r)
-          case ir.BinaryOp.Divide => Div(l, r)
-          case ir.BinaryOp.Multiply => Mul(l, r)
-          case ir.BinaryOp.And => And(l, r)
-          case ir.BinaryOp.Or => Or(l, r)
-          case ir.BinaryOp.Equal => Eq(l, r)
-          case ir.BinaryOp.NotEqual => Not(Eq(l, r))
-          case ir.BinaryOp.Less => Lt(l, r)
-          case ir.BinaryOp.LessOrEqual => LtEq(l, r)
-          case ir.BinaryOp.Greater => Gt(l, r)
-          case ir.BinaryOp.GreaterOrEqual => GtEq(l, r)
-        }
-      }
-      case n: ir.Unary => {
-        val x = fromIR(n.operand)
-        n.operator match {
-          case ir.UnaryOp.Negate => Neg(x)
-          case ir.UnaryOp.Not => x match {
-            case Not(t) => t
-            case x => x
-          }
-        }
-      }
-
-      case _ => throw new WeaverException("Invalid expression")
-    }
+  case object Result extends Expr {
+    def toIR(p: IRGraph.Program, m: IRGraph.Method, returnValue: Option[IRGraph.Expression]): IRGraph.Expression =
+      returnValue.getOrElse(throw new WeaverException("Invalid \result expression"))
   }
 
-  def fromViper(value: vpr.Exp, method: ir.Method, returnValue: Option[ir.Expression] = None): Expr = {
-    def expr(e: vpr.Exp) = fromViper(e, method, returnValue)
+  def fromViper(value: vpr.Exp, method: ir.Method): Expr = {
+    def expr(e: vpr.Exp) = fromViper(e, method)
 
     value match {
       case eq: vpr.EqCmp => Eq(expr(eq.left), expr(eq.right))
@@ -226,7 +172,7 @@ object CheckExpression {
       }
 
       case v: vpr.LocalVar => v.name match {
-        case "$return" => fromIR(returnValue.getOrElse(throw new WeaverException("Invalid access to return value")))
+        case "$return" => Result
         case id => Var(id)
       }
 

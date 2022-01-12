@@ -43,11 +43,11 @@ class Checker(program: Program, collected: CollectedMethod) {
     collected.conditions.foreach { cond =>
       val variable = conditions(cond.id)
       val fullExpr = getDisjunction(cond.when) match {
-        case None => cond.value.toIR(program, method)
-        case Some(when) => new Binary(BinaryOp.And, when, cond.value.toIR(program, method))
+        case None => cond.value.toIR(program, method, None)
+        case Some(when) => new Binary(BinaryOp.And, when, cond.value.toIR(program, method, None))
       }
 
-      insertAt(cond.location, Seq(new Assign(variable, fullExpr)))
+      insertAt(cond.location, _ => Seq(new Assign(variable, fullExpr)))
     }
   }
 
@@ -61,8 +61,12 @@ class Checker(program: Program, collected: CollectedMethod) {
       }
   }
 
-  private def generateChecks(cond: Option[Expression], checks: Seq[Check]): Seq[Op] = {
-    val ops = checks.flatMap(_.toAssert(program, method))
+  private def generateChecks(
+    cond: Option[Expression],
+    checks: Seq[Check],
+    returnValue: Option[Expression]
+  ): Seq[Op] = {
+    val ops = checks.map(generateCheck(_, returnValue))
     cond match {
       case None => ops
       case Some(cond) => {
@@ -74,21 +78,26 @@ class Checker(program: Program, collected: CollectedMethod) {
     }
   }
 
+  def generateCheck(check: Check, returnValue: Option[Expression]): Op = check match {
+    case AccessibilityCheck(field) => ???
+    case expr: CheckExpression => new Assert(expr.toIR(program, method, returnValue), AssertKind.Imperative)
+  }
+
   // NOTE: Ops are call-by-name, since multiple copies of them may be necessary. DO NOT construct
   // the Ops before passing them to this method.
-  private def insertAt(at: Location, ops: => Seq[Op]): Unit = at match {
+  private def insertAt(at: Location, ops: Option[Expression] => Seq[Op]): Unit = at match {
     case Invariant(op) => ???
-    case Pre(op) => op.insertBefore(ops)
-    case Post(op) => op.insertAfter(ops)
-    case MethodPre => ops.foreach(_ +=: method.body)
+    case Pre(op) => op.insertBefore(ops(None))
+    case Post(op) => op.insertAfter(ops(None))
+    case MethodPre => ops(None).foreach(_ +=: method.body)
     case MethodPost => {
-      collected.returns.foreach(e => e.insertBefore(ops))
+      collected.returns.foreach(e => e.insertBefore(ops(e.value)))
       if (collected.hasImplicitReturn) {
-        ops.foreach(method.body += _)
+        ops(None).foreach(method.body += _)
       }
     }
   }
 
   private def insertChecks(at: Location, cond: Option[Expression], checks: Seq[Check]): Unit =
-    insertAt(at, generateChecks(cond, checks))
+    insertAt(at, generateChecks(cond, checks, _))
 }

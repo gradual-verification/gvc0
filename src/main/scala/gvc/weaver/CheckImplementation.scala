@@ -51,11 +51,7 @@ object CheckImplementation {
 
       case access: vpr.FieldAccess => {
         val root = expr(access.rcv)
-        val rootType = root match {
-          case v: Var => v.valueType
-          case m: Member => m.valueType
-          case _ => throw new WeaverException("Invalid root value for field access")
-        }
+        val rootType = root.valueType.getOrElse(throw new WeaverException("Invalid root value for field access"))
 
         val fieldName = access.field.name
         rootType match {
@@ -74,7 +70,7 @@ object CheckImplementation {
             if (expected != fieldName)
               throw new WeaverException(s"Invalid dereference field: expected '$expected' but encountered '$fieldName'")
             
-            new DereferenceMember(root, ptr.valueType)
+            new DereferenceMember(root)
           }
 
           case ref: ReferenceType => {

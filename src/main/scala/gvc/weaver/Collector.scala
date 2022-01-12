@@ -228,14 +228,9 @@ class Collector(
   private def check(node: vpr.Node, loc: Location): Unit = {
     for (check <- viperChecks.get(node).toSeq.flatten) {
       val condition = branchCondition(check.branch)
-      
-      val returnValue = loc match {
-        case Pre(ret: Return) => ret.value
-        case _ => None
-      }
 
       // TODO: Split apart ANDed checks?
-      val checkValue = CheckExpression.fromViper(check.checks, irMethod, returnValue)
+      val checkValue = CheckExpression.fromViper(check.checks, irMethod)
       checks.getOrElseUpdate((loc, checkValue), mutable.Set()) += condition
     }
   }

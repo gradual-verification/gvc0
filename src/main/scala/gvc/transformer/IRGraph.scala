@@ -296,65 +296,93 @@ object IRGraph {
   }
 
   sealed trait Expression {
+    def valueType: Option[Type]
+
     def contains(exp: Expression): Boolean =
       exp == this
   }
 
-  class Parameter(valueType: Type, name: java.lang.String) extends Var(valueType, name)
-  class Var(var valueType: Type, val name: java.lang.String) extends Expression
+  class Parameter(varType: Type, name: java.lang.String) extends Var(varType, name)
+  class Var(var varType: Type, val name: java.lang.String) extends Expression {
+    def valueType: Option[Type] = Some(varType)
+  }
 
   sealed trait Member extends Expression {
     var root: Expression
-    def valueType: Type
-
     override def contains(exp: Expression) =
       super.contains(exp) || root.contains(exp)
   }
 
   class FieldMember(var root: Expression, var field: StructField)
       extends Member {
-    def valueType: Type = field.valueType
+    def valueType: Option[Type] = Some(field.valueType)
   }
-  class DereferenceMember(var root: Expression, var valueType: Type)
-      extends Member
-  // TODO: Index should be Expression
-  class ArrayMember(var root: Expression, var valueType: Type, var index: Int)
-      extends Member
+  class DereferenceMember(var root: Expression)
+      extends Member {
+    def valueType: Option[Type] = root.valueType match {
+      case Some(ptr: PointerType) => Some(ptr.valueType)
+      case _ => None
+    }
+  }
+  class ArrayMember(var root: Expression, var index: Expression)
+      extends Member {
+    def valueType: Option[Type] = root.valueType match {
+      case Some(arr: ArrayType) => Some(arr.valueType)
+      case _ => None
+    }
+  }
 
-  class Accessibility(var member: Member) extends Expression {
+  // Expressions that can only be used within specifications
+  sealed trait SpecificationExpression extends Expression {
+    def valueType = None
+  }
+
+  class Accessibility(var member: Member) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || member.contains(exp)
+    
   }
 
   class PredicateInstance(
       var predicate: Predicate,
       var arguments: List[IRGraph.Expression]
-  ) extends Expression {
+  ) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || arguments.exists(_.contains(exp))
   }
 
   // Represents a \result expression in a specification
-  class Result(var method: Method) extends Expression
+  class Result(var method: Method) extends SpecificationExpression
 
   // Wraps another expression and adds imprecision (i.e. `? && precise`)
-  class Imprecise(var precise: Option[IRGraph.Expression]) extends Expression {
+  class Imprecise(var precise: Option[IRGraph.Expression]) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || precise.exists(_.contains(exp))
   }
 
   sealed trait Literal extends Expression
-  class Int(val value: scala.Int) extends Literal
-  class Char(val value: scala.Char) extends Literal
-  class Bool(val value: scala.Boolean) extends Literal
-  class String(val value: java.lang.String) extends Literal
-  class Null extends Literal
+  class Int(val value: scala.Int) extends Literal {
+    def valueType: Option[Type] = Some(IntType)
+  }
+  class Char(val value: scala.Char) extends Literal {
+    def valueType: Option[Type] = Some(CharType)
+  }
+  class Bool(val value: scala.Boolean) extends Literal {
+    def valueType: Option[Type] = Some(BoolType)
+  }
+  class String(val value: java.lang.String) extends Literal {
+    def valueType: Option[Type] = Some(StringType)
+  }
+  class Null extends Literal {
+    def valueType: Option[Type] = None
+  }
 
   class Conditional(
       var condition: Expression,
       var ifTrue: Expression,
       var ifFalse: Expression
   ) extends Expression {
+    def valueType: Option[Type] = ifTrue.valueType.orElse(ifFalse.valueType)
     override def contains(exp: Expression) =
       super.contains(exp) || condition.contains(exp) || ifTrue.contains(
         exp
@@ -366,6 +394,14 @@ object IRGraph {
       var left: Expression,
       var right: Expression
   ) extends Expression {
+    def valueType: Option[Type] = operator match {
+      case BinaryOp.Add | BinaryOp.Subtract | BinaryOp.Divide | BinaryOp.Multiply =>
+        Some(IntType)
+      case BinaryOp.And | BinaryOp.Or |
+        BinaryOp.Equal | BinaryOp.NotEqual |
+        BinaryOp.Less | BinaryOp.LessOrEqual |
+        BinaryOp.Greater | BinaryOp.GreaterOrEqual => Some(BoolType)
+    }
     override def contains(exp: Expression) =
       super.contains(exp) || left.contains(exp) || right.contains(exp)
   }
@@ -390,6 +426,10 @@ object IRGraph {
       var operator: UnaryOp,
       var operand: Expression
   ) extends Expression {
+    def valueType: Option[Type] = operator match {
+      case UnaryOp.Negate => Some(IntType)
+      case UnaryOp.Not => Some(BoolType)
+    }
     override def contains(exp: Expression) =
       super.contains(exp) || operand.contains(exp)
   }

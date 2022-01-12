@@ -72,8 +72,8 @@ object Replacer {
 
   def replace(member: Member, m: Mapping): Member = member match {
     case field: FieldMember => new FieldMember(replace(field.root, m), field.field)
-    case deref: DereferenceMember => new DereferenceMember(replace(deref.root, m), deref.valueType)
-    case array: ArrayMember => new ArrayMember(replace(array.root, m), array.valueType, array.index) // TODO: index
+    case deref: DereferenceMember => new DereferenceMember(replace(deref.root, m))
+    case array: ArrayMember => new ArrayMember(replace(array.root, m), array.index) // TODO: index
   }
 
   def replace(pred: PredicateInstance, m: Mapping): PredicateInstance =

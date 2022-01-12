@@ -61,7 +61,7 @@ object GraphPrinter {
       p.print(predicate.name)
       p.print("(")
       printList(predicate.parameters) { param =>
-        printType(param.valueType)
+        printType(param.varType)
         p.print(" ")
         p.print(param.name)
       }
@@ -87,7 +87,7 @@ object GraphPrinter {
 
       var first = true
       printList(method.parameters) { param =>
-        printType(param.valueType)
+        printType(param.varType)
         p.print(" ")
         p.print(param.name)
       }
@@ -126,12 +126,15 @@ object GraphPrinter {
     }
 
     def printVar(v: Var): Unit = {
-      p.print(v.valueType.name)
+      p.print(v.varType.name)
       p.print(" ")
       p.print(v.name)
-      if(!v.valueType.isInstanceOf[ArrayType] && !v.valueType.isInstanceOf[ReferenceArrayType]){
-        p.print(" = ")
-        printExpr(v.valueType.default)
+      v.varType match {
+        case _: ArrayType | _: ReferenceArrayType => ()
+        case varType => {
+          p.print(" = ")
+          printExpr(varType.default)
+        }
       }
       p.println(";")
     }
