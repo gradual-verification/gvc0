@@ -1,7 +1,7 @@
 package gvc.weaver
 import gvc.transformer.IRGraph._
 import gvc.weaver.AccessChecks.{MethodAccessTracker, ProgramAccessTracker}
-import viper.silicon.state.{BranchInfo, CheckInfo}
+import viper.silicon.state.CheckInfo
 import viper.silver.{ast => vpr}
 
 import scala.annotation.tailrec
@@ -175,7 +175,7 @@ object Weaver {
           .toSeq
           .flatten
           .map(check =>
-            conditional(assert(check, returnVal), check.branch)
+            conditional(assert(check, returnVal), check.branchInfo)
           )
           .foreach(insertAt(_, op))
       )
@@ -256,13 +256,9 @@ object Weaver {
         .foreach(insertAt(_, op))
     }
 
-    private def conditional(check: Op, branch: BranchInfo): Op = {
-      val when = (
-        branch.branch,
-        branch.branchOrigin,
-        branch.branchPosition
-      ).zipped.toSeq.foldRight(Logic.Conjunction())((branch, conj) => branch match {
-          case (branch, origin, position) => {
+    private def conditional(check: Op, branchInfo: Seq[(vpr.Exp, vpr.Node, Option[vpr.Node])]): Op = {
+      val when = branchInfo.toSeq.foldRight(Logic.Conjunction())((branch, conj) => branch match {
+          case (branch, position, origin) => {
             val insertAt = origin.getOrElse(position)
             conj & defineConditional(insertAt, branch, conj)
           }
