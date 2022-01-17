@@ -1,15 +1,17 @@
 package gvc.weaver
 
+import scala.collection.mutable
 import gvc.transformer.IRGraph._
 import Collector._
 
 object Checker {
   def insert(program: CollectedProgram): Unit = {
-    program.methods.values.foreach { method => insert(program.program, method) }
+    program.methods.values.foreach { method => insert(program, method) }
   }
 
-  private def insert(program: Program, collected: CollectedMethod): Unit = {
-    val method = collected.method
+  private def insert(programData: CollectedProgram, methodData: CollectedMethod): Unit = {
+    val program = programData.program
+    val method = methodData.method
 
     // `ops` is a function that generates the operations, given the current return value at that
     // position. DO NOT construct the ops before passing them to this method since multiple copies
@@ -20,15 +22,15 @@ object Checker {
       case Post(op) => op.insertAfter(ops(None))
       case MethodPre => ops(None).foreach(_ +=: method.body)
       case MethodPost => {
-        collected.returns.foreach(e => e.insertBefore(ops(e.value)))
-        if (collected.hasImplicitReturn) {
+        methodData.returns.foreach(e => e.insertBefore(ops(e.value)))
+        if (methodData.hasImplicitReturn) {
           ops(None).foreach(method.body += _)
         }
       }
     }
 
     // Define condition variables and create a map from term ID to variables
-    val conditions = collected.conditions
+    val conditions = methodData.conditions
       .map(cond => (cond.id, method.addVar(BoolType, s"_cond_${cond.id}")))
       .toMap
 
@@ -56,7 +58,7 @@ object Checker {
     }
 
     // Insert the required assignments to condition variables
-    collected.conditions.foreach { cond =>
+    methodData.conditions.foreach { cond =>
       insertAt(cond.location, _ => Seq(new Assign(conditions(cond.id), getConditionValue(cond))))
     }
 
@@ -88,7 +90,7 @@ object Checker {
     // Insert the runtime checks
     // Group them by location and condition, so that multiple checks can be contained in a single
     // if block.
-    collected.checks.groupBy(c => (c.location, c.when))
+    methodData.checks.groupBy(c => (c.location, c.when))
       .foreach {
         case ((loc, when), checks) => {
           val condition = getDisjunction(when)

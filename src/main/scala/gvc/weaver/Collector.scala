@@ -3,7 +3,6 @@ package gvc.weaver
 
 import scala.collection.mutable
 import gvc.transformer.IRGraph._
-import viper.silicon.state.BranchInfo
 import viper.silver.{ast => vpr}
 
 object Collector {
@@ -17,7 +16,13 @@ object Collector {
   case class Condition(id: scala.Int, location: Location, value: CheckExpression, when: Disjunction)
   case class Conjunction(values: List[(Condition, Boolean)])
   case class Disjunction(cases: List[Conjunction])
+
   case class RuntimeCheck(location: Location, check: Check, when: Disjunction)
+
+  sealed trait CallStyle
+  case object PreciseCallStyle extends CallStyle
+  case object ImpreciseCallStyle extends CallStyle
+
   class CollectedMethod(
     val method: Method,
     val conditions: List[Condition],
@@ -26,6 +31,7 @@ object Collector {
     val hasImplicitReturn: Boolean,
     val calls: List[Invoke],
     val allocations: List[Op],
+    val callStyle: CallStyle,
   )
 
   class CollectedProgram(
@@ -227,10 +233,10 @@ class Collector(
   // Finds all the runtime checks required by the given Viper node
   private def check(node: vpr.Node, loc: Location): Unit = {
     for (check <- viperChecks.get(node).toSeq.flatten) {
-      val condition = branchCondition(check.branch)
+      val condition = branchCondition(check.branchInfo)
 
       // TODO: Split apart ANDed checks?
-      val checkValue = CheckExpression.fromViper(check.checks, irMethod)
+      val checkValue = Check.fromViper(check, irMethod)
       checks.getOrElseUpdate((loc, checkValue), mutable.Set()) += condition
     }
   }
@@ -257,11 +263,9 @@ class Collector(
   }
 
   // Converts the stack of branch conditions to a logical conjunction
-  private def branchCondition(branch: BranchInfo): Logic.Conjunction = {
-    (branch.branch, branch.branchOrigin, branch.branchPosition)
-      .zipped
-      .foldRight(Logic.Conjunction())((b, conj) => b match {
-        case (branch, origin, position) => {
+  private def branchCondition(branches: Seq[(vpr.Exp, vpr.Node, Option[vpr.Node])]): Logic.Conjunction = {
+    branches.foldRight(Logic.Conjunction())((b, conj) => b match {
+        case (branch, position, origin) => {
           val vprLoc = origin match {
             case None => ViperLocation(position)
             case Some(origin) => ViperLocation(origin, position)
@@ -320,6 +324,14 @@ class Collector(
       }
     }.toList
 
+    def isImprecise(cond: Option[Expression]) = cond match {
+      case Some(_: Imprecise) => true
+      case _ => false
+    }
+
+    val hasImprecision = isImprecise(irMethod.precondition) || isImprecise(irMethod.postcondition)
+    val callStyle = if (hasImprecision) ImpreciseCallStyle else PreciseCallStyle
+
     new CollectedMethod(
       method = irMethod,
       conditions = usedConditions.values.toSeq.sortBy(_.id).toList,
@@ -328,6 +340,7 @@ class Collector(
       hasImplicitReturn = hasImplicitReturn,
       calls = invokes.toList,
       allocations = allocations.toList,
+      callStyle = callStyle,
     )
   }
 

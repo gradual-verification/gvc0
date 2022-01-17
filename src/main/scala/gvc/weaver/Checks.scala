@@ -3,13 +3,17 @@ import viper.silver.{ast => vpr}
 import gvc.transformer.{IRGraph => ir}
 import gvc.transformer.IRGraphSilver.Names
 import gvc.transformer.IRGraph
+import viper.silicon.state.CheckInfo
 
 sealed trait Check
+
 object Check {
-  def fromViper(value: vpr.Exp, method: ir.Method): Check = value match {
-    case acc: vpr.FieldAccessPredicate => CheckExpression.fromViper(acc.loc, method) match {
-      case field: CheckExpression.Field => AccessibilityCheck(field)
-      case _ => throw new WeaverException("Invalid acc()")
+  def fromViper(check: CheckInfo, method: ir.Method): Check = check.checks match {
+    case acc: vpr.FieldAccessPredicate => {
+      CheckExpression.fromViper(acc.loc, method) match {
+        case field: CheckExpression.Field => AccessibilityCheck(field)
+        case _ => throw new WeaverException("Invalid acc()")
+      }
     }
 
     case e => CheckExpression.fromViper(e, method)

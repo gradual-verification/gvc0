@@ -1,0 +1,14 @@
+struct Test {
+  int value;
+};
+
+void test(struct Test *t)
+//@requires ?;
+{
+  t->value = 1;
+}
+
+int main()
+{
+  return 0;
+}

@@ -20,7 +20,7 @@ object CheckRuntime {
     val resolved = Resolver.resolveProgram(parsed, errors)
     if (errors.errors.nonEmpty)
       throw new WeaverException("Cannot resolve runtime header")
-    
+
     resolved
   }
 
@@ -51,6 +51,7 @@ class CheckRuntime private (program: IRGraph.Program) {
 
   val ownedFields = program.struct(Names.ownedFields)
   val ownedFieldsRef = new IRGraph.ReferenceType(ownedFields)
+  val ownedFieldInstanceCounter = ownedFields.fields.find(_.name == "instanceCounter").get
 
   val initOwnedFields = program.method(Names.initOwnedFields)
   val addStructAccess = program.method(Names.addStructAccess)
