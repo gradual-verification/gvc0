@@ -1,37 +1,53 @@
-# Runtime Checks for Field Access Predicates
+# Field Access Tracking
 
-## Tracking Allocations
+## Field Identification
 
-If a function has a complete, statically-verified specification, and it does not call any partially specified functions, then no runtime checks are required in its immediate body. However, because it may allocate memory, an `_id_counter` variable is injected as a parameter to assign unique IDs to each struct allocation. This is initialized once at the entry of the program, and is incremented for each allocation. Each struct's definition is injected with an `_id` field to contain its unique identifier. 
+An `_id` field is added to each struct to uniquely identify each allocated object. (Note: the field may be named something other than `_id` if a field with that name exists already in the struct.) A `int` pointer will track the number of objects allocated. On each allocation, the new value's `_id` field is assigned the value of this counter, and the counter is incremented.
 
-If a precise function calls imprecise functions, or if a function itself is imprecise, then `OwnedFields` structs must be introduced to track which fields become accessible and inaccessible during runtime. 
+Fields are identified by the index of the field within the struct. The pair of struct `_id` and field index uniquely identify a single field in memory.
 
-We differentiate between field permissions that are explicitly specified and those created at runtime by allocations. The struct `static_fields` contains static fields, while `dyn_fields` contains permissions created by calls to `alloc`. Additionally, `dyn_fields` will contain permissions that were statically verified for a different function, passed to the current one, and weren't part of any static specification in the current function.
+## Precise methods
 
- Note that each `OwnedFields` struct is initialized with a reference to `_id_counter` to reduce the number of injected parameters. When a struct is allocated in an imprecise context, all of its fields are marked as accessible within `dyn_fields`, and it is assigned a unique ID. 
+A *precise method* is any method that does not contain imprecision in its pre-condition or post-condition. When calling a precise method, only the object counter pointer is passed. An additional argument is added to the method for this purpose, and every call site is updated to pass this pointer.
 
-We maintain the invariant that `static_fields` and `dyn_fields` are disjoint to handle the separating conjunction. We can verify that a field is accessible and disjoint from the statically-verified fields of a given specification by ensuring that it is only an element of `dyn_fields` and not of `static_fields`.
+### Calling precise methods
 
-## Handling Imprecision
+When calling precise methods, pass the object counter pointer verbatim. No permissions need to be tracked since they have been statically verified.
 
-If a `?` appears in any context within a function, then `OwnedFields` structs must be created and adjusted for the function's precondition, its postcondition, and any other imprecise contracts within its body. 
+### Calling imprecise methods
 
-### Precise Precondition
+1. Initialize a new `OwnedFields` instance.
+2. Add all statically-known permissions to the instance.
+3. Call the imprecise method, passing it the new `OwnedFields` instance.
+4. Track all following permissions and allocations in following method calls with this `OwnedFields` instance.
 
-When a function with a precise precondition is called, all static permissions given by the precondition of the function are removed from the current `OwnedFields` structs. Then, the current `static_fields` and `dyn_fields` structs are stored in temporary variables and replaced by new ones. The new `static_fields` contains only the statically-verified component given by the new function's precondition, and the new `dyn_fields` is empty.
+## Imprecise methods
 
-After the function returns, the current `static_fields` and `dyn_fields` are merged with their older versions, and then all permissions that are shared between the two structs are removed from `dyn_fields` to preserve separation.
+An *imprecise method* is any method that contains imprecision in its pre-condition or post-condition. When calling an imprecise method, an `OwnedFields` instance must be passed. An additional argument is added to the method for this purpose, and every call site is updated to pass this pointer. The `OwnedFields` instance also contains the object counter pointer.
 
-### Imprecise Precondition
+### Calling precise methods
 
-Similarly, all static permissions given by the precondition of the function are removed from the current `OwnedFields` structs. However, the remaining contents of `static_fields` are also added to `dyn_fields`. Then, `static_fields` is replaced with a new `OwnedFields` instance containing the static component of the new function's precondition. No temporary variables are created. 
+1. Call the precise method, passing the object counter pointer from the `OwnedFields` instance.
+2. Calculate the difference in permissions, gained or lost, from the callee's pre and post-conditions and modify the current `OwnedFields` instance accordingly (this may include predicates).
 
-When the function returns, permissions are similarly separated so that `static_fields` contains only the static component of the returning function's postcondition, and `dyn_fields` contains all other permissions. However, if the postcondition is precise, then `dyn_fields` is emptied.
+### Calling imprecise methods
 
-### Assertions
+When calling imprecise methods, pass the `OwnedFields` instance verbatim. Any mutations to the permission set are inherited by the caller.
 
-To handle assertions, all permissions in the static component of the assertion are appended to the existing `static_fields` object, and separation is preserved by removing shared permissions from `dyn_fields`. Both steps occur prior to the runtime check.
+## Runtime checks
 
-## Runtime Checks
+Runtime checks assert the presence of a specified permission in the executing method's permission set. This will only occur in an imprecise method, or in a precise method after calling an imprecise method, so an `OwnedFields` instance will always be available. 
 
-There are two types of runtime checks that can occur. A disjoint check verifies accessibility and separation, ensuring that a field is present in `dyn_fields` but not in `static_fields`. This happens for assertions that have both a precise and imprecise component. When a specification only contains `?`, separation isn't guaranteed, so we can skip the additional check against `static_fields`.
+### Separating conjunctions
+ A separating conjunction can separate permissions that are statically-known from permissions that must be dynamically-checked. To satisfy this, any statically-known permissions that are included in the larger specification must be removed before dynamically checking a permission.
+
+### Implementation
+To assert the presence of a permission:
+1. Walk the specification (pre-condition, loop invariant, assert, or post-condition), and add each access specifier to a separate `OwnedFields` struct.
+2. Execute the required assertion(s), checking that none of the permissions involved are contained in the temporary `OwnedFields`.
+3. If the temporary `OwnedFields` struct will be reused for future runtime checks, reinitialize it as necessary.
+
+Any runtime checks that arise separate from a permission (i.e. `acc` of a field created by a field assignment statement) can be asserted without modifying the set of permissions, since there are no separating conjunctions.
+
+## Abstract Predicates
+If an abstract predicate is present in the static component of a specification, then it is translated into a C0 function in which every access specifier is replaced with an instruction to remove the given permission from `OwnedFields` (or add it to the secondary, temporary OwnedFields struct). This function is executed during step 1 of the implementation, prior to when the runtime check occurs.

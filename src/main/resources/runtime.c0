@@ -45,11 +45,14 @@ void grow(OwnedFields* fields)
 
 FieldArray* find(OwnedFields* fields, int _id){
   int index = hash(_id, fields->capacity);
-  if(fields->contents[index] != NULL && !fields->contents[index]->deleted){
-    return fields->contents[index];
-  }else{
-    return NULL;
+  while(fields->contents[index] != NULL){
+    if(!fields->contents[index]->deleted && fields->contents[index]->_id == _id){
+        return fields->contents[index];
+    }else{
+        index += 1;
+    }
   }
+  return NULL;
 }
 
 FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool accAll)
@@ -108,12 +111,22 @@ void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage
 }
 
 void assertDisjointAcc(OwnedFields* static, OwnedFields* dynamic, int _id, int fieldIndex, string errorMessage){
-    FieldArray* toCheck = find(static, _id);
-    if(toCheck != NULL && toCheck->length <= fieldIndex) error("[INTERNAL] Field index exceeds maximum for the static OwnedFields struct.\n");
-    if(toCheck == NULL || !toCheck->contents[fieldIndex]){
-        assertAcc(dynamic, _id, fieldIndex, errorMessage);
+    FieldArray* checkStatic = find(static, _id);
+    FieldArray* checkDynamic = find(dynamic, _id);
+
+    if(checkStatic != NULL && checkStatic->length <= fieldIndex) error("[INTERNAL] Field index exceeds maximum for the static OwnedFields struct.\n");
+    if(checkDynamic != NULL && checkDynamic->length <= fieldIndex) error("[INTERNAL] Field index exceeds maximum for the dynamic OwnedFields struct.\n");
+
+    if(checkStatic == NULL || !checkStatic->contents[fieldIndex]){
+        assertAcc(dynamic, _id, fieldIndex, string_join(errorMessage, "\n - Separation Satisfied."));
+    }else if(checkDynamic == NULL || !checkDynamic->contents[fieldIndex]){
+        assertAcc(static, _id, fieldIndex, string_join(errorMessage, "\n - Separation Satisfied."));
     }else{
-        error(errorMessage);
+        if(checkStatic != NULL && checkDynamic != NULL && checkStatic->contents[fieldIndex] && checkDynamic->contents[fieldIndex]){
+            error(string_join(errorMessage, "\n - Separation Unsatisifed."));
+        }else{
+            error(string_join(errorMessage, "\n - Separation Satisfied."));
+        }
     }
 }
 

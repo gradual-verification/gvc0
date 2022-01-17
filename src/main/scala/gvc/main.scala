@@ -150,13 +150,11 @@ object Main extends App {
       println("Runtime checks required for " + exp.toString() + ":")
       println(
         checks
-          .map(b =>
-            "  if " + (if (b.branch.branch.isEmpty) "true"
-                       else
-                         b.branch.branch
-                           .map(c => "(" + c.toString() + ")")
-                           .mkString(" && ")) + ": " +
-              b.checks.toString()
+          .map(b => s"  if ${
+            if (b.branchInfo.isEmpty) "true"
+            else b.branchInfo.map { case (branch, _, _) => branch }
+              .map(c => "(" + c.toString() + ")")
+              .mkString(" && ")}: ${b.checks.toString()}"
           )
           .mkString("\n")
       )
