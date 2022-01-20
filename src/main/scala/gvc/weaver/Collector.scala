@@ -87,6 +87,11 @@ object Collector {
     // conjuncts where one conjunct must be true in order for the runtime check to occur.
     val checks = mutable.Map[(Location, Check), mutable.Set[Logic.Conjunction]]()
 
+    // A set of all locations that need the full specification walked to find all conditions. Used
+    // to implement the semantics of the separating conjunction. Pre-calculates a set so that the
+    // same location is not checked twice.
+    val needsFullPermissionChecking = mutable.Set[Location]()
+
     // Indexing adds the node to the mapping of Viper locations to IR locations
     def index(node: vpr.Node, loc: Location): Unit =
       locations += ViperLocation(node) -> loc
@@ -98,8 +103,6 @@ object Collector {
     // Finds all the runtime checks required by the given Viper node, and adds them at the given
     // IR location
     def check(node: vpr.Node, loc: Location): Unit = {
-      var needsPermissions = false
-
       for (check <- vprChecks.get(node).toSeq.flatten) {
         val condition = branchCondition(check.branchInfo)
 
@@ -110,17 +113,20 @@ object Collector {
             // specification. In this case, we need to walk the entire specification and disregard
             // what the verifier thinks can be skipped, in order to satisfy the properties of the
             // separating conjunction.
-            needsPermissions = true
+
+            needsFullPermissionChecking += loc
+
+            // TODO: Remove debugging
+            println(s"METHOD: ${irMethod.name}")
+            println(s"AT: $node")
+            println(s"CHECK: $check")
+            println(s"LOCATION: $loc")
+            println(s"CONTEXT: ${check.context}")
           }
           case check => {
             checks.getOrElseUpdate((loc, check), mutable.Set()) += condition
           }
         }
-      }
-
-      if (needsPermissions) {
-        // TODO: Walk entire specification, collecting permission checks
-        ???
       }
     }
 
@@ -324,13 +330,92 @@ object Collector {
     }
 
     // Get all checks (grouped by their location) and simplify their conditions
-    val collectedChecks = checks.map {
-      case ((loc, check), conditions) => {
-        val simplified = Logic.simplify(Logic.Disjunction(conditions.toSet))
-        val condition = convertDisjunction(simplified)
-        RuntimeCheck(loc, check, condition)
+    val collectedChecks = mutable.ListBuffer[RuntimeCheck]()
+    for (((loc, check), conditions) <- checks) {
+      val simplified = Logic.simplify(Logic.Disjunction(conditions.toSet))
+      val condition = convertDisjunction(simplified)
+      collectedChecks += RuntimeCheck(loc, check, condition)
+    }
+
+    // Collects all permissions in the given specification, and adds checks for them at the given
+    // location.
+    def traversePermissions(
+      location: Location,
+      spec: Expression,
+      arguments: Option[Map[Parameter, CheckExpression]],
+      condition: Option[CheckExpression]
+    ): Seq[RuntimeCheck] = spec match {
+      // Imprecise expressions just needs the precise part checked.
+      // TODO: This should also enable framing checks.
+      case imp: Imprecise => {
+        imp.precise.toSeq.flatMap(traversePermissions(location, _, arguments, condition))
       }
-    }.toList
+
+      // And expressions just traverses both parts
+      case and: Binary if and.operator == BinaryOp.And => {
+        val left = traversePermissions(location, and.left, arguments, condition)
+        val right = traversePermissions(location, and.right, arguments, condition)
+        left ++ right
+      }
+
+      // A condition expression traverses each side with its respective condition, joined with the
+      // existing condition if provided to support nested conditionals.
+      case cond: Conditional => {
+        val baseCond = resolveValue(cond.condition, arguments)
+        val negCond = CheckExpression.Not(baseCond)
+        val (trueCond, falseCond) = condition match {
+          case None => (baseCond, negCond)
+          case Some(otherCond) => (CheckExpression.And(otherCond, baseCond), CheckExpression.And(otherCond, negCond))
+        }
+
+        val truePerms = traversePermissions(location, cond.ifTrue, arguments, Some(trueCond))
+        val falsePerms = traversePermissions(location, cond.ifFalse, arguments, Some(falseCond))
+        truePerms ++ falsePerms
+      }
+
+      // A single accessibility check
+      case acc: Accessibility => {
+        val field = resolveValue(acc.member, arguments) match {
+          case f: CheckExpression.Field => f
+          case invalid => throw new WeaverException(s"Invalid acc() argument: '$invalid'")
+        }
+
+        // TODO: Add checks for framing (these can overlap)
+
+        Seq(RuntimeCheck(
+          location,
+          AccessibilityCheck(field),
+          ConditionValue(condition.getOrElse(CheckExpression.TrueLit))))
+      }
+
+      // TODO: Implement predicates
+      case pred: PredicateInstance => ???
+
+      case _ => {
+        // Otherwise there can be no permission specifiers in this term or its children
+        Seq.empty
+      }
+    }
+
+    // Traverse the specifications for statements that require full permission checks
+    for (location <- needsFullPermissionChecking) {
+      val (spec, arguments) = location match {
+        case Pre(op: Invoke) if op.method.precondition.isDefined =>
+          (op.method.precondition.get, Some(op.method.parameters.zip(op.arguments.map(resolveValue(_))).toMap))
+        case Invariant(op: While) if op.invariant.isDefined =>
+          (op.invariant.get, None)
+        case MethodPost if irMethod.postcondition.isDefined =>
+          (irMethod.postcondition.get, None)
+        case Pre(op: Assert) =>
+          (op.value, None)
+        case _ =>
+          throw new WeaverException("Could not locate specification for permission checking: " + location.toString())
+      }
+
+      // TODO: If only a single separated permission is collected, make it non-separating since it
+      // will never overlap
+      collectedChecks ++= traversePermissions(location, spec, arguments, None)
+    }
 
     // Calculate the necessary call style
     val hasImprecision = isImprecise(irMethod.precondition) || isImprecise(irMethod.postcondition)
@@ -340,7 +425,7 @@ object Collector {
     new CollectedMethod(
       method = irMethod,
       conditions = usedConditions.values.toSeq.sortBy(_.id).toList,
-      checks = collectedChecks,
+      checks = collectedChecks.toList,
       returns = exits.toList,
       hasImplicitReturn = implicitReturn,
       calls = invokes.toList,

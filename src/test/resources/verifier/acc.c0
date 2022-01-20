@@ -2,10 +2,19 @@ struct Test {
   int value;
 };
 
+void setValue(struct Test *t)
+//@requires acc(t->value);
+//@ensures acc(t->value);
+{
+  t->value = 1;
+}
+
 void test(struct Test *t)
 //@requires ?;
 {
-  t->value = 1;
+  // TODO: Fix acc()'s created by assignment
+  // t->value = 1;
+  setValue(t);
 }
 
 int main()
