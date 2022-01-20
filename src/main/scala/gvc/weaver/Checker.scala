@@ -71,7 +71,7 @@ object Checker {
     }
 
     def implementCheck(check: Check, returnValue: Option[Expression]): Op = check match {
-      case AccessibilityCheck(field) => ???
+      case AccessibilityCheck(field, separating) => ???
       case expr: CheckExpression =>
         new Assert(
           expr.toIR(program, method, returnValue),

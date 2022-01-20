@@ -384,7 +384,7 @@ object Collector {
 
         Seq(RuntimeCheck(
           location,
-          AccessibilityCheck(field),
+          AccessibilityCheck(field, true),
           ConditionValue(condition.getOrElse(CheckExpression.TrueLit))))
       }
 

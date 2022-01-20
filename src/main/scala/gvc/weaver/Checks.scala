@@ -11,7 +11,7 @@ object Check {
   def fromViper(check: CheckInfo, method: ir.Method): Check = check.checks match {
     case acc: vpr.FieldAccessPredicate => {
       CheckExpression.fromViper(acc.loc, method) match {
-        case field: CheckExpression.Field => AccessibilityCheck(field)
+        case field: CheckExpression.Field => AccessibilityCheck(field, false)
         case _ => throw new WeaverException("Invalid acc()")
       }
     }
@@ -20,7 +20,7 @@ object Check {
   }
 }
 
-case class AccessibilityCheck(field: CheckExpression.Field) extends Check
+case class AccessibilityCheck(field: CheckExpression.Field, separating: Boolean) extends Check
 
 sealed trait CheckExpression extends Check {
   def toIR(p: ir.Program, m: ir.Method, returnValue: Option[ir.Expression]): ir.Expression
