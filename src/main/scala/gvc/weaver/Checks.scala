@@ -118,6 +118,9 @@ object CheckExpression {
     def value: Boolean
     def toIR(p: ir.Program, m: ir.Method, r: Option[ir.Expression]) = new ir.Bool(value)
   }
+  object BoolLit {
+    def apply(value: Boolean): BoolLit = if (value) TrueLit else FalseLit
+  }
   case object TrueLit extends BoolLit {
     def value = true
   }

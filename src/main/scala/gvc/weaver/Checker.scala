@@ -30,14 +30,14 @@ object Checker {
     }
 
     // Define condition variables and create a map from term ID to variables
-    val conditions = methodData.conditions
+    val trackedConditions = methodData.conditions
       .map(cond => (cond.id, method.addVar(BoolType, s"_cond_${cond.id}")))
       .toMap
 
-    def getConjunction(conj: Conjunction): Option[Expression] =
+    def getConjunction(conj: TrackedConjunction): Option[Expression] =
       conj.values.foldLeft[Option[Expression]](None) {
         case (expr, (cond, flag)) => {
-          val variable = conditions(cond.id)
+          val variable = trackedConditions(cond.id)
           val value = if (flag) variable else new Unary(UnaryOp.Not, variable)
           expr match {
             case None => Some(value)
@@ -46,20 +46,28 @@ object Checker {
         }
       }
 
-    def getDisjunction(disj: Disjunction): Option[Expression] =
+    def getDisjunction(disj: TrackedDisjunction): Option[Expression] =
       disj.cases.foldLeft[Option[Expression]](None) {
         case (Some(expr), conj) => getConjunction(conj).map(new Binary(BinaryOp.Or, expr, _))
         case (None, conj) => getConjunction(conj)
       }
 
-    def getConditionValue(cond: Condition): Expression = getDisjunction(cond.when) match {
+    def getTrackedConditionValue(cond: TrackedCondition): Expression = getDisjunction(cond.when) match {
       case None => cond.value.toIR(program, method, None)
       case Some(when) => new Binary(BinaryOp.And, when, cond.value.toIR(program, method, None))
     }
 
+    def getCondition(cond: Condition): Option[Expression] = cond match {
+      case tracked: TrackedDisjunction => getDisjunction(tracked)
+      case cond: ConditionValue => cond.value match {
+        case CheckExpression.TrueLit => None
+        case value => Some(value.toIR(program, method, None))
+      }
+    }
+
     // Insert the required assignments to condition variables
     methodData.conditions.foreach { cond =>
-      insertAt(cond.location, _ => Seq(new Assign(conditions(cond.id), getConditionValue(cond))))
+      insertAt(cond.location, _ => Seq(new Assign(trackedConditions(cond.id), getTrackedConditionValue(cond))))
     }
 
     def implementCheck(check: Check, returnValue: Option[Expression]): Op = check match {
@@ -93,7 +101,7 @@ object Checker {
     methodData.checks.groupBy(c => (c.location, c.when))
       .foreach {
         case ((loc, when), checks) => {
-          val condition = getDisjunction(when)
+          val condition = getCondition(when)
           insertAt(loc, implementChecks(condition, checks.map(_.check), _))
         }
       }
