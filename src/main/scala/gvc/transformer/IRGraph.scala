@@ -7,17 +7,24 @@ object IRGraph {
   // Note that names of methods, vars, etc. are immutable, since they are also copied in their respective Maps
 
   class Program {
-    private[IRGraph] val _structs = mutable.Map[java.lang.String, StructDefinition]()
-    private[IRGraph] val _methods = mutable.Map[java.lang.String, MethodDefinition]()
+    private[IRGraph] val _structs =
+      mutable.Map[java.lang.String, StructDefinition]()
+    private[IRGraph] val _methods =
+      mutable.Map[java.lang.String, MethodDefinition]()
     private val _predicates = mutable.Map[java.lang.String, Predicate]()
     private val _dependencies = mutable.ListBuffer[Dependency]()
 
-    lazy val ownedFieldsStruct = struct(Helpers.findAvailableName(_structs, "OwnedFields"))
+    lazy val ownedFieldsStruct = struct(
+      Helpers.findAvailableName(_structs, "OwnedFields")
+    )
 
-    def addDependency(path: java.lang.String, isLibrary: Boolean): Dependency = {
+    def addDependency(
+        path: java.lang.String,
+        isLibrary: Boolean
+    ): Dependency = {
       if (_dependencies.exists(d => d.path == path && d.isLibrary == isLibrary))
         throw new IRException(s"Dependency '$path' already exists")
-      
+
       val newDep = new Dependency(this, path, isLibrary)
       _dependencies += newDep
       newDep
@@ -37,14 +44,12 @@ object IRGraph {
       predicate
     }
 
-    def structs: Seq[Struct] = _structs
-      .values
+    def structs: Seq[Struct] = _structs.values
       .collect { case (s: Struct) => s }
       .toSeq
       .sortBy(_.name)
 
-    def methods: Seq[Method] = _methods
-      .values
+    def methods: Seq[Method] = _methods.values
       .collect { case (m: Method) => m }
       .toSeq
       .sortBy(_.name)
@@ -302,7 +307,8 @@ object IRGraph {
       exp == this
   }
 
-  class Parameter(varType: Type, name: java.lang.String) extends Var(varType, name)
+  class Parameter(varType: Type, name: java.lang.String)
+      extends Var(varType, name)
   class Var(var varType: Type, val name: java.lang.String) extends Expression {
     def valueType: Option[Type] = Some(varType)
   }
@@ -317,18 +323,17 @@ object IRGraph {
       extends Member {
     def valueType: Option[Type] = Some(field.valueType)
   }
-  class DereferenceMember(var root: Expression)
-      extends Member {
+  class DereferenceMember(var root: Expression) extends Member {
     def valueType: Option[Type] = root.valueType match {
       case Some(ptr: PointerType) => Some(ptr.valueType)
-      case _ => None
+      case _                      => None
     }
   }
   class ArrayMember(var root: Expression, var index: Expression)
       extends Member {
     def valueType: Option[Type] = root.valueType match {
       case Some(arr: ArrayType) => Some(arr.valueType)
-      case _ => None
+      case _                    => None
     }
   }
 
@@ -340,7 +345,7 @@ object IRGraph {
   class Accessibility(var member: Member) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || member.contains(exp)
-    
+
   }
 
   class PredicateInstance(
@@ -355,7 +360,8 @@ object IRGraph {
   class Result(var method: Method) extends SpecificationExpression
 
   // Wraps another expression and adds imprecision (i.e. `? && precise`)
-  class Imprecise(var precise: Option[IRGraph.Expression]) extends SpecificationExpression {
+  class Imprecise(var precise: Option[IRGraph.Expression])
+      extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || precise.exists(_.contains(exp))
   }
@@ -395,12 +401,13 @@ object IRGraph {
       var right: Expression
   ) extends Expression {
     def valueType: Option[Type] = operator match {
-      case BinaryOp.Add | BinaryOp.Subtract | BinaryOp.Divide | BinaryOp.Multiply =>
+      case BinaryOp.Add | BinaryOp.Subtract | BinaryOp.Divide |
+          BinaryOp.Multiply =>
         Some(IntType)
-      case BinaryOp.And | BinaryOp.Or |
-        BinaryOp.Equal | BinaryOp.NotEqual |
-        BinaryOp.Less | BinaryOp.LessOrEqual |
-        BinaryOp.Greater | BinaryOp.GreaterOrEqual => Some(BoolType)
+      case BinaryOp.And | BinaryOp.Or | BinaryOp.Equal | BinaryOp.NotEqual |
+          BinaryOp.Less | BinaryOp.LessOrEqual | BinaryOp.Greater |
+          BinaryOp.GreaterOrEqual =>
+        Some(BoolType)
     }
     override def contains(exp: Expression) =
       super.contains(exp) || left.contains(exp) || right.contains(exp)
@@ -428,7 +435,7 @@ object IRGraph {
   ) extends Expression {
     def valueType: Option[Type] = operator match {
       case UnaryOp.Negate => Some(IntType)
-      case UnaryOp.Not => Some(BoolType)
+      case UnaryOp.Not    => Some(BoolType)
     }
     override def contains(exp: Expression) =
       super.contains(exp) || operand.contains(exp)
@@ -629,9 +636,9 @@ object IRGraph {
   }
 
   class Dependency(
-    program: Program,
-    val path: java.lang.String,
-    val isLibrary: Boolean
+      program: Program,
+      val path: java.lang.String,
+      val isLibrary: Boolean
   ) {
     private val _methods = mutable.ListBuffer[DependencyMethod]()
     private val _structs = mutable.ListBuffer[DependencyStruct]()
@@ -640,11 +647,13 @@ object IRGraph {
     def structs: Seq[DependencyStruct] = _structs
 
     def defineMethod(
-      name: java.lang.String,
-      returnType: Option[Type]
+        name: java.lang.String,
+        returnType: Option[Type]
     ): DependencyMethod = {
       if (program._methods.contains(name)) {
-        throw new IRException(s"Method '$name' already exists (importing from '$path'")
+        throw new IRException(
+          s"Method '$name' already exists (importing from '$path'"
+        )
       }
 
       val method = new DependencyMethod(name, returnType)
@@ -657,7 +666,9 @@ object IRGraph {
       val struct = new DependencyStruct(name)
       if (_structs.contains(struct.name)) {
         // TODO: This should not throw if the struct *fields* have not been defined
-        throw new IRException(s"Struct '${struct.name}' already exists (importing from '$path'")
+        throw new IRException(
+          s"Struct '${struct.name}' already exists (importing from '$path'"
+        )
       }
 
       program._structs += struct.name -> struct
@@ -674,15 +685,17 @@ object IRGraph {
     def addField(fieldName: java.lang.String, valueType: Type): StructField = {
       val field = new StructField(this, fieldName, valueType)
       if (_fields.exists(_.name == fieldName))
-        throw new TransformerException(s"Field '$name.$fieldName' already exists")
+        throw new TransformerException(
+          s"Field '$name.$fieldName' already exists"
+        )
       _fields += field
       field
     }
   }
 
   class DependencyMethod(
-    val name: java.lang.String,
-    val returnType: Option[Type]
+      val name: java.lang.String,
+      val returnType: Option[Type]
   ) extends MethodDefinition {
     val _parameters = mutable.ListBuffer[Parameter]()
 
