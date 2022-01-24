@@ -22,8 +22,8 @@ import gvc.transformer.IRGraph.{
 import gvc.transformer.{DependencyTransformer, IRGraph}
 import gvc.weaver.Collector.{
   CollectedMethod,
-  ImprecisePostCallStyle,
-  ImprecisePreCallStyle
+  ImpreciseCallStyle,
+  PrecisePreCallStyle
 }
 
 object CheckRuntime {
@@ -114,7 +114,7 @@ class CheckRuntime private (program: IRGraph.Program) {
 
   def resolvePrimaryOwnedFields(methodData: CollectedMethod): Var = {
     if (
-      methodData.callStyle == ImprecisePostCallStyle || methodData.callStyle == ImprecisePreCallStyle
+      methodData.callStyle == PrecisePreCallStyle || methodData.callStyle == ImpreciseCallStyle
     ) {
       val currentEntry = methodData.method.parameters.find(p =>
         p.name == Names.primaryOwnedFields && p.valueType.isDefined && p.valueType.get

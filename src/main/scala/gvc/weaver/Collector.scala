@@ -28,8 +28,8 @@ object Collector {
 
   sealed trait CallStyle
   case object PreciseCallStyle extends CallStyle
-  case object ImprecisePreCallStyle extends CallStyle
-  case object ImprecisePostCallStyle extends CallStyle
+  case object PrecisePreCallStyle extends CallStyle
+  case object ImpreciseCallStyle extends CallStyle
 
   class CollectedMethod(
       val method: Method,
@@ -511,12 +511,6 @@ object Collector {
       )
     }
 
-    // Calculate the necessary call style
-    val callStyle =
-      if (isImprecise(irMethod.precondition)) ImprecisePreCallStyle
-      else if (isImprecise(irMethod.postcondition)) ImprecisePostCallStyle
-      else PreciseCallStyle
-
     // Wrap up all the results
     new CollectedMethod(
       method = irMethod,
@@ -526,7 +520,7 @@ object Collector {
       hasImplicitReturn = implicitReturn,
       calls = invokes.toList,
       allocations = allocations.toList,
-      callStyle = callStyle,
+      callStyle = getCallstyle(irMethod),
       requiresFieldAccessTracking = requiresFieldAccessTracking
     )
   }
@@ -547,6 +541,12 @@ object Collector {
     case Some(_: Imprecise) => true
     case _                  => false
   }
+
+  def getCallstyle(irMethod: Method) = if (isImprecise(irMethod.precondition))
+    ImpreciseCallStyle
+  else if (isImprecise(irMethod.postcondition))
+    PrecisePreCallStyle
+  else PreciseCallStyle
 
   // Changes an expression from an IR expression into a CheckExpression. If an argument lookup
   // mapping is given, it will use this mapping to resolve variables. Otherwise, it will assume

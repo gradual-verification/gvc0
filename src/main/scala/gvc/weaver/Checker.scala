@@ -202,65 +202,48 @@ object Checker {
       methodData: CollectedMethod,
       runtime: CheckRuntime
   ): Unit = {
-    val sourceOfInstanceCounter: Var =
-      if (
-        methodData.callStyle == ImprecisePostCallStyle || methodData.callStyle == ImprecisePreCallStyle
+    if (methodData.method.name == "main") {
+      val instanceCounter = methodData.method.addVar(
+        new PointerType(IntType),
+        CheckRuntime.Names.instanceCounter
       )
-        methodData.method.addParameter(
-          new ReferenceType(runtime.ownedFields),
-          CheckRuntime.Names.primaryOwnedFields
-        )
-      else if (
-        methodData.calls.exists(call =>
-          isImprecise(call.method.precondition) || isImprecise(
-            call.method.postcondition
+      methodData.method.body.head.insertBefore(
+        Seq(
+          new AllocValue(new PointerType(IntType), instanceCounter),
+          new AssignMember(
+            new DereferenceMember(instanceCounter),
+            new IRGraph.Int(0)
           )
         )
       )
-        methodData.method.addVar(
-          new ReferenceType(runtime.ownedFields),
-          CheckRuntime.Names.primaryOwnedFields
-        )
-      else if (methodData.method.name == "main") {
-        methodData.method.addVar(
-          new PointerType(IntType),
-          CheckRuntime.Names.instanceCounter
-        )
-      } else {
-        methodData.method.addParameter(
-          new PointerType(IntType),
-          CheckRuntime.Names.instanceCounter
-        )
-      }
-    injectAllocationSupport(
-      sourceOfInstanceCounter,
-      runtime,
-      methodData.allocations
-    )
+    }
 
-  }
-
-  private def injectAllocationSupport(
-      sourceOfInstanceCounter: Var,
-      runtime: CheckRuntime,
-      allocations: List[IRGraph.Op]
-  ): Unit = {
-    if (sourceOfInstanceCounter.name == CheckRuntime.Names.instanceCounter)
-      for (alloc <- allocations) {
+    if (
+      methodData.callStyle == ImpreciseCallStyle || methodData.callStyle == PrecisePreCallStyle
+    ) {
+      val primaryOwnedFields = runtime.resolvePrimaryOwnedFields(methodData)
+      for (alloc <- methodData.allocations) {
         alloc match {
           case str: AllocStruct =>
-            runtime.addDynamicStructAccess(str, sourceOfInstanceCounter)
+            runtime.addDynamicStructAccess(str, primaryOwnedFields)
           case _ =>
             throw new WeaverException(
               "Tracking is only currently supported for struct allocations."
             )
         }
       }
-    else {
-      for (alloc <- allocations) {
+    } else {
+      if (methodData.method.name != "main")
+        methodData.method.addParameter(
+          new PointerType(IntType),
+          CheckRuntime.Names.instanceCounter
+        )
+      val instanceCounter =
+        methodData.method.getVar(CheckRuntime.Names.instanceCounter).get
+      for (alloc <- methodData.allocations) {
         alloc match {
           case str: AllocStruct =>
-            runtime.assignIDFromInstanceCounter(str, sourceOfInstanceCounter)
+            runtime.assignIDFromInstanceCounter(str, instanceCounter)
           case _ =>
             throw new WeaverException(
               "Tracking is only currently supported for struct allocations."
@@ -268,5 +251,59 @@ object Checker {
         }
       }
     }
+    injectCallsiteSupport(
+      methodData,
+      runtime
+    )
+  }
+
+  //TODO: To continue implementation, at what point do we need to start tracking permissions in a precise method when
+  // we call imprecise methods? Immediately, or right before the first imprecise call?
+
+  private def injectCallsiteSupport(
+      methodData: CollectedMethod,
+      runtime: CheckRuntime
+  ): Unit = {
+    val calledImprecise = false
+    methodData.calls.foreach(inv => {
+      val callStyle = getCallstyle(inv.method)
+      callStyle match {
+        case Collector.PreciseCallStyle => {
+          if (methodData.callStyle != PreciseCallStyle) {
+            //convert precondition into calls to addAcc
+            //convert postcondition into calls to addAcc
+          }
+        }
+        case Collector.PrecisePreCallStyle => {
+          val calledImprecise = true
+          val tempOwnedFields = runtime.resolveTemporaryOwnedFields(methodData)
+          inv.insertBefore(
+            new Invoke(runtime.initOwnedFields, List(tempOwnedFields), None)
+          )
+          //convert precondition into calls to addAcc
+
+          inv.insertAfter(new Invoke(runtime.join, List(), None))
+        }
+        case Collector.ImpreciseCallStyle => {
+          val calledImprecise = true
+          if (methodData.callStyle == PreciseCallStyle) {
+            if (
+              !methodData.method
+                .getVar(CheckRuntime.Names.primaryOwnedFields)
+                .isDefined
+            ) {
+              val primaryOwnedFields = methodData.method.addVar(
+                new ReferenceType(runtime.ownedFields),
+                CheckRuntime.Names.primaryOwnedFields
+              )
+              //convert precondition into calls to addAcc
+
+              inv.arguments = inv.arguments ++ List(primaryOwnedFields)
+            }
+          } else {}
+
+        }
+      }
+    })
   }
 }
