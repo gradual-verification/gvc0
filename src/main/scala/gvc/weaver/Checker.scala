@@ -86,22 +86,82 @@ object Checker {
       )
     }
 
-    def implementCheck(check: Check, returnValue: Option[Expression]): Op =
+    def implementAccCheck(
+        check: AccessibilityCheck,
+        runtime: CheckRuntime
+    ): Op = {
+      val primaryOwnedFields = runtime.resolvePrimaryOwnedFields(methodData)
+      val structId = new FieldMember(
+        check.field.root.toIR(program, method, None),
+        check.field.getIRField(program)
+      )
+      val fieldToCheck = check.field.getIRField(program)
+      val fieldIndex =
+        new IRGraph.Int(fieldToCheck.struct.fields.indexOf(fieldToCheck))
+      if (check.separating) {
+        val temporaryOwnedFields =
+          runtime.resolveTemporaryOwnedFields(methodData)
+        if (check.unverified) {
+          new Invoke(
+            runtime.assertDisjointAcc,
+            List(
+              temporaryOwnedFields,
+              primaryOwnedFields,
+              structId,
+              fieldIndex
+            ),
+            None
+          )
+        } else {
+          new Invoke(
+            runtime.addDisjointAcc,
+            List(
+              temporaryOwnedFields,
+              structId,
+              fieldIndex
+            ),
+            None
+          )
+        }
+      } else {
+        new Invoke(
+          runtime.assertAcc,
+          List(
+            primaryOwnedFields,
+            structId,
+            fieldIndex
+          ),
+          None
+        )
+      }
+    }
+    def implementCheck(
+        check: Check,
+        runtimeOption: Option[CheckRuntime],
+        returnValue: Option[Expression]
+    ): Op =
       check match {
-        case AccessibilityCheck(field, separating) => ???
+        case acc: AccessibilityCheck =>
+          runtimeOption match {
+            case Some(runtime) => implementAccCheck(acc, runtime)
+            case None =>
+              throw new WeaverException(
+                "Field access tracking is required, but wasn't initialized."
+              )
+          }
         case expr: CheckExpression =>
           new Assert(
             expr.toIR(program, method, returnValue),
             AssertKind.Imperative
           )
       }
-
     def implementChecks(
         cond: Option[Expression],
         checks: Seq[Check],
+        runtime: Option[CheckRuntime],
         returnValue: Option[Expression]
     ): Seq[Op] = {
-      val ops = checks.map(implementCheck(_, returnValue))
+      val ops = checks.map(implementCheck(_, runtime, returnValue))
       cond match {
         case None => ops
         case Some(cond) => {
@@ -121,7 +181,15 @@ object Checker {
       .foreach {
         case ((loc, when), checks) => {
           val condition = getCondition(when)
-          insertAt(loc, implementChecks(condition, checks.map(_.check), _))
+          insertAt(
+            loc,
+            implementChecks(
+              condition,
+              checks.map(_.check),
+              programData.runtime,
+              _
+            )
+          )
         }
       }
     programData.runtime match {
@@ -140,7 +208,7 @@ object Checker {
       )
         methodData.method.addParameter(
           new ReferenceType(runtime.ownedFields),
-          CheckRuntime.Names.ownedFieldsPrimary
+          CheckRuntime.Names.primaryOwnedFields
         )
       else if (
         methodData.calls.exists(call =>
@@ -151,7 +219,7 @@ object Checker {
       )
         methodData.method.addVar(
           new ReferenceType(runtime.ownedFields),
-          CheckRuntime.Names.ownedFieldsPrimary
+          CheckRuntime.Names.primaryOwnedFields
         )
       else if (methodData.method.name == "main") {
         methodData.method.addVar(

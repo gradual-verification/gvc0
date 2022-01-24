@@ -145,6 +145,7 @@ object IRGraph {
     }
 
     def getVar(name: java.lang.String): Option[Var] = scope.get(name)
+
   }
 
   class Predicate(

@@ -80,23 +80,40 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   return fields->contents[fieldIndex];
 }
 
-int addStructAccess(OwnedFields * fields, int numFields){
+int addStructAcc(OwnedFields * fields, int numFields){
     newFieldArray(fields, *fields->instanceCounter, numFields, true);
     *(fields->instanceCounter) += 1;
     return *(fields->instanceCounter) - 1;
 }
 
-void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex){
+void addAcc(OwnedFields * fields, int _id, int numFields, int fieldIndex){
   FieldArray * array = find(fields, _id);
   if(array != NULL){
-    array->contents[fieldIndex] = true;
+    if(!array->contents[fieldIndex]){
+        array->numAccessible += 1;
+        array->contents[fieldIndex] = true;
+    }
   }else{
     array = newFieldArray(fields, _id, numFields, false);
     array->contents[fieldIndex] = true;
+    array->numAccessible += 1;
   }
-  array->numAccessible += 1;
 }
 
+void addDisjointAcc(OwnedFields * fields, int _id, int numFields, int fieldIndex, string errorMessage){
+    FieldArray * array = find(fields, _id);
+    if(array != NULL){
+        if(array->contents[fieldIndex]){
+            error(errorMessage);
+        }else{
+           array->contents[fieldIndex] = true;
+        }
+    }else{
+        array = newFieldArray(fields, _id, numFields, false);
+        array->contents[fieldIndex] = true;
+    }
+    array->numAccessible += 1;
+}
 
 void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
     FieldArray* toCheck = find(fields, _id);
@@ -136,7 +153,7 @@ void join(OwnedFields* target, OwnedFields* source){
             FieldArray* currFields = source->contents[i];
             if(currFields != NULL){
                 for(int j = 0; j< currFields->length; j += 1){
-                    addAccess(target, currFields->_id, currFields->length, j);
+                    addAcc(target, currFields->_id, currFields->length, j);
                 }
             }
         }
@@ -168,26 +185,3 @@ void disjoin(OwnedFields* target, OwnedFields* source){
         }
     }
 }
-
-void deleteAccess(OwnedFields* fields, int _id, int fieldIndex){
-    FieldArray* toRemove = find(fields, _id);
-    if(toRemove != NULL){
-        if(fieldIndex < toRemove->length){
-            toRemove->contents[fieldIndex] = false;
-            toRemove->numAccessible -= 1;
-        }
-        if(toRemove->numAccessible == 0){
-            toRemove->deleted = true;
-        }
-    }
-}
-
-void loseAccess(OwnedFields* static, OwnedFields* dynamic, int _id, int fieldIndex){
-    if(static != NULL){
-        deleteAccess(static, _id, fieldIndex);
-    }
-    if(dynamic != NULL){
-        deleteAccess(dynamic, _id, fieldIndex);
-    }
-}
-

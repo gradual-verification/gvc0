@@ -14,11 +14,17 @@ import gvc.transformer.IRGraph.{
   Int,
   IntType,
   Invoke,
+  ReferenceType,
   Struct,
   StructField,
   Var
 }
 import gvc.transformer.{DependencyTransformer, IRGraph}
+import gvc.weaver.Collector.{
+  CollectedMethod,
+  ImprecisePostCallStyle,
+  ImprecisePreCallStyle
+}
 
 object CheckRuntime {
   val name = "runtime"
@@ -48,12 +54,12 @@ object CheckRuntime {
   object Names {
     val ownedFieldsStruct = "OwnedFields"
     val fieldArray = "FieldArray"
-    val ownedFieldsPrimary = "fields"
-    val ownedFieldsTemporary = "tempFields"
+    val primaryOwnedFields = "fields"
+    val temporaryOwnedFields = "tempFields"
     val initOwnedFields = "initOwnedFields"
-    val addStructAccess = "addStructAccess"
-    val addAccess = "addAccess"
-    val loseAccess = "loseAccess"
+    val addStructAcc = "addStructAcc"
+    val addAcc = "addAcc"
+    val addDisjointAcc = "addDisjointAcc"
     val join = "join"
     val disjoin = "disjoin"
     val assertAcc = "assertAcc"
@@ -75,10 +81,11 @@ class CheckRuntime private (program: IRGraph.Program) {
 
   val initOwnedFields: IRGraph.MethodDefinition =
     program.method(Names.initOwnedFields)
-  val addStructAccess: IRGraph.MethodDefinition =
-    program.method(Names.addStructAccess)
-  val addAccess: IRGraph.MethodDefinition = program.method(Names.addAccess)
-  val loseAccess: IRGraph.MethodDefinition = program.method(Names.loseAccess)
+  val addStructAcc: IRGraph.MethodDefinition =
+    program.method(Names.addStructAcc)
+  val addAcc: IRGraph.MethodDefinition = program.method(Names.addAcc)
+  val addDisjointAcc: IRGraph.MethodDefinition =
+    program.method(Names.addDisjointAcc)
   val join: IRGraph.MethodDefinition = program.method(Names.join)
   val disjoin: IRGraph.MethodDefinition = program.method(Names.disjoin)
   val assertAcc: IRGraph.MethodDefinition = program.method(Names.assertAcc)
@@ -93,7 +100,7 @@ class CheckRuntime private (program: IRGraph.Program) {
     val structType = alloc.struct
     alloc.insertAfter(
       new Invoke(
-        addStructAccess,
+        addStructAcc,
         List(ownedFields, new Int(structType.fields.length - 1)),
         Some(
           new FieldMember(
@@ -104,6 +111,51 @@ class CheckRuntime private (program: IRGraph.Program) {
       )
     )
   }
+
+  def resolvePrimaryOwnedFields(methodData: CollectedMethod): Var = {
+    if (
+      methodData.callStyle == ImprecisePostCallStyle || methodData.callStyle == ImprecisePreCallStyle
+    ) {
+      val currentEntry = methodData.method.parameters.find(p =>
+        p.name == Names.primaryOwnedFields && p.valueType.isDefined && p.valueType.get
+          .isInstanceOf[ReferenceType] && p.valueType.get
+          .asInstanceOf[ReferenceType]
+          .struct
+          .equals(ownedFields)
+      )
+      currentEntry match {
+        case Some(entry) => entry
+        case None =>
+          methodData.method.addParameter(
+            new ReferenceType(ownedFields),
+            Names.primaryOwnedFields
+          )
+      }
+    } else {
+      val currentEntry = methodData.method.getVar(Names.primaryOwnedFields)
+      currentEntry match {
+        case Some(value) => value
+        case None        => methodData.method.addVar(new ReferenceType(ownedFields))
+      }
+    }
+  }
+  def resolveTemporaryOwnedFields(methodData: CollectedMethod): Var = {
+    val currentEntry = methodData.method.getVar(Names.temporaryOwnedFields)
+    if (
+      currentEntry.isDefined && currentEntry.get.valueType.isDefined && currentEntry.get.valueType.get
+        .isInstanceOf[ReferenceType] && currentEntry.get.valueType.get
+        .asInstanceOf[ReferenceType]
+        .struct == ownedFields
+    ) {
+      currentEntry.get
+    } else {
+      methodData.method.addVar(
+        new ReferenceType(ownedFields),
+        Names.temporaryOwnedFields
+      )
+    }
+  }
+
   def assignIDFromInstanceCounter(
       alloc: AllocStruct,
       instanceCounter: Var
@@ -135,4 +187,5 @@ class CheckRuntime private (program: IRGraph.Program) {
       )
     )
   }
+
 }
