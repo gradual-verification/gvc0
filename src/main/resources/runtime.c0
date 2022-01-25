@@ -80,13 +80,13 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   return fields->contents[fieldIndex];
 }
 
-int addStructAccess(OwnedFields * fields, int numFields){
+int addStructAcc(OwnedFields * fields, int numFields){
     newFieldArray(fields, *fields->instanceCounter, numFields, true);
     *(fields->instanceCounter) += 1;
     return *(fields->instanceCounter) - 1;
 }
 
-void addAccess(OwnedFields * fields, int _id, int numFields, int fieldIndex){
+void addAcc(OwnedFields * fields, int _id, int numFields, int fieldIndex){
   FieldArray * array = find(fields, _id);
   if(array != NULL){
     array->contents[fieldIndex] = true;
@@ -136,7 +136,7 @@ void join(OwnedFields* target, OwnedFields* source){
             FieldArray* currFields = source->contents[i];
             if(currFields != NULL){
                 for(int j = 0; j< currFields->length; j += 1){
-                    addAccess(target, currFields->_id, currFields->length, j);
+                    addAcc(target, currFields->_id, currFields->length, j);
                 }
             }
         }
@@ -169,7 +169,7 @@ void disjoin(OwnedFields* target, OwnedFields* source){
     }
 }
 
-void deleteAccess(OwnedFields* fields, int _id, int fieldIndex){
+void deleteAcc(OwnedFields* fields, int _id, int fieldIndex){
     FieldArray* toRemove = find(fields, _id);
     if(toRemove != NULL){
         if(fieldIndex < toRemove->length){
@@ -182,12 +182,12 @@ void deleteAccess(OwnedFields* fields, int _id, int fieldIndex){
     }
 }
 
-void loseAccess(OwnedFields* static, OwnedFields* dynamic, int _id, int fieldIndex){
+void loseAcc(OwnedFields* static, OwnedFields* dynamic, int _id, int fieldIndex){
     if(static != NULL){
-        deleteAccess(static, _id, fieldIndex);
+        deleteAcc(static, _id, fieldIndex);
     }
     if(dynamic != NULL){
-        deleteAccess(dynamic, _id, fieldIndex);
+        deleteAcc(dynamic, _id, fieldIndex);
     }
 }
 
