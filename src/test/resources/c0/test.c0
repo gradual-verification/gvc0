@@ -70,10 +70,10 @@ bool testStructCreation(string header){
     OwnedFields* fields = alloc(OwnedFields);
     initOwnedFields(fields, _id_counter);
 
-    int _id = addStructAccess(fields, 80);
+    int _id = addStructAcc(fields, 80);
 
     for(int i = 0; i<80; i += 1){
-        assertAcc(fields, _id, i, "(addStructAccess) Failed to verify access to the fields of a newly created struct.");
+        assertAcc(fields, _id, i, "(addStructAcc) Failed to verify access to the fields of a newly created struct.");
     }
     return true;
 }
@@ -90,10 +90,10 @@ bool testFieldAddition(string header){
     OwnedFields* fields_2 = alloc(OwnedFields);
     initOwnedFields(fields_2, _id_counter);
 
-    int _id = addStructAccess(fields_1, 4);
+    int _id = addStructAcc(fields_1, 4);
 
-    addAccess(fields_2, _id, 4, 2);
-    assertAcc(fields_2, _id, 2, "(addAccess/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.");
+    addAcc(fields_2, _id, 4, 2);
+    assertAcc(fields_2, _id, 2, "(addAcc/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.");
     return true;
 }
 
@@ -107,8 +107,8 @@ bool testFieldMerging(string header){
     OwnedFields* source = alloc(OwnedFields);
     initOwnedFields(source, _id_counter);
 
-    int _id_node_1 = addStructAccess(source, num_fields);
-    int _id_node_2 = addStructAccess(source, num_fields);
+    int _id_node_1 = addStructAcc(source, num_fields);
+    int _id_node_2 = addStructAcc(source, num_fields);
 
     OwnedFields* fields_1 = alloc(OwnedFields);
     initOwnedFields(fields_1, _id_counter);
@@ -117,11 +117,11 @@ bool testFieldMerging(string header){
     initOwnedFields(fields_2, _id_counter);
 
     for(int i = 0; i<num_fields; i += 1){
-        addAccess(fields_1, _id_node_1, num_fields, i);
-        assertAcc(fields_1, _id_node_1, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
+        addAcc(fields_1, _id_node_1, num_fields, i);
+        assertAcc(fields_1, _id_node_1, i, "(addAcc/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
 
-        addAccess(fields_2, _id_node_2, num_fields, i);
-        assertAcc(fields_2, _id_node_2, i, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
+        addAcc(fields_2, _id_node_2, num_fields, i);
+        assertAcc(fields_2, _id_node_2, i, "(addAcc/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
     }
 
 
@@ -145,21 +145,21 @@ bool testDisjoin(string header){
     initOwnedFields(target, _id_counter);
 
     int num_fields = 20;
-    int _id_node_1 = addStructAccess(source, num_fields);
+    int _id_node_1 = addStructAcc(source, num_fields);
 
-    addAccess(target, _id_node_1, num_fields, 0);
+    addAcc(target, _id_node_1, num_fields, 0);
 
-    assertAcc(source, _id_node_1, 0, "(addAccess/assertAcc) Failed to add permission to new OwnedFields");
-    assertAcc(target, _id_node_1, 0, "(addAccess/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
+    assertAcc(source, _id_node_1, 0, "(addAcc/assertAcc) Failed to add permission to new OwnedFields");
+    assertAcc(target, _id_node_1, 0, "(addAcc/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
 
     disjoin(target, source);
-    assertAcc(source, _id_node_1, 0, "(addAccess/assertAcc) Disjoin failed to preserve permissions in source OwnedFields");
+    assertAcc(source, _id_node_1, 0, "(addAcc/assertAcc) Disjoin failed to preserve permissions in source OwnedFields");
 
     FieldArray* disjoined = find(target, _id_node_1);
-    test(header, disjoined == NULL, "(addAccess/assertAcc) Disjoin failed to remove permissions from target OwnedFields.");
+    test(header, disjoined == NULL, "(addAcc/assertAcc) Disjoin failed to remove permissions from target OwnedFields.");
 
     FieldArray* kept = find(source, _id_node_1);
-    test(header, kept != NULL && kept->contents[0], "(addAccess/assertAcc) Disjoin failed to preserve permissions in source OwnedFields.");
+    test(header, kept != NULL && kept->contents[0], "(addAcc/assertAcc) Disjoin failed to preserve permissions in source OwnedFields.");
 
     assertDisjointAcc(target, source, _id_node_1, 0, "(assertDisjointAcc) Failed to distinguish permissions after disjoining.");
     return true;
