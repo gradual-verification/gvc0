@@ -7,9 +7,10 @@ import viper.silver.{ast => vpr}
 
 object Collector {
   sealed trait Location
-  case class Pre(val op: Op) extends Location
-  case class Post(val op: Op) extends Location
-  case class Invariant(val op: Op) extends Location
+  case class AtOp(op: Op) extends Location
+  case class Pre(override val op: Op) extends AtOp(op)
+  case class Post(override val op: Op) extends AtOp(op)
+  case class Invariant(override val op: Op) extends AtOp(op)
   case object MethodPre extends Location
   case object MethodPost extends Location
 
@@ -41,7 +42,8 @@ object Collector {
       val calls: List[CollectedInvocation],
       val allocations: List[Op],
       val callStyle: CallStyle,
-      val requiresFieldAccessTracking: Boolean
+      val requiresFieldAccessTracking: Boolean,
+      val checkedSpecificationLocations: Set[Location]
   )
 
   class CollectedProgram(
@@ -531,7 +533,8 @@ object Collector {
       calls = invokes.toList,
       allocations = allocations.toList,
       callStyle = getCallstyle(irMethod),
-      requiresFieldAccessTracking = requiresFieldAccessTracking
+      requiresFieldAccessTracking = requiresFieldAccessTracking,
+      checkedSpecificationLocations = needsFullPermissionChecking.toSet
     )
   }
 

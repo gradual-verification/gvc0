@@ -204,13 +204,12 @@ object Checker {
         )
       }
     programData.runtime match {
-      case Some(runtime) => injectSupport(programData, methodData, runtime)
+      case Some(runtime) => injectSupport(methodData, runtime)
       case None          =>
     }
   }
 
   private def injectSupport(
-      programData: CollectedProgram,
       methodData: CollectedMethod,
       runtime: CheckRuntime
   ): Unit = {
@@ -263,6 +262,21 @@ object Checker {
         }
       }
     }
+    methodData.checkedSpecificationLocations.foreach(loc => {
+      loc match {
+        case AtOp(op) =>
+          op.insertAfter(
+            new Invoke(
+              runtime.initOwnedFields,
+              List(
+                runtime.resolveTemporaryOwnedFields(methodData)
+              ),
+              None
+            )
+          )
+      }
+    })
+
     injectCallsiteSupport(
       methodData,
       runtime
