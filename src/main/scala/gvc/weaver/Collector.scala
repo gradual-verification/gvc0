@@ -2,6 +2,7 @@ package gvc.weaver
 
 import scala.collection.mutable
 import gvc.transformer.IRGraph._
+import viper.silver.ast.MethodCall
 import viper.silver.{ast => vpr}
 
 object Collector {
@@ -37,7 +38,7 @@ object Collector {
       val checks: List[RuntimeCheck],
       val returns: List[Return],
       val hasImplicitReturn: Boolean,
-      val calls: List[Invoke],
+      val calls: List[CollectedInvocation],
       val allocations: List[Op],
       val callStyle: CallStyle,
       val requiresFieldAccessTracking: Boolean
@@ -48,6 +49,8 @@ object Collector {
       val methods: Map[java.lang.String, CollectedMethod],
       val runtime: Option[CheckRuntime]
   )
+
+  case class CollectedInvocation(ir: Invoke, vpr: MethodCall)
 
   def collect(irProgram: Program, vprProgram: vpr.Program): CollectedProgram = {
     var runtime: Option[CheckRuntime] = None
@@ -100,7 +103,7 @@ object Collector {
     // A list of `return` statements in the IR method, used for inserting any runtime checks that
     // the postcondition may require.
     val exits = mutable.ListBuffer[Return]()
-    val invokes = mutable.ListBuffer[Invoke]()
+    val invokes = mutable.ListBuffer[CollectedInvocation]()
     val allocations = mutable.ListBuffer[Op]()
 
     // The collection of conditions that are used in runtime checks. Not all conditions may be
@@ -193,8 +196,15 @@ object Collector {
         )
       }
 
-      // TODO: Implement predicates
-      case pred: PredicateInstance => ???
+      case pred: PredicateInstance => {
+        Seq(
+          RuntimeCheck(
+            location,
+            PredicateCheck(pred),
+            ConditionValue(condition.getOrElse(CheckExpression.TrueLit))
+          )
+        )
+      }
 
       case _ => {
         // Otherwise there can be no permission specifiers in this term or its children
@@ -304,7 +314,7 @@ object Collector {
             vprRest
           }
           case (irInvoke: Invoke, (vprInvoke: vpr.MethodCall) :: vprRest) => {
-            invokes += irInvoke
+            invokes += CollectedInvocation(irInvoke, vprInvoke)
             visit(irInvoke, vprInvoke)
             vprRest
           }

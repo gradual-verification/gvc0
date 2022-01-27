@@ -3,6 +3,7 @@ import viper.silver.{ast => vpr}
 import gvc.transformer.{IRGraph => ir}
 import gvc.transformer.IRGraphSilver.Names
 import gvc.transformer.IRGraph
+import gvc.transformer.IRGraph.PredicateInstance
 import viper.silicon.state.CheckInfo
 
 sealed trait Check
@@ -26,6 +27,10 @@ case class AccessibilityCheck(
     separating: Boolean,
     unverified: Boolean
 ) extends Check
+
+case class PredicateCheck(
+                         predicate: PredicateInstance
+                         ) extends Check
 
 sealed trait CheckExpression extends Check {
   def toIR(

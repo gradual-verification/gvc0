@@ -185,3 +185,16 @@ void disjoin(OwnedFields* target, OwnedFields* source){
         }
     }
 }
+
+void loseAcc(OwnedFields* fields, int _id, int fieldIndex){
+    FieldArray * toLose = find(fields, _id);
+    if(toLose != NULL){
+        if(fieldIndex >= toLose->length){
+            error("[INTERNAL] Field index exceeds maximum for the given struct.\n");
+        }else if(toLose->contents[fieldIndex]){
+            toLose->contents[fieldIndex] = false;
+            toLose->numAccessible -= 1;
+        }
+        if(toLose->numAccessible == 0) toLose->deleted = true;
+    }
+}

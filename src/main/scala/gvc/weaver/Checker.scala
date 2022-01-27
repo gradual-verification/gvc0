@@ -24,12 +24,11 @@ object Checker {
         case Pre(op)       => op.insertBefore(ops(None))
         case Post(op)      => op.insertAfter(ops(None))
         case MethodPre     => ops(None).foreach(_ +=: method.body)
-        case MethodPost => {
+        case MethodPost =>
           methodData.returns.foreach(e => e.insertBefore(ops(e.value)))
           if (methodData.hasImplicitReturn) {
             ops(None).foreach(method.body += _)
           }
-        }
       }
 
     // Define condition variables and create a map from term ID to variables
@@ -39,14 +38,13 @@ object Checker {
 
     def getConjunction(conj: TrackedConjunction): Option[Expression] =
       conj.values.foldLeft[Option[Expression]](None) {
-        case (expr, (cond, flag)) => {
+        case (expr, (cond, flag)) =>
           val variable = trackedConditions(cond.id)
           val value = if (flag) variable else new Unary(UnaryOp.Not, variable)
           expr match {
             case None       => Some(value)
             case Some(expr) => Some(new Binary(BinaryOp.And, expr, value))
           }
-        }
       }
 
     def getDisjunction(disj: TrackedDisjunction): Option[Expression] =
@@ -137,39 +135,53 @@ object Checker {
     }
     def implementCheck(
         check: Check,
-        runtimeOption: Option[CheckRuntime],
         returnValue: Option[Expression]
     ): Op =
       check match {
-        case acc: AccessibilityCheck =>
-          runtimeOption match {
-            case Some(runtime) => implementAccCheck(acc, runtime)
-            case None =>
-              throw new WeaverException(
-                "Field access tracking is required, but wasn't initialized."
-              )
-          }
         case expr: CheckExpression =>
           new Assert(
             expr.toIR(program, method, returnValue),
             AssertKind.Imperative
           )
+        case _ =>
+          throw new WeaverException(
+            "Unsupported runtime check in the current mode."
+          )
       }
+    def implementCheckWithTracking(
+        check: Check,
+        runtime: CheckRuntime,
+        returnValue: Option[IRGraph.Expression],
+        methodData: CollectedMethod
+    ): Op = {
+      check match {
+        case acc: AccessibilityCheck => implementAccCheck(acc, runtime)
+        case pc: PredicateCheck =>
+          runtime.callPredicate(pc.predicate, methodData)
+        case _ => implementCheck(check, returnValue)
+      }
+    }
     def implementChecks(
         cond: Option[Expression],
         checks: Seq[Check],
-        runtime: Option[CheckRuntime],
-        returnValue: Option[Expression]
+        maybeRuntime: Option[CheckRuntime],
+        returnValue: Option[Expression],
+        methodData: CollectedMethod
     ): Seq[Op] = {
-      val ops = checks.map(implementCheck(_, runtime, returnValue))
+      val ops = maybeRuntime match {
+        case Some(runtime) =>
+          checks.map(
+            implementCheckWithTracking(_, runtime, returnValue, methodData)
+          )
+        case None => checks.map(implementCheck(_, returnValue))
+      }
       cond match {
         case None => ops
-        case Some(cond) => {
+        case Some(cond) =>
           val iff = new If(cond)
           iff.condition = cond
           ops.foreach(iff.ifTrue += _)
           Seq(iff)
-        }
       }
     }
 
@@ -178,27 +190,27 @@ object Checker {
     // if block.
     methodData.checks
       .groupBy(c => (c.location, c.when))
-      .foreach {
-        case ((loc, when), checks) => {
-          val condition = getCondition(when)
-          insertAt(
-            loc,
-            implementChecks(
-              condition,
-              checks.map(_.check),
-              programData.runtime,
-              _
-            )
+      .foreach { case ((loc, when), checks) =>
+        val condition = getCondition(when)
+        insertAt(
+          loc,
+          implementChecks(
+            condition,
+            checks.map(_.check),
+            programData.runtime,
+            _,
+            methodData
           )
-        }
+        )
       }
     programData.runtime match {
-      case Some(runtime) => injectSupport(methodData, runtime)
+      case Some(runtime) => injectSupport(programData, methodData, runtime)
       case None          =>
     }
   }
 
   private def injectSupport(
+      programData: CollectedProgram,
       methodData: CollectedMethod,
       runtime: CheckRuntime
   ): Unit = {
@@ -209,7 +221,7 @@ object Checker {
       )
       methodData.method.body.head.insertBefore(
         Seq(
-          new AllocValue(new PointerType(IntType), instanceCounter),
+          new AllocValue(IntType, instanceCounter),
           new AssignMember(
             new DereferenceMember(instanceCounter),
             new IRGraph.Int(0)
@@ -257,52 +269,90 @@ object Checker {
     )
   }
 
-  //TODO: To continue implementation, at what point do we need to start tracking permissions in a precise method when
-  // we call imprecise methods? Immediately, or right before the first imprecise call?
-
   private def injectCallsiteSupport(
       methodData: CollectedMethod,
       runtime: CheckRuntime
   ): Unit = {
-    val calledImprecise = false
+    var calledImprecise = false
     methodData.calls.foreach(inv => {
-      val callStyle = getCallstyle(inv.method)
+      val callStyle = getCallstyle(inv.ir.method)
       callStyle match {
-        case Collector.PreciseCallStyle => {
+        case Collector.PreciseCallStyle =>
           if (methodData.callStyle != PreciseCallStyle) {
             //convert precondition into calls to addAcc
+            inv.ir.insertBefore(
+              runtime.removePermissionsFromContract(
+                methodData.method.precondition,
+                methodData
+              )
+            )
             //convert postcondition into calls to addAcc
+            inv.ir.insertAfter(
+              runtime.addPermissionsFromContract(
+                methodData.method.postcondition,
+                methodData
+              )
+            )
           }
-        }
-        case Collector.PrecisePreCallStyle => {
-          val calledImprecise = true
+
+        case Collector.PrecisePreCallStyle =>
+          if (methodData.callStyle == PreciseCallStyle && !calledImprecise) {
+            //initialize primary OwnedFields with the static permissions at the method's callsite
+            inv.ir.insertBefore(
+              runtime.loadPermissionsBeforeInvocation(inv.vpr, methodData)
+            )
+
+            calledImprecise = true
+          }
           val tempOwnedFields = runtime.resolveTemporaryOwnedFields(methodData)
-          inv.insertBefore(
+          inv.ir.insertBefore(
             new Invoke(runtime.initOwnedFields, List(tempOwnedFields), None)
           )
           //convert precondition into calls to addAcc
+          inv.ir.insertAfter(
+            new Invoke(
+              runtime.join,
+              List(
+                runtime.resolvePrimaryOwnedFields(methodData),
+                tempOwnedFields
+              ),
+              None
+            )
+          )
 
-          inv.insertAfter(new Invoke(runtime.join, List(), None))
-        }
-        case Collector.ImpreciseCallStyle => {
-          val calledImprecise = true
+        case Collector.ImpreciseCallStyle =>
           if (methodData.callStyle == PreciseCallStyle) {
+            if (!calledImprecise) {
+              //initialize primary OwnedFields with the static permissions at the method's callsite
+              inv.ir.insertBefore(
+                runtime.loadPermissionsBeforeInvocation(inv.vpr, methodData)
+              )
+              calledImprecise = true
+            }
             if (
-              !methodData.method
+              methodData.method
                 .getVar(CheckRuntime.Names.primaryOwnedFields)
-                .isDefined
+                .isEmpty
             ) {
               val primaryOwnedFields = methodData.method.addVar(
                 new ReferenceType(runtime.ownedFields),
                 CheckRuntime.Names.primaryOwnedFields
               )
               //convert precondition into calls to addAcc
+              inv.ir.insertBefore(
+                runtime.removePermissionsFromContract(
+                  methodData.method.precondition,
+                  methodData
+                )
+              )
 
-              inv.arguments = inv.arguments ++ List(primaryOwnedFields)
+              inv.ir.arguments = inv.ir.arguments ++ List(primaryOwnedFields)
             }
-          } else {}
-
-        }
+          } else {
+            inv.ir.arguments = inv.ir.arguments ++ List(
+              runtime.resolvePrimaryOwnedFields(methodData)
+            )
+          }
       }
     })
   }
