@@ -263,9 +263,11 @@ object Checker {
       }
     }
     methodData.checkedSpecificationLocations.foreach(loc => {
-      loc match {
-        case AtOp(op) =>
-          op.insertAfter(
+      if (loc.isInstanceOf[AtOp]) {
+        loc
+          .asInstanceOf[AtOp]
+          .op
+          .insertAfter(
             new Invoke(
               runtime.initOwnedFields,
               List(

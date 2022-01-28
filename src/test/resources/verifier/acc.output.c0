@@ -1,0 +1,36 @@
+#use <runtime>
+struct Test;
+
+struct Test
+{
+  int value;
+};
+
+int main();
+void setValue(struct Test* t, int* _instanceCounter);
+void test(struct Test* t, struct OwnedFields* fields);
+
+int main()
+{
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  *_instanceCounter = 0;
+  return 0;
+}
+
+void setValue(struct Test* t, int* _instanceCounter)
+  //@requires acc(t->value);
+  //@ensures acc(t->value);
+{
+  t->value = 1;
+}
+
+void test(struct Test* t, struct OwnedFields* fields)
+  //@requires ?;
+{
+  struct OwnedFields* tempFields = NULL;
+  assert(!(t == NULL));
+  assertAcc(fields, t->value, 0);
+  setValue(t, fields);
+  initOwnedFields(tempFields);
+}

@@ -7,10 +7,10 @@ import viper.silver.{ast => vpr}
 
 object Collector {
   sealed trait Location
-  case class AtOp(op: Op) extends Location
-  case class Pre(override val op: Op) extends AtOp(op)
-  case class Post(override val op: Op) extends AtOp(op)
-  case class Invariant(override val op: Op) extends AtOp(op)
+  sealed trait AtOp extends Location { val op: Op }
+  case class Pre(override val op: Op) extends AtOp
+  case class Post(override val op: Op) extends AtOp
+  case class Invariant(override val op: Op) extends AtOp
   case object MethodPre extends Location
   case object MethodPost extends Location
 
