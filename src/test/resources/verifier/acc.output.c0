@@ -4,17 +4,17 @@ struct Test;
 struct Test
 {
   int value;
+  int _id;
 };
 
 int main();
 void setValue(struct Test* t, int* _instanceCounter);
-void test(struct Test* t, struct OwnedFields* fields);
+void test(struct Test* t, struct OwnedFields* _ownedFields);
 
 int main()
 {
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  *_instanceCounter = 0;
   return 0;
 }
 
@@ -25,12 +25,11 @@ void setValue(struct Test* t, int* _instanceCounter)
   t->value = 1;
 }
 
-void test(struct Test* t, struct OwnedFields* fields)
+void test(struct Test* t, struct OwnedFields* _ownedFields)
   //@requires ?;
 {
-  struct OwnedFields* tempFields = NULL;
   assert(!(t == NULL));
-  assertAcc(fields, t->value, 0);
-  setValue(t, fields);
-  initOwnedFields(tempFields);
+  loseAcc(_ownedFields, t->_id, 0);
+  setValue(t, _ownedFields->instanceCounter);
+  addAcc(_ownedFields, t->_id, 2, 0);
 }

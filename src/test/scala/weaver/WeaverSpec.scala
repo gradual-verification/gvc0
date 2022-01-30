@@ -25,6 +25,8 @@ class WeaverSpec extends AnyFunSuite {
          |
          |int main()
          |{
+         |  int* _instanceCounter = NULL;
+         |  _instanceCounter = alloc(int);
          |  return 0;
          |}
          |""".stripMargin

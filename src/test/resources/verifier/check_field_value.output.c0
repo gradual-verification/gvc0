@@ -1,19 +1,23 @@
+#use <runtime>
 struct Test;
 
 struct Test
 {
   int value;
+  int _id;
 };
 
 int main();
-void test(struct Test* value);
+void test(struct Test* value, struct OwnedFields* _ownedFields);
 
 int main()
 {
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
   return 0;
 }
 
-void test(struct Test* value)
+void test(struct Test* value, struct OwnedFields* _ownedFields)
   //@requires ? && acc(value->value);
   //@ensures ?;
 {

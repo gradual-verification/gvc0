@@ -24,8 +24,8 @@ object Check {
 
 case class AccessibilityCheck(
     field: CheckExpression.Field,
-    separating: Boolean,
-    unverified: Boolean
+    checkSeparate: Boolean,
+    checkExists: Boolean
 ) extends Check
 
 case class PredicateCheck(

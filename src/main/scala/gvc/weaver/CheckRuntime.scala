@@ -219,92 +219,68 @@ class CheckRuntime private (program: IRGraph.Program) {
       pred: Predicate,
       methodData: CollectedMethod
   ): IRGraph.MethodDefinition =
-    equirecursivePredicates.get(pred.name) match {
-      case Some(value) => value
-      case None =>
-        val defn = program.addMethod(pred.name, None)
-        equirecursivePredicates += pred.name -> defn
-        translateSpec(
-          pred.expression,
-          resolveTemporaryOwnedFields(methodData),
-          addAccess,
-          methodData
-        ).foreach(op => defn.body += op)
-        defn
-    }
+    equirecursivePredicates.getOrElse(pred.name, {
+      val defn = program.addMethod(pred.name, None)
+      equirecursivePredicates += pred.name -> defn
+
+      ???
+      /*translateSpec(
+        pred.expression,
+        resolveTemporaryOwnedFields(methodData),
+        addAccess,
+        methodData
+      ).foreach(op => defn.body += op)*/
+      defn
+    })
 
   def removePermissionsFromContract(
       contract: Option[IRGraph.Expression],
-      methodData: CollectedMethod
+      targetSet: Var,
+      idFields: Map[String, IRGraph.StructField],
+      runtime: => CheckRuntime
   ): Seq[Op] = {
-    contract match {
-      case Some(value) =>
-        translateSpec(
-          value,
-          resolveTemporaryOwnedFields(methodData),
-          loseAccess,
-          methodData
-        )
-      case None => Seq()
+    def loseAccess(member: FieldMember): Invoke = {
+      val struct = member.field.struct
+      val instanceId = new FieldMember(member.root, idFields(struct.name))
+      val fieldIndex = new Int(struct.fields.indexOf(member.field))
+      new Invoke(
+        loseAcc,
+        List(
+          targetSet,
+          instanceId,
+          fieldIndex
+        ),
+        None
+      )
     }
+
+    contract.toSeq.flatMap(translateSpec(_, loseAccess))
   }
 
   def addPermissionsFromContract(
       contract: Option[IRGraph.Expression],
-      methodData: CollectedMethod
+      targetSet: Var,
+      idFields: Map[String, IRGraph.StructField],
+      runtime: => CheckRuntime
   ): Seq[Op] = {
-    contract match {
-      case Some(value) =>
-        translateSpec(
-          value,
-          resolveTemporaryOwnedFields(methodData),
-          addAccess,
-          methodData
-        )
-      case None => Seq()
-    }
-  }
+    def addAccess(member: FieldMember): Invoke = {
+      val struct = member.field.struct
+      val instanceId = new FieldMember(member.root, idFields(struct.name))
+      val fieldIndex = new Int(struct.fields.indexOf(member.field))
+      val numFields = new Int(struct.fields.length)
 
-  private def addAccess(target: Var, fm: FieldMember): Invoke = {
-    val struct = fm.field.struct
-    val fieldIndex = struct.fields.indexOf(fm.field)
-    new Invoke(
-      addAcc,
-      List(
-        target,
-        new FieldMember(
-          fm.root,
-          new StructField(
-            fm.field.struct,
-            CheckRuntime.Names.id,
-            IntType
-          )
+      new Invoke(
+        addAcc,
+        List(
+          targetSet,
+          instanceId,
+          numFields,
+          fieldIndex
         ),
-        new Int(fm.field.struct.fields.length),
-        new Int(fieldIndex)
-      ),
-      None
-    )
-  }
-  private def loseAccess(target: Var, fm: FieldMember): Invoke = {
-    val struct = fm.field.struct
-    val fieldIndex = struct.fields.indexOf(fm.field)
-    new Invoke(
-      addAcc,
-      List(
-        target,
-        new FieldMember(
-          fm.root,
-          new StructField(
-            fm.field.struct,
-            CheckRuntime.Names.id,
-            IntType
-          )
-        ),
-        new Int(fieldIndex)
-      ),
-      None
-    )
+        None)
+    }
+
+    contract.toSeq.flatMap(translateSpec(_, addAccess))
   }
 
   def loadPermissionsBeforeInvocation(
@@ -339,69 +315,45 @@ class CheckRuntime private (program: IRGraph.Program) {
 
   def translateSpec(
       expr: IRGraph.Expression,
-      target: Var,
-      permissionHandler: (Var, FieldMember) => Invoke,
-      methodData: CollectedMethod
+      permissionHandler: (FieldMember) => Invoke
   ): Seq[Op] = {
     expr match {
-      case expression: IRGraph.SpecificationExpression =>
-        expression match {
-          case accessibility: IRGraph.Accessibility =>
-            val member = accessibility.member
-            member match {
-              case fm: FieldMember =>
-                Seq(permissionHandler(target, fm))
-              case _ =>
-                throw new WeaverException("Invalid conjunct in specification.")
-            }
-          case instance: PredicateInstance =>
-            Seq(callPredicate(instance, methodData))
-          case imprecise: IRGraph.Imprecise =>
-            imprecise.precise match {
-              case Some(value) =>
-                translateSpec(
-                  value,
-                  target,
-                  permissionHandler,
-                  methodData
-                )
-              case None => Seq()
-            }
+      case accessibility: IRGraph.Accessibility =>
+        accessibility.member match {
+          case member: FieldMember =>
+            Seq(permissionHandler(member))
           case _ =>
             throw new WeaverException("Invalid conjunct in specification.")
         }
-      case conditional: IRGraph.Conditional =>
-        val ifstmt = new If(conditional.condition)
-        translateSpec(
-          conditional.ifTrue,
-          target,
-          permissionHandler,
-          methodData
-        ).foreach(_ => ifstmt.ifTrue += _)
-        translateSpec(
-          conditional.ifFalse,
-          target,
-          permissionHandler,
-          methodData
-        ).foreach(_ => ifstmt.ifFalse += _)
-        Seq(ifstmt)
-      case binary: Binary =>
-        binary.operator match {
-          case BinaryOp.And =>
-            translateSpec(
-              binary.left,
-              target,
-              permissionHandler,
-              methodData
-            ) ++ translateSpec(
-              binary.right,
-              target,
-              permissionHandler,
-              methodData
-            )
-          case _ => Seq(new IRGraph.Assert(binary, AssertKind.Imperative))
+
+      case instance: PredicateInstance => ???
+        // TODO: Seq(callPredicate(instance, methodData))
+
+      // Imprecise specifications cannot be translated
+      // TODO: Required for imprecise predicates?
+      case imprecise: IRGraph.Imprecise =>
+        throw new WeaverException("Invalid spec")
+
+      case conditional: IRGraph.Conditional => {
+        val trueOps = translateSpec(conditional.ifTrue, permissionHandler).toList
+        val falseOps = translateSpec(conditional.ifFalse, permissionHandler).toList
+
+        if (trueOps.nonEmpty || falseOps.nonEmpty) {
+          val ifStmt = new If(conditional.condition)
+          ifStmt.ifTrue ++= trueOps
+          ifStmt.ifFalse ++= falseOps
+          Seq(ifStmt)
+        } else {
+          Seq.empty
         }
-      case _ => throw new WeaverException("Invalid conjunct in specification.")
+      }
+
+      case binary: Binary if binary.operator == BinaryOp.And =>
+            translateSpec(binary.left, permissionHandler) ++
+            translateSpec(binary.right, permissionHandler)
+
+      case expr =>
+        Seq(new IRGraph.Assert(expr, IRGraph.AssertKind.Imperative))
     }
   }
 }

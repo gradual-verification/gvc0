@@ -203,6 +203,10 @@ object IRGraph {
       }
     }
 
+    def ++=(newOps: Seq[Op]): Unit = {
+      for (op <- newOps) +=(op)
+    }
+
     // Prepends an Op to the beginning of the block
     def +=:(newOp: Op): Unit = {
       claim(newOp)
@@ -224,6 +228,17 @@ object IRGraph {
           // There is no next or previous, and tail and head are the same
           headNode = Some(newOp)
           tailNode = headNode
+        }
+      }
+    }
+
+    def ++=:(newOps: Seq[Op]): Unit = {
+      // TODO: This could be implemented better
+      newOps.toList match {
+        case Nil => ()
+        case head :: tl => {
+          +=:(head)
+          for (op <- tl) head.insertAfter(op)
         }
       }
     }

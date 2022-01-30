@@ -2,15 +2,27 @@ package gvc.weaver
 import gvc.transformer.IRGraph._
 import Collector._
 import gvc.transformer.IRGraph
+import scala.collection.mutable
 
 object Checker {
   def insert(program: CollectedProgram): Unit = {
-    program.methods.values.foreach { method => insert(program, method) }
+    lazy val runtime = CheckRuntime.addToIR(program.program)
+
+    // Add the _id field to each struct
+    // Keep a separate map since the name may be something other than `_id` due
+    // to name collision avoidance
+    val structIdFields = program.program.structs
+      .map(s => (s.name, s.addField("_id", IntType)))
+      .toMap
+
+    program.methods.values.foreach { method => insert(program, method, runtime, structIdFields) }
   }
 
   private def insert(
       programData: CollectedProgram,
-      methodData: CollectedMethod
+      methodData: CollectedMethod,
+      runtime: => CheckRuntime,
+      structIdFields: Map[java.lang.String, IRGraph.StructField]
   ): Unit = {
     val program = programData.program
     val method = methodData.method
@@ -84,97 +96,115 @@ object Checker {
       )
     }
 
-    def implementAccCheck(
-        check: AccessibilityCheck,
-        runtime: CheckRuntime
-    ): Op = {
-      val primaryOwnedFields = runtime.resolvePrimaryOwnedFields(methodData)
+    val initializeOps = mutable.ListBuffer[Op]()
+
+    var (primaryOwnedFields, instanceCounter) = methodData.callStyle match {
+      case MainCallStyle => {
+        val instanceCounter = method.addVar(new PointerType(IntType), "_instanceCounter")
+        initializeOps += new AllocValue(IntType, instanceCounter)
+        (None, instanceCounter)
+      }
+
+      case PreciseCallStyle => {
+        val instanceCounter = method.addParameter(new PointerType(IntType), "_instanceCounter")
+        (None, instanceCounter)
+      }
+
+      case ImpreciseCallStyle | PrecisePreCallStyle => {
+        val ownedFields: Var = method.addParameter(runtime.ownedFieldsRef, "_ownedFields")
+        val instanceCounter = new FieldMember(ownedFields, runtime.ownedFieldInstanceCounter)
+        (Some(ownedFields), instanceCounter)
+      }
+    }
+
+    def getPrimaryOwnedFields = primaryOwnedFields.getOrElse {
+      val ownedFields = method.addVar(runtime.ownedFieldsRef, "_ownedFields")
+      // TODO: initOwnedFields could return a newly-allocated struct
+      initializeOps += new AllocStruct(runtime.ownedFields, ownedFields)
+      initializeOps += new Invoke(runtime.initOwnedFields, List(ownedFields, instanceCounter), None)
+      primaryOwnedFields = Some(ownedFields)
+      ownedFields
+    }
+
+    def implementAccCheck(check: AccessibilityCheck, temporaryOwnedFields: => Expression): Seq[Op] = {
+      // Get the `_id` value that identifies the struct instance
       val structId = new FieldMember(
         check.field.root.toIR(program, method, None),
-        check.field.getIRField(program)
+        structIdFields(check.field.structName)
       )
+
+      // Get the number that identifies the struct field
       val fieldToCheck = check.field.getIRField(program)
       val fieldIndex =
         new IRGraph.Int(fieldToCheck.struct.fields.indexOf(fieldToCheck))
-      if (check.separating) {
-        val temporaryOwnedFields =
-          runtime.resolveTemporaryOwnedFields(methodData)
-        if (check.unverified) {
-          new Invoke(
-            runtime.assertDisjointAcc,
-            List(
-              temporaryOwnedFields,
-              primaryOwnedFields,
-              structId,
-              fieldIndex
-            ),
-            None
-          )
-        } else {
-          new Invoke(
-            runtime.addDisjointAcc,
-            List(
-              temporaryOwnedFields,
-              structId,
-              fieldIndex
-            ),
-            None
-          )
-        }
-      } else {
-        new Invoke(
+
+      val ops = mutable.ListBuffer[Op]()
+      if (check.checkExists) {
+        ops += new Invoke(
           runtime.assertAcc,
           List(
-            primaryOwnedFields,
+            getPrimaryOwnedFields,
             structId,
             fieldIndex
           ),
           None
         )
       }
+
+      if (check.checkSeparate) {
+        ops += new Invoke(
+          runtime.addDisjointAcc,
+          List(
+            temporaryOwnedFields,
+            structId,
+            fieldIndex
+          ),
+          None
+        )
+      }
+
+      ops.toList
     }
+
     def implementCheck(
         check: Check,
-        returnValue: Option[Expression]
-    ): Op =
+        returnValue: Option[IRGraph.Expression],
+        temporaryOwnedFields: => Expression
+    ): Seq[Op] = {
       check match {
+        case acc: AccessibilityCheck => implementAccCheck(acc, temporaryOwnedFields)
+        case pc: PredicateCheck =>
+          Seq(runtime.callPredicate(pc.predicate, methodData))
         case expr: CheckExpression =>
-          new Assert(
+          Seq(new Assert(
             expr.toIR(program, method, returnValue),
             AssertKind.Imperative
-          )
-        case _ =>
-          throw new WeaverException(
-            "Unsupported runtime check in the current mode."
-          )
-      }
-    def implementCheckWithTracking(
-        check: Check,
-        runtime: CheckRuntime,
-        returnValue: Option[IRGraph.Expression],
-        methodData: CollectedMethod
-    ): Op = {
-      check match {
-        case acc: AccessibilityCheck => implementAccCheck(acc, runtime)
-        case pc: PredicateCheck =>
-          runtime.callPredicate(pc.predicate, methodData)
-        case _ => implementCheck(check, returnValue)
+          ))
       }
     }
+
     def implementChecks(
         cond: Option[Expression],
-        checks: Seq[Check],
-        maybeRuntime: Option[CheckRuntime],
-        returnValue: Option[Expression],
-        methodData: CollectedMethod
+        checks: List[Check],
+        returnValue: Option[Expression]
     ): Seq[Op] = {
-      val ops = maybeRuntime match {
-        case Some(runtime) =>
-          checks.map(
-            implementCheckWithTracking(_, runtime, returnValue, methodData)
-          )
-        case None => checks.map(implementCheck(_, returnValue))
+      // Create a temporary owned fields instance when it is required
+      var temporaryOwnedFields: Option[Var] = None
+      def getTemporaryOwnedFields = temporaryOwnedFields.getOrElse {
+        val tempVar = method.addVar(runtime.ownedFieldsRef, "_temp_fields")
+        temporaryOwnedFields = Some(tempVar)
+        tempVar
       }
+
+      // Collect all the ops for the check
+      var ops = checks.flatMap(implementCheck(_, returnValue, getTemporaryOwnedFields))
+
+      // Prepend op to initialize owned fields if it is required
+      temporaryOwnedFields.foreach { tempOwned =>
+        ops = new Invoke(runtime.initOwnedFields, List(instanceCounter), None) :: ops
+      }
+
+      // Wrap in an if statement if it is conditional
       cond match {
         case None => ops
         case Some(cond) =>
@@ -197,179 +227,97 @@ object Checker {
           implementChecks(
             condition,
             checks.map(_.check),
-            programData.runtime,
-            _,
-            methodData
+            _
           )
         )
       }
-    programData.runtime match {
-      case Some(runtime) => injectSupport(methodData, runtime)
-      case None          =>
-    }
-  }
 
-  private def injectSupport(
-      methodData: CollectedMethod,
-      runtime: CheckRuntime
-  ): Unit = {
-    if (methodData.method.name == "main") {
-      val instanceCounter = methodData.method.addVar(
-        new PointerType(IntType),
-        CheckRuntime.Names.instanceCounter
-      )
-      methodData.method.body.head.insertBefore(
-        Seq(
-          new AllocValue(IntType, instanceCounter),
-          new AssignMember(
-            new DereferenceMember(instanceCounter),
-            new IRGraph.Int(0)
-          )
-        )
-      )
-    }
+    val needsToTrackPrecisePerms =
+      primaryOwnedFields.isDefined ||
+      methodData.calls.exists(c => programData.methods(c.ir.callee.name).callStyle match {
+        case ImpreciseCallStyle | PrecisePreCallStyle => true
+        case _ => false
+      })
 
-    if (
-      methodData.callStyle == ImpreciseCallStyle || methodData.callStyle == PrecisePreCallStyle
-    ) {
-      val primaryOwnedFields = runtime.resolvePrimaryOwnedFields(methodData)
-      for (alloc <- methodData.allocations) {
-        alloc match {
-          case str: AllocStruct =>
-            runtime.addDynamicStructAccess(str, primaryOwnedFields)
-          case _ =>
-            throw new WeaverException(
-              "Tracking is only currently supported for struct allocations."
-            )
-        }
+    // Update the call sites to add any required parameters
+    for (call <- methodData.calls) {
+      val callee = call.ir.callee match {
+        case method: Method => method
+        case _: DependencyMethod => throw new WeaverException("Invalid method call")
       }
-    } else {
-      if (methodData.method.name != "main")
-        methodData.method.addParameter(
-          new PointerType(IntType),
-          CheckRuntime.Names.instanceCounter
-        )
-      val instanceCounter =
-        methodData.method.getVar(CheckRuntime.Names.instanceCounter).get
-      for (alloc <- methodData.allocations) {
-        alloc match {
-          case str: AllocStruct =>
-            runtime.assignIDFromInstanceCounter(str, instanceCounter)
-          case _ =>
-            throw new WeaverException(
-              "Tracking is only currently supported for struct allocations."
-            )
-        }
-      }
-    }
-    methodData.checkedSpecificationLocations.foreach(loc => {
-      if (loc.isInstanceOf[AtOp]) {
-        loc
-          .asInstanceOf[AtOp]
-          .op
-          .insertAfter(
-            new Invoke(
-              runtime.initOwnedFields,
-              List(
-                runtime.resolveTemporaryOwnedFields(methodData)
-              ),
-              None
-            )
-          )
-      }
-    })
+      val calleeData = programData.methods(callee.name)
 
-    injectCallsiteSupport(
-      methodData,
-      runtime
-    )
-  }
+      calleeData.callStyle match {
+        // No parameters can be added to a main method
+        case MainCallStyle => ()
 
-  private def injectCallsiteSupport(
-      methodData: CollectedMethod,
-      runtime: CheckRuntime
-  ): Unit = {
-    var calledImprecise = false
-    methodData.calls.foreach(inv => {
-      val callStyle = getCallstyle(inv.ir.method)
-      callStyle match {
-        case Collector.PreciseCallStyle =>
-          if (methodData.callStyle != PreciseCallStyle) {
-            //convert precondition into calls to addAcc
-            inv.ir.insertBefore(
+        // Imprecise methods always get the primary owned fields instance directly
+        case ImpreciseCallStyle => call.ir.arguments :+= getPrimaryOwnedFields
+
+        case PreciseCallStyle => {
+          // Always pass the instance counter
+          call.ir.arguments :+= instanceCounter
+
+          // If we need to track precise permisions, add the code at the call site
+          if (needsToTrackPrecisePerms) {
+            // Convert precondition into calls to addAcc
+            call.ir.insertBefore(
+              // TODO
               runtime.removePermissionsFromContract(
-                methodData.method.precondition,
-                methodData
+                callee.precondition,
+                getPrimaryOwnedFields,
+                structIdFields,
+                runtime
               )
             )
-            //convert postcondition into calls to addAcc
-            inv.ir.insertAfter(
+
+            // Convert postcondition into calls to addAcc
+            call.ir.insertAfter(
               runtime.addPermissionsFromContract(
-                methodData.method.postcondition,
-                methodData
+                callee.postcondition,
+                getPrimaryOwnedFields,
+                structIdFields,
+                runtime
               )
             )
           }
+        }
 
-        case Collector.PrecisePreCallStyle =>
-          if (methodData.callStyle == PreciseCallStyle && !calledImprecise) {
-            //initialize primary OwnedFields with the static permissions at the method's callsite
-            inv.ir.insertBefore(
-              runtime.loadPermissionsBeforeInvocation(inv.vpr, methodData)
-            )
-
-            calledImprecise = true
-          }
-          val tempOwnedFields = runtime.resolveTemporaryOwnedFields(methodData)
-          inv.ir.insertBefore(
-            new Invoke(runtime.initOwnedFields, List(tempOwnedFields), None)
-          )
-          //convert precondition into calls to addAcc
-          inv.ir.insertAfter(
-            new Invoke(
-              runtime.join,
-              List(
-                runtime.resolvePrimaryOwnedFields(methodData),
-                tempOwnedFields
-              ),
-              None
-            )
+        // For precise-pre/imprecise-post, create a temporary set of permissions, add the
+        // permissions from the precondition, call the method, and add the temporary set to the
+        // primary set
+        case PrecisePreCallStyle => {
+          val tempSet = method.addVar(runtime.ownedFieldsRef, "_temp_fields")
+          call.ir.insertBefore(
+            new AllocStruct(runtime.ownedFields, tempSet) ::
+            new Invoke(runtime.initOwnedFields, List(instanceCounter), None) ::
+            runtime.addPermissionsFromContract(callee.precondition, tempSet, structIdFields, runtime).toList
           )
 
-        case Collector.ImpreciseCallStyle =>
-          if (methodData.callStyle == PreciseCallStyle) {
-            if (!calledImprecise) {
-              //initialize primary OwnedFields with the static permissions at the method's callsite
-              inv.ir.insertBefore(
-                runtime.loadPermissionsBeforeInvocation(inv.vpr, methodData)
-              )
-              calledImprecise = true
-            }
-            if (
-              methodData.method
-                .getVar(CheckRuntime.Names.primaryOwnedFields)
-                .isEmpty
-            ) {
-              val primaryOwnedFields = methodData.method.addVar(
-                new ReferenceType(runtime.ownedFields),
-                CheckRuntime.Names.primaryOwnedFields
-              )
-              //convert precondition into calls to addAcc
-              inv.ir.insertBefore(
-                runtime.removePermissionsFromContract(
-                  methodData.method.precondition,
-                  methodData
-                )
-              )
+          call.ir.arguments :+= tempSet
 
-              inv.ir.arguments = inv.ir.arguments ++ List(primaryOwnedFields)
-            }
-          } else {
-            inv.ir.arguments = inv.ir.arguments ++ List(
-              runtime.resolvePrimaryOwnedFields(methodData)
-            )
-          }
+          call.ir.insertAfter(new Invoke(runtime.join, List(getPrimaryOwnedFields, tempSet), None))
+        }
       }
-    })
+    }
+
+    // If a primary owned fields instance is required for this method, add all allocations into it
+    for (ownedFields <- primaryOwnedFields)
+    for (alloc <- methodData.allocations) {
+      alloc match {
+        case alloc: AllocStruct => {
+          val fieldCount = alloc.struct.fields.length - 1
+          val id = new FieldMember(alloc.target, structIdFields(alloc.struct.name))
+          alloc.insertAfter(new Invoke(runtime.addStructAcc, List(ownedFields, new IRGraph.Int(fieldCount)), Some(id)))
+        }
+        case _ =>
+          throw new WeaverException(
+            "Tracking is only currently supported for struct allocations."
+          )
+      }
+    }
+
+    // Finally, add all the initialization ops to the beginning
+    initializeOps ++=: method.body
   }
 }

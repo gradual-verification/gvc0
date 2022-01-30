@@ -1,12 +1,15 @@
+#use <runtime>
 int main();
-void test(int x, int y);
+void test(int x, int y, struct OwnedFields* _ownedFields);
 
 int main()
 {
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
   return 0;
 }
 
-void test(int x, int y)
+void test(int x, int y, struct OwnedFields* _ownedFields)
   //@requires ?;
 {
   bool _cond_0 = false;

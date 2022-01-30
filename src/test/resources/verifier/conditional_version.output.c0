@@ -1,26 +1,33 @@
+#use <runtime>
 int main();
-void test(int x, int y);
-int testCall(int a);
+void test(int x, int y, struct OwnedFields* _ownedFields);
+int testCall(int a, struct OwnedFields* _ownedFields);
 
 int main()
 {
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
   return 0;
 }
 
-void test(int x, int y)
+void test(int x, int y, struct OwnedFields* _ownedFields)
   //@requires ?;
 {
   int z = 0;
   bool _cond_0 = false;
   bool _cond_1 = false;
   bool _cond_3 = false;
+  struct OwnedFields* _temp_fields = NULL;
   _cond_0 = x > 1;
   if (x > 1)
   {
     _cond_1 = _cond_0 && x > 2;
     if (x > 2)
     {
-      z = testCall(y);
+      _temp_fields = alloc(struct OwnedFields);
+      initOwnedFields(_ownedFields->instanceCounter);
+      z = testCall(y, _temp_fields);
+      join(_ownedFields, _temp_fields);
       _cond_3 = _cond_0 && _cond_1 && z == 0;
       if (z == 0)
       {
@@ -34,7 +41,7 @@ void test(int x, int y)
   }
 }
 
-int testCall(int a)
+int testCall(int a, struct OwnedFields* _ownedFields)
   //@ensures ? && (a == 0 ? \result == 0 : true);
 {
   return a;

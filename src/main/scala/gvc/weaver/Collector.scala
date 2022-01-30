@@ -32,6 +32,7 @@ object Collector {
   case object PreciseCallStyle extends CallStyle
   case object PrecisePreCallStyle extends CallStyle
   case object ImpreciseCallStyle extends CallStyle
+  case object MainCallStyle extends CallStyle
 
   class CollectedMethod(
       val method: Method,
@@ -48,32 +49,24 @@ object Collector {
 
   class CollectedProgram(
       val program: Program,
-      val methods: Map[java.lang.String, CollectedMethod],
-      val runtime: Option[CheckRuntime]
+      val methods: Map[java.lang.String, CollectedMethod]
   )
 
   case class CollectedInvocation(ir: Invoke, vpr: MethodCall)
 
   def collect(irProgram: Program, vprProgram: vpr.Program): CollectedProgram = {
-    var runtime: Option[CheckRuntime] = None
     val methods = irProgram.methods
-      .map(m => {
-        val collected = collect(
+      .map(m => 
+        (m.name, collect(
           irProgram,
           vprProgram,
           m,
           vprProgram.findMethod(m.name)
-        )
-        if (collected.requiresFieldAccessTracking) {
-          runtime = Some(CheckRuntime.addToIR(irProgram))
-        }
-        (m.name, collected)
-      })
+        )))
       .toMap
     new CollectedProgram(
       program = irProgram,
-      methods = methods,
-      runtime = runtime
+      methods = methods
     )
   }
 
@@ -192,7 +185,7 @@ object Collector {
         Seq(
           RuntimeCheck(
             location,
-            AccessibilityCheck(field, true, false),
+            AccessibilityCheck(field, true, true),
             ConditionValue(condition.getOrElse(CheckExpression.TrueLit))
           )
         )
@@ -240,7 +233,6 @@ object Collector {
               println(s"LOCATION: $loc")
               println(s"CONTEXT: ${check.context}")
             }
-            checks.getOrElseUpdate((loc, acc), mutable.Set()) += condition
           case check => {
             checks.getOrElseUpdate((loc, check), mutable.Set()) += condition
           }
@@ -555,11 +547,14 @@ object Collector {
     case _                  => false
   }
 
-  def getCallstyle(irMethod: Method) = if (isImprecise(irMethod.precondition))
-    ImpreciseCallStyle
-  else if (isImprecise(irMethod.postcondition))
-    PrecisePreCallStyle
-  else PreciseCallStyle
+  def getCallstyle(irMethod: Method) =
+    if (irMethod.name == "main")
+      MainCallStyle
+    else if (isImprecise(irMethod.precondition))
+      ImpreciseCallStyle
+    else if (isImprecise(irMethod.postcondition))
+      PrecisePreCallStyle
+    else PreciseCallStyle
 
   // Changes an expression from an IR expression into a CheckExpression. If an argument lookup
   // mapping is given, it will use this mapping to resolve variables. Otherwise, it will assume
