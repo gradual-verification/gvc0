@@ -16,6 +16,7 @@ import gvc.transformer.IRGraph.{
   Int,
   IntType,
   Invoke,
+  Method,
   MethodDefinition,
   Op,
   Predicate,
@@ -107,6 +108,11 @@ class CheckRuntime private (program: IRGraph.Program) {
   val equirecursivePredicates: mutable.Map[String, MethodDefinition] =
     mutable.Map[String, MethodDefinition]()
 
+  val primaryOwnedFields: mutable.Map[IRGraph.Method, Var] =
+    mutable.Map[Method, Var]()
+  val temporaryOwnedFields: mutable.Map[IRGraph.Method, Var] =
+    mutable.Map[Method, Var]()
+
   def addDynamicStructAccess(
       alloc: AllocStruct,
       ownedFields: Var
@@ -127,47 +133,33 @@ class CheckRuntime private (program: IRGraph.Program) {
   }
 
   def resolvePrimaryOwnedFields(methodData: CollectedMethod): Var = {
-    if (
-      methodData.callStyle == PrecisePreCallStyle || methodData.callStyle == ImpreciseCallStyle
-    ) {
-      val currentEntry = methodData.method.parameters.find(p =>
-        p.name == Names.primaryOwnedFields && p.valueType.isDefined && p.valueType.get
-          .isInstanceOf[ReferenceType] && p.valueType.get
-          .asInstanceOf[ReferenceType]
-          .struct
-          .equals(ownedFields)
-      )
-      currentEntry match {
-        case Some(entry) => entry
-        case None =>
+    if (primaryOwnedFields.contains(methodData.method)) {
+      primaryOwnedFields(methodData.method)
+    } else {
+      val contextOwnedFields =
+        if (
+          methodData.callStyle == PrecisePreCallStyle || methodData.callStyle == ImpreciseCallStyle
+        ) {
           methodData.method.addParameter(
             new ReferenceType(ownedFields),
             Names.primaryOwnedFields
           )
-      }
-    } else {
-      val currentEntry = methodData.method.getVar(Names.primaryOwnedFields)
-      currentEntry match {
-        case Some(value) => value
-        case None        => methodData.method.addVar(new ReferenceType(ownedFields))
-      }
+        } else {
+          methodData.method.addVar(new ReferenceType(ownedFields))
+        }
+      primaryOwnedFields += (methodData.method -> contextOwnedFields)
+      contextOwnedFields
     }
   }
 
   def resolveTemporaryOwnedFields(methodData: CollectedMethod): Var = {
-    val currentEntry = methodData.method.getVar(Names.temporaryOwnedFields)
-    if (
-      currentEntry.isDefined && currentEntry.get.valueType.isDefined && currentEntry.get.valueType.get
-        .isInstanceOf[ReferenceType] && currentEntry.get.valueType.get
-        .asInstanceOf[ReferenceType]
-        .struct == ownedFields
-    ) {
-      currentEntry.get
+    if (temporaryOwnedFields.contains(methodData.method)) {
+      temporaryOwnedFields(methodData.method)
     } else {
-      methodData.method.addVar(
-        new ReferenceType(ownedFields),
-        Names.temporaryOwnedFields
-      )
+      val contextOwnedFields =
+        methodData.method.addVar(new ReferenceType(ownedFields))
+      temporaryOwnedFields += (methodData.method -> contextOwnedFields)
+      contextOwnedFields
     }
   }
 
@@ -219,19 +211,21 @@ class CheckRuntime private (program: IRGraph.Program) {
       pred: Predicate,
       methodData: CollectedMethod
   ): IRGraph.MethodDefinition =
-    equirecursivePredicates.getOrElse(pred.name, {
-      val defn = program.addMethod(pred.name, None)
-      equirecursivePredicates += pred.name -> defn
+    equirecursivePredicates.getOrElse(
+      pred.name, {
+        val defn = program.addMethod(pred.name, None)
+        equirecursivePredicates += pred.name -> defn
 
-      ???
-      /*translateSpec(
+        ???
+        /*translateSpec(
         pred.expression,
         resolveTemporaryOwnedFields(methodData),
         addAccess,
         methodData
       ).foreach(op => defn.body += op)*/
-      defn
-    })
+        defn
+      }
+    )
 
   def removePermissionsFromContract(
       contract: Option[IRGraph.Expression],
@@ -277,7 +271,8 @@ class CheckRuntime private (program: IRGraph.Program) {
           numFields,
           fieldIndex
         ),
-        None)
+        None
+      )
     }
 
     contract.toSeq.flatMap(translateSpec(_, addAccess))
@@ -327,7 +322,7 @@ class CheckRuntime private (program: IRGraph.Program) {
         }
 
       case instance: PredicateInstance => ???
-        // TODO: Seq(callPredicate(instance, methodData))
+      // TODO: Seq(callPredicate(instance, methodData))
 
       // Imprecise specifications cannot be translated
       // TODO: Required for imprecise predicates?
@@ -335,8 +330,10 @@ class CheckRuntime private (program: IRGraph.Program) {
         throw new WeaverException("Invalid spec")
 
       case conditional: IRGraph.Conditional => {
-        val trueOps = translateSpec(conditional.ifTrue, permissionHandler).toList
-        val falseOps = translateSpec(conditional.ifFalse, permissionHandler).toList
+        val trueOps =
+          translateSpec(conditional.ifTrue, permissionHandler).toList
+        val falseOps =
+          translateSpec(conditional.ifFalse, permissionHandler).toList
 
         if (trueOps.nonEmpty || falseOps.nonEmpty) {
           val ifStmt = new If(conditional.condition)
@@ -349,8 +346,8 @@ class CheckRuntime private (program: IRGraph.Program) {
       }
 
       case binary: Binary if binary.operator == BinaryOp.And =>
-            translateSpec(binary.left, permissionHandler) ++
-            translateSpec(binary.right, permissionHandler)
+        translateSpec(binary.left, permissionHandler) ++
+          translateSpec(binary.right, permissionHandler)
 
       case expr =>
         Seq(new IRGraph.Assert(expr, IRGraph.AssertKind.Imperative))
