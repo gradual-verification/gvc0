@@ -29,7 +29,7 @@ void test(struct Test* t, struct OwnedFields* _ownedFields)
   //@requires ?;
 {
   assert(!(t == NULL));
-  loseAcc(_ownedFields, t->_id, 0);
+  addAcc(_ownedFields, t->_id, 0);
   setValue(t, _ownedFields->instanceCounter);
   addAcc(_ownedFields, t->_id, 2, 0);
 }

@@ -17,17 +17,17 @@ void test(int x, int y, struct OwnedFields* _ownedFields)
   bool _cond_0 = false;
   bool _cond_1 = false;
   bool _cond_3 = false;
-  struct OwnedFields* _temp_fields = NULL;
+  struct OwnedFields* _tempFields = NULL;
   _cond_0 = x > 1;
   if (x > 1)
   {
     _cond_1 = _cond_0 && x > 2;
     if (x > 2)
     {
-      _temp_fields = alloc(struct OwnedFields);
+      _tempFields = alloc(struct OwnedFields);
       initOwnedFields(_ownedFields->instanceCounter);
-      z = testCall(y, _temp_fields);
-      join(_ownedFields, _temp_fields);
+      z = testCall(y, _tempFields);
+      join(_ownedFields, _tempFields);
       _cond_3 = _cond_0 && _cond_1 && z == 0;
       if (z == 0)
       {

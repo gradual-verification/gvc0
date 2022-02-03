@@ -15,14 +15,16 @@ object Checker {
       .map(s => (s.name, s.addField("_id", IntType)))
       .toMap
 
-    program.methods.values.foreach { method => insert(program, method, runtime, structIdFields) }
+    program.methods.values.foreach { method =>
+      insert(program, method, runtime, structIdFields)
+    }
   }
 
   private def insert(
       programData: CollectedProgram,
       methodData: CollectedMethod,
       runtime: => CheckRuntime,
-      structIdFields: Map[java.lang.String, IRGraph.StructField]
+      structIdFields: Map[scala.Predef.String, StructField]
   ): Unit = {
     val program = programData.program
     val method = methodData.method
@@ -100,33 +102,56 @@ object Checker {
 
     var (primaryOwnedFields, instanceCounter) = methodData.callStyle match {
       case MainCallStyle => {
-        val instanceCounter = method.addVar(new PointerType(IntType), "_instanceCounter")
+        val instanceCounter =
+          method.addVar(
+            new PointerType(IntType),
+            CheckRuntime.Names.instanceCounter
+          )
         initializeOps += new AllocValue(IntType, instanceCounter)
         (None, instanceCounter)
       }
 
       case PreciseCallStyle => {
-        val instanceCounter = method.addParameter(new PointerType(IntType), "_instanceCounter")
+        val instanceCounter =
+          method.addParameter(
+            new PointerType(IntType),
+            CheckRuntime.Names.instanceCounter
+          )
         (None, instanceCounter)
       }
 
       case ImpreciseCallStyle | PrecisePreCallStyle => {
-        val ownedFields: Var = method.addParameter(runtime.ownedFieldsRef, "_ownedFields")
-        val instanceCounter = new FieldMember(ownedFields, runtime.ownedFieldInstanceCounter)
+        val ownedFields: Var =
+          method.addParameter(
+            runtime.ownedFieldsRef,
+            CheckRuntime.Names.primaryOwnedFields
+          )
+        val instanceCounter =
+          new FieldMember(ownedFields, runtime.ownedFieldInstanceCounter)
         (Some(ownedFields), instanceCounter)
       }
     }
 
     def getPrimaryOwnedFields = primaryOwnedFields.getOrElse {
-      val ownedFields = method.addVar(runtime.ownedFieldsRef, "_ownedFields")
+      val ownedFields = method.addVar(
+        runtime.ownedFieldsRef,
+        CheckRuntime.Names.primaryOwnedFields
+      )
       // TODO: initOwnedFields could return a newly-allocated struct
       initializeOps += new AllocStruct(runtime.ownedFields, ownedFields)
-      initializeOps += new Invoke(runtime.initOwnedFields, List(ownedFields, instanceCounter), None)
+      initializeOps += new Invoke(
+        runtime.initOwnedFields,
+        List(ownedFields, instanceCounter),
+        None
+      )
       primaryOwnedFields = Some(ownedFields)
       ownedFields
     }
 
-    def implementAccCheck(check: AccessibilityCheck, temporaryOwnedFields: => Expression): Seq[Op] = {
+    def implementAccCheck(
+        check: AccessibilityCheck,
+        temporaryOwnedFields: => Expression
+    ): Seq[Op] = {
       // Get the `_id` value that identifies the struct instance
       val structId = new FieldMember(
         check.field.root.toIR(program, method, None),
@@ -172,14 +197,21 @@ object Checker {
         temporaryOwnedFields: => Expression
     ): Seq[Op] = {
       check match {
-        case acc: AccessibilityCheck => implementAccCheck(acc, temporaryOwnedFields)
+        case acc: AccessibilityCheck =>
+          implementAccCheck(acc, temporaryOwnedFields)
         case pc: PredicateCheck =>
-          Seq(runtime.callPredicate(pc.predicate, methodData))
+          val checkPredicate =
+            runtime.resolveAdditionPredicate(pc.predicate, structIdFields)
+          Seq(
+            new Invoke(checkPredicate, List(temporaryOwnedFields), None)
+          )
         case expr: CheckExpression =>
-          Seq(new Assert(
-            expr.toIR(program, method, returnValue),
-            AssertKind.Imperative
-          ))
+          Seq(
+            new Assert(
+              expr.toIR(program, method, returnValue),
+              AssertKind.Imperative
+            )
+          )
       }
     }
 
@@ -191,17 +223,25 @@ object Checker {
       // Create a temporary owned fields instance when it is required
       var temporaryOwnedFields: Option[Var] = None
       def getTemporaryOwnedFields = temporaryOwnedFields.getOrElse {
-        val tempVar = method.addVar(runtime.ownedFieldsRef, "_temp_fields")
+        val tempVar = method.addVar(
+          runtime.ownedFieldsRef,
+          CheckRuntime.Names.temporaryOwnedFields
+        )
         temporaryOwnedFields = Some(tempVar)
         tempVar
       }
 
       // Collect all the ops for the check
-      var ops = checks.flatMap(implementCheck(_, returnValue, getTemporaryOwnedFields))
+      var ops =
+        checks.flatMap(implementCheck(_, returnValue, getTemporaryOwnedFields))
 
       // Prepend op to initialize owned fields if it is required
       temporaryOwnedFields.foreach { tempOwned =>
-        ops = new Invoke(runtime.initOwnedFields, List(instanceCounter), None) :: ops
+        ops = new Invoke(
+          runtime.initOwnedFields,
+          List(instanceCounter),
+          None
+        ) :: ops
       }
 
       // Wrap in an if statement if it is conditional
@@ -234,16 +274,19 @@ object Checker {
 
     val needsToTrackPrecisePerms =
       primaryOwnedFields.isDefined ||
-      methodData.calls.exists(c => programData.methods(c.ir.callee.name).callStyle match {
-        case ImpreciseCallStyle | PrecisePreCallStyle => true
-        case _ => false
-      })
+        methodData.calls.exists(c =>
+          programData.methods(c.ir.callee.name).callStyle match {
+            case ImpreciseCallStyle | PrecisePreCallStyle => true
+            case _                                        => false
+          }
+        )
 
     // Update the call sites to add any required parameters
     for (call <- methodData.calls) {
       val callee = call.ir.callee match {
         case method: Method => method
-        case _: DependencyMethod => throw new WeaverException("Invalid method call")
+        case _: DependencyMethod =>
+          throw new WeaverException("Invalid method call")
       }
       val calleeData = programData.methods(callee.name)
 
@@ -266,8 +309,7 @@ object Checker {
               runtime.removePermissionsFromContract(
                 callee.precondition,
                 getPrimaryOwnedFields,
-                structIdFields,
-                runtime
+                structIdFields
               )
             )
 
@@ -276,8 +318,7 @@ object Checker {
               runtime.addPermissionsFromContract(
                 callee.postcondition,
                 getPrimaryOwnedFields,
-                structIdFields,
-                runtime
+                structIdFields
               )
             )
           }
@@ -287,35 +328,60 @@ object Checker {
         // permissions from the precondition, call the method, and add the temporary set to the
         // primary set
         case PrecisePreCallStyle => {
-          val tempSet = method.addVar(runtime.ownedFieldsRef, "_temp_fields")
+          val tempSet = method.addVar(
+            runtime.ownedFieldsRef,
+            CheckRuntime.Names.temporaryOwnedFields
+          )
           call.ir.insertBefore(
             new AllocStruct(runtime.ownedFields, tempSet) ::
-            new Invoke(runtime.initOwnedFields, List(instanceCounter), None) ::
-            runtime.addPermissionsFromContract(callee.precondition, tempSet, structIdFields, runtime).toList
+              new Invoke(
+                runtime.initOwnedFields,
+                List(instanceCounter),
+                None
+              ) ::
+              runtime
+                .addPermissionsFromContract(
+                  callee.precondition,
+                  tempSet,
+                  structIdFields
+                )
+                .toList
           )
 
           call.ir.arguments :+= tempSet
 
-          call.ir.insertAfter(new Invoke(runtime.join, List(getPrimaryOwnedFields, tempSet), None))
+          call.ir.insertAfter(
+            new Invoke(runtime.join, List(getPrimaryOwnedFields, tempSet), None)
+          )
         }
       }
     }
 
     // If a primary owned fields instance is required for this method, add all allocations into it
     for (ownedFields <- primaryOwnedFields)
-    for (alloc <- methodData.allocations) {
-      alloc match {
-        case alloc: AllocStruct => {
-          val fieldCount = alloc.struct.fields.length - 1
-          val id = new FieldMember(alloc.target, structIdFields(alloc.struct.name))
-          alloc.insertAfter(new Invoke(runtime.addStructAcc, List(ownedFields, new IRGraph.Int(fieldCount)), Some(id)))
+      for (alloc <- methodData.allocations) {
+        alloc match {
+          case alloc: AllocStruct => {
+            val structType = alloc.struct
+            alloc.insertAfter(
+              new Invoke(
+                runtime.addStructAcc,
+                List(ownedFields, new Int(structType.fields.length - 1)),
+                Some(
+                  new FieldMember(
+                    alloc.target,
+                    structIdFields(alloc.struct.name)
+                  )
+                )
+              )
+            )
+          }
+          case _ =>
+            throw new WeaverException(
+              "Tracking is only currently supported for struct allocations."
+            )
         }
-        case _ =>
-          throw new WeaverException(
-            "Tracking is only currently supported for struct allocations."
-          )
       }
-    }
 
     // Finally, add all the initialization ops to the beginning
     initializeOps ++=: method.body
