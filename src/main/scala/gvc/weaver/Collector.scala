@@ -49,7 +49,7 @@ object Collector {
 
   class CollectedProgram(
       val program: Program,
-      val methods: Map[java.lang.String, CollectedMethod]
+      val methods: Map[scala.Predef.String, CollectedMethod]
   )
 
   case class CollectedInvocation(ir: Invoke, vpr: MethodCall)

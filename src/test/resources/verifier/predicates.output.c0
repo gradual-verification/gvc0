@@ -1,0 +1,49 @@
+#use <runtime>
+struct Node;
+
+struct Node
+{
+  int value;
+  struct Node* next;
+  int _id;
+};
+
+//@predicate wrappedAcc(struct Node* node);
+
+//@predicate wrappedAcc(struct Node* node) = acc(node->value) && acc(node->next);
+
+void check_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields);
+int main();
+int test(struct Node* a, struct OwnedFields* _ownedFields);
+
+void check_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
+{
+  assertAcc(_ownedFields, node->_id, 0, "Field access runtime check failed for struct Node.value");
+  assertAcc(_ownedFields, node->_id, 1, "Field access runtime check failed for struct Node.next");
+}
+
+int main()
+{
+  struct Node* a = NULL;
+  int _ = 0;
+  int* _instanceCounter = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  a = alloc(struct Node);
+  a->_id = addStructAcc(_ownedFields, 2);
+  a->value = 5;
+  a->next = NULL;
+  _ = test(a, _ownedFields);
+  return _;
+}
+
+int test(struct Node* a, struct OwnedFields* _ownedFields)
+  //@requires ?;
+  //@ensures wrappedAcc(a);
+{
+  struct OwnedFields* _tempFields = NULL;
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  check_wrappedAcc(a, _tempFields);
+  return a->value;
+}

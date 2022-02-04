@@ -6,14 +6,11 @@ import gvc.parser.Parser
 import gvc.analyzer.{ErrorSink, ResolvedProgram, Resolver}
 import gvc.transformer.IRGraph._
 import gvc.transformer.{DependencyTransformer, IRGraph}
-
 import scala.collection.mutable
-
 object CheckRuntime {
   val name = "runtime"
-
   private lazy val header: ResolvedProgram = {
-    val runtimeSource = Source.fromResource("runtime.h0").mkString
+    val runtimeSource = Source.fromResource(name + ".h0").mkString
     val parsed = Parser.parseProgram(runtimeSource) match {
       case _: Failure =>
         throw new WeaverException("Cannot parse runtime header")
@@ -53,6 +50,7 @@ object CheckRuntime {
     val id = "_id"
     val removePrefix = "remove_"
     val addPrefix = "add_"
+    val checkPrefix = "check_"
   }
 }
 
@@ -63,7 +61,6 @@ class CheckRuntime private (program: IRGraph.Program) {
   val ownedFieldsRef = new IRGraph.ReferenceType(ownedFields)
   val ownedFieldInstanceCounter: StructField =
     ownedFields.fields.find(_.name == "instanceCounter").get
-
   val initOwnedFields: IRGraph.MethodDefinition =
     program.method(Names.initOwnedFields)
   val addStructAcc: IRGraph.MethodDefinition =
@@ -85,6 +82,23 @@ class CheckRuntime private (program: IRGraph.Program) {
   val additionPredicates
       : mutable.Map[IRGraph.Predicate, IRGraph.MethodDefinition] =
     mutable.Map[IRGraph.Predicate, IRGraph.MethodDefinition]()
+  val checkPredicates
+      : mutable.Map[IRGraph.Predicate, IRGraph.MethodDefinition] =
+    mutable.Map[IRGraph.Predicate, IRGraph.MethodDefinition]()
+
+  def resolveCheckPredicate(
+      pred: Predicate,
+      structIdFields: Map[scala.Predef.String, StructField]
+  ): MethodDefinition = {
+    resolvePredicate(
+      pred,
+      checkPredicates,
+      Names.checkPrefix,
+      assertFieldAccess,
+      structIdFields,
+      resolveCheckPredicate
+    )
+  }
 
   def resolveAdditionPredicate(
       pred: Predicate,
@@ -95,7 +109,8 @@ class CheckRuntime private (program: IRGraph.Program) {
       additionPredicates,
       Names.addPrefix,
       addFieldAccess,
-      structIdFields
+      structIdFields,
+      resolveAdditionPredicate
     )
   }
 
@@ -108,7 +123,8 @@ class CheckRuntime private (program: IRGraph.Program) {
       removalPredicates,
       Names.removePrefix,
       removeFieldAccess,
-      structIdFields
+      structIdFields,
+      resolveRemovalPredicate
     )
   }
 
@@ -121,13 +137,20 @@ class CheckRuntime private (program: IRGraph.Program) {
           Var,
           Map[scala.Predef.String, StructField]
       ) => Invoke,
-      structFields: Map[scala.Predef.String, StructField]
+      structFields: Map[scala.Predef.String, StructField],
+      predicateResolutionMethod: (
+          Predicate,
+          Map[scala.Predef.String, StructField]
+      ) => MethodDefinition
   ): MethodDefinition = {
     if (predMap.contains(pred)) {
       predMap(pred)
     } else {
       val predicateMethod =
         program.addMethod(prefix + pred.name, None)
+      pred.parameters.foreach(param => {
+        predicateMethod.addParameter(param.valueType.get, param.name)
+      })
       val ownedFieldsInstanceParameter = predicateMethod.addParameter(
         new ReferenceType(ownedFields),
         Names.primaryOwnedFields
@@ -136,44 +159,12 @@ class CheckRuntime private (program: IRGraph.Program) {
         pred.expression,
         fieldAccessMutator,
         ownedFieldsInstanceParameter,
-        structFields
+        structFields,
+        predicateResolutionMethod
       ).foreach(op => predicateMethod.body += op)
       predMap += (pred -> predicateMethod)
       predicateMethod
     }
-  }
-
-  def assignIDFromInstanceCounter(
-      alloc: AllocStruct,
-      instanceCounter: Var
-  ): Unit = {
-    /* increment *(_instance_counter) */
-
-    val deref_inst_counter = new DereferenceMember(instanceCounter)
-    alloc.insertAfter(
-      new AssignMember(
-        deref_inst_counter,
-        new Binary(
-          BinaryOp.Add,
-          deref_inst_counter,
-          new IRGraph.Int(1)
-        )
-      )
-    )
-    /* assign the new instance's _id field to the current value of *(_instance_counter) */
-    alloc.insertAfter(
-      new AssignMember(
-        new FieldMember(
-          alloc.target,
-          new StructField(
-            alloc.struct.asInstanceOf[Struct],
-            CheckRuntime.Names.id,
-            IntType
-          )
-        ),
-        new DereferenceMember(instanceCounter)
-      )
-    )
   }
 
   def addFieldAccess(
@@ -217,13 +208,42 @@ class CheckRuntime private (program: IRGraph.Program) {
     )
   }
 
+  def assertFieldAccess(
+      member: FieldMember,
+      ownedFieldsTarget: Var,
+      structIdFields: Map[scala.Predef.String, StructField]
+  ): Invoke = {
+    val struct = member.field.struct
+    val instanceId = new FieldMember(member.root, structIdFields(struct.name))
+    val fieldIndex = new Int(struct.fields.indexOf(member.field))
+    new Invoke(
+      assertAcc,
+      List(
+        ownedFieldsTarget,
+        instanceId,
+        fieldIndex,
+        //TODO: add support for GraphPrinter.printExpr here
+        new String(
+          "Field access runtime check failed for struct " + member.field.struct.name + "." + member.field.name
+        )
+      ),
+      None
+    )
+  }
+
   def removePermissionsFromContract(
       contract: Option[IRGraph.Expression],
       ownedFieldsTarget: Var,
       structIdFields: Map[scala.Predef.String, StructField]
   ): Seq[Op] = {
     contract.toSeq.flatMap(
-      translateSpec(_, removeFieldAccess, ownedFieldsTarget, structIdFields)
+      translateSpec(
+        _,
+        removeFieldAccess,
+        ownedFieldsTarget,
+        structIdFields,
+        resolveRemovalPredicate
+      )
     )
   }
 
@@ -233,7 +253,13 @@ class CheckRuntime private (program: IRGraph.Program) {
       structIdFields: Map[scala.Predef.String, StructField]
   ): Seq[Op] = {
     contract.toSeq.flatMap(
-      translateSpec(_, addFieldAccess, ownedFieldsTarget, structIdFields)
+      translateSpec(
+        _,
+        addFieldAccess,
+        ownedFieldsTarget,
+        structIdFields,
+        resolveAdditionPredicate
+      )
     )
   }
 
@@ -245,7 +271,11 @@ class CheckRuntime private (program: IRGraph.Program) {
           Map[scala.Predef.String, StructField]
       ) => Invoke,
       ownedFieldsInstance: Var,
-      structIdFields: Map[scala.Predef.String, StructField]
+      structIdFields: Map[scala.Predef.String, StructField],
+      predicateResolutionMethod: (
+          Predicate,
+          Map[scala.Predef.String, StructField]
+      ) => MethodDefinition
   ): Seq[Op] = {
     expr match {
       case accessibility: IRGraph.Accessibility =>
@@ -256,10 +286,15 @@ class CheckRuntime private (program: IRGraph.Program) {
             throw new WeaverException("Invalid conjunct in specification.")
         }
 
-      case instance: PredicateInstance => ???
-      // TODO: Seq(callPredicate(instance, methodData))
-
-      case imprecise: IRGraph.Imprecise =>
+      case instance: PredicateInstance =>
+        Seq(
+          new Invoke(
+            predicateResolutionMethod(instance.predicate, structIdFields),
+            List(ownedFieldsInstance),
+            None
+          )
+        )
+      case _: IRGraph.Imprecise =>
         throw new WeaverException("Invalid spec")
 
       case conditional: IRGraph.Conditional => {
@@ -268,14 +303,16 @@ class CheckRuntime private (program: IRGraph.Program) {
             conditional.ifTrue,
             permissionHandler,
             ownedFieldsInstance,
-            structIdFields
+            structIdFields,
+            predicateResolutionMethod
           ).toList
         val falseOps =
           translateSpec(
             conditional.ifFalse,
             permissionHandler,
             ownedFieldsInstance,
-            structIdFields
+            structIdFields,
+            predicateResolutionMethod
           ).toList
 
         if (trueOps.nonEmpty || falseOps.nonEmpty) {
@@ -293,15 +330,16 @@ class CheckRuntime private (program: IRGraph.Program) {
           binary.left,
           permissionHandler,
           ownedFieldsInstance,
-          structIdFields
+          structIdFields,
+          predicateResolutionMethod
         ) ++
           translateSpec(
             binary.right,
             permissionHandler,
             ownedFieldsInstance,
-            structIdFields
+            structIdFields,
+            predicateResolutionMethod
           )
-
       case expr =>
         Seq(new IRGraph.Assert(expr, IRGraph.AssertKind.Imperative))
     }

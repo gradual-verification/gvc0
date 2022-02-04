@@ -1,0 +1,25 @@
+field Node$next: Ref
+
+field Node$value: Int
+
+predicate wrappedAcc(node: Ref) {
+  acc(node.Node$value, write) && acc(node.Node$next, write)
+}
+
+method main() returns ($result: Int)
+{
+  var a: Ref
+  var _: Int
+  a := new(Node$value, Node$next)
+  a.Node$value := 5
+  a.Node$next := null
+  _ := test(a)
+  $result := _
+}
+
+method test(a: Ref) returns ($result: Int)
+  requires ? && true
+  ensures acc(wrappedAcc(a), write)
+{
+  $result := a.Node$value
+}

@@ -1,0 +1,23 @@
+struct Node {
+  int value;
+  struct Node* next;
+};
+
+/*@
+predicate wrappedAcc(struct Node *node) = acc(node->value) && acc(node->next);
+@*/
+
+int test(struct Node* a)
+//@requires ?;
+//@ensures wrappedAcc(a);
+{
+    return a->value;
+}
+
+int main()
+{
+  struct Node* a = alloc(struct Node);
+  a->value = 5;
+  a->next = NULL;
+  return test(a);
+}

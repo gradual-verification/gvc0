@@ -18,7 +18,7 @@ struct FieldArray {
 
 typedef struct FieldArray FieldArray;
 
-void initOwnedFields(OwnedFields* fields, int * instanceCounter);
+OwnedFields* initOwnedFields(int * instanceCounter);
 int addStructAcc(OwnedFields * fields, int numFields);
 void addAcc(OwnedFields * fields, int _id, int numFields, int fieldIndex);
 void loseAcc(OwnedFields * fields, int _id, int fieldIndex);

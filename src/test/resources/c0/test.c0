@@ -42,8 +42,7 @@ bool testOwnedFieldsInitialization(string header){
     int * _id_counter = alloc(int);
     *(_id_counter) = 0;
 
-    OwnedFields* fields = alloc(OwnedFields);
-    initOwnedFields(fields, _id_counter);
+    OwnedFields* fields = initOwnedFields(_id_counter);
     if(!test(header, fields->capacity > 0, "(initOwnedFields) OwnedFields must have a nonzero default capacity after intialization.")){
         return false;
     }
@@ -67,8 +66,7 @@ bool testStructCreation(string header){
     int * _id_counter = alloc(int);
     *(_id_counter) = 0;
 
-    OwnedFields* fields = alloc(OwnedFields);
-    initOwnedFields(fields, _id_counter);
+    OwnedFields* fields = initOwnedFields(_id_counter);
 
     int _id = addStructAcc(fields, 80);
 
@@ -84,11 +82,8 @@ bool testFieldAddition(string header){
     int * _id_counter = alloc(int);
     *(_id_counter) = 0;
 
-    OwnedFields* fields_1 = alloc(OwnedFields);
-    initOwnedFields(fields_1, _id_counter);
-
-    OwnedFields* fields_2 = alloc(OwnedFields);
-    initOwnedFields(fields_2, _id_counter);
+    OwnedFields* fields_1 = initOwnedFields(_id_counter);
+    OwnedFields* fields_2 = initOwnedFields(_id_counter);
 
     int _id = addStructAcc(fields_1, 4);
 
@@ -104,17 +99,14 @@ bool testFieldMerging(string header){
 
     int num_fields = 20;
 
-    OwnedFields* source = alloc(OwnedFields);
-    initOwnedFields(source, _id_counter);
+    OwnedFields* source = initOwnedFields(_id_counter);
 
     int _id_node_1 = addStructAcc(source, num_fields);
     int _id_node_2 = addStructAcc(source, num_fields);
 
-    OwnedFields* fields_1 = alloc(OwnedFields);
-    initOwnedFields(fields_1, _id_counter);
+    OwnedFields* fields_1 = initOwnedFields(_id_counter);
 
-    OwnedFields* fields_2 = alloc(OwnedFields);
-    initOwnedFields(fields_2, _id_counter);
+    OwnedFields* fields_2 = initOwnedFields(_id_counter);
 
     for(int i = 0; i<num_fields; i += 1){
         addAcc(fields_1, _id_node_1, num_fields, i);
@@ -138,11 +130,9 @@ bool testDisjoin(string header){
     int * _id_counter = alloc(int);
     *(_id_counter) = 0;
 
-    OwnedFields* source = alloc(OwnedFields);
-    initOwnedFields(source, _id_counter);
+    OwnedFields* source = initOwnedFields(_id_counter);
 
-    OwnedFields* target = alloc(OwnedFields);
-    initOwnedFields(target, _id_counter);
+    OwnedFields* target = initOwnedFields(_id_counter);
 
     int num_fields = 20;
     int _id_node_1 = addStructAcc(source, num_fields);

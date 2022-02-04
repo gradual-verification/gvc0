@@ -23,9 +23,21 @@ object Check {
       case predicate: vpr.PredicateAccess => {
         PredicateCheck(
           program.predicate(predicate.predicateName),
-          predicate.args.map(
-            CheckExpression.fromViper(_, method).toIR(program, method, None)
-          )
+          predicate.args
+            .map(
+              CheckExpression.fromViper(_, method).toIR(program, method, None)
+            )
+            .toList
+        )
+      }
+      case predicateAccess: vpr.PredicateAccessPredicate => {
+        PredicateCheck(
+          program.predicate(predicateAccess.loc.predicateName),
+          predicateAccess.loc.args
+            .map(
+              CheckExpression.fromViper(_, method).toIR(program, method, None)
+            )
+            .toList
         )
       }
       case _ => CheckExpression.fromViper(check.checks, method)
@@ -41,7 +53,7 @@ case class AccessibilityCheck(
 
 case class PredicateCheck(
     predicate: ir.Predicate,
-    args: Seq[ir.Expression]
+    args: List[ir.Expression]
 ) extends Check
 
 sealed trait CheckExpression extends Check {

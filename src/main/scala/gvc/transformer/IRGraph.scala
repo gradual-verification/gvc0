@@ -2,16 +2,16 @@ package gvc.transformer
 import scala.collection.mutable
 
 object IRGraph {
-  class IRException(message: java.lang.String) extends Exception(message)
+  class IRException(message: scala.Predef.String) extends Exception(message)
 
   // Note that names of methods, vars, etc. are immutable, since they are also copied in their respective Maps
 
   class Program {
     private[IRGraph] val _structs =
-      mutable.Map[java.lang.String, StructDefinition]()
+      mutable.Map[scala.Predef.String, StructDefinition]()
     private[IRGraph] val _methods =
-      mutable.Map[java.lang.String, MethodDefinition]()
-    private val _predicates = mutable.Map[java.lang.String, Predicate]()
+      mutable.Map[scala.Predef.String, MethodDefinition]()
+    private val _predicates = mutable.Map[scala.Predef.String, Predicate]()
     private val _dependencies = mutable.ListBuffer[Dependency]()
 
     lazy val ownedFieldsStruct = struct(
@@ -19,7 +19,7 @@ object IRGraph {
     )
 
     def addDependency(
-        path: java.lang.String,
+        path: scala.Predef.String,
         isLibrary: Boolean
     ): Dependency = {
       if (_dependencies.exists(d => d.path == path && d.isLibrary == isLibrary))
@@ -30,14 +30,17 @@ object IRGraph {
       newDep
     }
 
-    def addMethod(name: java.lang.String, returnType: Option[Type]): Method = {
+    def addMethod(
+        name: scala.Predef.String,
+        returnType: Option[Type]
+    ): Method = {
       val method = new Method(name, returnType)
       if (_methods.getOrElseUpdate(method.name, method) != method)
         throw new IRException(s"Method '${method.name}' already exists")
       method
     }
 
-    def addPredicate(name: java.lang.String): Predicate = {
+    def addPredicate(name: scala.Predef.String): Predicate = {
       val predicate = new Predicate(name, new IRGraph.Bool(true))
       if (_predicates.getOrElseUpdate(predicate.name, predicate) != predicate)
         throw new IRException(s"Predicate '${predicate.name}' already exists")
@@ -59,29 +62,30 @@ object IRGraph {
     def dependencies: Seq[Dependency] = _dependencies.toList.sortBy(_.path)
 
     // Structs can be used even if they are never declared
-    def struct(name: java.lang.String): StructDefinition =
+    def struct(name: scala.Predef.String): StructDefinition =
       _structs.getOrElseUpdate(name, new Struct(name))
 
-    def method(name: java.lang.String): MethodDefinition = _methods.getOrElse(
-      name,
-      throw new IRException(s"Method '$name' not found")
-    )
+    def method(name: scala.Predef.String): MethodDefinition =
+      _methods.getOrElse(
+        name,
+        throw new IRException(s"Method '$name' not found")
+      )
 
-    def predicate(name: java.lang.String): Predicate = _predicates.getOrElse(
+    def predicate(name: scala.Predef.String): Predicate = _predicates.getOrElse(
       name,
       throw new IRException(s"Predicate '$name' not found")
     )
   }
 
   sealed trait StructDefinition {
-    def name: java.lang.String
+    def name: scala.Predef.String
     def fields: Seq[StructField]
   }
 
-  class Struct(val name: java.lang.String) extends StructDefinition {
+  class Struct(val name: scala.Predef.String) extends StructDefinition {
     private val _fields = mutable.ListBuffer[StructField]()
 
-    def addField(name: java.lang.String, valueType: Type): StructField = {
+    def addField(name: scala.Predef.String, valueType: Type): StructField = {
       val field = new StructField(
         this,
         Helpers.findAvailableName(_fields.map(_.name), name),
@@ -96,18 +100,18 @@ object IRGraph {
 
   class StructField(
       val struct: StructDefinition,
-      val name: java.lang.String,
+      val name: scala.Predef.String,
       var valueType: Type
   )
 
   sealed trait MethodDefinition {
-    def name: java.lang.String
+    def name: scala.Predef.String
     def returnType: Option[Type]
     def parameters: Seq[Parameter]
   }
 
   class Method(
-      val name: java.lang.String,
+      val name: scala.Predef.String,
       var returnType: Option[Type],
       var precondition: Option[Expression] = None,
       var postcondition: Option[Expression] = None
@@ -116,20 +120,20 @@ object IRGraph {
     // Scope is a map of both parameters and variables
     private val _parameters = mutable.ListBuffer[Parameter]()
     private val _variables = mutable.ListBuffer[Var]()
-    private val scope = mutable.Map[java.lang.String, Var]()
+    private val scope = mutable.Map[scala.Predef.String, Var]()
 
     val body = new MethodBlock(this)
 
     def parameters: Seq[Parameter] = _parameters
     def variables: Seq[Var] = _variables
 
-    def variable(name: java.lang.String): Var =
+    def variable(name: scala.Predef.String): Var =
       scope.getOrElse(
         name,
         throw new IRException(s"Variable '$name' not found")
       )
 
-    def addParameter(valueType: Type, name: java.lang.String): Parameter = {
+    def addParameter(valueType: Type, name: scala.Predef.String): Parameter = {
       val newParam =
         new Parameter(valueType, Helpers.findAvailableName(scope, name))
       scope += newParam.name -> newParam
@@ -137,26 +141,26 @@ object IRGraph {
       newParam
     }
 
-    def addVar(valueType: Type, name: java.lang.String = "_"): Var = {
+    def addVar(valueType: Type, name: scala.Predef.String = "_"): Var = {
       val newVar = new Var(valueType, Helpers.findAvailableName(scope, name))
       scope += newVar.name -> newVar
       _variables += newVar
       newVar
     }
 
-    def getVar(name: java.lang.String): Option[Var] = scope.get(name)
+    def getVar(name: scala.Predef.String): Option[Var] = scope.get(name)
 
   }
 
   class Predicate(
-      val name: java.lang.String,
+      val name: scala.Predef.String,
       var expression: IRGraph.Expression
   ) {
     private val _parameters = mutable.ListBuffer[Parameter]()
 
     def parameters: Seq[Parameter] = _parameters
 
-    def addParameter(valueType: Type, name: java.lang.String): Parameter = {
+    def addParameter(valueType: Type, name: scala.Predef.String): Parameter = {
       val newParam = new Parameter(valueType, name)
       _parameters += newParam
       newParam
@@ -323,9 +327,10 @@ object IRGraph {
       exp == this
   }
 
-  class Parameter(varType: Type, name: java.lang.String)
+  class Parameter(varType: Type, name: scala.Predef.String)
       extends Var(varType, name)
-  class Var(var varType: Type, val name: java.lang.String) extends Expression {
+  class Var(var varType: Type, val name: scala.Predef.String)
+      extends Expression {
     def valueType: Option[Type] = Some(varType)
   }
 
@@ -392,7 +397,7 @@ object IRGraph {
   class Bool(val value: scala.Boolean) extends Literal {
     def valueType: Option[Type] = Some(BoolType)
   }
-  class String(val value: java.lang.String) extends Literal {
+  class String(val value: scala.Predef.String) extends Literal {
     def valueType: Option[Type] = Some(StringType)
   }
   class Null extends Literal {
@@ -464,31 +469,31 @@ object IRGraph {
   }
 
   sealed trait Type {
-    def name: java.lang.String
+    def name: scala.Predef.String
     def default: IRGraph.Literal
   }
 
   // A pointer to a struct value
   class ReferenceType(val struct: StructDefinition) extends Type {
-    def name: java.lang.String = "struct " + struct.name + "*"
+    def name: scala.Predef.String = "struct " + struct.name + "*"
     def default = new IRGraph.Null()
   }
 
   // A pointer to a primitive value
   class PointerType(val valueType: Type) extends Type {
-    def name: java.lang.String = valueType.name + "*"
+    def name: scala.Predef.String = valueType.name + "*"
     def default = new IRGraph.Null()
   }
 
   // An array of primitive values
   class ArrayType(val valueType: Type) extends Type {
-    def name: java.lang.String = valueType.name + "[]"
+    def name: scala.Predef.String = valueType.name + "[]"
     def default = new IRGraph.Null()
   }
 
   // An array of struct values
   class ReferenceArrayType(val struct: StructDefinition) extends Type {
-    def name: java.lang.String = "struct " + struct.name + "[]"
+    def name: scala.Predef.String = "struct " + struct.name + "[]"
     def default = new IRGraph.Null()
   }
 
@@ -653,7 +658,7 @@ object IRGraph {
 
   class Dependency(
       program: Program,
-      val path: java.lang.String,
+      val path: scala.Predef.String,
       val isLibrary: Boolean
   ) {
     private val _methods = mutable.ListBuffer[DependencyMethod]()
@@ -663,7 +668,7 @@ object IRGraph {
     def structs: Seq[DependencyStruct] = _structs
 
     def defineMethod(
-        name: java.lang.String,
+        name: scala.Predef.String,
         returnType: Option[Type]
     ): DependencyMethod = {
       if (program._methods.contains(name)) {
@@ -678,7 +683,7 @@ object IRGraph {
       method
     }
 
-    def defineStruct(name: java.lang.String): DependencyStruct = {
+    def defineStruct(name: scala.Predef.String): DependencyStruct = {
       val struct = new DependencyStruct(name)
       if (_structs.contains(struct.name)) {
         // TODO: This should not throw if the struct *fields* have not been defined
@@ -693,12 +698,16 @@ object IRGraph {
     }
   }
 
-  class DependencyStruct(val name: java.lang.String) extends StructDefinition {
+  class DependencyStruct(val name: scala.Predef.String)
+      extends StructDefinition {
     private val _fields = mutable.ListBuffer[StructField]()
 
     def fields: Seq[StructField] = _fields
 
-    def addField(fieldName: java.lang.String, valueType: Type): StructField = {
+    def addField(
+        fieldName: scala.Predef.String,
+        valueType: Type
+    ): StructField = {
       val field = new StructField(this, fieldName, valueType)
       if (_fields.exists(_.name == fieldName))
         throw new TransformerException(
@@ -710,14 +719,14 @@ object IRGraph {
   }
 
   class DependencyMethod(
-      val name: java.lang.String,
+      val name: scala.Predef.String,
       val returnType: Option[Type]
   ) extends MethodDefinition {
     val _parameters = mutable.ListBuffer[Parameter]()
 
     def parameters: Seq[Parameter] = _parameters
 
-    def addParameter(name: java.lang.String, valueType: Type): Parameter = {
+    def addParameter(name: scala.Predef.String, valueType: Type): Parameter = {
       val param = new Parameter(valueType, name)
       if (_parameters.exists(_.name == name))
         throw new TransformerException(s"Parameter '$name' already exists")

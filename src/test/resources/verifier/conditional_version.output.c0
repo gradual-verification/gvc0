@@ -24,8 +24,7 @@ void test(int x, int y, struct OwnedFields* _ownedFields)
     _cond_1 = _cond_0 && x > 2;
     if (x > 2)
     {
-      _tempFields = alloc(struct OwnedFields);
-      initOwnedFields(_ownedFields->instanceCounter);
+      _tempFields = initOwnedFields(_ownedFields->instanceCounter);
       z = testCall(y, _tempFields);
       join(_ownedFields, _tempFields);
       _cond_3 = _cond_0 && _cond_1 && z == 0;

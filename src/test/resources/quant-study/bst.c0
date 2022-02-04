@@ -6,19 +6,6 @@ struct Node {
 };
 
 /*@
-predicate bstRemove(struct Node *root, int x, int min, int max) =
-  (root == NULL) ?
-    ( true )
-    :
-    ( 
-      acc(root->left) && acc(root->right) && acc(root->val) &&
-      root->val >= min && root->val <= max && root->val != x &&
-      bstRemove(root->left, x, min, root->val-1) &&
-      bstRemove(root->right, x, root->val+1, max)
-    ) ;
-@*/
-
-/*@
 predicate bst(struct Node *root, int min, int max) =
   (root == NULL) ?
     ( true )

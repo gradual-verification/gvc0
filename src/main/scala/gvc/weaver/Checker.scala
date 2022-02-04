@@ -12,7 +12,7 @@ object Checker {
     // Keep a separate map since the name may be something other than `_id` due
     // to name collision avoidance
     val structIdFields = program.program.structs
-      .map(s => (s.name, s.addField("_id", IntType)))
+      .map(s => (s.name, s.addField(CheckRuntime.Names.id, IntType)))
       .toMap
 
     program.methods.values.foreach { method =>
@@ -137,14 +137,13 @@ object Checker {
         runtime.ownedFieldsRef,
         CheckRuntime.Names.primaryOwnedFields
       )
-      // TODO: initOwnedFields could return a newly-allocated struct
-      initializeOps += new AllocStruct(runtime.ownedFields, ownedFields)
+      primaryOwnedFields = Some(ownedFields)
+
       initializeOps += new Invoke(
         runtime.initOwnedFields,
-        List(ownedFields, instanceCounter),
-        None
+        List(instanceCounter),
+        primaryOwnedFields
       )
-      primaryOwnedFields = Some(ownedFields)
       ownedFields
     }
 
@@ -201,9 +200,13 @@ object Checker {
           implementAccCheck(acc, temporaryOwnedFields)
         case pc: PredicateCheck =>
           val checkPredicate =
-            runtime.resolveAdditionPredicate(pc.predicate, structIdFields)
+            runtime.resolveCheckPredicate(pc.predicate, structIdFields)
           Seq(
-            new Invoke(checkPredicate, List(temporaryOwnedFields), None)
+            new Invoke(
+              checkPredicate,
+              pc.args ++ List(temporaryOwnedFields),
+              None
+            )
           )
         case expr: CheckExpression =>
           Seq(
@@ -240,7 +243,7 @@ object Checker {
         ops = new Invoke(
           runtime.initOwnedFields,
           List(instanceCounter),
-          None
+          Some(tempOwned)
         ) :: ops
       }
 
@@ -333,19 +336,17 @@ object Checker {
             CheckRuntime.Names.temporaryOwnedFields
           )
           call.ir.insertBefore(
-            new AllocStruct(runtime.ownedFields, tempSet) ::
-              new Invoke(
-                runtime.initOwnedFields,
-                List(instanceCounter),
-                None
-              ) ::
-              runtime
-                .addPermissionsFromContract(
-                  callee.precondition,
-                  tempSet,
-                  structIdFields
-                )
-                .toList
+            new Invoke(
+              runtime.initOwnedFields,
+              List(instanceCounter),
+              Some(tempSet)
+            ) :: runtime
+              .addPermissionsFromContract(
+                callee.precondition,
+                tempSet,
+                structIdFields
+              )
+              .toList
           )
 
           call.ir.arguments :+= tempSet

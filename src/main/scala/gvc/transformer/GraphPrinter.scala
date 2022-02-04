@@ -14,7 +14,7 @@ object GraphPrinter {
     val Top = 9
   }
 
-  def print(program: Program, includeSpecs: Boolean): java.lang.String = {
+  def print(program: Program, includeSpecs: Boolean): scala.Predef.String = {
     val p = new Printer()
 
     def printList[T](values: Seq[T])(action: T => Unit): Unit = {
@@ -191,7 +191,6 @@ object GraphPrinter {
         p.println(";")
       }
 
-
       case assign: AssignMember => {
         assign.member match {
           case member: FieldMember => {
@@ -217,19 +216,19 @@ object GraphPrinter {
       }
 
       case assert: Assert =>
-          assert.kind match {
-            case AssertKind.Specification =>
-              if(includeSpecs) {
-                p.print ("//@assert ")
-                printExpr (assert.value)
-                p.println (";")
-              }
-            case AssertKind.Imperative => {
-              p.print("assert(")
+        assert.kind match {
+          case AssertKind.Specification =>
+            if (includeSpecs) {
+              p.print("//@assert ")
               printExpr(assert.value)
-              p.println(");")
+              p.println(";")
             }
+          case AssertKind.Imperative => {
+            p.print("assert(")
+            printExpr(assert.value)
+            p.println(");")
           }
+        }
 
       case fold: Fold => {
         p.print("fold ")
@@ -275,7 +274,7 @@ object GraphPrinter {
         printExpr(w.condition)
         p.println(")")
         w.invariant.foreach { inv =>
-          if(includeSpecs){
+          if (includeSpecs) {
             p.withIndent {
               p.print("//@loop_invariant ")
               printExpr(inv)
@@ -428,17 +427,19 @@ object GraphPrinter {
       p.println()
     }
 
-    for (predicate <- program.predicates) {
-      printPredicateHeader(predicate)
-      p.println(";")
-      empty = false
-    }
+    if (includeSpecs) {
+      for (predicate <- program.predicates) {
+        printPredicateHeader(predicate)
+        p.println(";")
+        empty = false
+      }
 
-    printSeparator()
+      printSeparator()
 
-    for (predicate <- program.predicates) {
-      printPredicate(predicate)
-      empty = false
+      for (predicate <- program.predicates) {
+        printPredicate(predicate)
+        empty = false
+      }
     }
 
     printSeparator()
@@ -482,12 +483,12 @@ object GraphPrinter {
       indentLevel -= 1
     }
 
-    def print(value: java.lang.String): Unit = {
+    def print(value: scala.Predef.String): Unit = {
       startLine()
       builder ++= value
     }
 
-    def println(value: java.lang.String): Unit = {
+    def println(value: scala.Predef.String): Unit = {
       startLine()
       builder ++= value
       builder += '\n'
@@ -499,6 +500,6 @@ object GraphPrinter {
       startedLine = false
     }
 
-    override def toString(): java.lang.String = builder.toString()
+    override def toString(): scala.Predef.String = builder.toString()
   }
 }

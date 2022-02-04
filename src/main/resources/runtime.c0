@@ -15,7 +15,8 @@ int hash(int index, int arrayLength)
     return index % arrayLength;
 }
 
-void initOwnedFields(OwnedFields* fields, int * instanceCounter){
+OwnedFields* initOwnedFields( int * instanceCounter){
+  OwnedFields* fields = alloc(OwnedFields);
   fields->instanceCounter = instanceCounter;
   int oldCapacity = 0;
   fields->capacity = GROW_CAPACITY(oldCapacity);
@@ -24,6 +25,7 @@ void initOwnedFields(OwnedFields* fields, int * instanceCounter){
   for(int i = 0; i < fields->capacity; i += 1){
     fields->contents[i] = NULL;
   }
+  return fields;
 }
 
 void grow(OwnedFields* fields)
