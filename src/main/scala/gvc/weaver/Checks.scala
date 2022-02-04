@@ -3,25 +3,36 @@ import viper.silver.{ast => vpr}
 import gvc.transformer.{IRGraph => ir}
 import gvc.transformer.IRGraphSilver.Names
 import gvc.transformer.IRGraph
-import gvc.transformer.IRGraph.PredicateInstance
 import viper.silicon.state.CheckInfo
 
 sealed trait Check
 
 object Check {
-  def fromViper(check: CheckInfo, method: ir.Method): Check =
+  def fromViper(
+      check: CheckInfo,
+      program: ir.Program,
+      method: ir.Method
+  ): Check = {
     check.checks match {
-      case acc: vpr.FieldAccessPredicate => {
-        CheckExpression.fromViper(acc.loc, method) match {
-          case field: CheckExpression.Field =>
-            AccessibilityCheck(field, false, true)
-          case _ => throw new WeaverException("Invalid acc()")
-        }
+      case fieldAccess: vpr.FieldAccessPredicate => {
+        val field: CheckExpression.Field = CheckExpression
+          .fromViper(fieldAccess.loc, method)
+          .asInstanceOf[CheckExpression.Field]
+        AccessibilityCheck(field, false, true)
       }
-      case e => CheckExpression.fromViper(e, method)
-    }
-}
+      case predicate: vpr.PredicateAccess => {
+        PredicateCheck(
+          program.predicate(predicate.predicateName),
+          predicate.args.map(
+            CheckExpression.fromViper(_, method).toIR(program, method, None)
+          )
+        )
+      }
+      case _ => CheckExpression.fromViper(check.checks, method)
 
+    }
+  }
+}
 case class AccessibilityCheck(
     field: CheckExpression.Field,
     checkSeparate: Boolean,
@@ -29,8 +40,9 @@ case class AccessibilityCheck(
 ) extends Check
 
 case class PredicateCheck(
-                         predicate: PredicateInstance
-                         ) extends Check
+    predicate: ir.Predicate,
+    args: Seq[ir.Expression]
+) extends Check
 
 sealed trait CheckExpression extends Check {
   def toIR(
@@ -176,7 +188,6 @@ object CheckExpression {
 
   def fromViper(value: vpr.Exp, method: ir.Method): Expr = {
     def expr(e: vpr.Exp) = fromViper(e, method)
-
     value match {
       case eq: vpr.EqCmp  => Eq(expr(eq.left), expr(eq.right))
       case ne: vpr.NeCmp  => Not(Eq(expr(ne.left), expr(ne.right)))

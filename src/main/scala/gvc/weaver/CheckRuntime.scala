@@ -80,14 +80,14 @@ class CheckRuntime private (program: IRGraph.Program) {
   val find: IRGraph.MethodDefinition = program.method(Names.find)
 
   val removalPredicates
-      : mutable.Map[IRGraph.PredicateInstance, IRGraph.MethodDefinition] =
-    mutable.Map[IRGraph.PredicateInstance, IRGraph.MethodDefinition]()
+      : mutable.Map[IRGraph.Predicate, IRGraph.MethodDefinition] =
+    mutable.Map[IRGraph.Predicate, IRGraph.MethodDefinition]()
   val additionPredicates
-      : mutable.Map[IRGraph.PredicateInstance, IRGraph.MethodDefinition] =
-    mutable.Map[IRGraph.PredicateInstance, IRGraph.MethodDefinition]()
+      : mutable.Map[IRGraph.Predicate, IRGraph.MethodDefinition] =
+    mutable.Map[IRGraph.Predicate, IRGraph.MethodDefinition]()
 
   def resolveAdditionPredicate(
-      pred: PredicateInstance,
+      pred: Predicate,
       structIdFields: Map[scala.Predef.String, StructField]
   ): MethodDefinition = {
     resolvePredicate(
@@ -100,7 +100,7 @@ class CheckRuntime private (program: IRGraph.Program) {
   }
 
   def resolveRemovalPredicate(
-      pred: PredicateInstance,
+      pred: Predicate,
       structIdFields: Map[scala.Predef.String, StructField]
   ): MethodDefinition = {
     resolvePredicate(
@@ -113,8 +113,8 @@ class CheckRuntime private (program: IRGraph.Program) {
   }
 
   def resolvePredicate(
-      pred: PredicateInstance,
-      predMap: mutable.Map[PredicateInstance, MethodDefinition],
+      pred: Predicate,
+      predMap: mutable.Map[Predicate, MethodDefinition],
       prefix: scala.Predef.String,
       fieldAccessMutator: (
           FieldMember,
@@ -127,13 +127,13 @@ class CheckRuntime private (program: IRGraph.Program) {
       predMap(pred)
     } else {
       val predicateMethod =
-        program.addMethod(prefix + pred.predicate.name, None)
+        program.addMethod(prefix + pred.name, None)
       val ownedFieldsInstanceParameter = predicateMethod.addParameter(
         new ReferenceType(ownedFields),
         Names.primaryOwnedFields
       )
       translateSpec(
-        pred.predicate.expression,
+        pred.expression,
         fieldAccessMutator,
         ownedFieldsInstanceParameter,
         structFields

@@ -56,13 +56,17 @@ object Collector {
 
   def collect(irProgram: Program, vprProgram: vpr.Program): CollectedProgram = {
     val methods = irProgram.methods
-      .map(m => 
-        (m.name, collect(
-          irProgram,
-          vprProgram,
-          m,
-          vprProgram.findMethod(m.name)
-        )))
+      .map(m =>
+        (
+          m.name,
+          collect(
+            irProgram,
+            vprProgram,
+            m,
+            vprProgram.findMethod(m.name)
+          )
+        )
+      )
       .toMap
     new CollectedProgram(
       program = irProgram,
@@ -195,7 +199,7 @@ object Collector {
         Seq(
           RuntimeCheck(
             location,
-            PredicateCheck(pred),
+            PredicateCheck(pred.predicate, pred.arguments),
             ConditionValue(condition.getOrElse(CheckExpression.TrueLit))
           )
         )
@@ -216,7 +220,7 @@ object Collector {
         val condition = branchCondition(check.branchInfo)
 
         // TODO: Split apart ANDed checks?
-        Check.fromViper(check, irMethod) match {
+        Check.fromViper(check, irProgram, irMethod) match {
           case acc: AccessibilityCheck =>
             requiresFieldAccessTracking = true
             if (!node.contains(check.context)) {
