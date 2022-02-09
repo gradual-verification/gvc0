@@ -43,6 +43,7 @@ int test(struct Node* a, struct OwnedFields* _ownedFields)
   //@ensures wrappedAcc(a);
 {
   struct OwnedFields* _tempFields = NULL;
+  assertAcc(_ownedFields, a->_id, 0);
   _tempFields = initOwnedFields(_ownedFields->instanceCounter);
   check_wrappedAcc(a, _tempFields);
   return a->value;

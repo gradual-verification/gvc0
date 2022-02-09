@@ -3,17 +3,16 @@ import viper.silver.{ast => vpr}
 import gvc.transformer.{IRGraph => ir}
 import gvc.transformer.IRGraphSilver.Names
 import gvc.transformer.IRGraph
-import viper.silicon.state.CheckInfo
 
 sealed trait Check
 
 object Check {
   def fromViper(
-      check: CheckInfo,
+      check: vpr.Exp,
       program: ir.Program,
       method: ir.Method
   ): Check = {
-    check.checks match {
+    check match {
       case fieldAccess: vpr.FieldAccessPredicate => {
         val field: CheckExpression.Field = CheckExpression
           .fromViper(fieldAccess.loc, method)
@@ -40,7 +39,7 @@ object Check {
             .toList
         )
       }
-      case _ => CheckExpression.fromViper(check.checks, method)
+      case _ => CheckExpression.fromViper(check, method)
 
     }
   }

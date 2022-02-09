@@ -47,15 +47,17 @@ object Checker {
     // may be required.
     def insertAt(at: Location, ops: Option[Expression] => Seq[Op]): Unit =
       at match {
-        case Invariant(op) => ???
+        case LoopStart(op: While) => ops(None) ++=: op.body
+        case LoopEnd(op: While) => op.body ++= ops(None)
         case Pre(op)       => op.insertBefore(ops(None))
         case Post(op)      => op.insertAfter(ops(None))
-        case MethodPre     => ops(None).foreach(_ +=: method.body)
+        case MethodPre     => ops(None) ++=: method.body
         case MethodPost =>
           methodData.returns.foreach(e => e.insertBefore(ops(e.value)))
           if (methodData.hasImplicitReturn) {
-            ops(None).foreach(method.body += _)
+            method.body ++= ops(None)
           }
+        case _ => throw new WeaverException(s"Invalid location '$at'")
       }
 
     // Define condition variables and create a map from term ID to variables

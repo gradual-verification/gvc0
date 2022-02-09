@@ -4,13 +4,16 @@ import scala.collection.mutable
 import gvc.transformer.IRGraph._
 import viper.silver.ast.MethodCall
 import viper.silver.{ast => vpr}
+import viper.silicon.state.CheckPosition
+import viper.silicon.state.LoopPosition
 
 object Collector {
   sealed trait Location
   sealed trait AtOp extends Location { val op: Op }
   case class Pre(override val op: Op) extends AtOp
   case class Post(override val op: Op) extends AtOp
-  case class Invariant(override val op: Op) extends AtOp
+  case class LoopStart(override val op: Op) extends AtOp
+  case class LoopEnd(override val op: Op) extends AtOp
   case object MethodPre extends Location
   case object MethodPost extends Location
 
@@ -43,7 +46,6 @@ object Collector {
       val calls: List[CollectedInvocation],
       val allocations: List[Op],
       val callStyle: CallStyle,
-      val requiresFieldAccessTracking: Boolean,
       val checkedSpecificationLocations: Set[Location]
   )
 
@@ -55,19 +57,19 @@ object Collector {
   case class CollectedInvocation(ir: Invoke, vpr: MethodCall)
 
   def collect(irProgram: Program, vprProgram: vpr.Program): CollectedProgram = {
+    val checks = collectChecks(vprProgram)
+
     val methods = irProgram.methods
-      .map(m =>
-        (
-          m.name,
-          collect(
-            irProgram,
-            vprProgram,
-            m,
-            vprProgram.findMethod(m.name)
-          )
-        )
-      )
+      .map(m => 
+        (m.name, collect(
+          irProgram,
+          vprProgram,
+          m,
+          vprProgram.findMethod(m.name),
+          checks
+        )))
       .toMap
+
     new CollectedProgram(
       program = irProgram,
       methods = methods
@@ -78,30 +80,120 @@ object Collector {
     val conditions = mutable.Set[Logic.Conjunction]()
   }
 
-  private case class ViperLocation(node: Integer, child: Option[Integer])
+  private sealed trait ViperLocation
+  private sealed trait ViperCheckLocation extends ViperLocation
   private object ViperLocation {
-    def apply(node: vpr.Node, child: vpr.Node) =
-      new ViperLocation(node.uniqueIdentifier, Some(child.uniqueIdentifier))
-    def apply(node: vpr.Node) =
-      new ViperLocation(node.uniqueIdentifier, None)
+    case object Value extends ViperCheckLocation
+    case object InvariantBeforeLoop extends ViperCheckLocation
+    case object InvariantAfterLoop extends ViperCheckLocation
+    case object InvariantLoopStart extends ViperCheckLocation
+    case object InvariantLoopEnd extends ViperCheckLocation
+    case object PreInvoke extends ViperLocation
+    case object PostInvoke extends ViperLocation
+    
+    def loop(loopPosition: LoopPosition): ViperCheckLocation = loopPosition match {
+      case LoopPosition.After => ViperLocation.InvariantAfterLoop
+      case LoopPosition.Before => ViperLocation.InvariantBeforeLoop
+      case LoopPosition.Beginning => ViperLocation.InvariantLoopStart
+      case LoopPosition.End => ViperLocation.InvariantLoopEnd
+    }
+
+    def forIR(irLocation: Location, vprLocation: ViperLocation): Location = irLocation match {
+      case at: AtOp => vprLocation match {
+        case ViperLocation.Value => Pre(at.op)
+        case ViperLocation.InvariantBeforeLoop => Pre(at.op)
+        case ViperLocation.InvariantAfterLoop => Post(at.op)
+        case ViperLocation.InvariantLoopStart => LoopStart(at.op)
+        case ViperLocation.InvariantLoopEnd => LoopEnd(at.op)
+        case ViperLocation.PreInvoke => Pre(at.op)
+        case ViperLocation.PostInvoke => Post(at.op)
+      }
+      case _ => {
+        if (vprLocation != ViperLocation.Value)
+          throw new WeaverException("Invalid location")
+        irLocation
+      }
+    }
+  }
+
+  private case class ViperBranch(
+    at: vpr.Node,
+    location: ViperLocation,
+    condition: vpr.Exp,
+  )
+
+  private object ViperBranch {
+    def apply(branch: (vpr.Exp, vpr.Node, Option[CheckPosition]), program: vpr.Program) = branch match {
+      case (condition, source, Some(CheckPosition.GenericNode(invoke: vpr.MethodCall))) => {
+        // This must be a method pre-condition or post-condition
+        val callee = program.findMethod(invoke.methodName)
+        val location: ViperLocation =
+          if (callee.posts.exists(_.contains(source))) ViperLocation.PostInvoke
+          else ViperLocation.PreInvoke
+        new ViperBranch(invoke, location, condition)
+      }
+
+      case (condition, source, Some(CheckPosition.Loop(inv, position))) => {
+        // This must be an invariant
+        if (inv.tail.nonEmpty) throw new WeaverException("Invalid loop invariant")
+        new ViperBranch(inv.head, ViperLocation.loop(position), condition)
+      }
+
+      case (condition, source, None) => {
+        new ViperBranch(source, ViperLocation.Value, condition)
+      }
+
+      case _ => throw new WeaverException("Invalid branch condition")
+    }
+  }
+
+  private case class ViperCheck(
+    check: vpr.Exp,
+    conditions: List[ViperBranch],
+    location: ViperCheckLocation
+  )
+
+  private type ViperCheckMap = mutable.HashMap[scala.Int, mutable.ListBuffer[ViperCheck]]
+
+  // Convert the verifier's check map into a ViperCheckMap
+  private def collectChecks(vprProgram: vpr.Program): ViperCheckMap = {
+    val vprChecks = viper.silicon.state.runtimeChecks.getChecks
+    val collected = new ViperCheckMap()
+
+    for ((pos, checks) <- vprChecks) {
+      val (node, location) = pos match {
+        case CheckPosition.GenericNode(node) => (node, ViperLocation.Value)
+        case CheckPosition.Loop(invariants, position) => {
+          if (invariants.tail.nonEmpty) throw new WeaverException("Invalid loop invariant")
+          (invariants.head, ViperLocation.loop(position))
+        }
+      }
+
+      val list = collected.getOrElseUpdate(node.uniqueIdentifier, mutable.ListBuffer())
+      for (c <- checks) {
+        val conditions = c.branchInfo.map(ViperBranch(_, vprProgram)).toList
+        list += ViperCheck(c.checks, conditions, location)
+      }
+    }
+
+    collected
   }
 
   private def collect(
       irProgram: Program,
       vprProgram: vpr.Program,
       irMethod: Method,
-      vprMethod: vpr.Method
+      vprMethod: vpr.Method,
+      vprChecks: ViperCheckMap
   ): CollectedMethod = {
-    // Get all checks from the verifier
-    val vprChecks = viper.silicon.state.runtimeChecks.getChecks
-
-    // A mapping of Viper nodes to the corresponding location in the IR.
+    // A mapping of Viper node IDs to the corresponding IR op.
     // This is used for locating the correct insertion of conditionals.
-    val locations = mutable.Map[ViperLocation, Location]()
+    val locations = mutable.Map[scala.Int, Location]()
 
     // A list of `return` statements in the IR method, used for inserting any runtime checks that
     // the postcondition may require.
     val exits = mutable.ListBuffer[Return]()
+    // A list of invocations and allocations, used for inserting permission tracking
     val invokes = mutable.ListBuffer[CollectedInvocation]()
     val allocations = mutable.ListBuffer[Op]()
 
@@ -111,24 +203,27 @@ object Collector {
 
     // The collection of runtime checks that are required, mapping a runtime check to the list of
     // conjuncts where one conjunct must be true in order for the runtime check to occur.
+    // Note: Uses a List as a Map so that the order is preserved in the way that the verifier
+    // determines (this is important for acc checks of a nested field, for example).
     val checks =
-      mutable.Map[(Location, Check), mutable.Set[Logic.Conjunction]]()
+      mutable.Map[Location, mutable.ListBuffer[(Check, mutable.Set[Logic.Conjunction])]]()
 
-    // A set of all locations that need the full specification walked to find all conditions. Used
+    // A set of all locations that need the full specification walked to verify separation. Used
     // to implement the semantics of the separating conjunction. Pre-calculates a set so that the
     // same location is not checked twice.
     val needsFullPermissionChecking = mutable.Set[Location]()
 
     // Indexing adds the node to the mapping of Viper locations to IR locations
-    def index(node: vpr.Node, loc: Location): Unit =
-      locations += ViperLocation(node) -> loc
+    def index(node: vpr.Node, location: Location): Unit =
+      locations += node.uniqueIdentifier -> location
 
     // Indexes the given node and all of its child nodes
     def indexAll(node: vpr.Node, loc: Location): Unit =
-      node.visit { case n => locations += ViperLocation(n) -> loc }
+      node.visit { case n => locations += n.uniqueIdentifier -> loc }
 
     // Collects all permissions in the given specification, and adds checks for them at the given
     // location.
+    // TODO: Factor this out
     def traversePermissions(
         location: Location,
         spec: Expression,
@@ -184,8 +279,6 @@ object Collector {
             throw new WeaverException(s"Invalid acc() argument: '$invalid'")
         }
 
-        // TODO: Add checks for framing (these can overlap)
-
         Seq(
           RuntimeCheck(
             location,
@@ -213,33 +306,37 @@ object Collector {
 
     // Finds all the runtime checks required by the given Viper node, and adds them at the given
     // IR location
-
-    var requiresFieldAccessTracking = false
     def check(node: vpr.Node, loc: Location): Unit = {
-      for (check <- vprChecks.get(node).toSeq.flatten) {
-        val condition = branchCondition(check.branchInfo)
+      for (vprCheck <- vprChecks.get(node.uniqueIdentifier).toSeq.flatten) {
+        val condition = branchCondition(vprCheck.conditions)
+        val checkLocation = (vprCheck.location, loc) match {
+          case (ViperLocation.Value, _) => loc
+          case (ViperLocation.InvariantBeforeLoop, at: AtOp) => Pre(at.op)
+          case (ViperLocation.InvariantAfterLoop, at: AtOp) => Post(at.op)
+          case (ViperLocation.InvariantLoopStart, at: AtOp) => LoopStart(at.op)
+          case (ViperLocation.InvariantLoopEnd, at: AtOp) => LoopEnd(at.op)
+
+          // It is invalid for a loop invariant check to be attached to a pre/post-condition
+          case _ => throw new WeaverException("Invalid check location")
+        }
 
         // TODO: Split apart ANDed checks?
-        Check.fromViper(check, irProgram, irMethod) match {
-          case acc: AccessibilityCheck =>
-            requiresFieldAccessTracking = true
-            if (!node.contains(check.context)) {
-              // If the context is outside of the current node, it must have been generated by a
-              // specification. In this case, we need to walk the entire specification and disregard
-              // what the verifier thinks can be skipped, in order to satisfy the properties of the
-              // separating conjunction.
+        val check = Check.fromViper(vprCheck.check, irProgram, irMethod)
 
-              needsFullPermissionChecking += loc
-              // TODO: Remove debugging
-              println(s"METHOD: ${irMethod.name}")
-              println(s"AT: $node")
-              println(s"CHECK: $check")
-              println(s"LOCATION: $loc")
-              println(s"CONTEXT: ${check.context}")
-            }
-          case check => {
-            checks.getOrElseUpdate((loc, check), mutable.Set()) += condition
-          }
+        val locationChecks = checks.getOrElseUpdate(checkLocation, mutable.ListBuffer())
+        val conditions = locationChecks.find { case (c, _) => c == check } match {
+          case Some((_, conditions)) => conditions
+          case None =>
+            val conditions = mutable.Set[Logic.Conjunction]()
+            locationChecks += (check -> conditions)
+            conditions
+        }
+
+        conditions += condition
+
+        println(locationChecks)
+        if (check.isInstanceOf[AccessibilityCheck] && (loc == MethodPre || loc == MethodPost || vprCheck.location != ViperLocation.Value)) {
+          needsFullPermissionChecking += checkLocation
         }
       }
     }
@@ -265,28 +362,17 @@ object Collector {
         case call: vpr.MethodCall => {
           val method = vprProgram.findMethod(call.methodName)
           indexAll(call, loc)
-          method.pres.foreach { p =>
-            p.visit { case pre =>
-              locations += ViperLocation(node, pre) -> Pre(op)
-            }
-          }
-          method.posts.foreach { p =>
-            p.visit { case post =>
-              locations += ViperLocation(node, post) -> Post(op)
-            }
-          }
-
           checkAll(call, loc)
         }
 
         case loop: vpr.While => {
           index(loop, loc)
           indexAll(loop.cond, loc)
-          loop.invs.foreach(indexAll(_, Invariant(op)))
+          loop.invs.foreach(indexAll(_, loc))
 
           check(loop, loc)
           checkAll(loop.cond, loc)
-          loop.invs.foreach { i => checkAll(i, Invariant(op)) }
+          loop.invs.foreach { i => checkAll(i, loc) }
         }
 
         case n => {
@@ -366,6 +452,7 @@ object Collector {
           }
           case (irReturn: Return, (vprReturn: vpr.LocalVarAssign) :: vprRest)
               if irReturn.value.isDefined => {
+            visit(irReturn, vprReturn)
             exits += irReturn
             vprRest
           }
@@ -388,40 +475,28 @@ object Collector {
     }
 
     // Converts the stack of branch conditions from the verifier to a logical conjunction
-    def branchCondition(
-        branches: Seq[(vpr.Exp, vpr.Node, Option[vpr.Node])]
-    ): Logic.Conjunction = {
-      branches.foldRight(Logic.Conjunction())((b, conj) =>
-        b match {
-          case (branch, position, origin) => {
-            val vprLoc = origin match {
-              case None         => ViperLocation(position)
-              case Some(origin) => ViperLocation(origin, position)
-            }
+    def branchCondition(branches: List[ViperBranch]): Logic.Conjunction = {
 
-            val loc = locations.getOrElse(
-              vprLoc,
-              throw new WeaverException(
-                s"Could not find location for $origin, $position"
-              )
-            )
-            val value = CheckExpression.fromViper(branch, irMethod)
-            val (unwrapped, flag) = value match {
-              case CheckExpression.Not(negated) => (negated, false)
-              case other                        => (other, true)
-            }
+      branches.foldRight[Logic.Conjunction](Logic.Conjunction())((b, conj) => {
+        val irLoc = locations.getOrElse(
+          b.at.uniqueIdentifier,
+          throw new WeaverException(
+            s"Could not find location for ${b.at}"
+          )
+        )
 
-            val nextId = conditions.size
-            val cond = conditions.getOrElseUpdate(
-              (loc, unwrapped),
-              new ConditionTerm(nextId)
-            )
-            cond.conditions += conj
-
-            conj & Logic.Term(cond.id, flag)
-          }
+        val loc = ViperLocation.forIR(irLoc, b.location)
+        val value = CheckExpression.fromViper(b.condition, irMethod)
+        val (unwrapped, flag) = value match {
+          case CheckExpression.Not(negated) => (negated, false)
+          case other                        => (other, true)
         }
-      )
+        val nextId = conditions.size
+        val cond = conditions.getOrElseUpdate((loc, unwrapped), new ConditionTerm(nextId))
+        cond.conditions += conj
+
+        conj & Logic.Term(cond.id, flag)
+      })
     }
 
     // Index pre-conditions and add required runtime checks
@@ -436,6 +511,7 @@ object Collector {
     vprMethod.posts.foreach(checkAll(_, MethodPost))
 
     // Check if execution can fall-through to the end of the method
+    // It is valid to only check the last operation since we don't allow early returns
     val implicitReturn: Boolean = irMethod.body.lastOption match {
       case None         => true
       case Some(tailOp) => hasImplicitReturn(tailOp)
@@ -479,7 +555,8 @@ object Collector {
 
     // Get all checks (grouped by their location) and simplify their conditions
     val collectedChecks = mutable.ListBuffer[RuntimeCheck]()
-    for (((loc, check), conditions) <- checks) {
+    for ((loc, locChecks) <- checks)
+    for ((check, conditions) <- locChecks) {
       val simplified = Logic.simplify(Logic.Disjunction(conditions.toSet))
       val condition = convertDisjunction(simplified)
       collectedChecks += RuntimeCheck(loc, check, condition)
@@ -488,19 +565,23 @@ object Collector {
     // Traverse the specifications for statements that require full permission checks
     for (location <- needsFullPermissionChecking) {
       val (spec, arguments) = location match {
-        case Pre(op: Invoke) if op.method.precondition.isDefined =>
-          (
-            op.method.precondition.get,
-            Some(
-              op.method.parameters.zip(op.arguments.map(resolveValue(_))).toMap
+        case at: AtOp => at.op match {
+          case op: Invoke if op.method.precondition.isDefined =>
+            (
+              op.method.precondition.get,
+              Some(
+                op.method.parameters.zip(op.arguments.map(resolveValue(_))).toMap
+              )
             )
+          case op: While if op.invariant.isDefined => (op.invariant.get, None)
+          case op: Assert => (op.value, None)
+          case _ => throw new WeaverException(
+            "Could not locate specification for permission checking: " + location
+              .toString()
           )
-        case Invariant(op: While) if op.invariant.isDefined =>
-          (op.invariant.get, None)
+        }
         case MethodPost if irMethod.postcondition.isDefined =>
           (irMethod.postcondition.get, None)
-        case Pre(op: Assert) =>
-          (op.value, None)
         case _ =>
           throw new WeaverException(
             "Could not locate specification for permission checking: " + location
@@ -508,9 +589,7 @@ object Collector {
           )
       }
 
-      // TODO: If only a single separated permission is collected, make it non-separating since it
-      // will never overlap
-
+      // TODO: These checks are only for separation, not existence
       collectedChecks ++= traversePermissions(
         location,
         spec,
@@ -529,7 +608,6 @@ object Collector {
       calls = invokes.toList,
       allocations = allocations.toList,
       callStyle = getCallstyle(irMethod),
-      requiresFieldAccessTracking = requiresFieldAccessTracking,
       checkedSpecificationLocations = needsFullPermissionChecking.toSet
     )
   }
