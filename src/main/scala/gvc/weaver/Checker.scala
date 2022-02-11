@@ -48,10 +48,10 @@ object Checker {
     def insertAt(at: Location, ops: Option[Expression] => Seq[Op]): Unit =
       at match {
         case LoopStart(op: While) => ops(None) ++=: op.body
-        case LoopEnd(op: While) => op.body ++= ops(None)
-        case Pre(op)       => op.insertBefore(ops(None))
-        case Post(op)      => op.insertAfter(ops(None))
-        case MethodPre     => ops(None) ++=: method.body
+        case LoopEnd(op: While)   => op.body ++= ops(None)
+        case Pre(op)              => op.insertBefore(ops(None))
+        case Post(op)             => op.insertAfter(ops(None))
+        case MethodPre            => ops(None) ++=: method.body
         case MethodPost =>
           methodData.returns.foreach(e => e.insertBefore(ops(e.value)))
           if (methodData.hasImplicitReturn) {
@@ -385,7 +385,7 @@ object Checker {
       val instanceId = new FieldMember(member.root, structIdFields(struct.name))
       val fieldIndex = new Int(struct.fields.indexOf(member.field))
       new Invoke(
-        runtime.addAcc,
+        runtime.loseAcc,
         List(
           ownedFieldsTarget,
           instanceId,
@@ -422,8 +422,8 @@ object Checker {
         contract: Option[IRGraph.Expression],
         ownedFieldsTarget: Var,
         structIdFields: Map[scala.Predef.String, StructField]
-    ): Seq[Op] = {
-      contract.toSeq.flatMap(
+    ): List[Op] = {
+      contract.toList.flatMap(
         translateSpec(
           _,
           removeFieldAccess,
@@ -438,8 +438,8 @@ object Checker {
         contract: Option[IRGraph.Expression],
         ownedFieldsTarget: Var,
         structIdFields: Map[scala.Predef.String, StructField]
-    ): Seq[Op] = {
-      contract.toSeq.flatMap(
+    ): List[Op] = {
+      contract.toList.flatMap(
         translateSpec(
           _,
           addFieldAccess,
@@ -607,6 +607,7 @@ object Checker {
         // permissions from the precondition, call the method, and add the temporary set to the
         // primary set
         case PrecisePreCallStyle => {
+
           val tempSet = method.addVar(
             runtime.ownedFieldsRef,
             CheckRuntime.Names.temporaryOwnedFields
@@ -620,7 +621,11 @@ object Checker {
               callee.precondition,
               tempSet,
               structIdFields
-            ).toList
+            ) ++ removePermissionsFromContract(
+              callee.precondition,
+              getPrimaryOwnedFields,
+              structIdFields
+            )
           )
 
           call.ir.arguments :+= tempSet
