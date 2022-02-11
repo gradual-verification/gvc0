@@ -12,14 +12,72 @@ struct Node
 
 //@predicate wrappedAcc(struct Node* node) = acc(node->value) && acc(node->next);
 
-void check_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields);
+void add_wrappedAcc(struct Node* node, struct OwnedFields* _tempFields, struct OwnedFields* _ownedFields);
+void check_wrappedAcc(struct Node* node, struct OwnedFields* _tempFields, struct OwnedFields* _ownedFields);
+int fullyImprecise(struct Node* a, struct OwnedFields* _ownedFields);
+int fullyPrecise(struct Node* a, int* _instanceCounter);
+int imprecisePostcondition(struct Node* a, struct OwnedFields* _ownedFields);
+int imprecisePrecondition(struct Node* a, struct OwnedFields* _ownedFields);
 int main();
-int test(struct Node* a, struct OwnedFields* _ownedFields);
+void remove_wrappedAcc(struct Node* node, struct OwnedFields* _tempFields, struct OwnedFields* _ownedFields);
 
-void check_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
+void add_wrappedAcc(struct Node* node, struct OwnedFields* _tempFields, struct OwnedFields* _ownedFields)
 {
-  assertAcc(_ownedFields, node->_id, 0, "Field access runtime check failed for struct Node.value");
-  assertAcc(_ownedFields, node->_id, 1, "Field access runtime check failed for struct Node.next");
+  addAcc(_ownedFields, node->_id, 3, 0);
+  addAcc(_ownedFields, node->_id, 3, 1);
+}
+
+void check_wrappedAcc(struct Node* node, struct OwnedFields* _tempFields, struct OwnedFields* _ownedFields)
+{
+  assertAcc(_tempFields, _ownedFields, node->_id, 0, "Field access runtime check failed for struct Node.value");
+  assertAcc(_tempFields, _ownedFields, node->_id, 1, "Field access runtime check failed for struct Node.next");
+}
+
+int fullyImprecise(struct Node* a, struct OwnedFields* _ownedFields)
+  //@requires ?;
+  //@ensures ?;
+{
+  struct OwnedFields* _tempFields = NULL;
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  assertAcc(_tempFields, _ownedFields, a->_id, 0, "Field access runtime check failed for struct Node.value");
+  return a->value;
+}
+
+int fullyPrecise(struct Node* a, int* _instanceCounter)
+  //@requires wrappedAcc(a);
+  //@ensures wrappedAcc(a);
+{
+  int _ = 0;
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  struct OwnedFields* _tempFields1 = NULL;
+  _ownedFields = initOwnedFields(_instanceCounter);
+  _tempFields1 = initOwnedFields(_instanceCounter);
+  add_wrappedAcc(a, NULL, _tempFields1);
+  remove_wrappedAcc(a, NULL, _ownedFields);
+  _ = imprecisePostcondition(a, _tempFields1);
+  join(_ownedFields, _tempFields1);
+  _tempFields = initOwnedFields(_instanceCounter);
+  check_wrappedAcc(a, _tempFields, _ownedFields);
+  return _;
+}
+
+int imprecisePostcondition(struct Node* a, struct OwnedFields* _ownedFields)
+  //@requires wrappedAcc(a);
+  //@ensures ?;
+{
+  unfold wrappedAcc(a);
+  return a->value;
+}
+
+int imprecisePrecondition(struct Node* a, struct OwnedFields* _ownedFields)
+  //@requires ?;
+  //@ensures ?;
+{
+  struct OwnedFields* _tempFields = NULL;
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  assertAcc(_tempFields, _ownedFields, a->_id, 0, "Field access runtime check failed for struct Node.value");
+  return a->value;
 }
 
 int main()
@@ -27,24 +85,17 @@ int main()
   struct Node* a = NULL;
   int _ = 0;
   int* _instanceCounter = NULL;
-  struct OwnedFields* _ownedFields = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields(_instanceCounter);
   a = alloc(struct Node);
-  a->_id = addStructAcc(_ownedFields, 2);
-  a->value = 5;
   a->next = NULL;
-  _ = test(a, _ownedFields);
+  //@assert acc(a->value) && acc(a->next);
+  fold wrappedAcc(a);
+  _ = fullyPrecise(a, _instanceCounter);
   return _;
 }
 
-int test(struct Node* a, struct OwnedFields* _ownedFields)
-  //@requires ?;
-  //@ensures wrappedAcc(a);
+void remove_wrappedAcc(struct Node* node, struct OwnedFields* _tempFields, struct OwnedFields* _ownedFields)
 {
-  struct OwnedFields* _tempFields = NULL;
-  assertAcc(_ownedFields, a->_id, 0);
-  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  check_wrappedAcc(a, _tempFields);
-  return a->value;
+  loseAcc(_ownedFields, node->_id, 0);
+  loseAcc(_ownedFields, node->_id, 1);
 }

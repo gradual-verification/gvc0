@@ -230,17 +230,19 @@ object GraphPrinter {
           }
         }
 
-      case fold: Fold => {
-        p.print("fold ")
-        printExpr(fold.instance)
-        p.println(";")
-      }
+      case fold: Fold =>
+        if (includeSpecs) {
+          p.print("fold ")
+          printExpr(fold.instance)
+          p.println(";")
+        }
 
-      case unfold: Unfold => {
-        p.print("unfold ")
-        printExpr(unfold.instance)
-        p.println(";")
-      }
+      case unfold: Unfold =>
+        if (includeSpecs) {
+          p.print("unfold ")
+          printExpr(unfold.instance)
+          p.println(";")
+        }
 
       case error: IRGraph.Error => {
         p.print("error(")

@@ -6,7 +6,6 @@ import gvc.parser.Parser
 import gvc.analyzer.{ErrorSink, ResolvedProgram, Resolver}
 import gvc.transformer.IRGraph._
 import gvc.transformer.{DependencyTransformer, IRGraph}
-import scala.collection.mutable
 object CheckRuntime {
   val name = "runtime"
   private lazy val header: ResolvedProgram = {
@@ -40,11 +39,8 @@ object CheckRuntime {
     val addStructAcc = "addStructAcc"
     val addAcc = "addAcc"
     val loseAcc = "loseAcc"
-    val addDisjointAcc = "addDisjointAcc"
     val join = "join"
-    val disjoin = "disjoin"
     val assertAcc = "assertAcc"
-    val assertDisjointAcc = "assertDisjointAcc"
     val find = "find"
     val instanceCounter = "_instanceCounter"
     val id = "_id"
@@ -67,12 +63,7 @@ class CheckRuntime private (program: IRGraph.Program) {
     program.method(Names.addStructAcc)
   val addAcc: IRGraph.MethodDefinition = program.method(Names.addAcc)
   val loseAcc: IRGraph.MethodDefinition = program.method(Names.loseAcc)
-  val addDisjointAcc: IRGraph.MethodDefinition =
-    program.method(Names.addDisjointAcc)
   val join: IRGraph.MethodDefinition = program.method(Names.join)
-  val disjoin: IRGraph.MethodDefinition = program.method(Names.disjoin)
   val assertAcc: IRGraph.MethodDefinition = program.method(Names.assertAcc)
-  val assertDisjointAcc: IRGraph.MethodDefinition =
-    program.method(Names.assertDisjointAcc)
   val find: IRGraph.MethodDefinition = program.method(Names.find)
 }

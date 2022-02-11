@@ -6,20 +6,45 @@ predicate wrappedAcc(node: Ref) {
   acc(node.Node$value, write) && acc(node.Node$next, write)
 }
 
+method fullyImprecise(a: Ref) returns ($result: Int)
+  requires ? && true
+  ensures ? && true
+{
+  $result := a.Node$value
+}
+
+method fullyPrecise(a: Ref) returns ($result: Int)
+  requires acc(wrappedAcc(a), write)
+  ensures acc(wrappedAcc(a), write)
+{
+  var _: Int
+  _ := imprecisePostcondition(a)
+  $result := _
+}
+
+method imprecisePostcondition(a: Ref) returns ($result: Int)
+  requires acc(wrappedAcc(a), write)
+  ensures ? && true
+{
+  unfold acc(wrappedAcc(a), write)
+  $result := a.Node$value
+}
+
+method imprecisePrecondition(a: Ref) returns ($result: Int)
+  requires ? && true
+  ensures ? && true
+{
+  $result := a.Node$value
+}
+
 method main() returns ($result: Int)
 {
   var a: Ref
   var _: Int
   a := new(Node$value, Node$next)
-  a.Node$value := 5
   a.Node$next := null
-  _ := test(a)
+  assert acc(a.Node$value, write) && acc(a.Node$next, write)
+  fold acc(wrappedAcc(a), write)
+  _ := fullyPrecise(a)
   $result := _
-}
-
-method test(a: Ref) returns ($result: Int)
-  requires ? && true
-  ensures acc(wrappedAcc(a), write)
-{
-  $result := a.Node$value
 }
