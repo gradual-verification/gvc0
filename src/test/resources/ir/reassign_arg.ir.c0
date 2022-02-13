@@ -28,7 +28,7 @@ int main()
   a = 1;
   a1 = echo(a);
   a11 = echo(a1 + 1);
-  use(a1);
+  use(a11);
   b = 2;
   if (test == 0)
   {
@@ -74,7 +74,7 @@ int main()
     }
     d11 = echo(d1 + 4);
   }
-  use(d1);
+  use(d11);
   e = 5;
   while (e < 10)
   {

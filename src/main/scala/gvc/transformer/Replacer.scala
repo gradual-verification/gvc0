@@ -68,7 +68,13 @@ object Replacer {
     }
   }
 
-  def replace(v: Var, m: Mapping): Var = m.getOrElse(v, v)
+  // Recursively follows all mappings
+  // Note that this could cause an infinite loop if a cycle of mappings occurred
+  // (i.e. v1 -> v2 -> v1)
+  def replace(v: Var, m: Mapping): Var = m.get(v) match {
+    case None => v
+    case Some(mappedVar) => replace(mappedVar, m)
+  }
 
   def replace(member: Member, m: Mapping): Member = member match {
     case field: FieldMember => new FieldMember(replace(field.root, m), field.field)
