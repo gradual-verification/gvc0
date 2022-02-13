@@ -305,10 +305,11 @@ object Collector {
     }
 
     // Finds all the runtime checks required by the given Viper node, and adds them at the given
-    // IR location
-    def check(node: vpr.Node, loc: Location): Unit = {
+    // IR location.
+    // `loopInvs` is the list of the invariants from all the loops that contain this position.
+    def check(node: vpr.Node, loc: Location, loopInvs: List[vpr.Exp]): Unit = {
       for (vprCheck <- vprChecks.get(node.uniqueIdentifier).toSeq.flatten) {
-        val condition = branchCondition(vprCheck.conditions)
+        val condition = branchCondition(vprCheck.conditions, loopInvs)
         val checkLocation = (vprCheck.location, loc) match {
           case (ViperLocation.Value, _) => loc
           case (ViperLocation.InvariantBeforeLoop, at: AtOp) => Pre(at.op)
@@ -342,27 +343,27 @@ object Collector {
     }
 
     // Recursively collects all runtime checks
-    def checkAll(node: vpr.Node, loc: Location): Unit =
-      node.visit { case n => check(n, loc) }
+    def checkAll(node: vpr.Node, loc: Location, loopInvs: List[vpr.Exp]): Unit =
+      node.visit { case n => check(n, loc, loopInvs) }
 
     // Combines indexing and runtime check collection for a given Viper node. Indexing must be
     // completed first, since the conditions on a runtime check may be at locations contained in
     // the same node.
-    def visit(op: Op, node: vpr.Node): Unit = {
+    def visit(op: Op, node: vpr.Node, loopInvs: List[vpr.Exp]): Unit = {
       val loc = Pre(op)
       node match {
         case iff: vpr.If => {
           index(iff, loc)
           indexAll(iff.cond, loc)
 
-          check(iff, loc)
-          checkAll(iff.cond, loc)
+          check(iff, loc, loopInvs)
+          checkAll(iff.cond, loc, loopInvs)
         }
 
         case call: vpr.MethodCall => {
           val method = vprProgram.findMethod(call.methodName)
           indexAll(call, loc)
-          checkAll(call, loc)
+          checkAll(call, loc, loopInvs)
         }
 
         case loop: vpr.While => {
@@ -370,60 +371,63 @@ object Collector {
           indexAll(loop.cond, loc)
           loop.invs.foreach(indexAll(_, loc))
 
-          check(loop, loc)
-          checkAll(loop.cond, loc)
-          loop.invs.foreach { i => checkAll(i, loc) }
+
+          check(loop, loc, loopInvs)
+          checkAll(loop.cond, loc, loopInvs)
+          loop.invs.foreach { i => checkAll(i, loc, loopInvs) }
         }
 
         case n => {
           indexAll(n, loc)
-          checkAll(n, loc)
+          checkAll(n, loc, loopInvs)
         }
       }
     }
 
-    def visitBlock(irBlock: Block, vprBlock: vpr.Seqn): Unit = {
+    def visitBlock(irBlock: Block, vprBlock: vpr.Seqn, loopInvs: List[vpr.Exp]): Unit = {
       var vprOps = vprBlock.ss.toList
       for (irOp <- irBlock) {
         vprOps = (irOp, vprOps) match {
           case (irIf: If, (vprIf: vpr.If) :: vprRest) => {
-            visit(irIf, vprIf)
-            visitBlock(irIf.ifTrue, vprIf.thn)
-            visitBlock(irIf.ifFalse, vprIf.els)
+            visit(irIf, vprIf, loopInvs)
+            visitBlock(irIf.ifTrue, vprIf.thn, loopInvs)
+            visitBlock(irIf.ifFalse, vprIf.els, loopInvs)
             vprRest
           }
           case (irWhile: While, (vprWhile: vpr.While) :: vprRest) => {
-            visit(irWhile, vprWhile)
-            visitBlock(irWhile.body, vprWhile.body)
+            visit(irWhile, vprWhile, loopInvs)
+            // Supports only a single invariant
+            val newInvs = vprWhile.invs.headOption.map(_ :: loopInvs).getOrElse(loopInvs)
+            visitBlock(irWhile.body, vprWhile.body, newInvs)
             vprRest
           }
           case (irInvoke: Invoke, (vprInvoke: vpr.MethodCall) :: vprRest) => {
             invokes += CollectedInvocation(irInvoke, vprInvoke)
-            visit(irInvoke, vprInvoke)
+            visit(irInvoke, vprInvoke, loopInvs)
             vprRest
           }
           case (irAlloc: AllocValue, (vprAlloc: vpr.NewStmt) :: vprRest) => {
             allocations += irAlloc
-            visit(irAlloc, vprAlloc)
+            visit(irAlloc, vprAlloc, loopInvs)
             vprRest
           }
           case (irAlloc: AllocStruct, (vprAlloc: vpr.NewStmt) :: vprRest) => {
             allocations += irAlloc
-            visit(irAlloc, vprAlloc)
+            visit(irAlloc, vprAlloc, loopInvs)
             vprRest
           }
           case (
                 irAssign: Assign,
                 (vprAssign: vpr.LocalVarAssign) :: vprRest
               ) => {
-            visit(irAssign, vprAssign)
+            visit(irAssign, vprAssign, loopInvs)
             vprRest
           }
           case (
                 irAssign: AssignMember,
                 (vprAssign: vpr.FieldAssign) :: vprRest
               ) => {
-            visit(irAssign, vprAssign)
+            visit(irAssign, vprAssign, loopInvs)
             vprRest
           }
           case (irAssert: Assert, vprRest)
@@ -431,19 +435,19 @@ object Collector {
             vprRest
           case (irAssert: Assert, (vprAssert: vpr.Assert) :: vprRest)
               if irAssert.kind == AssertKind.Specification => {
-            visit(irAssert, vprAssert)
+            visit(irAssert, vprAssert, loopInvs)
             vprRest
           }
           case (irFold: Fold, (vprFold: vpr.Fold) :: vprRest) => {
-            visit(irFold, vprFold)
+            visit(irFold, vprFold, loopInvs)
             vprRest
           }
           case (irUnfold: Unfold, (vprUnfold: vpr.Unfold) :: vprRest) => {
-            visit(irUnfold, vprUnfold)
+            visit(irUnfold, vprUnfold, loopInvs)
             vprRest
           }
           case (irError: Error, (vprError: vpr.Assert) :: vprRest) => {
-            visit(irError, vprError)
+            visit(irError, vprError, loopInvs)
             vprRest
           }
           case (irReturn: Return, vprRest) if irReturn.value.isEmpty => {
@@ -452,7 +456,7 @@ object Collector {
           }
           case (irReturn: Return, (vprReturn: vpr.LocalVarAssign) :: vprRest)
               if irReturn.value.isDefined => {
-            visit(irReturn, vprReturn)
+            visit(irReturn, vprReturn, loopInvs)
             exits += irReturn
             vprRest
           }
@@ -475,7 +479,7 @@ object Collector {
     }
 
     // Converts the stack of branch conditions from the verifier to a logical conjunction
-    def branchCondition(branches: List[ViperBranch]): Logic.Conjunction = {
+    def branchCondition(branches: List[ViperBranch], loopInvs: List[vpr.Exp]): Logic.Conjunction = {
 
       branches.foldRight[Logic.Conjunction](Logic.Conjunction())((b, conj) => {
         val irLoc = locations.getOrElse(
@@ -485,7 +489,15 @@ object Collector {
           )
         )
 
-        val loc = ViperLocation.forIR(irLoc, b.location)
+        val position = b.location match {
+          // Special case for when the verifier uses positions tagged as the beginning of the loop
+          // outside of the loop body. In this case, just use the after loop position.
+          case ViperLocation.InvariantLoopStart if !loopInvs.contains(b.at) =>
+            ViperLocation.InvariantAfterLoop
+          case p => p
+        }
+
+        val loc = ViperLocation.forIR(irLoc, position)
         val value = CheckExpression.fromViper(b.condition, irMethod)
         val (unwrapped, flag) = value match {
           case CheckExpression.Not(negated) => (negated, false)
@@ -501,14 +513,14 @@ object Collector {
 
     // Index pre-conditions and add required runtime checks
     vprMethod.pres.foreach(indexAll(_, MethodPre))
-    vprMethod.pres.foreach(checkAll(_, MethodPre))
+    vprMethod.pres.foreach(checkAll(_, MethodPre, Nil))
 
     // Loop through each operation and collect checks
-    visitBlock(irMethod.body, vprMethod.body.get)
+    visitBlock(irMethod.body, vprMethod.body.get, Nil)
 
     // Index post-conditions and add required runtime checks
     vprMethod.posts.foreach(indexAll(_, MethodPost))
-    vprMethod.posts.foreach(checkAll(_, MethodPost))
+    vprMethod.posts.foreach(checkAll(_, MethodPost, Nil))
 
     // Check if execution can fall-through to the end of the method
     // It is valid to only check the last operation since we don't allow early returns
