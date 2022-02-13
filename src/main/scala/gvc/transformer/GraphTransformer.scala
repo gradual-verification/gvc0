@@ -346,7 +346,7 @@ object GraphTransformer {
           assign.value match {
             case invoke: ResolvedInvoke =>
               assign.left match {
-                case ref: ResolvedVariableRef =>
+                case ref: ResolvedVariableRef if assign.operation == None =>
                   // Avoid introducing a temp var for the case when the result
                   // is immediately assigned to a var
                   invokeToVar(invoke, scope.variable(ref), scope)
@@ -354,6 +354,7 @@ object GraphTransformer {
                   scope += transformAssign(
                     complex,
                     transformExpr(invoke, scope),
+                    assign.operation,
                     scope
                   )
               }
@@ -363,12 +364,13 @@ object GraphTransformer {
               assign.left match {
                 // Avoid introducing a temp var for the case when the result
                 // is immediately assigned to a var
-                case ref: ResolvedVariableRef =>
+                case ref: ResolvedVariableRef if assign.operation == None =>
                   scope += transformAlloc(alloc, scope.variable(ref), scope)
                 case complex =>
                   scope += transformAssign(
                     complex,
                     transformExpr(alloc, scope),
+                    assign.operation,
                     scope
                   )
               }
@@ -377,6 +379,7 @@ object GraphTransformer {
               scope += transformAssign(
                 assign.left,
                 transformExpr(expr, scope),
+                assign.operation,
                 scope
               )
           }
@@ -392,7 +395,7 @@ object GraphTransformer {
           }
 
           val computed = new IRGraph.Binary(op, current, new IRGraph.Int(1))
-          scope += transformAssign(inc.value, computed, scope)
+          scope += transformAssign(inc.value, computed, None, scope)
         }
 
         case ret: ResolvedReturn =>
@@ -680,29 +683,43 @@ object GraphTransformer {
     def transformAssign(
         target: ResolvedExpression,
         value: IRGraph.Expression,
+        op: Option[ArithmeticOperation],
         scope: Scope
     ): IRGraph.Op = {
       target match {
-        case ref: ResolvedVariableRef =>
-          new IRGraph.Assign(scope.variable(ref), value)
+        case ref: ResolvedVariableRef => {
+          val target = scope.variable(ref)
+          new IRGraph.Assign(target, transformAssignValue(value, target, op))
+        }
 
         case member: ResolvedMember => {
           val (parent, field) = transformField(member)
-          new IRGraph.AssignMember(
-            new IRGraph.FieldMember(transformExpr(parent, scope), field),
-            value
-          )
+          val target = new IRGraph.FieldMember(transformExpr(parent, scope), field)
+          new IRGraph.AssignMember(target, transformAssignValue(value, target, op))
         }
 
         case deref: ResolvedDereference =>
-          new IRGraph.AssignMember(
-            new IRGraph.DereferenceMember(transformExpr(deref.value, scope)),
-            value
-          )
+          val target = new IRGraph.DereferenceMember(transformExpr(deref.value, scope))
+          new IRGraph.AssignMember(target, transformAssignValue(value, target, op))
 
         case _: ResolvedArrayIndex =>
           throw new TransformerException("Arrays are not supported")
         case _ => throw new TransformerException("Invalid L-value")
+      }
+    }
+
+    def transformAssignValue(value: IRGraph.Expression, target: IRGraph.Expression, op: Option[ArithmeticOperation]): IRGraph.Expression = {
+      op match {
+        case None => value
+        case Some(op) => {
+          val binOp = op match {
+            case ArithmeticOperation.Add => IRGraph.BinaryOp.Add
+            case ArithmeticOperation.Subtract => IRGraph.BinaryOp.Subtract
+            case ArithmeticOperation.Divide => IRGraph.BinaryOp.Divide
+            case ArithmeticOperation.Multiply => IRGraph.BinaryOp.Multiply
+          }
+          new IRGraph.Binary(binOp, target, value)
+        }
       }
     }
 

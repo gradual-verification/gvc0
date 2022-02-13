@@ -1,6 +1,6 @@
 int test(int x)
 {
-  x = x + 1;
+  x += 1;
   if (false)
     x = x + 2;
   while (false)
