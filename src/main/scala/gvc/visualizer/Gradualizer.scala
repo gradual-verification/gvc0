@@ -1,4 +1,5 @@
-package gvc.transformer
+package gvc.visualizer
+
 import gvc.analyzer.{
   LogicalOperation,
   ResolvedExpression,
@@ -8,8 +9,8 @@ import gvc.analyzer.{
   ResolvedProgram
 }
 
+import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-import scala.collection.{mutable}
 
 object Gradualizer {
 
@@ -19,7 +20,7 @@ object Gradualizer {
 
   def crossJoin[T](list: List[List[T]]): List[List[T]] = {
     list match {
-      case Nil => Nil
+      case Nil       => Nil
       case xs :: Nil => xs map (List(_))
       case x :: xs =>
         for {
@@ -245,6 +246,6 @@ object Gradualizer {
         asLogical = asLogical.left.asInstanceOf[ResolvedLogical]
       }
     }
-    return numClauses
+    numClauses
   }
 }
