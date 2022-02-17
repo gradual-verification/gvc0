@@ -9,9 +9,9 @@ object IRGraph {
   class Program {
     private[IRGraph] val _structs =
       mutable.Map[scala.Predef.String, StructDefinition]()
-    private[IRGraph] val _methods =
+    private[IRGraph] var _methods =
       mutable.Map[scala.Predef.String, MethodDefinition]()
-    private val _predicates = mutable.Map[scala.Predef.String, Predicate]()
+    private var _predicates = mutable.Map[scala.Predef.String, Predicate]()
     private val _dependencies = mutable.ListBuffer[Dependency]()
 
     lazy val ownedFieldsStruct = struct(
@@ -75,6 +75,18 @@ object IRGraph {
       name,
       throw new IRException(s"Predicate '$name' not found")
     )
+
+    def replaceMethods(methodList: List[MethodDefinition]): Unit =
+      _methods = methodList.foldLeft(
+        mutable.Map[scala.Predef.String, MethodDefinition]()
+      )((m, defn) => {
+        m + (defn.name -> defn)
+      })
+
+    def replacePredicates(predicateList: List[Predicate]): Unit =
+      _predicates = predicateList.foldLeft(
+        mutable.Map[scala.Predef.String, Predicate]()
+      )((m, pred) => { m + (pred.name -> pred) })
   }
 
   sealed trait StructDefinition {
@@ -122,7 +134,7 @@ object IRGraph {
     private val _variables = mutable.ListBuffer[Var]()
     private val scope = mutable.Map[scala.Predef.String, Var]()
 
-    val body = new MethodBlock(this)
+    var body = new MethodBlock(this)
 
     def parameters: Seq[Parameter] = _parameters
     def variables: Seq[Var] = _variables
@@ -641,17 +653,31 @@ object IRGraph {
       ifFalse.foreach(newIf.ifFalse += _.copy)
       newIf
     }
+    def copy(trueBranch: List[Op], falseBranch: List[Op]) = {
+      val newIf = new If(condition)
+      trueBranch.foreach(newIf.ifTrue += _.copy)
+      falseBranch.foreach(newIf.ifFalse += _.copy)
+      newIf
+    }
   }
 
   class While(
       var condition: Expression,
       var invariant: Option[Expression]
   ) extends Op {
-    val body = new ChildBlock(this)
+    var body = new ChildBlock(this)
 
     def copy = {
       val newWhile = new While(condition, invariant)
       body.foreach(newWhile.body += _.copy)
+      newWhile
+    }
+    def copy(
+        newInvariant: Option[IRGraph.Expression],
+        newBody: List[IRGraph.Op]
+    ) = {
+      val newWhile = new While(condition, newInvariant)
+      newBody.foreach(newWhile.body += _.copy)
       newWhile
     }
   }
