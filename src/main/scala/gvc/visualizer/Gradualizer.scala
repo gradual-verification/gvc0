@@ -2,12 +2,57 @@ package gvc.visualizer
 import gvc.transformer.IRGraph
 import gvc.transformer.IRGraph.Binary
 
+import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+
+case class PermutedProgram(
+    ir: IRGraph.Program,
+    nClausesPreconditions: Int,
+    nClausesPostconditions: Int,
+    nClausesAssertions: Int,
+    nCLausesLoopInvariants: Int,
+    methodMetadata: Map[IRGraph.Method, PermutedMethod]
+)
+
+case class PermutedExpression(
+    nClauses: Int,
+    expr: Option[IRGraph.Expression]
+)
+
+case class PermutationMetadata(
+    nClausesPreconditions: Int,
+    nClausesPostconditions: Int
+)
+
+case class PermutedMethod(
+    method: IRGraph.Method,
+    nClausesPreconditions: Int,
+    nClausesPostconditions: Int,
+    nClausesAssertions: Int,
+    nCLausesLoopInvariants: Int
+)
+
+case class PermutedBlock(
+    nClausesAssertions: Int,
+    nCLausesLoopInvariants: Int,
+    opList: List[IRGraph.Op]
+)
+
+case class PermutedPredicate(
+    predicate: IRGraph.Predicate,
+    metadata: PermutationMetadata
+)
+
+case class PermutedOp(
+    nClausesAssertions: Int,
+    nCLausesLoopInvariants: Int,
+    op: IRGraph.Op
+)
 
 object Gradualizer {
 
   class GradualizerException(val message: String) extends RuntimeException {
-    override def getMessage(): String = message
+    override def getMessage: String = message
   }
   def crossJoin[T](list: List[List[T]]): List[List[T]] = {
     list match {
@@ -23,82 +68,126 @@ object Gradualizer {
 
   def gradualizeProgram(
       program: IRGraph.Program
-  ): List[IRGraph.Program] = {
+  ): List[PermutedProgram] = {
 
-    val programPermutations: ListBuffer[IRGraph.Program] = ListBuffer()
+    val programPermutations: ListBuffer[PermutedProgram] = ListBuffer()
 
-    val methodPermutations: List[List[IRGraph.Method]] = List()
+    val methodPermutations: List[List[PermutedMethod]] = permuteMethods(
+      program.methods
+    )
     val predicatePermutations: List[List[IRGraph.Predicate]] = List()
 
     for (methodList <- methodPermutations) {
       for (predicateList <- predicatePermutations) {
+        var nClausesPreconditions = 0
+        var nClausesPostconditions = 0
+        var nClausesAssertions = 0
+        var nClausesLoopInvariants = 0
+        //var nClausesPredicates = 0
+        val methodMetadata = mutable.Map[IRGraph.Method, PermutedMethod]()
+
+        val methodsToAdd = methodList.map(permMethod => {
+          nClausesPreconditions += permMethod.nClausesPreconditions
+          nClausesPostconditions += permMethod.nClausesPostconditions
+          nClausesAssertions += permMethod.nClausesAssertions
+          nClausesLoopInvariants += permMethod.nCLausesLoopInvariants
+          methodMetadata += (permMethod.method -> permMethod)
+          permMethod.method
+        })
+        val predicatesToAdd = List()
         val clonedProgram: IRGraph.Program =
-          program.clone().asInstanceOf[IRGraph.Program]
-        clonedProgram.replaceMethods(methodList)
-        clonedProgram.replacePredicates(predicateList)
-        programPermutations += clonedProgram
+          program.copy(methodsToAdd, predicatesToAdd)
+
+        programPermutations += PermutedProgram(
+          clonedProgram,
+          nClausesPreconditions,
+          nClausesPostconditions,
+          nClausesAssertions,
+          nClausesLoopInvariants,
+          methodMetadata.toMap
+        )
       }
     }
     programPermutations.toList
   }
 
   def permuteMethods(
-      methods: List[IRGraph.Method]
-  ): List[List[IRGraph.Method]] = {
-    val perMethodPermutations: ListBuffer[List[IRGraph.Method]] =
+      methods: Seq[IRGraph.Method]
+  ): List[List[PermutedMethod]] = {
+    val perMethodPermutations: ListBuffer[List[PermutedMethod]] =
       ListBuffer()
     methods.foreach(method => {
       val permutedPreconditions = permuteConjunctiveClauses(method.precondition)
       val permutedPostconditions =
         permuteConjunctiveClauses(method.postcondition)
-      val permutedMethodBodies = permuteMethodBody(method)
+      val permutedMethodBodies = permuteBlock(method.body)
 
-      val methodPermutations = ListBuffer[IRGraph.Method]()
+      val methodPermutations = ListBuffer[PermutedMethod]()
       permutedPostconditions.foreach(post => {
         permutedPreconditions.foreach(pre => {
           permutedMethodBodies.foreach(body => {
-            val permutation = method.clone().asInstanceOf[IRGraph.Method]
-            permutation.precondition = pre
-            permutation.postcondition = post
-            permutation.body = body
-            methodPermutations += permutation
+            val permutation = new IRGraph.Method(method.name, method.returnType)
+            permutation.precondition = pre.expr
+            permutation.postcondition = post.expr
+            permutation.body = new IRGraph.MethodBlock(method)
+            permutation.body ++= body.opList
+
+            methodPermutations += PermutedMethod(
+              permutation,
+              pre.nClauses,
+              post.nClauses,
+              body.nClausesAssertions,
+              body.nCLausesLoopInvariants
+            )
           })
         })
       })
-      perMethodPermutations += methodPermutations
+      perMethodPermutations += methodPermutations.toList
     })
+
     crossJoin(perMethodPermutations.toList)
   }
 
-  def permuteMethodBody(
-      method: IRGraph.Method
-  ): List[IRGraph.MethodBlock] =
-    permuteBlock(method.body).map(opList => {
-      val methodBody = new IRGraph.MethodBlock(method)
-      methodBody ++= opList
-      methodBody
-    })
+  def permuteBlock(block: IRGraph.Block): List[PermutedBlock] = {
+    var currentPermutations: List[PermutedBlock] = List(
+      PermutedBlock(0, 0, List())
+    )
 
-  def permuteBlock(block: IRGraph.Block): List[List[IRGraph.Op]] = {
-    var currentPermutations: List[List[IRGraph.Op]] = List()
     val opList = block.toList
     def appendToAll(op: IRGraph.Op): Unit = {
-      currentPermutations = currentPermutations.map(opList => opList.::(op))
+      currentPermutations = currentPermutations.map(prev =>
+        PermutedBlock(
+          prev.nClausesAssertions,
+          prev.nCLausesLoopInvariants,
+          prev.opList.::(op)
+        )
+      )
     }
-    def permuteToAll(permList: List[IRGraph.Op]): Unit = {
-      val newPermutations: ListBuffer[List[IRGraph.Op]] = ListBuffer()
-      currentPermutations.foreach(opList => {
-        for (elem <- permList) { newPermutations += opList.::(elem) }
+
+    def permuteToAll(permList: List[PermutedOp]): Unit = {
+      currentPermutations = currentPermutations.flatMap(prev => {
+        permList.map(curr => {
+          PermutedBlock(
+            prev.nClausesAssertions + curr.nClausesAssertions,
+            prev.nCLausesLoopInvariants + curr.nCLausesLoopInvariants,
+            prev.opList.::(curr.op)
+          )
+        })
       })
     }
+
     opList.foreach {
       case assert: IRGraph.Assert =>
         if (assert.kind == IRGraph.AssertKind.Specification) {
           permuteToAll(
             permuteConjunctiveClauses(Some(assert.value)).map(expr => {
-              new IRGraph.Assert(
-                new IRGraph.Imprecise(expr),
-                IRGraph.AssertKind.Specification
+              PermutedOp(
+                expr.nClauses,
+                0,
+                new IRGraph.Assert(
+                  new IRGraph.Imprecise(expr.expr),
+                  IRGraph.AssertKind.Specification
+                )
               )
             })
           )
@@ -110,24 +199,37 @@ object Gradualizer {
         val falseBranchPermutations = permuteBlock(value.ifFalse)
         trueBranchPermutations.flatMap(trueBranch => {
           falseBranchPermutations.map(falseBranch => {
-            value.copy(trueBranch, falseBranch)
+            PermutedOp(
+              trueBranch.nClausesAssertions + falseBranch.nClausesAssertions,
+              trueBranch.nCLausesLoopInvariants + falseBranch.nCLausesLoopInvariants,
+              value.copy(trueBranch.opList, falseBranch.opList)
+            )
           })
         })
       case whl: IRGraph.While =>
         val invariantAssertions = permuteConjunctiveClauses(whl.invariant)
         val whileBodies = permuteBlock(whl.body)
-        permuteToAll(invariantAssertions.flatMap(invAssert => {
-          whileBodies.map(body => {
-            whl.copy(invAssert, body)
+        permuteToAll(
+          invariantAssertions.flatMap(invAssert => {
+            whileBodies.map(body => {
+              PermutedOp(
+                body.nClausesAssertions,
+                body.nCLausesLoopInvariants + invAssert.nClauses,
+                whl.copy(invAssert.expr, body.opList)
+              )
+            })
           })
-        }))
+        )
+      case _ => {
+        appendToAll(_)
+      }
     }
     currentPermutations
   }
   def permuteConjunctiveClauses(
       expression: Option[IRGraph.Expression]
-  ): List[Option[IRGraph.Expression]] = {
-    var permutedClauses = List[Option[IRGraph.Expression]]()
+  ): List[PermutedExpression] = {
+    var permutedClauses = List[PermutedExpression]()
     expression match {
       case Some(expr: IRGraph.Expression) =>
         val numClausesInAssertion = numClauses(expr)
@@ -136,9 +238,11 @@ object Gradualizer {
         conjunctionNodeIndices.foreach(permutation => {
           val subset =
             extractSubsetOfClauses(permutation, currentIndex = 0, expr)
-          permutedClauses = subset :: permutedClauses
+          permutedClauses =
+            PermutedExpression(permutation.length, subset) :: permutedClauses
         })
-      case None => permutedClauses = None :: permutedClauses
+      case None =>
+        permutedClauses = PermutedExpression(0, None) :: permutedClauses
     }
     println(
       s"This results in ${permutedClauses.length} permutations of the assertion"

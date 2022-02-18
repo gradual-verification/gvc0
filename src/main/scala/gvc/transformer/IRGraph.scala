@@ -7,12 +7,12 @@ object IRGraph {
   // Note that names of methods, vars, etc. are immutable, since they are also copied in their respective Maps
 
   class Program {
-    private[IRGraph] val _structs =
+    private[IRGraph] var _structs =
       mutable.Map[scala.Predef.String, StructDefinition]()
     private[IRGraph] var _methods =
       mutable.Map[scala.Predef.String, MethodDefinition]()
     private var _predicates = mutable.Map[scala.Predef.String, Predicate]()
-    private val _dependencies = mutable.ListBuffer[Dependency]()
+    private var _dependencies = mutable.ListBuffer[Dependency]()
 
     lazy val ownedFieldsStruct = struct(
       Helpers.findAvailableName(_structs, "OwnedFields")
@@ -87,6 +87,15 @@ object IRGraph {
       _predicates = predicateList.foldLeft(
         mutable.Map[scala.Predef.String, Predicate]()
       )((m, pred) => { m + (pred.name -> pred) })
+
+    def copy(methods: List[Method], predicates: List[Predicate]) = {
+      val newProgram = new IRGraph.Program()
+      newProgram.replacePredicates(predicates)
+      newProgram.replaceMethods(methods)
+      newProgram._structs = _structs
+      newProgram._dependencies = _dependencies
+      newProgram
+    }
   }
 
   sealed trait StructDefinition {

@@ -1,3 +1,6 @@
 package gvc.visualizer
 
-class Lattice {}
+class LatticeElement(
+) {}
+
+class lattice {}
