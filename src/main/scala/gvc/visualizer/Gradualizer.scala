@@ -5,6 +5,7 @@ import gvc.transformer.IRGraph.Binary
 import scala.collection.mutable.ListBuffer
 
 object Gradualizer {
+
   class GradualizerException(val message: String) extends RuntimeException {
     override def getMessage(): String = message
   }
