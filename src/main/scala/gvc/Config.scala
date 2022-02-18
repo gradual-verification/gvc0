@@ -8,6 +8,7 @@ sealed trait DumpType
 case class Config(
     dump: Option[DumpType] = None,
     output: Option[String] = None,
+    permute: Option[String] = None,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
@@ -47,11 +48,13 @@ object Config {
                |  -o <file>  --output=<file>  Place the executable output into <file>
                |  -v         --only-verify    Stop after static verification
                |  -s         --save-files     Save the intermediate files produced (IR, Silver, C0, and C)
-               |  -x         --exec           Execute the compiled file"""
+               |  -x         --exec           Execute the compiled file
+               |  -p <file>  --permute=<file> Generate, verify, execute, and profile all permutations of specs for a program,
+               |                              saving the output to <file> in .csv format."""
 
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
-
+  private val permuteArg = raw"--output=(.+)".r
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
@@ -75,8 +78,12 @@ object Config {
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
       case "-o" :: f :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
+      case "-p" :: f :: tail =>
+        fromCommandLineArgs(tail, current.copy(permute = Some(f)))
       case outputArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
+      case permuteArg(f) :: tail =>
+        fromCommandLineArgs(tail, current.copy(permute = Some(f)))
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>
@@ -84,7 +91,6 @@ object Config {
       case ("-v" | "--only-verify") :: tail =>
         fromCommandLineArgs(tail, current.copy(onlyVerify = true))
       case ("-h" | "--help") :: _ => error(Config.help)
-
       case other :: _ if other.startsWith("-") =>
         error(s"Unrecognized command line argument: $other")
       case sourceFile :: tail =>

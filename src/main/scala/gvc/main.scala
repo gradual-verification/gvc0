@@ -4,6 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
+import gvc.visualizer.Gradualizer
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silver.verifier
@@ -49,8 +50,10 @@ object Main extends App {
       )
 
     val ir = GraphTransformer.transform(resolved)
-    if (config.dump == Some(Config.DumpIR)) dump(GraphPrinter.print(ir, includeSpecs = true))
-    else if (config.saveFiles) writeFile(irFileName, GraphPrinter.print(ir, includeSpecs = true))
+    if (config.dump == Some(Config.DumpIR))
+      dump(GraphPrinter.print(ir, includeSpecs = true))
+    else if (config.saveFiles)
+      writeFile(irFileName, GraphPrinter.print(ir, includeSpecs = true))
 
     val silver = IRGraphSilver.toSilver(ir)
     if (config.dump == Some(Config.DumpSilver)) dump(silver.toString())
@@ -64,6 +67,9 @@ object Main extends App {
       Seq()
     )
 
+    if (config.onlyVerify) sys.exit(0)
+
+    if (config.permute.isDefined) {} else {}
     silicon.start()
 
     silicon.verify(silver) match {
@@ -76,44 +82,48 @@ object Main extends App {
       }
     }
 
-    if (config.onlyVerify) sys.exit(0)
-
-    val fieldChecksInserted = Weaver.weave(ir, silver)
-
     silicon.stop()
 
-    val c0Source = GraphPrinter.print(ir, includeSpecs = false)
-    if (config.dump == Some(Config.DumpC0)) dumpC0(c0Source)
+    if (config.permute.isDefined) {
+      val irList = Gradualizer.gradualizeProgram(ir)
 
-    val outputExe = config.output.getOrElse("a.out")
-
-    val runtimeInput = Paths.get(getClass().getResource("/runtime.c0").getPath)
-    val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
-
-    val cc0Options = CC0Options(
-      compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-      saveIntermediateFiles = config.saveFiles,
-      output = Some(outputExe),
-      includeDirs = List(runtimeIncludeDir.toString + "/")
-    )
-
-    // Always write the intermediate C0 file, but then delete it
-    // if not saving intermediate files
-    writeFile(c0FileName, c0Source)
-    val compilerExit =
-      try {
-        CC0Wrapper.exec(c0FileName, cc0Options)
-      } finally {
-        if (!config.saveFiles) deleteFile(c0FileName)
-      }
-
-    if (compilerExit != 0) Config.error("Compilation failed")
-
-    if (config.exec) {
-      val outputCommand = Paths.get(outputExe).toAbsolutePath().toString()
-      sys.exit(Seq(outputCommand) !)
     } else {
-      sys.exit(0)
+      val fieldChecksInserted = Weaver.weave(ir, silver)
+
+      val c0Source = GraphPrinter.print(ir, includeSpecs = false)
+      if (config.dump == Some(Config.DumpC0)) dumpC0(c0Source)
+
+      val outputExe = config.output.getOrElse("a.out")
+
+      val runtimeInput =
+        Paths.get(getClass().getResource("/runtime.c0").getPath)
+      val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
+
+      val cc0Options = CC0Options(
+        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+        saveIntermediateFiles = config.saveFiles,
+        output = Some(outputExe),
+        includeDirs = List(runtimeIncludeDir.toString + "/")
+      )
+
+      // Always write the intermediate C0 file, but then delete it
+      // if not saving intermediate files
+      writeFile(c0FileName, c0Source)
+      val compilerExit =
+        try {
+          CC0Wrapper.exec(c0FileName, cc0Options)
+        } finally {
+          if (!config.saveFiles) deleteFile(c0FileName)
+        }
+
+      if (compilerExit != 0) Config.error("Compilation failed")
+
+      if (config.exec) {
+        val outputCommand = Paths.get(outputExe).toAbsolutePath().toString()
+        sys.exit(Seq(outputCommand) !)
+      } else {
+        sys.exit(0)
+      }
     }
   }
 
@@ -150,11 +160,13 @@ object Main extends App {
       println("Runtime checks required for " + exp.toString() + ":")
       println(
         checks
-          .map(b => s"  if ${
-            if (b.branchInfo.isEmpty) "true"
-            else b.branchInfo.map { case (branch, _, _) => branch }
-              .map(c => "(" + c.toString() + ")")
-              .mkString(" && ")}: ${b.checks.toString()}"
+          .map(b =>
+            s"  if ${if (b.branchInfo.isEmpty) "true"
+            else
+              b.branchInfo
+                .map { case (branch, _, _) => branch }
+                .map(c => "(" + c.toString() + ")")
+                .mkString(" && ")}: ${b.checks.toString()}"
           )
           .mkString("\n")
       )

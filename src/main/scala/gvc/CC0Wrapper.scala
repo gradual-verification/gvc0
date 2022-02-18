@@ -10,30 +10,30 @@ object CC0Architecture {
 }
 
 case class CC0Options(
-  val compilerPath: String = "cc0",
-  val verbose: Boolean = false,
-  val libraries: List[String] = Nil,
-  val includeDirs: List[String] = Nil,
-  val execArgs: List[String] = Nil,
-  val compilerArgs: List[String] = Nil,
-  val warnings: List[String] = Nil,
-  val dumpAST: Boolean = false,
-  val output: Option[String] = None,
-  val warn: Boolean = false,
-  val exec: Boolean = false,
-  val version: Boolean = false,
-  val log: Boolean = true,
-  val dynCheck: Boolean = false,
-  val purityCheck: Boolean = true,
-  val saveIntermediateFiles: Boolean = false,
-  val genBytecode: Boolean = false,
-  val copy: Boolean = false,
-  val standard: Option[String] = None,
-  val runtime: Option[String] = None,
-  val architecture: Option[CC0Architecture] = None,
-  val onlyTypecheck: Boolean = false,
-  val includeRuntime: Boolean = false,
-  val inputFiles: List[String] = Nil,
+    compilerPath: String = "cc0",
+    verbose: Boolean = false,
+    libraries: List[String] = Nil,
+    includeDirs: List[String] = Nil,
+    execArgs: List[String] = Nil,
+    compilerArgs: List[String] = Nil,
+    warnings: List[String] = Nil,
+    dumpAST: Boolean = false,
+    output: Option[String] = None,
+    warn: Boolean = false,
+    exec: Boolean = false,
+    version: Boolean = false,
+    log: Boolean = true,
+    dynCheck: Boolean = false,
+    purityCheck: Boolean = true,
+    saveIntermediateFiles: Boolean = false,
+    genBytecode: Boolean = false,
+    copy: Boolean = false,
+    standard: Option[String] = None,
+    runtime: Option[String] = None,
+    architecture: Option[CC0Architecture] = None,
+    onlyTypecheck: Boolean = false,
+    includeRuntime: Boolean = false,
+    inputFiles: List[String] = Nil
 )
 
 object CC0Wrapper {
@@ -42,11 +42,16 @@ object CC0Wrapper {
     command !
   }
 
-  private def formatCommand(sourceFile: String, options: CC0Options): List[String] = {
+  private def formatCommand(
+      sourceFile: String,
+      options: CC0Options
+  ): List[String] = {
     def flag(arg: String, flag: Boolean): Seq[String] =
       if (flag) Seq(arg) else Seq.empty
     def values(arg: String, values: Seq[String]): Seq[String] =
-      values.flatMap(value => if (arg.startsWith("--")) Seq(s"$arg=$value") else Seq(arg, value))
+      values.flatMap(value =>
+        if (arg.startsWith("--")) Seq(s"$arg=$value") else Seq(arg, value)
+      )
     def value(arg: String, value: Option[String]): Seq[String] =
       values(arg, value.toSeq)
 
