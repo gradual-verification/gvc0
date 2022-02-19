@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.visualizer.Gradualizer
+import gvc.visualizer.{Gradualizer, ProgramLattice}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silver.verifier
@@ -86,6 +86,7 @@ object Main extends App {
 
     if (config.permute.isDefined) {
       val irList = Gradualizer.gradualizeProgram(ir)
+      val programLattice = ProgramLattice.generateProgramLattice(irList)
 
     } else {
       val fieldChecksInserted = Weaver.weave(ir, silver)

@@ -177,7 +177,7 @@ object IRGraph {
       val name: scala.Predef.String,
       var expression: IRGraph.Expression
   ) {
-    private val _parameters = mutable.ListBuffer[Parameter]()
+    private var _parameters = mutable.ListBuffer[Parameter]()
 
     def parameters: Seq[Parameter] = _parameters
 
@@ -185,6 +185,11 @@ object IRGraph {
       val newParam = new Parameter(valueType, name)
       _parameters += newParam
       newParam
+    }
+    def copy(expr: Expression) = {
+      val newPred = new Predicate(name, expr)
+      newPred._parameters = _parameters
+      newPred
     }
   }
 

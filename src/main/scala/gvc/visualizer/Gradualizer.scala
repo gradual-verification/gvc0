@@ -29,24 +29,24 @@ case class PermutedMethod(
     nClausesPreconditions: Int,
     nClausesPostconditions: Int,
     nClausesAssertions: Int,
-    nCLausesLoopInvariants: Int
+    nClausesLoopInvariants: Int
 )
 
 case class PermutedBlock(
     nClausesAssertions: Int,
-    nCLausesLoopInvariants: Int,
+    nClausesLoopInvariants: Int,
     opList: List[IRGraph.Op]
 )
 
 case class PermutedPredicate(
     predicate: IRGraph.Predicate,
-    metadata: PermutationMetadata
+    nClauses: Int
 )
 
 case class PermutedOp(
-    nClausesAssertions: Int,
-    nCLausesLoopInvariants: Int,
-    op: IRGraph.Op
+    nClausesAssertions: Int = 0,
+    nCLausesLoopInvariants: Int = 0,
+    op: Option[IRGraph.Op] = None
 )
 
 object Gradualizer {
@@ -75,7 +75,10 @@ object Gradualizer {
     val methodPermutations: List[List[PermutedMethod]] = permuteMethods(
       program.methods
     )
-    val predicatePermutations: List[List[IRGraph.Predicate]] = List()
+    val predicatePermutations: List[List[PermutedPredicate]] =
+      permutePredicates(
+        program.predicates
+      )
 
     for (methodList <- methodPermutations) {
       for (predicateList <- predicatePermutations) {
@@ -83,18 +86,22 @@ object Gradualizer {
         var nClausesPostconditions = 0
         var nClausesAssertions = 0
         var nClausesLoopInvariants = 0
-        //var nClausesPredicates = 0
+        var nClausesPredicates = 0
         val methodMetadata = mutable.Map[IRGraph.Method, PermutedMethod]()
 
         val methodsToAdd = methodList.map(permMethod => {
           nClausesPreconditions += permMethod.nClausesPreconditions
           nClausesPostconditions += permMethod.nClausesPostconditions
           nClausesAssertions += permMethod.nClausesAssertions
-          nClausesLoopInvariants += permMethod.nCLausesLoopInvariants
+          nClausesLoopInvariants += permMethod.nClausesLoopInvariants
           methodMetadata += (permMethod.method -> permMethod)
           permMethod.method
         })
-        val predicatesToAdd = List()
+        val predicatesToAdd = predicateList.map(permPredicate => {
+          nClausesPredicates += permPredicate.nClauses
+          permPredicate.predicate
+        })
+
         val clonedProgram: IRGraph.Program =
           program.copy(methodsToAdd, predicatesToAdd)
 
@@ -137,7 +144,7 @@ object Gradualizer {
               pre.nClauses,
               post.nClauses,
               body.nClausesAssertions,
-              body.nCLausesLoopInvariants
+              body.nClausesLoopInvariants
             )
           })
         })
@@ -148,17 +155,32 @@ object Gradualizer {
     crossJoin(perMethodPermutations.toList)
   }
 
+  def permutePredicates(
+      predicates: Seq[IRGraph.Predicate]
+  ): List[List[PermutedPredicate]] = {
+    val predicatePermutations = predicates.map(predicate => {
+      val permutedPredicateBodies = permuteConjunctiveClauses(
+        Some(predicate.expression)
+      )
+      permutedPredicateBodies.map(body => {
+        PermutedPredicate(
+          predicate.copy(new IRGraph.Imprecise(body.expr)),
+          body.nClauses
+        )
+      })
+    })
+    crossJoin(predicatePermutations.toList)
+  }
   def permuteBlock(block: IRGraph.Block): List[PermutedBlock] = {
     var currentPermutations: List[PermutedBlock] = List(
       PermutedBlock(0, 0, List())
     )
-
     val opList = block.toList
     def appendToAll(op: IRGraph.Op): Unit = {
       currentPermutations = currentPermutations.map(prev =>
         PermutedBlock(
           prev.nClausesAssertions,
-          prev.nCLausesLoopInvariants,
+          prev.nClausesLoopInvariants,
           prev.opList.::(op)
         )
       )
@@ -169,24 +191,31 @@ object Gradualizer {
         permList.map(curr => {
           PermutedBlock(
             prev.nClausesAssertions + curr.nClausesAssertions,
-            prev.nCLausesLoopInvariants + curr.nCLausesLoopInvariants,
-            prev.opList.::(curr.op)
+            prev.nClausesLoopInvariants + curr.nCLausesLoopInvariants,
+            if (curr.op.isDefined) prev.opList.::(curr.op.get) else prev.opList
           )
         })
       })
     }
 
     opList.foreach {
+      case fold: IRGraph.Fold => {
+        permuteToAll(List(PermutedOp(op = Some(fold)), PermutedOp()))
+      }
+      case unfold: IRGraph.Unfold => {
+        permuteToAll(List(PermutedOp(op = Some(unfold)), PermutedOp()))
+      }
       case assert: IRGraph.Assert =>
         if (assert.kind == IRGraph.AssertKind.Specification) {
           permuteToAll(
             permuteConjunctiveClauses(Some(assert.value)).map(expr => {
               PermutedOp(
-                expr.nClauses,
-                0,
-                new IRGraph.Assert(
-                  new IRGraph.Imprecise(expr.expr),
-                  IRGraph.AssertKind.Specification
+                nClausesAssertions = expr.nClauses,
+                op = Some(
+                  new IRGraph.Assert(
+                    new IRGraph.Imprecise(expr.expr),
+                    IRGraph.AssertKind.Specification
+                  )
                 )
               )
             })
@@ -201,8 +230,8 @@ object Gradualizer {
           falseBranchPermutations.map(falseBranch => {
             PermutedOp(
               trueBranch.nClausesAssertions + falseBranch.nClausesAssertions,
-              trueBranch.nCLausesLoopInvariants + falseBranch.nCLausesLoopInvariants,
-              value.copy(trueBranch.opList, falseBranch.opList)
+              trueBranch.nClausesLoopInvariants + falseBranch.nClausesLoopInvariants,
+              Some(value.copy(trueBranch.opList, falseBranch.opList))
             )
           })
         })
@@ -214,8 +243,8 @@ object Gradualizer {
             whileBodies.map(body => {
               PermutedOp(
                 body.nClausesAssertions,
-                body.nCLausesLoopInvariants + invAssert.nClauses,
-                whl.copy(invAssert.expr, body.opList)
+                body.nClausesLoopInvariants + invAssert.nClauses,
+                Some(whl.copy(invAssert.expr, body.opList))
               )
             })
           })

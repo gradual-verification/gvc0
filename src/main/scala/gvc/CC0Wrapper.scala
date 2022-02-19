@@ -43,18 +43,9 @@ case class ExecutionMetrics(
 )
 
 object CC0Wrapper {
-  private val real = {
-    "([0-9]+\\.[0-9]+) real".r
-  }
-  private val user = {
-    "([0-9]+\\.[0-9]+) user".r
-  }
-  private val sys = {
-    "([0-9]+\\.[0-9]+) sys".r
-  }
 
   class CC0Exception(val message: String) extends RuntimeException {
-    override def getMessage(): String = message
+    override def getMessage: String = message
   }
 
   def exec(sourceFile: String, options: CC0Options): Int = {
@@ -62,34 +53,20 @@ object CC0Wrapper {
     command !
   }
 
-  def execTimed(sourceFile: String, options: CC0Options): ExecutionMetrics = {
+  def execTimed(
+      sourceFile: String,
+      options: CC0Options,
+      iterations: Int
+  ): Long = {
     val command = formatCommand(sourceFile, options)
-    val timedCommand = "/usr/bin/time -p " + command
-    val results = timedCommand !!
-
-    val outputLines = results.split("\n")
-
-    if (outputLines.length < 3) {
-      throw new CC0Exception(
-        "Unable to extract timing information from stdout."
-      )
-    } else {
-      val realMatch = real.findFirstIn(outputLines(outputLines.length - 2))
-      val userMatch = user.findFirstIn(outputLines(outputLines.length - 1))
-      val sysMatch = sys.findFirstIn(outputLines.last)
-
-      if (realMatch.isDefined && userMatch.isDefined && sysMatch.isDefined) {
-        ExecutionMetrics(
-          realMatch.get.toLong,
-          userMatch.get.toLong,
-          sysMatch.get.toLong
-        )
-      } else {
-        throw new CC0Exception(
-          "Unable to extract timing information from stdout."
-        )
-      }
+    var duration: Long = 0;
+    for (_ <- 1 to iterations) {
+      val start = System.nanoTime()
+      command !
+      val stop = System.nanoTime()
+      duration += start - stop
     }
+    duration / iterations
   }
 
   private def formatCommand(
