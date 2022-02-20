@@ -81,32 +81,31 @@ object Collector {
   }
 
   private sealed trait ViperLocation
-  private sealed trait ViperCheckLocation extends ViperLocation
   private object ViperLocation {
-    case object Value extends ViperCheckLocation
-    case object InvariantBeforeLoop extends ViperCheckLocation
-    case object InvariantAfterLoop extends ViperCheckLocation
-    case object InvariantLoopStart extends ViperCheckLocation
-    case object InvariantLoopEnd extends ViperCheckLocation
+    case object Value extends ViperLocation
     case object PreInvoke extends ViperLocation
     case object PostInvoke extends ViperLocation
+    case object PreLoop extends ViperLocation
+    case object PostLoop extends ViperLocation
+    case object InvariantLoopStart extends ViperLocation
+    case object InvariantLoopEnd extends ViperLocation
     
-    def loop(loopPosition: LoopPosition): ViperCheckLocation = loopPosition match {
-      case LoopPosition.After => ViperLocation.InvariantAfterLoop
-      case LoopPosition.Before => ViperLocation.InvariantBeforeLoop
+    def loop(loopPosition: LoopPosition): ViperLocation = loopPosition match {
+      case LoopPosition.After => ViperLocation.PreLoop
+      case LoopPosition.Before => ViperLocation.PostLoop
       case LoopPosition.Beginning => ViperLocation.InvariantLoopStart
       case LoopPosition.End => ViperLocation.InvariantLoopEnd
     }
 
     def forIR(irLocation: Location, vprLocation: ViperLocation): Location = irLocation match {
       case at: AtOp => vprLocation match {
-        case ViperLocation.Value => Pre(at.op)
-        case ViperLocation.InvariantBeforeLoop => Pre(at.op)
-        case ViperLocation.InvariantAfterLoop => Post(at.op)
+        case ViperLocation.PreInvoke |
+          ViperLocation.PreLoop |
+          ViperLocation.Value => Pre(at.op)
+        case ViperLocation.PostInvoke |
+          ViperLocation.PostLoop => Post(at.op)
         case ViperLocation.InvariantLoopStart => LoopStart(at.op)
         case ViperLocation.InvariantLoopEnd => LoopEnd(at.op)
-        case ViperLocation.PreInvoke => Pre(at.op)
-        case ViperLocation.PostInvoke => Post(at.op)
       }
       case _ => {
         if (vprLocation != ViperLocation.Value)
@@ -128,7 +127,7 @@ object Collector {
         // This must be a method pre-condition or post-condition
         val callee = program.findMethod(invoke.methodName)
         val location: ViperLocation =
-          if (callee.posts.exists(_.contains(source))) ViperLocation.PostInvoke
+          if (isContained(source, callee.posts)) ViperLocation.PostInvoke
           else ViperLocation.PreInvoke
         new ViperBranch(invoke, location, condition)
       }
@@ -150,7 +149,8 @@ object Collector {
   private case class ViperCheck(
     check: vpr.Exp,
     conditions: List[ViperBranch],
-    location: ViperCheckLocation
+    location: ViperLocation,
+    context: vpr.Exp
   )
 
   private type ViperCheckMap = mutable.HashMap[scala.Int, mutable.ListBuffer[ViperCheck]]
@@ -172,12 +172,27 @@ object Collector {
       val list = collected.getOrElseUpdate(node.uniqueIdentifier, mutable.ListBuffer())
       for (c <- checks) {
         val conditions = c.branchInfo.map(ViperBranch(_, vprProgram)).toList
-        list += ViperCheck(c.checks, conditions, location)
+        list += ViperCheck(c.checks, conditions, location, c.context)
       }
     }
 
     collected
   }
+
+  private def isContained(node: vpr.Node, container: vpr.Node): Boolean = {
+    container.visit {
+      case n => {
+        if (n.uniqueIdentifier == node.uniqueIdentifier) {
+          return true
+        }
+      }
+    }
+  
+    false
+  }
+
+  private def isContained(node: vpr.Node, containers: Seq[vpr.Node]): Boolean =
+    containers.exists(isContained(node, _))
 
   private def collect(
       irProgram: Program,
@@ -307,18 +322,27 @@ object Collector {
     // Finds all the runtime checks required by the given Viper node, and adds them at the given
     // IR location.
     // `loopInvs` is the list of the invariants from all the loops that contain this position.
-    def check(node: vpr.Node, loc: Location, loopInvs: List[vpr.Exp]): Unit = {
+    def check(node: vpr.Node, loc: Location, methodCall: Option[vpr.Method], loopInvs: List[vpr.Exp]): Unit = {
       for (vprCheck <- vprChecks.get(node.uniqueIdentifier).toSeq.flatten) {
         val condition = branchCondition(vprCheck.conditions, loopInvs)
-        val checkLocation = (vprCheck.location, loc) match {
-          case (ViperLocation.Value, _) => loc
-          case (ViperLocation.InvariantBeforeLoop, at: AtOp) => Pre(at.op)
-          case (ViperLocation.InvariantAfterLoop, at: AtOp) => Post(at.op)
-          case (ViperLocation.InvariantLoopStart, at: AtOp) => LoopStart(at.op)
-          case (ViperLocation.InvariantLoopEnd, at: AtOp) => LoopEnd(at.op)
 
-          // It is invalid for a loop invariant check to be attached to a pre/post-condition
-          case _ => throw new WeaverException("Invalid check location")
+        val checkLocation = loc match {
+          case at: AtOp => vprCheck.location match {
+            case ViperLocation.Value => methodCall match {
+              case Some(method) if isContained(vprCheck.context, method.posts) =>
+                Post(at.op)
+              case _ => Pre(at.op)
+            }
+            case ViperLocation.PreLoop | ViperLocation.PreInvoke => Pre(at.op)
+            case ViperLocation.PostLoop | ViperLocation.PostInvoke => Post(at.op)
+            case ViperLocation.InvariantLoopStart => LoopStart(at.op)
+            case ViperLocation.InvariantLoopEnd => LoopEnd(at.op)
+          }
+          case _ => {
+            if (vprCheck.location != ViperLocation.Value)
+              throw new WeaverException("Invalid check location")
+            loc
+          }
         }
 
         // TODO: Split apart ANDed checks?
@@ -335,7 +359,6 @@ object Collector {
 
         conditions += condition
 
-        println(locationChecks)
         if (check.isInstanceOf[AccessibilityCheck] && (loc == MethodPre || loc == MethodPost || vprCheck.location != ViperLocation.Value)) {
           needsFullPermissionChecking += checkLocation
         }
@@ -343,8 +366,8 @@ object Collector {
     }
 
     // Recursively collects all runtime checks
-    def checkAll(node: vpr.Node, loc: Location, loopInvs: List[vpr.Exp]): Unit =
-      node.visit { case n => check(n, loc, loopInvs) }
+    def checkAll(node: vpr.Node, loc: Location, methodCall: Option[vpr.Method], loopInvs: List[vpr.Exp]): Unit =
+      node.visit { case n => check(n, loc, methodCall, loopInvs) }
 
     // Combines indexing and runtime check collection for a given Viper node. Indexing must be
     // completed first, since the conditions on a runtime check may be at locations contained in
@@ -356,14 +379,14 @@ object Collector {
           index(iff, loc)
           indexAll(iff.cond, loc)
 
-          check(iff, loc, loopInvs)
-          checkAll(iff.cond, loc, loopInvs)
+          check(iff, loc, None, loopInvs)
+          checkAll(iff.cond, loc, None, loopInvs)
         }
 
         case call: vpr.MethodCall => {
           val method = vprProgram.findMethod(call.methodName)
           indexAll(call, loc)
-          checkAll(call, loc, loopInvs)
+          checkAll(call, loc, Some(method), loopInvs)
         }
 
         case loop: vpr.While => {
@@ -372,14 +395,14 @@ object Collector {
           loop.invs.foreach(indexAll(_, loc))
 
 
-          check(loop, loc, loopInvs)
-          checkAll(loop.cond, loc, loopInvs)
-          loop.invs.foreach { i => checkAll(i, loc, loopInvs) }
+          check(loop, loc, None, loopInvs)
+          checkAll(loop.cond, loc, None, loopInvs)
+          loop.invs.foreach { i => checkAll(i, loc, None, loopInvs) }
         }
 
         case n => {
           indexAll(n, loc)
-          checkAll(n, loc, loopInvs)
+          checkAll(n, loc, None, loopInvs)
         }
       }
     }
@@ -492,8 +515,8 @@ object Collector {
         val position = b.location match {
           // Special case for when the verifier uses positions tagged as the beginning of the loop
           // outside of the loop body. In this case, just use the after loop position.
-          case ViperLocation.InvariantLoopStart if !loopInvs.contains(b.at) =>
-            ViperLocation.InvariantAfterLoop
+          case ViperLocation.InvariantLoopStart if !isContained(b.at, loopInvs) =>
+            ViperLocation.PostLoop
           case p => p
         }
 
@@ -513,14 +536,14 @@ object Collector {
 
     // Index pre-conditions and add required runtime checks
     vprMethod.pres.foreach(indexAll(_, MethodPre))
-    vprMethod.pres.foreach(checkAll(_, MethodPre, Nil))
+    vprMethod.pres.foreach(checkAll(_, MethodPre, None, Nil))
 
     // Loop through each operation and collect checks
     visitBlock(irMethod.body, vprMethod.body.get, Nil)
 
     // Index post-conditions and add required runtime checks
     vprMethod.posts.foreach(indexAll(_, MethodPost))
-    vprMethod.posts.foreach(checkAll(_, MethodPost, Nil))
+    vprMethod.posts.foreach(checkAll(_, MethodPost, None, Nil))
 
     // Check if execution can fall-through to the end of the method
     // It is valid to only check the last operation since we don't allow early returns
