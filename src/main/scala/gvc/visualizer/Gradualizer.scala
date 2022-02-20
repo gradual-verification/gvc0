@@ -1,17 +1,17 @@
 package gvc.visualizer
-import gvc.transformer.IRGraph
-import gvc.transformer.IRGraph.Binary
+import gvc.Main.generateIR
+import gvc.transformer.{GraphPrinter, IRGraph}
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
-case class PermutedProgram(
-    ir: IRGraph.Program,
+case class ProgramPermutation(
+    source: String,
     nClausesPreconditions: Int,
     nClausesPostconditions: Int,
     nClausesAssertions: Int,
     nCLausesLoopInvariants: Int,
-    methodMetadata: Map[IRGraph.Method, PermutedMethod]
+    methodMetadata: Map[String, PermutedMethod]
 )
 
 case class PermutedExpression(
@@ -26,10 +26,10 @@ case class PermutationMetadata(
 
 case class PermutedMethod(
     method: IRGraph.Method,
-    nClausesPreconditions: Int,
-    nClausesPostconditions: Int,
-    nClausesAssertions: Int,
-    nClausesLoopInvariants: Int
+    nClausesPreconditions: Int = 0,
+    nClausesPostconditions: Int = 0,
+    nClausesAssertions: Int = 0,
+    nClausesLoopInvariants: Int = 0
 )
 
 case class PermutedBlock(
@@ -66,14 +66,20 @@ object Gradualizer {
     }
   }
 
-  def gradualizeProgram(
-      program: IRGraph.Program
-  ): List[PermutedProgram] = {
+  def parseMethodExclusionList(rawList: String): Set[String] =
+    //TODO: add Regex to verify correct format?
+    rawList.split(',').toSet
 
-    val programPermutations: ListBuffer[PermutedProgram] = ListBuffer()
+  def gradualizeProgram(
+      c0Source: String,
+      methodExclusionList: Set[String]
+  ): List[ProgramPermutation] = {
+    val program = generateIR(c0Source)
+    val programPermutations: ListBuffer[ProgramPermutation] = ListBuffer()
 
     val methodPermutations: List[List[PermutedMethod]] = permuteMethods(
-      program.methods
+      program.methods,
+      methodExclusionList
     )
     val predicatePermutations: List[List[PermutedPredicate]] =
       permutePredicates(
@@ -87,14 +93,14 @@ object Gradualizer {
         var nClausesAssertions = 0
         var nClausesLoopInvariants = 0
         var nClausesPredicates = 0
-        val methodMetadata = mutable.Map[IRGraph.Method, PermutedMethod]()
+        val methodMetadata = mutable.Map[String, PermutedMethod]()
 
         val methodsToAdd = methodList.map(permMethod => {
           nClausesPreconditions += permMethod.nClausesPreconditions
           nClausesPostconditions += permMethod.nClausesPostconditions
           nClausesAssertions += permMethod.nClausesAssertions
           nClausesLoopInvariants += permMethod.nClausesLoopInvariants
-          methodMetadata += (permMethod.method -> permMethod)
+          methodMetadata += (permMethod.method.name -> permMethod)
           permMethod.method
         })
         val predicatesToAdd = predicateList.map(permPredicate => {
@@ -105,8 +111,8 @@ object Gradualizer {
         val clonedProgram: IRGraph.Program =
           program.copy(methodsToAdd, predicatesToAdd)
 
-        programPermutations += PermutedProgram(
-          clonedProgram,
+        programPermutations += ProgramPermutation(
+          GraphPrinter.print(clonedProgram, includeSpecs = true),
           nClausesPreconditions,
           nClausesPostconditions,
           nClausesAssertions,
@@ -115,43 +121,66 @@ object Gradualizer {
         )
       }
     }
+    print(
+      "Generated " + programPermutations.length + " permutations of the program."
+    )
     programPermutations.toList
   }
 
   def permuteMethods(
-      methods: Seq[IRGraph.Method]
+      methods: Seq[IRGraph.Method],
+      methodExclusionList: Set[String]
   ): List[List[PermutedMethod]] = {
     val perMethodPermutations: ListBuffer[List[PermutedMethod]] =
       ListBuffer()
+
     methods.foreach(method => {
-      val permutedPreconditions = permuteConjunctiveClauses(method.precondition)
-      val permutedPostconditions =
-        permuteConjunctiveClauses(method.postcondition)
-      val permutedMethodBodies = permuteBlock(method.body)
+      if (!methodExclusionList.contains(method.name)) {
+        val permutedPreconditions =
+          permuteConjunctiveClauses(method.precondition)
+        val permutedPostconditions =
+          permuteConjunctiveClauses(method.postcondition)
+        val permutedMethodBodies = permuteBlock(method.body)
+        println(s"${method.name}: ")
+        println(s"  - " + permutedPreconditions.length + " preconditions")
+        println(s"  - " + permutedPostconditions.length + " postconditions")
+        println(s"  - " + permutedMethodBodies.length + " method bodies")
+        println(
+          s"  = " + permutedPreconditions.length * permutedPostconditions.length * permutedMethodBodies.length + " total versions"
+        )
+        var currPermutation = 1
+        val methodPermutations = ListBuffer[PermutedMethod]()
+        permutedPostconditions.foreach(post => {
+          permutedPreconditions.foreach(pre => {
+            permutedMethodBodies.foreach(body => {
+              val permutation =
+                new IRGraph.Method(method.name, method.returnType)
+              permutation.precondition = Some(new IRGraph.Imprecise(pre.expr))
+              permutation.postcondition = Some(new IRGraph.Imprecise(post.expr))
+              permutation.body = new IRGraph.MethodBlock(method)
+              permutation.body ++= body.opList.map(op => op.copy)
+              methodPermutations += PermutedMethod(
+                permutation,
+                pre.nClauses,
+                post.nClauses,
+                body.nClausesAssertions,
+                body.nClausesLoopInvariants
+              )
+              print(
+                "\r" + currPermutation + "/" + permutedPreconditions.length * permutedPostconditions.length * permutedMethodBodies.length
+              )
 
-      val methodPermutations = ListBuffer[PermutedMethod]()
-      permutedPostconditions.foreach(post => {
-        permutedPreconditions.foreach(pre => {
-          permutedMethodBodies.foreach(body => {
-            val permutation = new IRGraph.Method(method.name, method.returnType)
-            permutation.precondition = pre.expr
-            permutation.postcondition = post.expr
-            permutation.body = new IRGraph.MethodBlock(method)
-            permutation.body ++= body.opList
-
-            methodPermutations += PermutedMethod(
-              permutation,
-              pre.nClauses,
-              post.nClauses,
-              body.nClausesAssertions,
-              body.nClausesLoopInvariants
-            )
+              currPermutation += 1
+            })
           })
         })
-      })
-      perMethodPermutations += methodPermutations.toList
+        perMethodPermutations += methodPermutations.toList
+      }
     })
-
+    print("\n")
+    methods
+      .filter(method => methodExclusionList.contains(method.name))
+      .foreach(method => perMethodPermutations += List(PermutedMethod(method)))
     crossJoin(perMethodPermutations.toList)
   }
 
@@ -199,12 +228,10 @@ object Gradualizer {
     }
 
     opList.foreach {
-      case fold: IRGraph.Fold => {
+      case fold: IRGraph.Fold =>
         permuteToAll(List(PermutedOp(op = Some(fold)), PermutedOp()))
-      }
-      case unfold: IRGraph.Unfold => {
+      case unfold: IRGraph.Unfold =>
         permuteToAll(List(PermutedOp(op = Some(unfold)), PermutedOp()))
-      }
       case assert: IRGraph.Assert =>
         if (assert.kind == IRGraph.AssertKind.Specification) {
           permuteToAll(
@@ -249,9 +276,8 @@ object Gradualizer {
             })
           })
         )
-      case _ => {
+      case _ =>
         appendToAll(_)
-      }
     }
     currentPermutations
   }
@@ -263,63 +289,96 @@ object Gradualizer {
       case Some(expr: IRGraph.Expression) =>
         val numClausesInAssertion = numClauses(expr)
         val conjunctionNodeIndices = permuteIndices(numClausesInAssertion)
-        println(s"There are $numClausesInAssertion clauses")
+        //println(s"There are $numClausesInAssertion clauses")
         conjunctionNodeIndices.foreach(permutation => {
           val subset =
-            extractSubsetOfClauses(permutation, currentIndex = 0, expr)
+            extractSubsetOfClauses(permutation, expr)
           permutedClauses =
             PermutedExpression(permutation.length, subset) :: permutedClauses
         })
       case None =>
         permutedClauses = PermutedExpression(0, None) :: permutedClauses
     }
-    println(
-      s"This results in ${permutedClauses.length} permutations of the assertion"
-    )
+    //println(
+    //  s"This results in ${permutedClauses.length} permutations of the assertion"
+    //)
     permutedClauses
   }
 
+  case class ASTMarker(expr: Option[IRGraph.Expression], currentIndex: Int)
   def extractSubsetOfClauses(
       subset: List[Int],
-      currentIndex: Int,
       root: IRGraph.Expression
   ): Option[IRGraph.Expression] = {
+    val subsetBuffer = mutable.ListBuffer.empty ++= subset
+    extractSubsetOfClauses(subsetBuffer, index = 0, root).expr
+  }
+  def extractSubsetOfClauses(
+      subset: ListBuffer[Int],
+      index: Int,
+      root: IRGraph.Expression
+  ): ASTMarker = {
     if (subset.nonEmpty) {
       root match {
         case binaryRoot: IRGraph.Binary =>
-          if (subset.last == currentIndex) {
-            val left = extractSubsetOfClauses(
-              subset.slice(0, subset.length - 1),
-              currentIndex + 1,
-              binaryRoot.left
-            )
-            left match {
-              case Some(leftExists: IRGraph.Expression) =>
+          if (binaryRoot.operator == IRGraph.BinaryOp.And) {
+            val rightTraversal =
+              extractSubsetOfClauses(subset, index, binaryRoot.right)
+            val leftTraversal =
+              extractSubsetOfClauses(
+                subset,
+                rightTraversal.currentIndex,
+                binaryRoot.left
+              )
+            if (rightTraversal.expr.isDefined && leftTraversal.expr.isDefined) {
+              ASTMarker(
                 Some(
                   new IRGraph.Binary(
                     binaryRoot.operator,
-                    leftExists,
-                    binaryRoot.right
+                    leftTraversal.expr.get,
+                    rightTraversal.expr.get
                   )
-                )
-              case None => Some(binaryRoot.right)
+                ),
+                leftTraversal.currentIndex
+              )
+            } else if (rightTraversal.expr.isDefined) {
+              ASTMarker(
+                rightTraversal.expr,
+                leftTraversal.currentIndex
+              )
+            } else {
+              leftTraversal
             }
+          } else if (subset.last == index) {
+            subset.remove(1, subset.length - 1)
+            ASTMarker(Some(binaryRoot), index + 1)
           } else {
-            extractSubsetOfClauses(
-              subset,
-              currentIndex + 1,
-              binaryRoot.left
-            )
+            ASTMarker(None, index + 1)
           }
+
+        case cond: IRGraph.Conditional =>
+          val ifTrue = extractSubsetOfClauses(subset, index, cond.ifTrue)
+          val ifFalse =
+            extractSubsetOfClauses(subset, ifTrue.currentIndex, cond.ifFalse)
+          ASTMarker(
+            Some(
+              new IRGraph.Conditional(
+                cond.condition,
+                new IRGraph.Imprecise(ifTrue.expr),
+                new IRGraph.Imprecise(ifFalse.expr)
+              )
+            ),
+            ifFalse.currentIndex
+          )
         case _: IRGraph.Expression =>
-          if (subset.last == currentIndex) {
-            Some(root)
+          if (subset.last == index) {
+            ASTMarker(Some(root), index)
           } else {
-            None
+            ASTMarker(None, index)
           }
       }
     } else {
-      None
+      ASTMarker(None, index)
     }
   }
 
@@ -365,21 +424,16 @@ object Gradualizer {
   }
 
   def numClauses(expr: IRGraph.Expression): Int = {
-    var numClauses = 1
-    if (expr.isInstanceOf[IRGraph.Binary]) {
-      var currExpr = expr
-      while (
-        (currExpr.isInstanceOf[IRGraph.Binary] && currExpr
-          .asInstanceOf[IRGraph.Binary]
-          .operator == IRGraph.BinaryOp.And) && currExpr
-          .asInstanceOf[IRGraph.Binary]
-          .left
-          .isInstanceOf[IRGraph.Binary]
-      ) {
-        numClauses += 1
-        currExpr = currExpr.asInstanceOf[Binary].left
-      }
+    expr match {
+      case binExp: IRGraph.Binary =>
+        if (binExp.operator == IRGraph.BinaryOp.And) {
+          numClauses(binExp.right) + numClauses(binExp.left)
+        } else {
+          1
+        }
+      case ifExp: IRGraph.Conditional =>
+        numClauses(ifExp.ifTrue) + numClauses(ifExp.ifFalse)
+      case _ => 1
     }
-    numClauses
   }
 }

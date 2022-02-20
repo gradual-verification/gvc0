@@ -9,6 +9,7 @@ case class Config(
     dump: Option[DumpType] = None,
     output: Option[String] = None,
     permute: Option[String] = None,
+    permuteExclude: Option[String] = None,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
@@ -30,6 +31,16 @@ case class Config(
       else if (!sourceFile.isDefined) Some("No source file specified")
       else if (!Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
+      else if (permuteExclude.isDefined && !permute.isDefined)
+        Some(s"Option --permute must be enabled to use --permute-exclude")
+      else if (
+        permuteExclude.isDefined && !Files.exists(
+          Paths.get(permuteExclude.get)
+        )
+      )
+        Some(
+          s"Permutation exclusion list '${permuteExclude.get}' does not exist'"
+        )
       else None
     ).foreach(Config.error)
   }
@@ -42,19 +53,22 @@ object Config {
 
   val help = """Usage: gvc0 [OPTION...] SOURCEFILE
                |where OPTION is
-               |  -h         --help           Give short usage message and exit
-               |  -d <type>  --dump=<type>    Print the generated code and exit, where <type> specifies
-               |                              the type of code to print: ir, silver, c0
-               |  -o <file>  --output=<file>  Place the executable output into <file>
-               |  -v         --only-verify    Stop after static verification
-               |  -s         --save-files     Save the intermediate files produced (IR, Silver, C0, and C)
-               |  -x         --exec           Execute the compiled file
-               |  -p <file>  --permute=<file> Generate, verify, execute, and profile all permutations of specs for a program,
-               |                              saving the output to <file> in .csv format."""
+               |  -h         --help                     Give short usage message and exit
+               |  -d <type>  --dump=<type>              Print the generated code and exit, where <type> specifies
+               |                                        the type of code to print: ir, silver, c0
+               |  -o <file>  --output=<file>            Place the executable output into <file>
+               |  -v         --only-verify              Stop after static verification
+               |  -s         --save-files               Save the intermediate files produced (IR, Silver, C0, and C)
+               |  -x         --exec                     Execute the compiled file
+               |  -p <file>  --permute=<file>           Generate, verify, execute, and profile all permutations of specs for a program,
+               |                                        saving the output to <file> in .csv format.
+               |             --permute-exclude=<file>   Provide a comma-separated list of methods to keep constant in all permutations."""
 
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
-  private val permuteArg = raw"--output=(.+)".r
+  private val permuteArg = raw"--permute=(.+)".r
+  private val permuteExcludeArg = raw"--permute-exclude=(.+)".r
+
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
@@ -84,6 +98,8 @@ object Config {
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
       case permuteArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permute = Some(f)))
+      case permuteExcludeArg(f) :: tail =>
+        fromCommandLineArgs(tail, current.copy(permuteExclude = Some(f)))
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>

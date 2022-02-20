@@ -15,14 +15,18 @@ import java.io.IOException
 import sys.process._
 import scala.language.postfixOps
 
+case class OutputFileCollection(
+    irFileName: String,
+    silverFileName: String,
+    c0FileName: String
+)
+
 object Main extends App {
   val cmdConfig = Config.fromCommandLineArgs(args.toList)
   cmdConfig.validate()
   run(cmdConfig)
-
   def run(config: Config): Unit = {
     val sourceFile = config.sourceFile.get
-
     val baseName =
       if (sourceFile.toLowerCase().endsWith(".c0"))
         sourceFile.slice(0, sourceFile.length() - 3)
@@ -30,101 +34,33 @@ object Main extends App {
     val irFileName = baseName + ".ir.c0"
     val silverFileName = baseName + ".vpr"
     val c0FileName = baseName + ".verified.c0"
+    val fileNames =
+      OutputFileCollection(irFileName, silverFileName, c0FileName)
 
     val inputSource = readFile(config.sourceFile.get)
 
-    val parsed = Parser.parseProgram(inputSource) match {
-      case fail: Failure =>
-        Config.error(s"Parse error:\n${fail.trace().longAggregateMsg}")
-      case Success(value, _) => value
-    }
-
-    val errors = new ErrorSink()
-    val resolved = Validator
-      .validateParsed(parsed, errors)
-      .getOrElse(
-        Config.error(
-          s"Errors:\n" +
-            errors.errors.map(_.toString()).mkString("\n")
-        )
-      )
-
-    val ir = GraphTransformer.transform(resolved)
-    if (config.dump == Some(Config.DumpIR))
-      dump(GraphPrinter.print(ir, includeSpecs = true))
-    else if (config.saveFiles)
-      writeFile(irFileName, GraphPrinter.print(ir, includeSpecs = true))
-
-    val silver = IRGraphSilver.toSilver(ir)
-    if (config.dump == Some(Config.DumpSilver)) dump(silver.toString())
-    else if (config.saveFiles) writeFile(silverFileName, silver.toString())
-
-    val reporter = viper.silver.reporter.StdIOReporter()
-    val z3Exe = Config.resolveToolPath("z3", "Z3_EXE")
-    val silicon = Silicon.fromPartialCommandLineArguments(
-      Seq("--z3Exe", z3Exe),
-      reporter,
-      Seq()
-    )
-
-    if (config.onlyVerify) sys.exit(0)
-
-    if (config.permute.isDefined) {} else {}
-    silicon.start()
-
-    silicon.verify(silver) match {
-      case verifier.Success => ()
-      case verifier.Failure(errors) => {
-        Config.error(
-          s"Verification errors:\n" +
-            errors.map(_.readableMessage).mkString("\n")
-        )
-      }
-    }
-
-    silicon.stop()
-
     if (config.permute.isDefined) {
-      val irList = Gradualizer.gradualizeProgram(ir)
-      val programLattice = ProgramLattice.generateProgramLattice(irList)
-
-    } else {
-      val fieldChecksInserted = Weaver.weave(ir, silver)
-
-      val c0Source = GraphPrinter.print(ir, includeSpecs = false)
-      if (config.dump == Some(Config.DumpC0)) dumpC0(c0Source)
-
-      val outputExe = config.output.getOrElse("a.out")
-
-      val runtimeInput =
-        Paths.get(getClass().getResource("/runtime.c0").getPath)
-      val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
-
-      val cc0Options = CC0Options(
-        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-        saveIntermediateFiles = config.saveFiles,
-        output = Some(outputExe),
-        includeDirs = List(runtimeIncludeDir.toString + "/")
+      val exclusionSource = readFile(config.sourceFile.get)
+      val methodsToExclude =
+        Gradualizer.parseMethodExclusionList(exclusionSource)
+      val c0SourceList =
+        Gradualizer.gradualizeProgram(inputSource, methodsToExclude)
+      val programLattice = ProgramLattice.generateProgramLattice(c0SourceList)
+      val verifiedLattice =
+        ProgramLattice.verifyProgramLattice(programLattice, fileNames)
+      val executedLattice =
+        ProgramLattice.executeProgramLattice(
+          verifiedLattice,
+          c0FileName,
+          config
+        )
+      val csvResult = ProgramLattice.generateCSV(
+        programLattice,
+        executedLattice
       )
-
-      // Always write the intermediate C0 file, but then delete it
-      // if not saving intermediate files
-      writeFile(c0FileName, c0Source)
-      val compilerExit =
-        try {
-          CC0Wrapper.exec(c0FileName, cc0Options)
-        } finally {
-          if (!config.saveFiles) deleteFile(c0FileName)
-        }
-
-      if (compilerExit != 0) Config.error("Compilation failed")
-
-      if (config.exec) {
-        val outputCommand = Paths.get(outputExe).toAbsolutePath().toString()
-        sys.exit(Seq(outputCommand) !)
-      } else {
-        sys.exit(0)
-      }
+      writeFile(config.permute.get, csvResult)
+    } else {
+      execute(verify(inputSource, fileNames), fileNames)
     }
   }
 
@@ -175,4 +111,112 @@ object Main extends App {
 
     dump(output)
   }
+
+  def generateIR(inputSource: String): IRGraph.Program = {
+    val parsed = Parser.parseProgram(inputSource) match {
+      case fail: Failure =>
+        Config.error(s"Parse error:\n${fail.trace().longAggregateMsg}")
+      case Success(value, _) => value
+    }
+    val errors = new ErrorSink()
+    val resolved = Validator
+      .validateParsed(parsed, errors)
+      .getOrElse(
+        Config.error(
+          s"Errors:\n" +
+            errors.errors.map(_.toString()).mkString("\n")
+        )
+      )
+    GraphTransformer.transform(resolved)
+  }
+
+  def verify(
+      inputSource: String,
+      fileNames: OutputFileCollection
+  ): String = {
+    val ir = generateIR(inputSource)
+
+    if (!cmdConfig.permute.isDefined) {
+      if (cmdConfig.dump == Some(Config.DumpIR))
+        dump(GraphPrinter.print(ir, includeSpecs = true))
+      else if (cmdConfig.saveFiles)
+        writeFile(
+          fileNames.irFileName,
+          GraphPrinter.print(ir, includeSpecs = true)
+        )
+    }
+
+    val reporter = viper.silver.reporter.StdIOReporter()
+    val z3Exe = Config.resolveToolPath("z3", "Z3_EXE")
+    val silicon = Silicon.fromPartialCommandLineArguments(
+      Seq("--z3Exe", z3Exe),
+      reporter,
+      Seq()
+    )
+    silicon.start()
+
+    val silver = IRGraphSilver.toSilver(ir)
+
+    if (!cmdConfig.permute.isDefined) {
+      if (cmdConfig.dump == Some(Config.DumpSilver)) dump(silver.toString())
+      else if (cmdConfig.saveFiles)
+        writeFile(fileNames.silverFileName, silver.toString())
+    }
+
+    silicon.verify(silver) match {
+      case verifier.Success => ()
+      case verifier.Failure(errors) =>
+        Config.error(
+          s"Verification errors:\n" +
+            errors.map(_.readableMessage).mkString("\n")
+        )
+    }
+
+    silicon.stop()
+    if (!cmdConfig.permute.isDefined && cmdConfig.onlyVerify) sys.exit(0)
+
+    Weaver.weave(ir, silver)
+
+    val c0Source = GraphPrinter.print(ir, includeSpecs = false)
+    if (!cmdConfig.permute.isDefined && cmdConfig.dump == Some(Config.DumpC0))
+      dumpC0(c0Source)
+    c0Source
+  }
+  def execute(
+      verifiedSource: String,
+      fileNames: OutputFileCollection
+  ): Unit = {
+    val outputExe = cmdConfig.output.getOrElse("a.out")
+
+    val runtimeInput =
+      Paths.get(getClass().getResource("/runtime.c0").getPath)
+    val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
+
+    val cc0Options = CC0Options(
+      compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+      saveIntermediateFiles = cmdConfig.saveFiles,
+      output = Some(outputExe),
+      includeDirs = List(runtimeIncludeDir.toString + "/")
+    )
+
+    // Always write the intermediate C0 file, but then delete it
+    // if not saving intermediate files
+    writeFile(fileNames.c0FileName, verifiedSource)
+    val compilerExit =
+      try {
+        CC0Wrapper.exec(fileNames.c0FileName, cc0Options)
+      } finally {
+        if (!cmdConfig.saveFiles) deleteFile(fileNames.c0FileName)
+      }
+
+    if (compilerExit != 0) Config.error("Compilation failed")
+
+    if (cmdConfig.exec) {
+      val outputCommand = Paths.get(outputExe).toAbsolutePath().toString()
+      sys.exit(Seq(outputCommand) !)
+    } else {
+      sys.exit(0)
+    }
+  }
+
 }

@@ -1,5 +1,4 @@
 package gvc.weaver
-
 import scala.collection.mutable
 import gvc.transformer.IRGraph._
 import viper.silver.ast.MethodCall
@@ -57,17 +56,22 @@ object Collector {
   case class CollectedInvocation(ir: Invoke, vpr: MethodCall)
 
   def collect(irProgram: Program, vprProgram: vpr.Program): CollectedProgram = {
+
     val checks = collectChecks(vprProgram)
 
     val methods = irProgram.methods
-      .map(m => 
-        (m.name, collect(
-          irProgram,
-          vprProgram,
-          m,
-          vprProgram.findMethod(m.name),
-          checks
-        )))
+      .map(m =>
+        (
+          m.name,
+          collect(
+            irProgram,
+            vprProgram,
+            m,
+            vprProgram.findMethod(m.name),
+            checks
+          )
+        )
+      )
       .toMap
 
     new CollectedProgram(
@@ -90,41 +94,51 @@ object Collector {
     case object InvariantLoopEnd extends ViperCheckLocation
     case object PreInvoke extends ViperLocation
     case object PostInvoke extends ViperLocation
-    
-    def loop(loopPosition: LoopPosition): ViperCheckLocation = loopPosition match {
-      case LoopPosition.After => ViperLocation.InvariantAfterLoop
-      case LoopPosition.Before => ViperLocation.InvariantBeforeLoop
-      case LoopPosition.Beginning => ViperLocation.InvariantLoopStart
-      case LoopPosition.End => ViperLocation.InvariantLoopEnd
-    }
 
-    def forIR(irLocation: Location, vprLocation: ViperLocation): Location = irLocation match {
-      case at: AtOp => vprLocation match {
-        case ViperLocation.Value => Pre(at.op)
-        case ViperLocation.InvariantBeforeLoop => Pre(at.op)
-        case ViperLocation.InvariantAfterLoop => Post(at.op)
-        case ViperLocation.InvariantLoopStart => LoopStart(at.op)
-        case ViperLocation.InvariantLoopEnd => LoopEnd(at.op)
-        case ViperLocation.PreInvoke => Pre(at.op)
-        case ViperLocation.PostInvoke => Post(at.op)
+    def loop(loopPosition: LoopPosition): ViperCheckLocation =
+      loopPosition match {
+        case LoopPosition.After     => ViperLocation.InvariantAfterLoop
+        case LoopPosition.Before    => ViperLocation.InvariantBeforeLoop
+        case LoopPosition.Beginning => ViperLocation.InvariantLoopStart
+        case LoopPosition.End       => ViperLocation.InvariantLoopEnd
       }
-      case _ => {
-        if (vprLocation != ViperLocation.Value)
-          throw new WeaverException("Invalid location")
-        irLocation
+
+    def forIR(irLocation: Location, vprLocation: ViperLocation): Location =
+      irLocation match {
+        case at: AtOp =>
+          vprLocation match {
+            case ViperLocation.Value               => Pre(at.op)
+            case ViperLocation.InvariantBeforeLoop => Pre(at.op)
+            case ViperLocation.InvariantAfterLoop  => Post(at.op)
+            case ViperLocation.InvariantLoopStart  => LoopStart(at.op)
+            case ViperLocation.InvariantLoopEnd    => LoopEnd(at.op)
+            case ViperLocation.PreInvoke           => Pre(at.op)
+            case ViperLocation.PostInvoke          => Post(at.op)
+          }
+        case _ => {
+          if (vprLocation != ViperLocation.Value)
+            throw new WeaverException("Invalid location")
+          irLocation
+        }
       }
-    }
   }
 
   private case class ViperBranch(
-    at: vpr.Node,
-    location: ViperLocation,
-    condition: vpr.Exp,
+      at: vpr.Node,
+      location: ViperLocation,
+      condition: vpr.Exp
   )
 
   private object ViperBranch {
-    def apply(branch: (vpr.Exp, vpr.Node, Option[CheckPosition]), program: vpr.Program) = branch match {
-      case (condition, source, Some(CheckPosition.GenericNode(invoke: vpr.MethodCall))) => {
+    def apply(
+        branch: (vpr.Exp, vpr.Node, Option[CheckPosition]),
+        program: vpr.Program
+    ) = branch match {
+      case (
+            condition,
+            source,
+            Some(CheckPosition.GenericNode(invoke: vpr.MethodCall))
+          ) => {
         // This must be a method pre-condition or post-condition
         val callee = program.findMethod(invoke.methodName)
         val location: ViperLocation =
@@ -135,7 +149,8 @@ object Collector {
 
       case (condition, source, Some(CheckPosition.Loop(inv, position))) => {
         // This must be an invariant
-        if (inv.tail.nonEmpty) throw new WeaverException("Invalid loop invariant")
+        if (inv.tail.nonEmpty)
+          throw new WeaverException("Invalid loop invariant")
         new ViperBranch(inv.head, ViperLocation.loop(position), condition)
       }
 
@@ -148,12 +163,13 @@ object Collector {
   }
 
   private case class ViperCheck(
-    check: vpr.Exp,
-    conditions: List[ViperBranch],
-    location: ViperCheckLocation
+      check: vpr.Exp,
+      conditions: List[ViperBranch],
+      location: ViperCheckLocation
   )
 
-  private type ViperCheckMap = mutable.HashMap[scala.Int, mutable.ListBuffer[ViperCheck]]
+  private type ViperCheckMap =
+    mutable.HashMap[scala.Int, mutable.ListBuffer[ViperCheck]]
 
   // Convert the verifier's check map into a ViperCheckMap
   private def collectChecks(vprProgram: vpr.Program): ViperCheckMap = {
@@ -164,12 +180,14 @@ object Collector {
       val (node, location) = pos match {
         case CheckPosition.GenericNode(node) => (node, ViperLocation.Value)
         case CheckPosition.Loop(invariants, position) => {
-          if (invariants.tail.nonEmpty) throw new WeaverException("Invalid loop invariant")
+          if (invariants.tail.nonEmpty)
+            throw new WeaverException("Invalid loop invariant")
           (invariants.head, ViperLocation.loop(position))
         }
       }
 
-      val list = collected.getOrElseUpdate(node.uniqueIdentifier, mutable.ListBuffer())
+      val list =
+        collected.getOrElseUpdate(node.uniqueIdentifier, mutable.ListBuffer())
       for (c <- checks) {
         val conditions = c.branchInfo.map(ViperBranch(_, vprProgram)).toList
         list += ViperCheck(c.checks, conditions, location)
@@ -206,7 +224,9 @@ object Collector {
     // Note: Uses a List as a Map so that the order is preserved in the way that the verifier
     // determines (this is important for acc checks of a nested field, for example).
     val checks =
-      mutable.Map[Location, mutable.ListBuffer[(Check, mutable.Set[Logic.Conjunction])]]()
+      mutable.Map[Location, mutable.ListBuffer[
+        (Check, mutable.Set[Logic.Conjunction])
+      ]]()
 
     // A set of all locations that need the full specification walked to verify separation. Used
     // to implement the semantics of the separating conjunction. Pre-calculates a set so that the
@@ -311,11 +331,11 @@ object Collector {
       for (vprCheck <- vprChecks.get(node.uniqueIdentifier).toSeq.flatten) {
         val condition = branchCondition(vprCheck.conditions, loopInvs)
         val checkLocation = (vprCheck.location, loc) match {
-          case (ViperLocation.Value, _) => loc
+          case (ViperLocation.Value, _)                      => loc
           case (ViperLocation.InvariantBeforeLoop, at: AtOp) => Pre(at.op)
-          case (ViperLocation.InvariantAfterLoop, at: AtOp) => Post(at.op)
-          case (ViperLocation.InvariantLoopStart, at: AtOp) => LoopStart(at.op)
-          case (ViperLocation.InvariantLoopEnd, at: AtOp) => LoopEnd(at.op)
+          case (ViperLocation.InvariantAfterLoop, at: AtOp)  => Post(at.op)
+          case (ViperLocation.InvariantLoopStart, at: AtOp)  => LoopStart(at.op)
+          case (ViperLocation.InvariantLoopEnd, at: AtOp)    => LoopEnd(at.op)
 
           // It is invalid for a loop invariant check to be attached to a pre/post-condition
           case _ => throw new WeaverException("Invalid check location")
@@ -324,8 +344,11 @@ object Collector {
         // TODO: Split apart ANDed checks?
         val check = Check.fromViper(vprCheck.check, irProgram, irMethod)
 
-        val locationChecks = checks.getOrElseUpdate(checkLocation, mutable.ListBuffer())
-        val conditions = locationChecks.find { case (c, _) => c == check } match {
+        val locationChecks =
+          checks.getOrElseUpdate(checkLocation, mutable.ListBuffer())
+        val conditions = locationChecks.find { case (c, _) =>
+          c == check
+        } match {
           case Some((_, conditions)) => conditions
           case None =>
             val conditions = mutable.Set[Logic.Conjunction]()
@@ -336,7 +359,11 @@ object Collector {
         conditions += condition
 
         println(locationChecks)
-        if (check.isInstanceOf[AccessibilityCheck] && (loc == MethodPre || loc == MethodPost || vprCheck.location != ViperLocation.Value)) {
+        if (
+          check.isInstanceOf[
+            AccessibilityCheck
+          ] && (loc == MethodPre || loc == MethodPost || vprCheck.location != ViperLocation.Value)
+        ) {
           needsFullPermissionChecking += checkLocation
         }
       }
@@ -371,7 +398,6 @@ object Collector {
           indexAll(loop.cond, loc)
           loop.invs.foreach(indexAll(_, loc))
 
-
           check(loop, loc, loopInvs)
           checkAll(loop.cond, loc, loopInvs)
           loop.invs.foreach { i => checkAll(i, loc, loopInvs) }
@@ -384,7 +410,11 @@ object Collector {
       }
     }
 
-    def visitBlock(irBlock: Block, vprBlock: vpr.Seqn, loopInvs: List[vpr.Exp]): Unit = {
+    def visitBlock(
+        irBlock: Block,
+        vprBlock: vpr.Seqn,
+        loopInvs: List[vpr.Exp]
+    ): Unit = {
       var vprOps = vprBlock.ss.toList
       for (irOp <- irBlock) {
         vprOps = (irOp, vprOps) match {
@@ -397,7 +427,8 @@ object Collector {
           case (irWhile: While, (vprWhile: vpr.While) :: vprRest) => {
             visit(irWhile, vprWhile, loopInvs)
             // Supports only a single invariant
-            val newInvs = vprWhile.invs.headOption.map(_ :: loopInvs).getOrElse(loopInvs)
+            val newInvs =
+              vprWhile.invs.headOption.map(_ :: loopInvs).getOrElse(loopInvs)
             visitBlock(irWhile.body, vprWhile.body, newInvs)
             vprRest
           }
@@ -479,7 +510,10 @@ object Collector {
     }
 
     // Converts the stack of branch conditions from the verifier to a logical conjunction
-    def branchCondition(branches: List[ViperBranch], loopInvs: List[vpr.Exp]): Logic.Conjunction = {
+    def branchCondition(
+        branches: List[ViperBranch],
+        loopInvs: List[vpr.Exp]
+    ): Logic.Conjunction = {
 
       branches.foldRight[Logic.Conjunction](Logic.Conjunction())((b, conj) => {
         val irLoc = locations.getOrElse(
@@ -504,7 +538,10 @@ object Collector {
           case other                        => (other, true)
         }
         val nextId = conditions.size
-        val cond = conditions.getOrElseUpdate((loc, unwrapped), new ConditionTerm(nextId))
+        val cond = conditions.getOrElseUpdate(
+          (loc, unwrapped),
+          new ConditionTerm(nextId)
+        )
         cond.conditions += conj
 
         conj & Logic.Term(cond.id, flag)
@@ -568,30 +605,34 @@ object Collector {
     // Get all checks (grouped by their location) and simplify their conditions
     val collectedChecks = mutable.ListBuffer[RuntimeCheck]()
     for ((loc, locChecks) <- checks)
-    for ((check, conditions) <- locChecks) {
-      val simplified = Logic.simplify(Logic.Disjunction(conditions.toSet))
-      val condition = convertDisjunction(simplified)
-      collectedChecks += RuntimeCheck(loc, check, condition)
-    }
+      for ((check, conditions) <- locChecks) {
+        val simplified = Logic.simplify(Logic.Disjunction(conditions.toSet))
+        val condition = convertDisjunction(simplified)
+        collectedChecks += RuntimeCheck(loc, check, condition)
+      }
 
     // Traverse the specifications for statements that require full permission checks
     for (location <- needsFullPermissionChecking) {
       val (spec, arguments) = location match {
-        case at: AtOp => at.op match {
-          case op: Invoke if op.method.precondition.isDefined =>
-            (
-              op.method.precondition.get,
-              Some(
-                op.method.parameters.zip(op.arguments.map(resolveValue(_))).toMap
+        case at: AtOp =>
+          at.op match {
+            case op: Invoke if op.method.precondition.isDefined =>
+              (
+                op.method.precondition.get,
+                Some(
+                  op.method.parameters
+                    .zip(op.arguments.map(resolveValue(_)))
+                    .toMap
+                )
               )
-            )
-          case op: While if op.invariant.isDefined => (op.invariant.get, None)
-          case op: Assert => (op.value, None)
-          case _ => throw new WeaverException(
-            "Could not locate specification for permission checking: " + location
-              .toString()
-          )
-        }
+            case op: While if op.invariant.isDefined => (op.invariant.get, None)
+            case op: Assert                          => (op.value, None)
+            case _ =>
+              throw new WeaverException(
+                "Could not locate specification for permission checking: " + location
+                  .toString()
+              )
+          }
         case MethodPost if irMethod.postcondition.isDefined =>
           (irMethod.postcondition.get, None)
         case _ =>

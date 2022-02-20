@@ -36,12 +36,6 @@ case class CC0Options(
     inputFiles: List[String] = Nil
 )
 
-case class ExecutionMetrics(
-    real: Long,
-    user: Long,
-    sys: Long
-)
-
 object CC0Wrapper {
 
   class CC0Exception(val message: String) extends RuntimeException {
