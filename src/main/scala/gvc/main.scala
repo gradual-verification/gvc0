@@ -40,7 +40,9 @@ object Main extends App {
     val inputSource = readFile(config.sourceFile.get)
 
     if (config.permute.isDefined) {
-      val exclusionSource = readFile(config.sourceFile.get)
+      val exclusionSource =
+        if (config.permuteExclude.isDefined) readFile(config.permuteExclude.get)
+        else ""
       val methodsToExclude =
         Gradualizer.parseMethodExclusionList(exclusionSource)
       val c0SourceList =

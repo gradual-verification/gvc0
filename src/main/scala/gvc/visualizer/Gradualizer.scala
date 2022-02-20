@@ -134,7 +134,7 @@ object Gradualizer {
     val perMethodPermutations: ListBuffer[List[PermutedMethod]] =
       ListBuffer()
 
-    methods.foreach(method => {
+    for (method <- methods) {
       if (!methodExclusionList.contains(method.name)) {
         val permutedPreconditions =
           permuteConjunctiveClauses(method.precondition)
@@ -176,7 +176,7 @@ object Gradualizer {
         })
         perMethodPermutations += methodPermutations.toList
       }
-    })
+    }
     print("\n")
     methods
       .filter(method => methodExclusionList.contains(method.name))
@@ -200,84 +200,110 @@ object Gradualizer {
     })
     crossJoin(predicatePermutations.toList)
   }
+
+  def appendToAll(
+      permutations: List[PermutedBlock],
+      op: IRGraph.Op
+  ): List[PermutedBlock] = {
+    permutations.map(prev =>
+      PermutedBlock(
+        prev.nClausesAssertions,
+        prev.nClausesLoopInvariants,
+        prev.opList ++ List(op)
+      )
+    )
+  }
+
+  def permuteToAll(
+      permutations: List[PermutedBlock],
+      permList: List[PermutedOp]
+  ): List[PermutedBlock] = {
+    permutations.flatMap(prev => {
+      permList.map(curr => {
+        PermutedBlock(
+          prev.nClausesAssertions + curr.nClausesAssertions,
+          prev.nClausesLoopInvariants + curr.nCLausesLoopInvariants,
+          if (curr.op.isDefined) prev.opList ++ List(curr.op.get)
+          else prev.opList
+        )
+      })
+    })
+  }
+
   def permuteBlock(block: IRGraph.Block): List[PermutedBlock] = {
+
     var currentPermutations: List[PermutedBlock] = List(
       PermutedBlock(0, 0, List())
     )
-    val opList = block.toList
-    def appendToAll(op: IRGraph.Op): Unit = {
-      currentPermutations = currentPermutations.map(prev =>
-        PermutedBlock(
-          prev.nClausesAssertions,
-          prev.nClausesLoopInvariants,
-          prev.opList.::(op)
-        )
-      )
-    }
 
-    def permuteToAll(permList: List[PermutedOp]): Unit = {
-      currentPermutations = currentPermutations.flatMap(prev => {
-        permList.map(curr => {
-          PermutedBlock(
-            prev.nClausesAssertions + curr.nClausesAssertions,
-            prev.nClausesLoopInvariants + curr.nCLausesLoopInvariants,
-            if (curr.op.isDefined) prev.opList.::(curr.op.get) else prev.opList
+    var currentPermutations: Trie
+    val it = block.iterator
+    while (it.hasNext) {
+      val op = it.next()
+      op match {
+        case fold: IRGraph.Fold =>
+          currentPermutations = permuteToAll(
+            currentPermutations,
+            List(PermutedOp(op = Some(fold)), PermutedOp())
           )
-        })
-      })
-    }
-
-    opList.foreach {
-      case fold: IRGraph.Fold =>
-        permuteToAll(List(PermutedOp(op = Some(fold)), PermutedOp()))
-      case unfold: IRGraph.Unfold =>
-        permuteToAll(List(PermutedOp(op = Some(unfold)), PermutedOp()))
-      case assert: IRGraph.Assert =>
-        if (assert.kind == IRGraph.AssertKind.Specification) {
-          permuteToAll(
-            permuteConjunctiveClauses(Some(assert.value)).map(expr => {
-              PermutedOp(
-                nClausesAssertions = expr.nClauses,
-                op = Some(
-                  new IRGraph.Assert(
-                    new IRGraph.Imprecise(expr.expr),
-                    IRGraph.AssertKind.Specification
+        case unfold: IRGraph.Unfold =>
+          currentPermutations = permuteToAll(
+            currentPermutations,
+            List(PermutedOp(op = Some(unfold)), PermutedOp())
+          )
+        case assert: IRGraph.Assert =>
+          if (assert.kind == IRGraph.AssertKind.Specification) {
+            currentPermutations = permuteToAll(
+              currentPermutations,
+              permuteConjunctiveClauses(Some(assert.value)).map(expr => {
+                PermutedOp(
+                  nClausesAssertions = expr.nClauses,
+                  op = Some(
+                    new IRGraph.Assert(
+                      new IRGraph.Imprecise(expr.expr),
+                      IRGraph.AssertKind.Specification
+                    )
                   )
                 )
-              )
+              })
+            )
+          } else {
+            currentPermutations = appendToAll(currentPermutations, assert)
+          }
+        case value: IRGraph.If =>
+          val trueBranchPermutations = permuteBlock(value.ifTrue)
+          val falseBranchPermutations = permuteBlock(value.ifFalse)
+
+          currentPermutations = permuteToAll(
+            currentPermutations,
+            trueBranchPermutations.flatMap(trueBranch => {
+              falseBranchPermutations.map(falseBranch => {
+                PermutedOp(
+                  trueBranch.nClausesAssertions + falseBranch.nClausesAssertions,
+                  trueBranch.nClausesLoopInvariants + falseBranch.nClausesLoopInvariants,
+                  Some(value.copy(trueBranch.opList, falseBranch.opList))
+                )
+              })
             })
           )
-        } else {
-          appendToAll(assert)
-        }
-      case value: IRGraph.If =>
-        val trueBranchPermutations = permuteBlock(value.ifTrue)
-        val falseBranchPermutations = permuteBlock(value.ifFalse)
-        trueBranchPermutations.flatMap(trueBranch => {
-          falseBranchPermutations.map(falseBranch => {
-            PermutedOp(
-              trueBranch.nClausesAssertions + falseBranch.nClausesAssertions,
-              trueBranch.nClausesLoopInvariants + falseBranch.nClausesLoopInvariants,
-              Some(value.copy(trueBranch.opList, falseBranch.opList))
-            )
-          })
-        })
-      case whl: IRGraph.While =>
-        val invariantAssertions = permuteConjunctiveClauses(whl.invariant)
-        val whileBodies = permuteBlock(whl.body)
-        permuteToAll(
-          invariantAssertions.flatMap(invAssert => {
-            whileBodies.map(body => {
-              PermutedOp(
-                body.nClausesAssertions,
-                body.nClausesLoopInvariants + invAssert.nClauses,
-                Some(whl.copy(invAssert.expr, body.opList))
-              )
+        case whl: IRGraph.While =>
+          val invariantAssertions = permuteConjunctiveClauses(whl.invariant)
+          val whileBodies = permuteBlock(whl.body)
+          currentPermutations = permuteToAll(
+            currentPermutations,
+            invariantAssertions.flatMap(invAssert => {
+              whileBodies.map(body => {
+                PermutedOp(
+                  body.nClausesAssertions,
+                  body.nClausesLoopInvariants + invAssert.nClauses,
+                  Some(whl.copy(invAssert.expr, body.opList))
+                )
+              })
             })
-          })
-        )
-      case _ =>
-        appendToAll(_)
+          )
+        case other: IRGraph.Op =>
+          currentPermutations = appendToAll(currentPermutations, other)
+      }
     }
     currentPermutations
   }
