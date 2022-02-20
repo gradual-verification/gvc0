@@ -23,13 +23,13 @@ object Collector {
       id: scala.Int,
       location: Location,
       value: CheckExpression,
-      when: TrackedDisjunction
+      when: Option[TrackedDisjunction]
   )
   case class TrackedConjunction(values: List[(TrackedCondition, Boolean)])
   case class TrackedDisjunction(cases: List[TrackedConjunction])
       extends Condition
 
-  case class RuntimeCheck(location: Location, check: Check, when: Condition)
+  case class RuntimeCheck(location: Location, check: Check, when: Option[Condition])
 
   sealed trait CallStyle
   case object PreciseCallStyle extends CallStyle
@@ -298,7 +298,7 @@ object Collector {
           RuntimeCheck(
             location,
             AccessibilityCheck(field, true, true),
-            ConditionValue(condition.getOrElse(CheckExpression.TrueLit))
+            condition.map(ConditionValue(_))
           )
         )
       }
@@ -308,7 +308,7 @@ object Collector {
           RuntimeCheck(
             location,
             PredicateCheck(pred.predicate, pred.arguments),
-            ConditionValue(condition.getOrElse(CheckExpression.TrueLit))
+            condition.map(ConditionValue(_))
           )
         )
       }
@@ -559,21 +559,28 @@ object Collector {
     }
 
     // Converts a logical conjunction to the actual expression that it represents
-    def convertConjunction(conjunction: Logic.Conjunction): TrackedConjunction =
-      TrackedConjunction(
-        conjunction.terms.toSeq.sorted
-          .map(t => (getCondition(t.id), t.value))
-          .toList
-      )
+    def convertConjunction(conjunction: Logic.Conjunction): Option[TrackedConjunction] =
+      if (conjunction.terms.isEmpty) {
+        None
+      } else {
+        Some(TrackedConjunction(
+          conjunction.terms.toSeq.sorted
+            .map(t => (getCondition(t.id), t.value))
+            .toList))
+      }
 
     // Converts a logical disjunction to the actual expression that it represents
     // TODO: pull out common factors?
-    def convertDisjunction(disjunction: Logic.Disjunction): TrackedDisjunction =
-      TrackedDisjunction(
-        disjunction.conjuncts.toSeq.sorted
-          .map(convertConjunction(_))
-          .toList
-      )
+    def convertDisjunction(disjunction: Logic.Disjunction): Option[TrackedDisjunction] = {
+      val conjuncts = disjunction.conjuncts.toSeq.sorted
+        .map(convertConjunction(_))
+        .toList
+      if (conjuncts.exists(_ == None)) {
+        None
+      } else {
+        Some(TrackedDisjunction(conjuncts.map(_.get)))
+      }
+    }
 
     // Maps the logical ID to the actual condition that it represents.
     // Creates the actual condition if it does not exist.
