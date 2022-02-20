@@ -632,12 +632,13 @@ object Collector {
       }
 
       // TODO: These checks are only for separation, not existence
-      collectedChecks ++= traversePermissions(
-        location,
-        spec,
-        arguments,
-        None
-      )
+      val separationChecks = traversePermissions(location, spec, arguments, None)
+      if (separationChecks.length > 1) {
+        // Since the checks are for separation, only include them if there is more than one
+        // otherwise, there can be no overlap
+        collectedChecks ++= separationChecks
+        println(separationChecks)
+      }
     }
 
     // Wrap up all the results
