@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.visualizer.{Gradualizer, ProgramLattice}
+import gvc.visualizer.{DiagramGenerator, Gradualizer, ProgramLattice}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silver.verifier
@@ -67,7 +67,7 @@ object Main extends App {
       writeFile(config.permute.get, csvResult)
       if (config.permuteTikz.isDefined) {
         val tikzResult =
-          ProgramLattice.generateTikZ(programLattice, executedLattice)
+          DiagramGenerator.generateTikZ(programLattice, executedLattice)
         writeFile(config.permuteTikz.get, tikzResult)
 
       }
