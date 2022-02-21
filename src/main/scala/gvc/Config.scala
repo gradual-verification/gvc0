@@ -1,5 +1,8 @@
 package gvc
 
+import gvc.visualizer.PermuteMode
+import gvc.visualizer.PermuteMode.PermuteMode
+
 import java.nio.file.{Files, Paths}
 import java.io.File
 
@@ -10,6 +13,7 @@ case class Config(
     output: Option[String] = None,
     permute: Option[String] = None,
     permuteExclude: Option[String] = None,
+    permuteMode: Option[PermuteMode] = None,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
@@ -31,16 +35,18 @@ case class Config(
       else if (!sourceFile.isDefined) Some("No source file specified")
       else if (!Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
-      else if (permuteExclude.isDefined && !permute.isDefined)
-        Some(s"Option --permute must be enabled to use --permute-exclude")
       else if (
-        permuteExclude.isDefined && !Files.exists(
+        permute.isDefined && permuteExclude.isDefined && !Files.exists(
           Paths.get(permuteExclude.get)
         )
       )
         Some(
           s"Permutation exclusion list '${permuteExclude.get}' does not exist'"
         )
+      else if (permuteExclude.isDefined)
+        Some(s"Option --permute must be enabled to use --permute-exclude")
+      else if (permuteMode.isDefined)
+        Some(s"Option --permute must be enabled to use --permute-mode")
       else None
     ).foreach(Config.error)
   }
@@ -62,12 +68,13 @@ object Config {
                |  -x         --exec                     Execute the compiled file
                |  -p <file>  --permute=<file>           Generate, verify, execute, and profile all permutations of specs for a program,
                |                                        saving the output to <file> in .csv format.
-               |             --permute-exclude=<file>   Provide a comma-separated list of methods to keep constant in all permutations."""
-
+               |             --permute-exclude=<file>   Provide a comma-separated list of methods to keep constant in all permutations.
+               |             --permute-mode=<mode>      Specify 'exp', 'linear', 'field', or 'predicate'. Linear is chosen by default."""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val permuteArg = raw"--permute=(.+)".r
   private val permuteExcludeArg = raw"--permute-exclude=(.+)".r
+  private val permuteModeArg = raw"--permute-mode=(.+)".r
 
   def error(message: String): Nothing = {
     println(message)
@@ -79,6 +86,14 @@ object Config {
     case "silver" => DumpSilver
     case "c0"     => DumpC0
     case _        => error(s"Invalid dump output type: $t")
+  }
+
+  def parsePermuteMode(str: String): PermuteMode = str.toLowerCase() match {
+    case "exp"       => PermuteMode.Linear
+    case "linear"    => PermuteMode.Exp
+    case "field"     => PermuteMode.Field
+    case "predicate" => PermuteMode.Predicate
+    case _           => error(s"Invalid permute mode type: $str")
   }
 
   def fromCommandLineArgs(
@@ -100,6 +115,11 @@ object Config {
         fromCommandLineArgs(tail, current.copy(permute = Some(f)))
       case permuteExcludeArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteExclude = Some(f)))
+      case permuteModeArg(f) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(permuteMode = Some(parsePermuteMode(f)))
+        )
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>

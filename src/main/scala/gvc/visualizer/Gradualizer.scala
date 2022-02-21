@@ -1,6 +1,7 @@
 package gvc.visualizer
 import gvc.Main.generateIR
 import gvc.transformer.{GraphPrinter, IRGraph}
+import gvc.visualizer.PermuteMode.PermuteMode
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -23,6 +24,10 @@ case class PermutationMetadata(
     nClausesPreconditions: Int,
     nClausesPostconditions: Int
 )
+object PermuteMode extends Enumeration {
+  type PermuteMode = Value
+  val Exp, Linear, Field, Predicate = Value
+}
 
 case class PermutedMethod(
     method: IRGraph.Method,
@@ -67,23 +72,30 @@ object Gradualizer {
   }
 
   def parseMethodExclusionList(rawList: String): Set[String] =
-    //TODO: add Regex to verify correct format?
-    rawList.split(',').toSet
+    //TODO: add Regex to verify correct format for method names?
+    rawList.split(',').map(_.trim).filter(_.length > 0).toSet
 
   def gradualizeProgram(
       c0Source: String,
-      methodExclusionList: Set[String]
+      methodExclusionList: Set[String],
+      permuteModeOption: Option[PermuteMode]
   ): List[ProgramPermutation] = {
     val program = generateIR(c0Source)
     val programPermutations: ListBuffer[ProgramPermutation] = ListBuffer()
 
+    val permuteMode = permuteModeOption match {
+      case Some(value) => value
+      case None        => PermuteMode.Linear
+    }
     val methodPermutations: List[List[PermutedMethod]] = permuteMethods(
       program.methods,
-      methodExclusionList
+      methodExclusionList,
+      permuteMode
     )
     val predicatePermutations: List[List[PermutedPredicate]] =
       permutePredicates(
-        program.predicates
+        program.predicates,
+        permuteMode
       )
 
     for (methodList <- methodPermutations) {
@@ -129,18 +141,20 @@ object Gradualizer {
 
   def permuteMethods(
       methods: Seq[IRGraph.Method],
-      methodExclusionList: Set[String]
+      methodExclusionList: Set[String],
+      permuteMode: PermuteMode
   ): List[List[PermutedMethod]] = {
+
     val perMethodPermutations: ListBuffer[List[PermutedMethod]] =
       ListBuffer()
 
     for (method <- methods) {
       if (!methodExclusionList.contains(method.name)) {
         val permutedPreconditions =
-          permuteConjunctiveClauses(method.precondition)
+          permuteExpression(method.precondition, permuteMode)
         val permutedPostconditions =
-          permuteConjunctiveClauses(method.postcondition)
-        val permutedMethodBodies = permuteBlock(method.body)
+          permuteExpression(method.postcondition, permuteMode)
+        val permutedMethodBodies = permuteBlock(method.body, permuteMode)
         println(s"${method.name}: ")
         println(s"  - " + permutedPreconditions.length + " preconditions")
         println(s"  - " + permutedPostconditions.length + " postconditions")
@@ -185,11 +199,13 @@ object Gradualizer {
   }
 
   def permutePredicates(
-      predicates: Seq[IRGraph.Predicate]
+      predicates: Seq[IRGraph.Predicate],
+      permuteMode: PermuteMode
   ): List[List[PermutedPredicate]] = {
     val predicatePermutations = predicates.map(predicate => {
-      val permutedPredicateBodies = permuteConjunctiveClauses(
-        Some(predicate.expression)
+      val permutedPredicateBodies = permuteExpression(
+        Some(predicate.expression),
+        permuteMode
       )
       permutedPredicateBodies.map(body => {
         PermutedPredicate(
@@ -230,13 +246,30 @@ object Gradualizer {
     })
   }
 
-  def permuteBlock(block: IRGraph.Block): List[PermutedBlock] = {
+  def permuteBlock(
+      block: IRGraph.Block,
+      permuteMode: PermuteMode
+  ): List[PermutedBlock] = {
+    permuteMode match {
+      case gvc.visualizer.PermuteMode.Exp       => permuteBlockExp(block)
+      case gvc.visualizer.PermuteMode.Linear    => ???
+      case gvc.visualizer.PermuteMode.Field     => ???
+      case gvc.visualizer.PermuteMode.Predicate => ???
+    }
+  }
+
+  def permuteBlockField(block: IRGraph.Block): List[PermutedBlock] = ???
+  def permuteBlockPredicate(block: IRGraph.Block): List[PermutedBlock] = ???
+  def permuteBlockLinear(block: IRGraph.Block): List[PermutedBlock] = ???
+
+  def permuteBlockExp(
+      block: IRGraph.Block
+  ): List[PermutedBlock] = {
 
     var currentPermutations: List[PermutedBlock] = List(
       PermutedBlock(0, 0, List())
     )
 
-    var currentPermutations: Trie
     val it = block.iterator
     while (it.hasNext) {
       val op = it.next()
@@ -255,7 +288,7 @@ object Gradualizer {
           if (assert.kind == IRGraph.AssertKind.Specification) {
             currentPermutations = permuteToAll(
               currentPermutations,
-              permuteConjunctiveClauses(Some(assert.value)).map(expr => {
+              permuteExpressionExp(Some(assert.value)).map(expr => {
                 PermutedOp(
                   nClausesAssertions = expr.nClauses,
                   op = Some(
@@ -271,8 +304,8 @@ object Gradualizer {
             currentPermutations = appendToAll(currentPermutations, assert)
           }
         case value: IRGraph.If =>
-          val trueBranchPermutations = permuteBlock(value.ifTrue)
-          val falseBranchPermutations = permuteBlock(value.ifFalse)
+          val trueBranchPermutations = permuteBlockExp(value.ifTrue)
+          val falseBranchPermutations = permuteBlockExp(value.ifFalse)
 
           currentPermutations = permuteToAll(
             currentPermutations,
@@ -287,8 +320,9 @@ object Gradualizer {
             })
           )
         case whl: IRGraph.While =>
-          val invariantAssertions = permuteConjunctiveClauses(whl.invariant)
-          val whileBodies = permuteBlock(whl.body)
+          val invariantAssertions =
+            permuteExpressionExp(whl.invariant)
+          val whileBodies = permuteBlockExp(whl.body)
           currentPermutations = permuteToAll(
             currentPermutations,
             invariantAssertions.flatMap(invAssert => {
@@ -307,7 +341,24 @@ object Gradualizer {
     }
     currentPermutations
   }
-  def permuteConjunctiveClauses(
+  def permuteExpression(
+      expression: Option[IRGraph.Expression],
+      permuteMode: PermuteMode
+  ): List[PermutedExpression] = {
+
+    permuteMode match {
+      case gvc.visualizer.PermuteMode.Exp       => permuteExpressionExp(expression)
+      case gvc.visualizer.PermuteMode.Linear    => ???
+      case gvc.visualizer.PermuteMode.Field     => ???
+      case gvc.visualizer.PermuteMode.Predicate => ???
+    }
+  }
+  def permuteExpressionField(block: IRGraph.Block): List[PermutedBlock] = ???
+  def permuteExpressionPredicate(block: IRGraph.Block): List[PermutedBlock] =
+    ???
+  def permuteExpressionLinear(block: IRGraph.Block): List[PermutedBlock] = ???
+
+  def permuteExpressionExp(
       expression: Option[IRGraph.Expression]
   ): List[PermutedExpression] = {
     var permutedClauses = List[PermutedExpression]()
@@ -315,7 +366,6 @@ object Gradualizer {
       case Some(expr: IRGraph.Expression) =>
         val numClausesInAssertion = numClauses(expr)
         val conjunctionNodeIndices = permuteIndices(numClausesInAssertion)
-        //println(s"There are $numClausesInAssertion clauses")
         conjunctionNodeIndices.foreach(permutation => {
           val subset =
             extractSubsetOfClauses(permutation, expr)
@@ -325,9 +375,6 @@ object Gradualizer {
       case None =>
         permutedClauses = PermutedExpression(0, None) :: permutedClauses
     }
-    //println(
-    //  s"This results in ${permutedClauses.length} permutations of the assertion"
-    //)
     permutedClauses
   }
 

@@ -46,7 +46,11 @@ object Main extends App {
       val methodsToExclude =
         Gradualizer.parseMethodExclusionList(exclusionSource)
       val c0SourceList =
-        Gradualizer.gradualizeProgram(inputSource, methodsToExclude)
+        Gradualizer.gradualizeProgram(
+          inputSource,
+          methodsToExclude,
+          config.permuteMode
+        )
       val programLattice = ProgramLattice.generateProgramLattice(c0SourceList)
       val verifiedLattice =
         ProgramLattice.verifyProgramLattice(programLattice, fileNames)
