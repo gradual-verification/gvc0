@@ -7,6 +7,7 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 case class ProgramPermutation(
+    ir: IRGraph.Program,
     source: String,
     nClausesPreconditions: Int,
     nClausesPostconditions: Int,
@@ -124,6 +125,7 @@ object Gradualizer {
           program.copy(methodsToAdd, predicatesToAdd)
 
         programPermutations += ProgramPermutation(
+          clonedProgram,
           GraphPrinter.print(clonedProgram, includeSpecs = true),
           nClausesPreconditions,
           nClausesPostconditions,

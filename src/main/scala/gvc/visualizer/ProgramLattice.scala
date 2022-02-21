@@ -140,6 +140,22 @@ object ProgramLattice {
     lattice.map(lst => lst.toList).toList
   }
 
+  def dumpC0(
+      lattice: List[List[ProgramPermutation]],
+      dir: String,
+      filename: String
+  ): Unit = ???
+  def dumpIR(
+      lattice: List[List[ProgramPermutation]],
+      dir: String,
+      filename: String
+  ): Unit = ???
+  def dumpSilver(
+      lattice: List[List[ProgramPermutation]],
+      dir: String,
+      filename: String
+  ): Unit = ???
+
   def generateCSV(
       programLattice: List[List[ProgramPermutation]],
       performanceLattice: List[List[Metrics]]

@@ -52,8 +52,32 @@ object Main extends App {
           config.permuteMode
         )
       val programLattice = ProgramLattice.generateProgramLattice(c0SourceList)
+      if (config.dump.isDefined) {
+        config.dump.get match {
+          case Config.DumpC0 =>
+            ProgramLattice.dumpC0(
+              programLattice,
+              config.permuteDumpDir.get,
+              c0FileName
+            )
+          case Config.DumpIR =>
+            ProgramLattice.dumpIR(
+              programLattice,
+              config.permuteDumpDir.get,
+              c0FileName
+            )
+          case Config.DumpSilver =>
+            ProgramLattice.dumpSilver(
+              programLattice,
+              config.permuteDumpDir.get,
+              c0FileName
+            )
+        }
+      }
+
       val verifiedLattice =
         ProgramLattice.verifyProgramLattice(programLattice, fileNames)
+
       val executedLattice =
         ProgramLattice.executeProgramLattice(
           verifiedLattice,

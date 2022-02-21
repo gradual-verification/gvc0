@@ -15,6 +15,7 @@ case class Config(
     permuteExclude: Option[String] = None,
     permuteMode: Option[PermuteMode] = None,
     permuteTikz: Option[String] = None,
+    permuteDumpDir: Option[String] = None,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
@@ -44,12 +45,20 @@ case class Config(
         Some(
           s"Permutation exclusion list '${permuteExclude.get}' does not exist'"
         )
-      else if (permuteExclude.isDefined)
+      else if (!permute.isDefined && permuteExclude.isDefined)
         Some(s"Option --permute must be enabled to use --permute-exclude")
-      else if (permuteMode.isDefined)
+      else if (!permute.isDefined && permuteMode.isDefined)
         Some(s"Option --permute must be enabled to use --permute-mode")
-      else if (permuteTikz.isDefined)
+      else if (!permute.isDefined && permuteTikz.isDefined)
         Some(s"Option --permute must be enabled to use --permute-tikz")
+      else if (!permute.isDefined && permuteDumpDir.isDefined)
+        Some(s"Option --permute must be enabled to use --permute-dump-dir")
+      else if (permuteDumpDir.isDefined && !dump.isDefined)
+        Some(s"Option --permute-dump-dir must be used with --dump")
+      else if (
+        permuteDumpDir.isDefined && !Files.exists(Paths.get(permuteDumpDir.get))
+      )
+        Some(s"The specified directory for --permute-dump-dir doesn't exist.")
       else None
     ).foreach(Config.error)
   }
@@ -80,7 +89,7 @@ object Config {
   private val permuteExcludeArg = raw"--permute-exclude=(.+)".r
   private val permuteModeArg = raw"--permute-mode=(.+)".r
   private val permuteTikzArg = raw"--permute-tikz=(.+)".r
-
+  private val permuteDumpDir = raw"--permute-dump-dir=(.+)".r
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
@@ -122,6 +131,8 @@ object Config {
         fromCommandLineArgs(tail, current.copy(permuteExclude = Some(f)))
       case permuteTikzArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteTikz = Some(f)))
+      case permuteDumpDir(f) :: tail =>
+        fromCommandLineArgs(tail, current.copy(permuteDumpDir = Some(f)))
       case permuteModeArg(f) :: tail =>
         fromCommandLineArgs(
           tail,
