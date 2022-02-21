@@ -14,6 +14,7 @@ case class Config(
     permute: Option[String] = None,
     permuteExclude: Option[String] = None,
     permuteMode: Option[PermuteMode] = None,
+    permuteTikz: Option[String] = None,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
@@ -47,6 +48,8 @@ case class Config(
         Some(s"Option --permute must be enabled to use --permute-exclude")
       else if (permuteMode.isDefined)
         Some(s"Option --permute must be enabled to use --permute-mode")
+      else if (permuteTikz.isDefined)
+        Some(s"Option --permute must be enabled to use --permute-tikz")
       else None
     ).foreach(Config.error)
   }
@@ -69,12 +72,14 @@ object Config {
                |  -p <file>  --permute=<file>           Generate, verify, execute, and profile all permutations of specs for a program,
                |                                        saving the output to <file> in .csv format.
                |             --permute-exclude=<file>   Provide a comma-separated list of methods to keep constant in all permutations.
-               |             --permute-mode=<mode>      Specify 'exp', 'linear', 'field', or 'predicate'. Linear is chosen by default."""
+               |             --permute-mode=<mode>      Specify 'exp', 'linear', 'field', or 'predicate'. Linear is chosen by default.
+               |             --permute-tikz=<file>      Specify the location to save a LaTeX-formatted lattice diagram of runtime statistics."""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val permuteArg = raw"--permute=(.+)".r
   private val permuteExcludeArg = raw"--permute-exclude=(.+)".r
   private val permuteModeArg = raw"--permute-mode=(.+)".r
+  private val permuteTikzArg = raw"--permute-tikz=(.+)".r
 
   def error(message: String): Nothing = {
     println(message)
@@ -115,6 +120,8 @@ object Config {
         fromCommandLineArgs(tail, current.copy(permute = Some(f)))
       case permuteExcludeArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteExclude = Some(f)))
+      case permuteTikzArg(f) :: tail =>
+        fromCommandLineArgs(tail, current.copy(permuteTikz = Some(f)))
       case permuteModeArg(f) :: tail =>
         fromCommandLineArgs(
           tail,

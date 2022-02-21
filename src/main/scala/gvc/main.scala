@@ -65,6 +65,12 @@ object Main extends App {
         executedLattice
       )
       writeFile(config.permute.get, csvResult)
+      if (config.permuteTikz.isDefined) {
+        val tikzResult =
+          ProgramLattice.generateTikZ(programLattice, executedLattice)
+        writeFile(config.permuteTikz.get, tikzResult)
+
+      }
     } else {
       execute(verify(inputSource, fileNames), fileNames)
     }

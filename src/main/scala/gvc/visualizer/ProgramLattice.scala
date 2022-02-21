@@ -164,10 +164,9 @@ object ProgramLattice {
       })
       .foldRight("")(_ + "\n" + _)
   }
-  /*
+
   def generateTikZ(
       programLattice: List[List[ProgramPermutation]],
-      performanceLattice: List[List[Metrics]],
-      filePath: String
-  ) = ??? */
+      performanceLattice: List[List[Metrics]]
+  ): String = ???
 }
