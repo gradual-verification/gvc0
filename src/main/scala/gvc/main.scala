@@ -4,7 +4,12 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.visualizer.{DiagramGenerator, Gradualizer, ProgramLattice}
+import gvc.visualizer.{
+  DiagramGenerator,
+  Gradualizer,
+  ProgramLattice,
+  VerifierIO
+}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silver.verifier
@@ -52,31 +57,35 @@ object Main extends App {
           config.permuteMode
         )
       val programLattice = ProgramLattice.generateProgramLattice(c0SourceList)
-      if (config.dump.isDefined) {
-        config.dump.get match {
-          case Config.DumpC0 =>
-            ProgramLattice.dumpC0(
-              programLattice,
-              config.permuteDumpDir.get,
-              c0FileName
-            )
-          case Config.DumpIR =>
-            ProgramLattice.dumpIR(
-              programLattice,
-              config.permuteDumpDir.get,
-              c0FileName
-            )
-          case Config.DumpSilver =>
-            ProgramLattice.dumpSilver(
-              programLattice,
-              config.permuteDumpDir.get,
-              c0FileName
-            )
-        }
+      if (config.dump.isDefined && config.dump.get == Config.DumpIR) {
+        ProgramLattice.dumpStrings(
+          programLattice.map(_.map(p => p.source)),
+          config.permuteDumpDir.get,
+          baseName + ".c0"
+        )
       }
 
       val verifiedLattice =
         ProgramLattice.verifyProgramLattice(programLattice, fileNames)
+
+      if (config.dump.isDefined) {
+        config.dump.get match {
+          case Config.DumpSilver =>
+            ProgramLattice.dumpStrings(
+              verifiedLattice.map(_.map(v => v.info.silver.toString())),
+              config.permuteDumpDir.get,
+              c0FileName
+            )
+          case Config.DumpC0 =>
+            ProgramLattice.dumpStrings(
+              verifiedLattice.map(_.map(v => v.info.verifiedSource)),
+              config.permuteDumpDir.get,
+              c0FileName
+            )
+          case _ =>
+        }
+
+      }
 
       val executedLattice =
         ProgramLattice.executeProgramLattice(
@@ -96,7 +105,7 @@ object Main extends App {
 
       }
     } else {
-      execute(verify(inputSource, fileNames), fileNames)
+      execute(verify(inputSource, fileNames).verifiedSource, fileNames)
     }
   }
 
@@ -169,7 +178,7 @@ object Main extends App {
   def verify(
       inputSource: String,
       fileNames: OutputFileCollection
-  ): String = {
+  ): VerifierIO = {
     val ir = generateIR(inputSource)
 
     if (!cmdConfig.permute.isDefined) {
@@ -216,7 +225,7 @@ object Main extends App {
     val c0Source = GraphPrinter.print(ir, includeSpecs = false)
     if (!cmdConfig.permute.isDefined && cmdConfig.dump == Some(Config.DumpC0))
       dumpC0(c0Source)
-    c0Source
+    VerifierIO(silver, c0Source)
   }
   def execute(
       verifiedSource: String,
@@ -253,6 +262,7 @@ object Main extends App {
     } else {
       sys.exit(0)
     }
+
   }
 
 }

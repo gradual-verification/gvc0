@@ -1,7 +1,8 @@
 package gvc.visualizer
 import gvc.Main.{deleteFile, writeFile}
 import gvc.{CC0Options, CC0Wrapper, Config, Main, OutputFileCollection}
-import java.nio.file.Paths
+import viper.silver.ast.Program
+import java.nio.file.{Paths}
 import scala.collection.mutable
 
 case class Metrics(
@@ -12,6 +13,11 @@ case class Metrics(
 case class VerifiedProgram(
     verification: Long,
     permutation: ProgramPermutation,
+    info: VerifierIO
+)
+
+case class VerifierIO(
+    silver: Program,
     verifiedSource: String
 )
 
@@ -73,7 +79,7 @@ object ProgramLattice {
             )
 
             val c0FileName = filename + "_" + i + "_" + j
-            writeFile(c0FileName, permutation.verifiedSource)
+            writeFile(c0FileName, permutation.info.verifiedSource)
             val executionTime =
               try {
                 CC0Wrapper.execTimed(c0FileName, cc0Options, 10)
@@ -100,6 +106,7 @@ object ProgramLattice {
       val stop = System.nanoTime()
       duration = (duration + (start - stop)) / 2
     }
+
     VerifiedProgram(duration, permutation, verifiedIR)
   }
   private def getLevel(perm: ProgramPermutation): Int = {
@@ -139,22 +146,27 @@ object ProgramLattice {
     }
     lattice.map(lst => lst.toList).toList
   }
+  def generatePath(dir: String, filename: String, level: Int, index: Int) =
+    Paths
+      .get(dir, level + "_" + index + "_" + filename)
+      .toAbsolutePath
+      .toString
 
-  def dumpC0(
-      lattice: List[List[ProgramPermutation]],
+  def dumpStrings(
+      lattice: List[List[String]],
       dir: String,
       filename: String
-  ): Unit = ???
-  def dumpIR(
-      lattice: List[List[ProgramPermutation]],
-      dir: String,
-      filename: String
-  ): Unit = ???
-  def dumpSilver(
-      lattice: List[List[ProgramPermutation]],
-      dir: String,
-      filename: String
-  ): Unit = ???
+  ): Unit = {
+    lattice.indices.foreach(level => {
+      lattice(level).indices.foreach((index) => {
+        val filePath = generatePath(dir, filename, level, index)
+        writeFile(
+          filePath,
+          lattice(level)(index)
+        )
+      })
+    })
+  }
 
   def generateCSV(
       programLattice: List[List[ProgramPermutation]],
