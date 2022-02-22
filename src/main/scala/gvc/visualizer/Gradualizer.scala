@@ -356,6 +356,7 @@ object Gradualizer {
     }
   }
   def permuteExpressionField(block: IRGraph.Block): List[PermutedBlock] = ???
+
   def permuteExpressionPredicate(block: IRGraph.Block): List[PermutedBlock] =
     ???
   def permuteExpressionLinear(block: IRGraph.Block): List[PermutedBlock] = ???
@@ -378,6 +379,66 @@ object Gradualizer {
         permutedClauses = PermutedExpression(0, None) :: permutedClauses
     }
     permutedClauses
+  }
+
+  type FieldPermutationMapping = Either[
+    Map[IRGraph.StructField, Option[IRGraph.Expression]],
+    Option[IRGraph.Expression]
+  ]
+
+  def extractClausesByField(
+      root: IRGraph.Expression,
+      predicate: (IRGraph.Expression) => Boolean
+  ): FieldPermutationMapping = {
+    val currentMap =
+      mutable.Map[IRGraph.StructField, Option[IRGraph.Expression]]
+
+    root match {
+      case binaryRoot: IRGraph.Binary => {
+        val rightTraversal =
+          extractClausesByField(binaryRoot.right, predicate)
+        val leftTraversal =
+          extractClausesByField(
+            binaryRoot.left,
+            predicate
+          )
+        if (rightTraversal.isRight && leftTraversal.isRight) {
+          if (
+            rightTraversal.right.get.isDefined && leftTraversal.right.get.isDefined
+          ) {
+            Right(
+              Some(
+                new IRGraph.Binary(
+                  binaryRoot.operator,
+                  leftTraversal.right.get.get,
+                  rightTraversal.right.get.get
+                )
+              )
+            )
+          } else if (binaryRoot.operator == IRGraph.BinaryOp.And) {}
+        }
+        Right(None)
+      }
+      case un: IRGraph.Unary => {
+        un.operand match {
+          case value: IRGraph.Var                          => ???
+          case member: IRGraph.Member                      => ???
+          case expression: IRGraph.SpecificationExpression => ???
+          case literal: IRGraph.Literal                    => ???
+          case conditional: IRGraph.Conditional            => ???
+          case binary: IRGraph.Binary                      => ???
+          case unary: IRGraph.Unary                        => ???
+        }
+      }
+      case spec: IRGraph.SpecificationExpression =>
+        spec match {
+          case accessibility: IRGraph.Accessibility => ???
+          case instance: IRGraph.PredicateInstance  => ???
+          case result: IRGraph.Result               => ???
+          case imprecise: IRGraph.Imprecise         => ???
+        }
+      case _: IRGraph.Expression => ???
+    }
   }
 
   case class ASTMarker(expr: Option[IRGraph.Expression], currentIndex: Int)
