@@ -199,7 +199,6 @@ object Checker {
         ops += new Invoke(
           runtime.assertAcc,
           List(
-            temporaryOwnedFields,
             primaryOwnedFields,
             structId,
             fieldIndex,
@@ -458,7 +457,6 @@ object Checker {
       new Invoke(
         runtime.assertAcc,
         List(
-          ownedFieldsSet.temporary,
           ownedFieldsSet.primary,
           instanceId,
           fieldIndex,
