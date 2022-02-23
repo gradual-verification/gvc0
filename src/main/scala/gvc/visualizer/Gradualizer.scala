@@ -91,6 +91,11 @@ object Gradualizer {
         program.predicates,
         permuteModes
       )
+
+    val totalPrograms = methodPermutations.length * predicatePermutations.length
+    var currProgram = 1
+
+    print("Printing permutations...")
     for (methodList <- methodPermutations) {
       for (predicateList <- predicatePermutations) {
         var nClausesPreconditions = 0
@@ -125,10 +130,16 @@ object Gradualizer {
           nClausesLoopInvariants,
           methodMetadata.toMap
         )
+        print(
+          "\r" + currProgram + "/" + totalPrograms
+        )
+        currProgram += 1
+
       }
     }
-    print(
-      "Generated " + programPermutations.length + " permutations of the program."
+
+    println(
+      "\nGenerated " + programPermutations.length + " permutations of the program."
     )
     programPermutations.toList
   }
@@ -149,7 +160,7 @@ object Gradualizer {
         val permutedPostconditions =
           permuteExpression(method.postcondition, permuteModes)
         val permutedMethodBodies = permuteBlock(method.body, permuteModes)
-        println(s"${method.name}: ")
+        println(s"METHOD: ${method.name}: ")
         println(s"  - " + permutedPreconditions.length + " preconditions")
         println(s"  - " + permutedPostconditions.length + " postconditions")
         println(s"  - " + permutedMethodBodies.length + " method bodies")
@@ -175,7 +186,7 @@ object Gradualizer {
                 body.nClausesLoopInvariants
               )
               print(
-                "\r" + currPermutation + "/" + permutedPreconditions.length * permutedPostconditions.length * permutedMethodBodies.length
+                "\r   -> Generated " + currPermutation + "/" + permutedPreconditions.length * permutedPostconditions.length * permutedMethodBodies.length
               )
 
               currPermutation += 1
@@ -183,9 +194,10 @@ object Gradualizer {
           })
         })
         perMethodPermutations += methodPermutations.toList
+        print("\n")
+
       }
     }
-    print("\n")
     methods
       .filter(method => methodExclusionList.contains(method.name))
       .foreach(method => perMethodPermutations += List(PermutedMethod(method)))
@@ -196,18 +208,26 @@ object Gradualizer {
       predicates: Seq[IRGraph.Predicate],
       permuteModes: Map[PermuteTarget, PermuteMode]
   ): List[List[PermutedPredicate]] = {
+    var currPermutation = 1;
     val predicatePermutations = predicates.map(predicate => {
+      println(s"PREDICATE: ${predicate.name}: ")
       val permutedPredicateBodies = permuteExpression(
         Some(predicate.expression),
         permuteModes
       )
+      println(s"  - " + permutedPredicateBodies.length + " bodies")
       permutedPredicateBodies.map(body => {
+        print(
+          "\r   -> Generated " + currPermutation + "/" + permutedPredicateBodies.length
+        )
+        currPermutation += 1
         PermutedPredicate(
           predicate.copy(new IRGraph.Imprecise(body.expr)),
           body.nClauses
         )
       })
     })
+    print("\n")
     crossJoin(predicatePermutations.toList)
   }
 
@@ -273,10 +293,9 @@ object Gradualizer {
           val trueBranchPermutations =
             permuteBlock(value.ifTrue, permuteModes)
           val falseBranchPermutations =
-            permuteBlock(value.ifTrue, permuteModes)
+            permuteBlock(value.ifFalse, permuteModes)
           trueBranchPermutations.flatMap(trueBranch => {
             falseBranchPermutations.map(falseBranch => {
-              val newIf = value.copy(trueBranch.opList, falseBranch.opList)
               permuter.permute(
                 PermutedOp(
                   trueBranch.nClausesAssertions + falseBranch.nClausesAssertions,
@@ -293,12 +312,11 @@ object Gradualizer {
           val whileBodies = permuteBlock(whl.body, permuteModes)
           invariantAssertions.flatMap(invAssert => {
             whileBodies.map(body => {
-              val permutedWhile = whl.copy(invAssert.expr, body.opList)
               permuter.permute(
                 PermutedOp(
                   body.nClausesAssertions,
                   body.nClausesLoopInvariants + invAssert.nClauses,
-                  Some(permutedWhile)
+                  Some(whl.copy(invAssert.expr, body.opList))
                 ),
                 permuteModes
               )
@@ -323,7 +341,7 @@ object Gradualizer {
         val expPermuter = new ExpressionPermuter()
         val expStack = ListBuffer[IRGraph.Expression](root)
         while (expStack.nonEmpty) {
-          val top = expStack.last
+          val top = expStack.remove(expStack.length - 1)
           top match {
             case conditional: IRGraph.Conditional =>
               val trueBranches =
@@ -332,10 +350,16 @@ object Gradualizer {
                 permuteExpression(Some(conditional.ifFalse), permuteModes)
               trueBranches.map(tBranch => {
                 falseBranches.map(fBranch => {
+                  val tExpr =
+                    if (tBranch.expr.isDefined) tBranch.expr.get
+                    else new IRGraph.Bool(value = true)
+                  val fExpr =
+                    if (fBranch.expr.isDefined) fBranch.expr.get
+                    else new IRGraph.Bool(value = true)
                   val permutedIf = new IRGraph.Conditional(
                     conditional.condition,
-                    new IRGraph.Imprecise(tBranch.expr),
-                    new IRGraph.Imprecise(fBranch.expr)
+                    tExpr,
+                    fExpr
                   )
                   expPermuter.permute(
                     PermutedExpression(

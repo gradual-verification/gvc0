@@ -15,7 +15,7 @@ object PermuteTarget extends Enumeration {
 }
 
 abstract class Permuter[T, S]() {
-  final val contents: ListBuffer[ListBuffer[T]] = ListBuffer()
+  final var contents: ListBuffer[ListBuffer[T]] = ListBuffer()
   private final def permuteExp(toPermute: S): Unit = {
     contents ++= contents.map(linearLayer => {
       linearLayer.map(marker => {
@@ -30,8 +30,8 @@ abstract class Permuter[T, S]() {
     })
   }
   private final def append(toAppend: S): Unit = {
-    contents.foreach(linear => {
-      linear.foreach(append => {
+    contents = contents.map(linear => {
+      linear.map(append => {
         combine(append, toAppend)
       })
     })
@@ -60,6 +60,7 @@ abstract class Permuter[T, S]() {
 }
 
 class BlockPermuter extends Permuter[PermutedBlock, PermutedOp] {
+  contents += ListBuffer(PermutedBlock(0, 0, List()))
   override def combine(
       root: PermutedBlock,
       toAppend: PermutedOp
@@ -79,7 +80,7 @@ class BlockPermuter extends Permuter[PermutedBlock, PermutedOp] {
 
 class ExpressionPermuter
     extends Permuter[PermutedExpression, PermutedExpression] {
-
+  contents += ListBuffer(PermutedExpression(0, None))
   override def combine(
       root: PermutedExpression,
       toAppend: PermutedExpression

@@ -11,7 +11,7 @@ dot_input.dot
 
 .scalafmt.conf
 
-
+perms
 
 # metals
 project/metals.sbt

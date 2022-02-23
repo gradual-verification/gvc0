@@ -88,8 +88,7 @@ object Config {
                |             --perm-all=<mode>              Specify 'exp', 'linear'. Linear is chosen by default.
                |             --perm-field=<mode>            Set the permutation mode for field access predicates. 
                |             --perm-pred=<mode>             Set the permutation mode for user-defined predicates.
-               |             --perm-expr=<mode>              Set the permutation mode for non-predicate expressions in specifications.
-               |             """
+               |             --perm-expr=<mode>             Set the permutation mode for non-predicate expressions in specifications."""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val permuteArg = raw"--perm=(.+)".r
@@ -135,7 +134,7 @@ object Config {
           tail,
           current.copy(
             permute = Some(f),
-            permuteModes = current.permuteModes + (All -> PermuteMode.Linear)
+            permuteModes = current.permuteModes + (All -> PermuteMode.Append)
           )
         )
       case outputArg(f) :: tail =>
@@ -145,7 +144,7 @@ object Config {
           tail,
           current.copy(
             permute = Some(f),
-            permuteModes = current.permuteModes + (All -> PermuteMode.Linear)
+            permuteModes = current.permuteModes + (All -> PermuteMode.Append)
           )
         )
       case permuteExcludeArg(f) :: tail =>

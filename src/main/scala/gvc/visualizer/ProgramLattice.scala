@@ -135,6 +135,8 @@ object ProgramLattice {
   ): List[List[ProgramPermutation]] = {
     val lattice =
       mutable.TreeSet[mutable.ListBuffer[ProgramPermutation]]()(LevelOrdering)
+
+    val currProgram = 1
     for (elem: ProgramPermutation <- permList) {
       val levelExists =
         lattice.find(buffer => getListLevel(buffer) == getLevel(elem))
@@ -146,17 +148,20 @@ object ProgramLattice {
     }
     lattice.map(lst => lst.toList).toList
   }
-  def generatePath(dir: String, filename: String, level: Int, index: Int) =
+  def generatePath(dir: String, filename: String, level: Int, index: Int) = {
+    val modifiedName = (level + "_" + index + "_" + filename)
     Paths
-      .get(dir, level + "_" + index + "_" + filename)
+      .get(dir, modifiedName)
       .toAbsolutePath
       .toString
+  }
 
   def dumpStrings(
       lattice: List[List[String]],
       dir: String,
       filename: String
   ): Unit = {
+
     lattice.indices.foreach(level => {
       lattice(level).indices.foreach((index) => {
         val filePath = generatePath(dir, filename, level, index)

@@ -16,7 +16,7 @@ import viper.silver.verifier
 
 import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets
-import java.io.IOException
+import java.io.{File, IOException}
 import sys.process._
 import scala.language.postfixOps
 
@@ -50,18 +50,29 @@ object Main extends App {
         else ""
       val methodsToExclude =
         Gradualizer.parseMethodExclusionList(exclusionSource)
+      println("Generating permutations...")
       val c0SourceList =
         Gradualizer.gradualizeProgram(
           inputSource,
           methodsToExclude,
           config.permuteModes
         )
+      println(s"Creating lattice of permutations by degree of specification...")
       val programLattice = ProgramLattice.generateProgramLattice(c0SourceList)
+      println(s"Created lattice.")
+
       if (config.dump.isDefined && config.dump.get == Config.DumpIR) {
+        println(
+          s"Writing each permutation as C0 to ${config.permuteDumpDir.get}."
+        )
         ProgramLattice.dumpStrings(
           programLattice.map(_.map(p => p.source)),
           config.permuteDumpDir.get,
-          baseName + ".c0"
+          baseName.substring(
+            if (baseName.lastIndexOf(File.separator) >= 0)
+              baseName.lastIndexOf(File.separator) + 1
+            else 0
+          ) + ".c0"
         )
       }
 
