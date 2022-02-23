@@ -54,7 +54,7 @@ object Main extends App {
         Gradualizer.gradualizeProgram(
           inputSource,
           methodsToExclude,
-          config.permuteMode
+          config.permuteModes
         )
       val programLattice = ProgramLattice.generateProgramLattice(c0SourceList)
       if (config.dump.isDefined && config.dump.get == Config.DumpIR) {
@@ -139,7 +139,7 @@ object Main extends App {
     // Print runtime check information for debugging when dumping C0 output
     // This only happens after verification, so runtime checks have been initialized
     for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
-      println("Runtime checks required for " + exp.toString() + ":")
+      println("Runtime checks required for " + exp.toString + ":")
       println(
         checks
           .map(b =>
@@ -181,8 +181,8 @@ object Main extends App {
   ): VerifierIO = {
     val ir = generateIR(inputSource)
 
-    if (!cmdConfig.permute.isDefined) {
-      if (cmdConfig.dump == Some(Config.DumpIR))
+    if (cmdConfig.permute.isEmpty) {
+      if (cmdConfig.dump.contains(Config.DumpIR))
         dump(GraphPrinter.print(ir, includeSpecs = true))
       else if (cmdConfig.saveFiles)
         writeFile(
@@ -218,12 +218,12 @@ object Main extends App {
     }
 
     silicon.stop()
-    if (!cmdConfig.permute.isDefined && cmdConfig.onlyVerify) sys.exit(0)
+    if (cmdConfig.permute.isEmpty && cmdConfig.onlyVerify) sys.exit(0)
 
     Weaver.weave(ir, silver)
 
     val c0Source = GraphPrinter.print(ir, includeSpecs = false)
-    if (!cmdConfig.permute.isDefined && cmdConfig.dump == Some(Config.DumpC0))
+    if (cmdConfig.permute.isEmpty && cmdConfig.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
     VerifierIO(silver, c0Source)
   }
@@ -257,7 +257,7 @@ object Main extends App {
     if (compilerExit != 0) Config.error("Compilation failed")
 
     if (cmdConfig.exec) {
-      val outputCommand = Paths.get(outputExe).toAbsolutePath().toString()
+      val outputCommand = Paths.get(outputExe).toAbsolutePath.toString
       sys.exit(Seq(outputCommand) !)
     } else {
       sys.exit(0)

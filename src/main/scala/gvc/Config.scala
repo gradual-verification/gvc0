@@ -1,10 +1,12 @@
 package gvc
 
-import gvc.visualizer.PermuteMode
+import gvc.visualizer.{PermuteMode}
 import gvc.visualizer.PermuteMode.PermuteMode
+import gvc.visualizer.PermuteTarget.{All, Field, Expr, Predicate, PermuteTarget}
 
 import java.nio.file.{Files, Paths}
 import java.io.File
+import scala.annotation.tailrec
 
 sealed trait DumpType
 
@@ -13,7 +15,7 @@ case class Config(
     output: Option[String] = None,
     permute: Option[String] = None,
     permuteExclude: Option[String] = None,
-    permuteMode: Option[PermuteMode] = None,
+    permuteModes: Map[PermuteTarget, PermuteMode] = Map(),
     permuteTikz: Option[String] = None,
     permuteDumpDir: Option[String] = None,
     saveFiles: Boolean = false,
@@ -34,7 +36,7 @@ case class Config(
         Some("Cannot combine --output and --only-verify")
       else if (exec && onlyVerify)
         Some("Cannot combine --exec and --only-verify")
-      else if (!sourceFile.isDefined) Some("No source file specified")
+      else if (sourceFile.isEmpty) Some("No source file specified")
       else if (!Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
       else if (
@@ -45,15 +47,15 @@ case class Config(
         Some(
           s"Permutation exclusion list '${permuteExclude.get}' does not exist'"
         )
-      else if (!permute.isDefined && permuteExclude.isDefined)
+      else if (permute.isEmpty && permuteExclude.isDefined)
         Some(s"Option --permute must be enabled to use --permute-exclude")
-      else if (!permute.isDefined && permuteMode.isDefined)
+      else if (permute.isEmpty && permuteModes.nonEmpty)
         Some(s"Option --permute must be enabled to use --permute-mode")
-      else if (!permute.isDefined && permuteTikz.isDefined)
+      else if (permute.isEmpty && permuteTikz.isDefined)
         Some(s"Option --permute must be enabled to use --permute-tikz")
-      else if (!permute.isDefined && permuteDumpDir.isDefined)
+      else if (permute.isEmpty && permuteDumpDir.isDefined)
         Some(s"Option --permute must be enabled to use --permute-dump-dir")
-      else if (permuteDumpDir.isDefined && !dump.isDefined)
+      else if (permuteDumpDir.isDefined && dump.isEmpty)
         Some(s"Option --permute-dump-dir must be used with --dump")
       else if (
         permuteDumpDir.isDefined && !Files.exists(Paths.get(permuteDumpDir.get))
@@ -71,25 +73,33 @@ object Config {
 
   val help = """Usage: gvc0 [OPTION...] SOURCEFILE
                |where OPTION is
-               |  -h         --help                     Give short usage message and exit
-               |  -d <type>  --dump=<type>              Print the generated code and exit, where <type> specifies
-               |                                        the type of code to print: ir, silver, c0
-               |  -o <file>  --output=<file>            Place the executable output into <file>
-               |  -v         --only-verify              Stop after static verification
-               |  -s         --save-files               Save the intermediate files produced (IR, Silver, C0, and C)
-               |  -x         --exec                     Execute the compiled file
-               |  -p <file>  --permute=<file>           Generate, verify, execute, and profile all permutations of specs for a program,
-               |                                        saving the output to <file> in .csv format.
-               |             --permute-exclude=<file>   Provide a comma-separated list of methods to keep constant in all permutations.
-               |             --permute-mode=<mode>      Specify 'exp', 'linear', 'field', or 'predicate'. Linear is chosen by default.
-               |             --permute-tikz=<file>      Specify the location to save a LaTeX-formatted lattice diagram of runtime statistics."""
+               |  -h         --help                         Give short usage message and exit
+               |  -d <type>  --dump=<type>                  Print the generated code and exit, where <type> specifies
+               |                                            the type of code to print: ir, silver, c0
+               |  -o <file>  --output=<file>                Place the executable output into <file>
+               |  -v         --only-verify                  Stop after static verification
+               |  -s         --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
+               |  -x         --exec                         Execute the compiled file
+               |  -p <file>  --perm=<file>                  Generate, verify, execute, and profile all permutations of specs for a program,
+               |                                            saving the output to <file> in .csv format.
+               |             --perm-ex=<file>               Provide a comma-separated list of methods to keep constant in all permutations.
+               |             --perm-tikz=<file>             Specify the location to save a LaTeX-formatted lattice diagram of runtime statistics.
+               |             --perm-dump-dir=<dir>          Specify the directory to dump permuted programs, if --dump is enabled.
+               |             --perm-all=<mode>              Specify 'exp', 'linear'. Linear is chosen by default.
+               |             --perm-field=<mode>            Set the permutation mode for field access predicates. 
+               |             --perm-pred=<mode>             Set the permutation mode for user-defined predicates.
+               |             --perm-expr=<mode>              Set the permutation mode for non-predicate expressions in specifications.
+               |             """
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
-  private val permuteArg = raw"--permute=(.+)".r
-  private val permuteExcludeArg = raw"--permute-exclude=(.+)".r
-  private val permuteModeArg = raw"--permute-mode=(.+)".r
-  private val permuteTikzArg = raw"--permute-tikz=(.+)".r
-  private val permuteDumpDir = raw"--permute-dump-dir=(.+)".r
+  private val permuteArg = raw"--perm=(.+)".r
+  private val permuteExcludeArg = raw"--perm-exclude=(.+)".r
+  private val permuteAllArg = raw"--perm-all=(.+)".r
+  private val permuteTikzArg = raw"--perm-tikz=(.+)".r
+  private val permuteDumpDir = raw"--perm-dump-dir=(.+)".r
+  private val permuteFieldMode = raw"--perm-field=(.+)".r
+  private val permutePredicateMode = raw"--perm-pred=(.+)".r
+  private val permuteExprMode = raw"--perm-expr=(.+)".r
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
@@ -103,13 +113,12 @@ object Config {
   }
 
   def parsePermuteMode(str: String): PermuteMode = str.toLowerCase() match {
-    case "exp"       => PermuteMode.Linear
-    case "linear"    => PermuteMode.Exp
-    case "field"     => PermuteMode.Field
-    case "predicate" => PermuteMode.Predicate
-    case _           => error(s"Invalid permute mode type: $str")
+    case "exp"    => PermuteMode.Linear
+    case "linear" => PermuteMode.Exp
+    case _        => error(s"Invalid permute mode type: $str")
   }
 
+  @tailrec
   def fromCommandLineArgs(
       args: List[String],
       current: Config = Config()
@@ -122,21 +131,56 @@ object Config {
       case "-o" :: f :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
       case "-p" :: f :: tail =>
-        fromCommandLineArgs(tail, current.copy(permute = Some(f)))
+        fromCommandLineArgs(
+          tail,
+          current.copy(
+            permute = Some(f),
+            permuteModes = current.permuteModes + (All -> PermuteMode.Linear)
+          )
+        )
       case outputArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
       case permuteArg(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(permute = Some(f)))
+        fromCommandLineArgs(
+          tail,
+          current.copy(
+            permute = Some(f),
+            permuteModes = current.permuteModes + (All -> PermuteMode.Linear)
+          )
+        )
       case permuteExcludeArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteExclude = Some(f)))
       case permuteTikzArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteTikz = Some(f)))
       case permuteDumpDir(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteDumpDir = Some(f)))
-      case permuteModeArg(f) :: tail =>
+      case permuteAllArg(f) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(permuteMode = Some(parsePermuteMode(f)))
+          current.copy(permuteModes =
+            current.permuteModes + (All -> parsePermuteMode(f))
+          )
+        )
+      case permuteFieldMode(f) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(permuteModes =
+            current.permuteModes + (Field -> parsePermuteMode(f))
+          )
+        )
+      case permutePredicateMode(f) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(permuteModes =
+            current.permuteModes + (Predicate -> parsePermuteMode(f))
+          )
+        )
+      case permuteExprMode(f) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(permuteModes =
+            current.permuteModes + (Expr -> parsePermuteMode(f))
+          )
         )
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
@@ -156,7 +200,6 @@ object Config {
               current.copy(sourceFile = Some(sourceFile))
             )
         }
-
       case Nil => current
     }
 

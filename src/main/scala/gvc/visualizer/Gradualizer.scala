@@ -2,6 +2,7 @@ package gvc.visualizer
 import gvc.Main.generateIR
 import gvc.transformer.{GraphPrinter, IRGraph}
 import gvc.visualizer.PermuteMode.PermuteMode
+import gvc.visualizer.PermuteTarget.PermuteTarget
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -25,10 +26,6 @@ case class PermutationMetadata(
     nClausesPreconditions: Int,
     nClausesPostconditions: Int
 )
-object PermuteMode extends Enumeration {
-  type PermuteMode = Value
-  val Exp, Linear, Field, Predicate = Value
-}
 
 case class PermutedMethod(
     method: IRGraph.Method,
@@ -79,26 +76,21 @@ object Gradualizer {
   def gradualizeProgram(
       c0Source: String,
       methodExclusionList: Set[String],
-      permuteModeOption: Option[PermuteMode]
+      permuteModes: Map[PermuteTarget, PermuteMode]
   ): List[ProgramPermutation] = {
     val program = generateIR(c0Source)
     val programPermutations: ListBuffer[ProgramPermutation] = ListBuffer()
 
-    val permuteMode = permuteModeOption match {
-      case Some(value) => value
-      case None        => PermuteMode.Linear
-    }
     val methodPermutations: List[List[PermutedMethod]] = permuteMethods(
       program.methods,
       methodExclusionList,
-      permuteMode
+      permuteModes
     )
     val predicatePermutations: List[List[PermutedPredicate]] =
       permutePredicates(
         program.predicates,
-        permuteMode
+        permuteModes
       )
-
     for (methodList <- methodPermutations) {
       for (predicateList <- predicatePermutations) {
         var nClausesPreconditions = 0
@@ -144,7 +136,7 @@ object Gradualizer {
   def permuteMethods(
       methods: Seq[IRGraph.Method],
       methodExclusionList: Set[String],
-      permuteMode: PermuteMode
+      permuteModes: Map[PermuteTarget, PermuteMode]
   ): List[List[PermutedMethod]] = {
 
     val perMethodPermutations: ListBuffer[List[PermutedMethod]] =
@@ -153,10 +145,10 @@ object Gradualizer {
     for (method <- methods) {
       if (!methodExclusionList.contains(method.name)) {
         val permutedPreconditions =
-          permuteExpression(method.precondition, permuteMode)
+          permuteExpression(method.precondition, permuteModes)
         val permutedPostconditions =
-          permuteExpression(method.postcondition, permuteMode)
-        val permutedMethodBodies = permuteBlock(method.body, permuteMode)
+          permuteExpression(method.postcondition, permuteModes)
+        val permutedMethodBodies = permuteBlock(method.body, permuteModes)
         println(s"${method.name}: ")
         println(s"  - " + permutedPreconditions.length + " preconditions")
         println(s"  - " + permutedPostconditions.length + " postconditions")
@@ -202,12 +194,12 @@ object Gradualizer {
 
   def permutePredicates(
       predicates: Seq[IRGraph.Predicate],
-      permuteMode: PermuteMode
+      permuteModes: Map[PermuteTarget, PermuteMode]
   ): List[List[PermutedPredicate]] = {
     val predicatePermutations = predicates.map(predicate => {
       val permutedPredicateBodies = permuteExpression(
         Some(predicate.expression),
-        permuteMode
+        permuteModes
       )
       permutedPredicateBodies.map(body => {
         PermutedPredicate(
@@ -232,344 +224,149 @@ object Gradualizer {
     )
   }
 
-  def permuteToAll(
-      permutations: List[PermutedBlock],
-      permList: List[PermutedOp]
-  ): List[PermutedBlock] = {
-    permutations.flatMap(prev => {
-      permList.map(curr => {
-        PermutedBlock(
-          prev.nClausesAssertions + curr.nClausesAssertions,
-          prev.nClausesLoopInvariants + curr.nCLausesLoopInvariants,
-          if (curr.op.isDefined) prev.opList ++ List(curr.op.get)
-          else prev.opList
-        )
-      })
-    })
-  }
-
   def permuteBlock(
       block: IRGraph.Block,
-      permuteMode: PermuteMode
+      permuteModes: Map[PermuteTarget, PermuteMode]
   ): List[PermutedBlock] = {
-    permuteMode match {
-      case gvc.visualizer.PermuteMode.Exp       => permuteBlockExp(block)
-      case gvc.visualizer.PermuteMode.Linear    => ???
-      case gvc.visualizer.PermuteMode.Field     => ???
-      case gvc.visualizer.PermuteMode.Predicate => ???
-    }
-  }
-
-  def permuteBlockField(block: IRGraph.Block): List[PermutedBlock] = ???
-  def permuteBlockPredicate(block: IRGraph.Block): List[PermutedBlock] = ???
-  def permuteBlockLinear(block: IRGraph.Block): List[PermutedBlock] = ???
-
-  def permuteBlockExp(
-      block: IRGraph.Block
-  ): List[PermutedBlock] = {
-
-    var currentPermutations: List[PermutedBlock] = List(
-      PermutedBlock(0, 0, List())
-    )
-
+    val permuter = new BlockPermuter()
     val it = block.iterator
     while (it.hasNext) {
       val op = it.next()
       op match {
         case fold: IRGraph.Fold =>
-          currentPermutations = permuteToAll(
-            currentPermutations,
-            List(PermutedOp(op = Some(fold)), PermutedOp())
+          permuter.permute(
+            PermutedOp(op = Some(fold)),
+            permuteModes
           )
         case unfold: IRGraph.Unfold =>
-          currentPermutations = permuteToAll(
-            currentPermutations,
-            List(PermutedOp(op = Some(unfold)), PermutedOp())
+          permuter.permute(
+            PermutedOp(op = Some(unfold)),
+            permuteModes
           )
         case assert: IRGraph.Assert =>
           if (assert.kind == IRGraph.AssertKind.Specification) {
-            currentPermutations = permuteToAll(
-              currentPermutations,
-              permuteExpressionExp(Some(assert.value)).map(expr => {
-                PermutedOp(
-                  nClausesAssertions = expr.nClauses,
-                  op = Some(
-                    new IRGraph.Assert(
-                      new IRGraph.Imprecise(expr.expr),
-                      IRGraph.AssertKind.Specification
-                    )
-                  )
+            permuteExpression(Some(assert.value), permuteModes).foreach(
+              expr => {
+                val permutedAssert = new IRGraph.Assert(
+                  new IRGraph.Imprecise(expr.expr),
+                  IRGraph.AssertKind.Specification
                 )
-              })
+                permuter.permute(
+                  PermutedOp(
+                    nClausesAssertions = expr.nClauses,
+                    op = Some(
+                      permutedAssert
+                    )
+                  ),
+                  permuteModes
+                )
+              }
             )
+
           } else {
-            currentPermutations = appendToAll(currentPermutations, assert)
+            permuter.permute(
+              PermutedOp(op = Some(assert)),
+              permuteModes
+            )
           }
         case value: IRGraph.If =>
-          val trueBranchPermutations = permuteBlockExp(value.ifTrue)
-          val falseBranchPermutations = permuteBlockExp(value.ifFalse)
-
-          currentPermutations = permuteToAll(
-            currentPermutations,
-            trueBranchPermutations.flatMap(trueBranch => {
-              falseBranchPermutations.map(falseBranch => {
+          val trueBranchPermutations =
+            permuteBlock(value.ifTrue, permuteModes)
+          val falseBranchPermutations =
+            permuteBlock(value.ifTrue, permuteModes)
+          trueBranchPermutations.flatMap(trueBranch => {
+            falseBranchPermutations.map(falseBranch => {
+              val newIf = value.copy(trueBranch.opList, falseBranch.opList)
+              permuter.permute(
                 PermutedOp(
                   trueBranch.nClausesAssertions + falseBranch.nClausesAssertions,
                   trueBranch.nClausesLoopInvariants + falseBranch.nClausesLoopInvariants,
                   Some(value.copy(trueBranch.opList, falseBranch.opList))
-                )
-              })
+                ),
+                permuteModes
+              )
             })
-          )
+          })
         case whl: IRGraph.While =>
           val invariantAssertions =
-            permuteExpressionExp(whl.invariant)
-          val whileBodies = permuteBlockExp(whl.body)
-          currentPermutations = permuteToAll(
-            currentPermutations,
-            invariantAssertions.flatMap(invAssert => {
-              whileBodies.map(body => {
+            permuteExpression(whl.invariant, permuteModes)
+          val whileBodies = permuteBlock(whl.body, permuteModes)
+          invariantAssertions.flatMap(invAssert => {
+            whileBodies.map(body => {
+              val permutedWhile = whl.copy(invAssert.expr, body.opList)
+              permuter.permute(
                 PermutedOp(
                   body.nClausesAssertions,
                   body.nClausesLoopInvariants + invAssert.nClauses,
-                  Some(whl.copy(invAssert.expr, body.opList))
-                )
-              })
-            })
-          )
-        case other: IRGraph.Op =>
-          currentPermutations = appendToAll(currentPermutations, other)
-      }
-    }
-    currentPermutations
-  }
-  def permuteExpression(
-      expression: Option[IRGraph.Expression],
-      permuteMode: PermuteMode
-  ): List[PermutedExpression] = {
-
-    permuteMode match {
-      case gvc.visualizer.PermuteMode.Exp       => permuteExpressionExp(expression)
-      case gvc.visualizer.PermuteMode.Linear    => ???
-      case gvc.visualizer.PermuteMode.Field     => ???
-      case gvc.visualizer.PermuteMode.Predicate => ???
-    }
-  }
-  def permuteExpressionField(block: IRGraph.Block): List[PermutedBlock] = ???
-
-  def permuteExpressionPredicate(block: IRGraph.Block): List[PermutedBlock] =
-    ???
-  def permuteExpressionLinear(block: IRGraph.Block): List[PermutedBlock] = ???
-
-  def permuteExpressionExp(
-      expression: Option[IRGraph.Expression]
-  ): List[PermutedExpression] = {
-    var permutedClauses = List[PermutedExpression]()
-    expression match {
-      case Some(expr: IRGraph.Expression) =>
-        val numClausesInAssertion = numClauses(expr)
-        val conjunctionNodeIndices = permuteIndices(numClausesInAssertion)
-        conjunctionNodeIndices.foreach(permutation => {
-          val subset =
-            extractSubsetOfClauses(permutation, expr)
-          permutedClauses =
-            PermutedExpression(permutation.length, subset) :: permutedClauses
-        })
-      case None =>
-        permutedClauses = PermutedExpression(0, None) :: permutedClauses
-    }
-    permutedClauses
-  }
-
-  type FieldPermutationMapping = Either[
-    Map[IRGraph.StructField, Option[IRGraph.Expression]],
-    Option[IRGraph.Expression]
-  ]
-
-  def extractClausesByField(
-      root: IRGraph.Expression,
-      predicate: (IRGraph.Expression) => Boolean
-  ): FieldPermutationMapping = {
-    val currentMap =
-      mutable.Map[IRGraph.StructField, Option[IRGraph.Expression]]
-
-    root match {
-      case binaryRoot: IRGraph.Binary => {
-        val rightTraversal =
-          extractClausesByField(binaryRoot.right, predicate)
-        val leftTraversal =
-          extractClausesByField(
-            binaryRoot.left,
-            predicate
-          )
-        if (rightTraversal.isRight && leftTraversal.isRight) {
-          if (
-            rightTraversal.right.get.isDefined && leftTraversal.right.get.isDefined
-          ) {
-            Right(
-              Some(
-                new IRGraph.Binary(
-                  binaryRoot.operator,
-                  leftTraversal.right.get.get,
-                  rightTraversal.right.get.get
-                )
-              )
-            )
-          } else if (binaryRoot.operator == IRGraph.BinaryOp.And) {}
-        }
-        Right(None)
-      }
-      case un: IRGraph.Unary => {
-        un.operand match {
-          case value: IRGraph.Var                          => ???
-          case member: IRGraph.Member                      => ???
-          case expression: IRGraph.SpecificationExpression => ???
-          case literal: IRGraph.Literal                    => ???
-          case conditional: IRGraph.Conditional            => ???
-          case binary: IRGraph.Binary                      => ???
-          case unary: IRGraph.Unary                        => ???
-        }
-      }
-      case spec: IRGraph.SpecificationExpression =>
-        spec match {
-          case accessibility: IRGraph.Accessibility => ???
-          case instance: IRGraph.PredicateInstance  => ???
-          case result: IRGraph.Result               => ???
-          case imprecise: IRGraph.Imprecise         => ???
-        }
-      case _: IRGraph.Expression => ???
-    }
-  }
-
-  case class ASTMarker(expr: Option[IRGraph.Expression], currentIndex: Int)
-  def extractSubsetOfClauses(
-      subset: List[Int],
-      root: IRGraph.Expression
-  ): Option[IRGraph.Expression] = {
-    val subsetBuffer = mutable.ListBuffer.empty ++= subset
-    extractSubsetOfClauses(subsetBuffer, index = 0, root).expr
-  }
-  def extractSubsetOfClauses(
-      subset: ListBuffer[Int],
-      index: Int,
-      root: IRGraph.Expression
-  ): ASTMarker = {
-    if (subset.nonEmpty) {
-      root match {
-        case binaryRoot: IRGraph.Binary =>
-          if (binaryRoot.operator == IRGraph.BinaryOp.And) {
-            val rightTraversal =
-              extractSubsetOfClauses(subset, index, binaryRoot.right)
-            val leftTraversal =
-              extractSubsetOfClauses(
-                subset,
-                rightTraversal.currentIndex,
-                binaryRoot.left
-              )
-            if (rightTraversal.expr.isDefined && leftTraversal.expr.isDefined) {
-              ASTMarker(
-                Some(
-                  new IRGraph.Binary(
-                    binaryRoot.operator,
-                    leftTraversal.expr.get,
-                    rightTraversal.expr.get
-                  )
+                  Some(permutedWhile)
                 ),
-                leftTraversal.currentIndex
+                permuteModes
               )
-            } else if (rightTraversal.expr.isDefined) {
-              ASTMarker(
-                rightTraversal.expr,
-                leftTraversal.currentIndex
-              )
-            } else {
-              leftTraversal
-            }
-          } else if (subset.last == index) {
-            subset.remove(1, subset.length - 1)
-            ASTMarker(Some(binaryRoot), index + 1)
-          } else {
-            ASTMarker(None, index + 1)
-          }
-
-        case cond: IRGraph.Conditional =>
-          val ifTrue = extractSubsetOfClauses(subset, index, cond.ifTrue)
-          val ifFalse =
-            extractSubsetOfClauses(subset, ifTrue.currentIndex, cond.ifFalse)
-          ASTMarker(
-            Some(
-              new IRGraph.Conditional(
-                cond.condition,
-                new IRGraph.Imprecise(ifTrue.expr),
-                new IRGraph.Imprecise(ifFalse.expr)
-              )
-            ),
-            ifFalse.currentIndex
+            })
+          })
+        case other: IRGraph.Op =>
+          permuter.permute(
+            PermutedOp(op = Some(other)),
+            permuteModes
           )
-        case _: IRGraph.Expression =>
-          if (subset.last == index) {
-            ASTMarker(Some(root), index)
-          } else {
-            ASTMarker(None, index)
-          }
       }
-    } else {
-      ASTMarker(None, index)
     }
+    permuter.gather()
   }
 
-  def permute[T](space: List[T]): ListBuffer[List[T]] = {
-    val collection = ListBuffer[List[T]]()
-    permuteRecurse(space, collection, List(), 0)
-    collection
-  }
-
-  def permuteIndices(max: Int): ListBuffer[List[Int]] = {
-    val collection = ListBuffer[List[Int]]()
-    permuteIndexRecurse(max, collection, List(), 0)
-    collection
-  }
-
-  //https://stackoverflow.com/a/8171776
-  def permuteRecurse[T](
-      space: List[T],
-      collection: ListBuffer[List[T]],
-      current: List[T],
-      index: Int
-  ): Unit = {
-    if (index == space.length) {
-      collection += current
-    } else {
-      permuteRecurse(space, collection, space(index) :: current, index + 1)
-      permuteRecurse(space, collection, current, index + 1)
-    }
-  }
-
-  def permuteIndexRecurse(
-      max: Int,
-      collection: ListBuffer[List[Int]],
-      current: List[Int],
-      index: Int
-  ): Unit = {
-    if (index == max) {
-      collection += current
-    } else {
-      permuteIndexRecurse(max, collection, index :: current, index + 1)
-      permuteIndexRecurse(max, collection, current, index + 1)
-    }
-  }
-
-  def numClauses(expr: IRGraph.Expression): Int = {
-    expr match {
-      case binExp: IRGraph.Binary =>
-        if (binExp.operator == IRGraph.BinaryOp.And) {
-          numClauses(binExp.right) + numClauses(binExp.left)
-        } else {
-          1
+  def permuteExpression(
+      rootOption: Option[IRGraph.Expression],
+      permuteModes: Map[PermuteTarget, PermuteMode]
+  ): List[PermutedExpression] = {
+    rootOption match {
+      case Some(root) =>
+        val expPermuter = new ExpressionPermuter()
+        val expStack = ListBuffer[IRGraph.Expression](root)
+        while (expStack.nonEmpty) {
+          val top = expStack.last
+          top match {
+            case conditional: IRGraph.Conditional =>
+              val trueBranches =
+                permuteExpression(Some(conditional.ifTrue), permuteModes)
+              val falseBranches =
+                permuteExpression(Some(conditional.ifFalse), permuteModes)
+              trueBranches.map(tBranch => {
+                falseBranches.map(fBranch => {
+                  val permutedIf = new IRGraph.Conditional(
+                    conditional.condition,
+                    new IRGraph.Imprecise(tBranch.expr),
+                    new IRGraph.Imprecise(fBranch.expr)
+                  )
+                  expPermuter.permute(
+                    PermutedExpression(
+                      tBranch.nClauses + fBranch.nClauses,
+                      Some(
+                        permutedIf
+                      )
+                    ),
+                    permuteModes
+                  )
+                })
+              })
+            case binary: IRGraph.Binary =>
+              if (binary.operator == IRGraph.BinaryOp.And) {
+                expStack += binary.left
+                expStack += binary.right
+              } else {
+                expPermuter.permute(
+                  PermutedExpression(1, Some(binary)),
+                  permuteModes
+                )
+              }
+            case expr: IRGraph.Expression =>
+              expPermuter.permute(
+                PermutedExpression(1, Some(expr)),
+                permuteModes
+              )
+          }
         }
-      case ifExp: IRGraph.Conditional =>
-        numClauses(ifExp.ifTrue) + numClauses(ifExp.ifFalse)
-      case _ => 1
+        expPermuter.gather()
+      case None => List(PermutedExpression(0, None))
     }
   }
 }
