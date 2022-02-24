@@ -170,7 +170,6 @@ object IRGraph {
     }
 
     def getVar(name: scala.Predef.String): Option[Var] = scope.get(name)
-
   }
 
   class Predicate(

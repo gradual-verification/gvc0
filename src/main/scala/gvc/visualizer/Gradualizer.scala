@@ -7,51 +7,6 @@ import gvc.visualizer.PermuteTarget.PermuteTarget
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
-case class ProgramPermutation(
-    ir: IRGraph.Program,
-    source: String,
-    nClausesPreconditions: Int,
-    nClausesPostconditions: Int,
-    nClausesAssertions: Int,
-    nCLausesLoopInvariants: Int,
-    methodMetadata: Map[String, PermutedMethod]
-)
-
-case class PermutedExpression(
-    nClauses: Int,
-    expr: Option[IRGraph.Expression]
-)
-
-case class PermutationMetadata(
-    nClausesPreconditions: Int,
-    nClausesPostconditions: Int
-)
-
-case class PermutedMethod(
-    method: IRGraph.Method,
-    nClausesPreconditions: Int = 0,
-    nClausesPostconditions: Int = 0,
-    nClausesAssertions: Int = 0,
-    nClausesLoopInvariants: Int = 0
-)
-
-case class PermutedBlock(
-    nClausesAssertions: Int,
-    nClausesLoopInvariants: Int,
-    opList: List[IRGraph.Op]
-)
-
-case class PermutedPredicate(
-    predicate: IRGraph.Predicate,
-    nClauses: Int
-)
-
-case class PermutedOp(
-    nClausesAssertions: Int = 0,
-    nCLausesLoopInvariants: Int = 0,
-    op: Option[IRGraph.Op] = None
-)
-
 object Gradualizer {
 
   class GradualizerException(val message: String) extends RuntimeException {
@@ -178,6 +133,7 @@ object Gradualizer {
               permutation.postcondition = Some(new IRGraph.Imprecise(post.expr))
               permutation.body = new IRGraph.MethodBlock(method)
               permutation.body ++= body.opList.map(op => op.copy)
+
               methodPermutations += PermutedMethod(
                 permutation,
                 pre.nClauses,
@@ -265,24 +221,20 @@ object Gradualizer {
           )
         case assert: IRGraph.Assert =>
           if (assert.kind == IRGraph.AssertKind.Specification) {
-            permuteExpression(Some(assert.value), permuteModes).foreach(
-              expr => {
-                val permutedAssert = new IRGraph.Assert(
-                  new IRGraph.Imprecise(expr.expr),
-                  IRGraph.AssertKind.Specification
-                )
-                permuter.permute(
-                  PermutedOp(
-                    nClausesAssertions = expr.nClauses,
-                    op = Some(
-                      permutedAssert
+            permuter.permute(
+              permuteExpression(Some(assert.value), permuteModes).map(expr => {
+                PermutedOp(
+                  nClausesAssertions = expr.nClauses,
+                  op = Some(
+                    new IRGraph.Assert(
+                      new IRGraph.Imprecise(expr.expr),
+                      IRGraph.AssertKind.Specification
                     )
-                  ),
-                  permuteModes
+                  )
                 )
-              }
+              }),
+              permuteModes
             )
-
           } else {
             permuter.permute(
               PermutedOp(op = Some(assert)),
