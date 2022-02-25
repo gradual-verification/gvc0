@@ -84,11 +84,7 @@ object Config {
                |                                            saving the output to <file> in .csv format.
                |             --perm-ex=<file>               Provide a comma-separated list of methods to keep constant in all permutations.
                |             --perm-tikz=<file>             Specify the location to save a LaTeX-formatted lattice diagram of runtime statistics.
-               |             --perm-dump-dir=<dir>          Specify the directory to dump permuted programs, if --dump is enabled.
-               |             --perm-all=<mode>              Specify 'exp', 'linear'. Linear is chosen by default.
-               |             --perm-field=<mode>            Set the permutation mode for field access predicates. 
-               |             --perm-pred=<mode>             Set the permutation mode for user-defined predicates.
-               |             --perm-expr=<mode>             Set the permutation mode for non-predicate expressions in specifications."""
+               |             --perm-dump-dir=<dir>          Specify the directory to dump permuted programs, if --dump is enabled."""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val permuteArg = raw"--perm=(.+)".r
@@ -96,9 +92,6 @@ object Config {
   private val permuteAllArg = raw"--perm-all=(.+)".r
   private val permuteTikzArg = raw"--perm-tikz=(.+)".r
   private val permuteDumpDir = raw"--perm-dump-dir=(.+)".r
-  private val permuteFieldMode = raw"--perm-field=(.+)".r
-  private val permutePredicateMode = raw"--perm-pred=(.+)".r
-  private val permuteExprMode = raw"--perm-expr=(.+)".r
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
@@ -158,27 +151,6 @@ object Config {
           tail,
           current.copy(permuteModes =
             current.permuteModes + (All -> parsePermuteMode(f))
-          )
-        )
-      case permuteFieldMode(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(permuteModes =
-            current.permuteModes + (Field -> parsePermuteMode(f))
-          )
-        )
-      case permutePredicateMode(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(permuteModes =
-            current.permuteModes + (Predicate -> parsePermuteMode(f))
-          )
-        )
-      case permuteExprMode(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(permuteModes =
-            current.permuteModes + (Expr -> parsePermuteMode(f))
           )
         )
       case ("-s" | "--save-files") :: tail =>
