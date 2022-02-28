@@ -47,8 +47,6 @@ case class Config(
         Some(s"Option --permute must be enabled to use --permute-tikz")
       else if (permute.isEmpty && permuteDumpDir.isDefined)
         Some(s"Option --permute must be enabled to use --permute-dump-dir")
-      else if (permuteDumpDir.isDefined && dump.isEmpty)
-        Some(s"Option --permute-dump-dir must be used with --dump")
       else None
     ).foreach(Config.error)
   }
