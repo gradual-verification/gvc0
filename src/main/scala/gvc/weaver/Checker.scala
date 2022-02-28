@@ -101,7 +101,7 @@ object Checker {
       }
 
     def getTrackedConditionValue(cond: TrackedCondition): Expression =
-      getDisjunction(cond.when) match {
+      cond.when.flatMap(getDisjunction(_)) match {
         case None => cond.value.toIR(program, method, None)
         case Some(when) =>
           new Binary(BinaryOp.And, when, cond.value.toIR(program, method, None))
@@ -596,7 +596,7 @@ object Checker {
     methodData.checks
       .groupBy(c => (c.location, c.when))
       .foreach { case ((loc, when), checks) =>
-        val condition = getCondition(when)
+        val condition = when.flatMap(getCondition(_))
         insertAt(
           loc,
           implementChecks(
