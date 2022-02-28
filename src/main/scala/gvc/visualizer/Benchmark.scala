@@ -107,7 +107,7 @@ object Bench {
     val labels = Labeller.labelAST(program)
     val lattice = new Lattice()
     val statsFile =
-      new FileWriter(dest.resolve(Names._stats).toString)
+      new FileWriter(config.permute.get)
 
     statsFile.write(columnHeaders)
     statsFile.flush()
@@ -234,6 +234,6 @@ class Lattice {
     entry += latticeElement.specsPresent.length.toString
     entry += latticeElement.metrics.execution.toString
     entry += latticeElement.metrics.verification.toString
-    entry.foldLeft("")(_ + "," + _) + "\n"
+    entry.foldRight("")(_ + "," + _) + "\n"
   }
 }
