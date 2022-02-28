@@ -170,6 +170,21 @@ object IRGraph {
     }
 
     def getVar(name: scala.Predef.String): Option[Var] = scope.get(name)
+
+    def copy(
+        replacementPre: Option[Expression],
+        replacementPost: Option[Expression],
+        replacementBody: List[Op]
+    ): Method = {
+      val copyOf = new Method(name, returnType, precondition, postcondition)
+      copyOf.precondition = replacementPre
+      copyOf.postcondition = replacementPost
+      _parameters.foreach(copyOf._parameters += _)
+      _variables.foreach(copyOf._variables += _)
+      scope.foreach(tuple => { copyOf.scope += tuple })
+      replacementBody.foreach(copyOf.body += _.copy)
+      copyOf
+    }
   }
 
   class Predicate(
@@ -435,7 +450,7 @@ object IRGraph {
       var ifFalse: Expression
   ) extends Expression {
     def valueType: Option[Type] = ifTrue.valueType.orElse(ifFalse.valueType)
-    override def contains(exp: Expression) =
+    override def contains(exp: Expression): Boolean =
       super.contains(exp) || condition.contains(exp) || ifTrue.contains(
         exp
       ) || ifFalse.contains(exp)
@@ -455,7 +470,7 @@ object IRGraph {
           BinaryOp.GreaterOrEqual =>
         Some(BoolType)
     }
-    override def contains(exp: Expression) =
+    override def contains(exp: Expression): Boolean =
       super.contains(exp) || left.contains(exp) || right.contains(exp)
   }
 

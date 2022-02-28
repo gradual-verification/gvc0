@@ -67,8 +67,9 @@ object GraphTransformer {
     def implementStruct(input: ResolvedStructDefinition): Unit = {
       val struct = ir.struct(input.name) match {
         case struct: IRGraph.Struct => struct
-        case struct => throw new TransformerException(s"Invalid struct '${struct.name}")
-      } 
+        case struct =>
+          throw new TransformerException(s"Invalid struct '${struct.name}")
+      }
 
       def resolveField(
           field: ResolvedStructField,
@@ -264,7 +265,8 @@ object GraphTransformer {
     def implementMethod(input: ResolvedMethodDefinition): Unit = {
       val method = ir.method(input.name) match {
         case method: IRGraph.Method => method
-        case method => throw new TransformerException(s"Invalid method '${method.name}'")
+        case method =>
+          throw new TransformerException(s"Invalid method '${method.name}'")
       }
 
       val scope = new BlockScope(
@@ -496,7 +498,7 @@ object GraphTransformer {
         })
 
       case imp: ResolvedImprecision =>
-        throw new TransformerException("Invalid ? encountered as expression")
+        new IRGraph.Imprecise(None)
 
       case cond: ResolvedTernary => {
         val condition = transformExpr(cond.condition, scope)
@@ -694,13 +696,21 @@ object GraphTransformer {
 
         case member: ResolvedMember => {
           val (parent, field) = transformField(member)
-          val target = new IRGraph.FieldMember(transformExpr(parent, scope), field)
-          new IRGraph.AssignMember(target, transformAssignValue(value, target, op))
+          val target =
+            new IRGraph.FieldMember(transformExpr(parent, scope), field)
+          new IRGraph.AssignMember(
+            target,
+            transformAssignValue(value, target, op)
+          )
         }
 
         case deref: ResolvedDereference =>
-          val target = new IRGraph.DereferenceMember(transformExpr(deref.value, scope))
-          new IRGraph.AssignMember(target, transformAssignValue(value, target, op))
+          val target =
+            new IRGraph.DereferenceMember(transformExpr(deref.value, scope))
+          new IRGraph.AssignMember(
+            target,
+            transformAssignValue(value, target, op)
+          )
 
         case _: ResolvedArrayIndex =>
           throw new TransformerException("Arrays are not supported")
@@ -708,14 +718,18 @@ object GraphTransformer {
       }
     }
 
-    def transformAssignValue(value: IRGraph.Expression, target: IRGraph.Expression, op: Option[ArithmeticOperation]): IRGraph.Expression = {
+    def transformAssignValue(
+        value: IRGraph.Expression,
+        target: IRGraph.Expression,
+        op: Option[ArithmeticOperation]
+    ): IRGraph.Expression = {
       op match {
         case None => value
         case Some(op) => {
           val binOp = op match {
-            case ArithmeticOperation.Add => IRGraph.BinaryOp.Add
+            case ArithmeticOperation.Add      => IRGraph.BinaryOp.Add
             case ArithmeticOperation.Subtract => IRGraph.BinaryOp.Subtract
-            case ArithmeticOperation.Divide => IRGraph.BinaryOp.Divide
+            case ArithmeticOperation.Divide   => IRGraph.BinaryOp.Divide
             case ArithmeticOperation.Multiply => IRGraph.BinaryOp.Multiply
           }
           new IRGraph.Binary(binOp, target, value)

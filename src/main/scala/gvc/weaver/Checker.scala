@@ -530,9 +530,18 @@ object Checker {
               structIdFields
             )
           )
-        case _: IRGraph.Imprecise =>
-          throw new WeaverException("Invalid spec")
-
+        case imp: IRGraph.Imprecise =>
+          if (imp.precise.isDefined) {
+            translateSpec(
+              imp.precise.get,
+              permissionHandler,
+              ownedFields,
+              structIdFields,
+              predicateHandler
+            )
+          } else {
+            Seq.empty
+          }
         case conditional: IRGraph.Conditional => {
           val trueOps =
             translateSpec(

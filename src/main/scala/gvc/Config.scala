@@ -1,9 +1,4 @@
 package gvc
-
-import gvc.visualizer.{PermuteMode}
-import gvc.visualizer.PermuteMode.PermuteMode
-import gvc.visualizer.PermuteTarget.{All, Field, Expr, Predicate, PermuteTarget}
-
 import java.nio.file.{Files, Paths}
 import java.io.File
 import scala.annotation.tailrec
@@ -15,7 +10,6 @@ case class Config(
     output: Option[String] = None,
     permute: Option[String] = None,
     permuteExclude: Option[String] = None,
-    permuteModes: Map[PermuteTarget, PermuteMode] = Map(),
     permuteTikz: Option[String] = None,
     permuteDumpDir: Option[String] = None,
     saveFiles: Boolean = false,
@@ -49,18 +43,12 @@ case class Config(
         )
       else if (permute.isEmpty && permuteExclude.isDefined)
         Some(s"Option --permute must be enabled to use --permute-exclude")
-      else if (permute.isEmpty && permuteModes.nonEmpty)
-        Some(s"Option --permute must be enabled to use --permute-mode")
       else if (permute.isEmpty && permuteTikz.isDefined)
         Some(s"Option --permute must be enabled to use --permute-tikz")
       else if (permute.isEmpty && permuteDumpDir.isDefined)
         Some(s"Option --permute must be enabled to use --permute-dump-dir")
       else if (permuteDumpDir.isDefined && dump.isEmpty)
         Some(s"Option --permute-dump-dir must be used with --dump")
-      else if (
-        permuteDumpDir.isDefined && !Files.exists(Paths.get(permuteDumpDir.get))
-      )
-        Some(s"The specified directory for --permute-dump-dir doesn't exist.")
       else None
     ).foreach(Config.error)
   }
@@ -89,7 +77,6 @@ object Config {
   private val outputArg = raw"--output=(.+)".r
   private val permuteArg = raw"--perm=(.+)".r
   private val permuteExcludeArg = raw"--perm-exclude=(.+)".r
-  private val permuteAllArg = raw"--perm-all=(.+)".r
   private val permuteTikzArg = raw"--perm-tikz=(.+)".r
   private val permuteDumpDir = raw"--perm-dump-dir=(.+)".r
   def error(message: String): Nothing = {
@@ -102,12 +89,6 @@ object Config {
     case "silver" => DumpSilver
     case "c0"     => DumpC0
     case _        => error(s"Invalid dump output type: $t")
-  }
-
-  def parsePermuteMode(str: String): PermuteMode = str.toLowerCase() match {
-    case "exp"    => PermuteMode.Linear
-    case "linear" => PermuteMode.Exp
-    case _        => error(s"Invalid permute mode type: $str")
   }
 
   @tailrec
@@ -126,8 +107,7 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(
-            permute = Some(f),
-            permuteModes = current.permuteModes + (All -> PermuteMode.Append)
+            permute = Some(f)
           )
         )
       case outputArg(f) :: tail =>
@@ -136,8 +116,7 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(
-            permute = Some(f),
-            permuteModes = current.permuteModes + (All -> PermuteMode.Append)
+            permute = Some(f)
           )
         )
       case permuteExcludeArg(f) :: tail =>
@@ -146,13 +125,6 @@ object Config {
         fromCommandLineArgs(tail, current.copy(permuteTikz = Some(f)))
       case permuteDumpDir(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteDumpDir = Some(f)))
-      case permuteAllArg(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(permuteModes =
-            current.permuteModes + (All -> parsePermuteMode(f))
-          )
-        )
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>

@@ -232,14 +232,14 @@ object GraphPrinter {
 
       case fold: Fold =>
         if (includeSpecs) {
-          p.print("fold ")
+          p.print("//@fold ")
           printExpr(fold.instance)
           p.println(";")
         }
 
       case unfold: Unfold =>
         if (includeSpecs) {
-          p.print("unfold ")
+          p.print("//@unfold ")
           printExpr(unfold.instance)
           p.println(";")
         }

@@ -58,7 +58,7 @@ object CC0Wrapper {
       val start = System.nanoTime()
       command !
       val stop = System.nanoTime()
-      duration += start - stop
+      duration += stop - start
     }
     duration / iterations
   }

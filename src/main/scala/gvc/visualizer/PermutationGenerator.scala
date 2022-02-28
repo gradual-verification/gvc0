@@ -1,274 +1,279 @@
 package gvc.visualizer
 import gvc.transformer.IRGraph
-import gvc.transformer.IRGraph.{Block, Expression, Method, Predicate, Program}
-import gvc.visualizer.ExprType.ExprType
-import gvc.visualizer.Labeller.ASTLabel
-import gvc.visualizer.SamplingHeuristic.SamplingHeuristic
-import gvc.visualizer.SpecType.SpecType
+import gvc.transformer.IRGraph.{
+  Block,
+  Expression,
+  Method,
+  Op,
+  Predicate,
+  Program
+}
+import gvc.visualizer.Labeller.{ASTLabel, LabelOrdering}
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
-object SpecType extends Enumeration {
-  type SpecType = Value
-  val Assert, Precondition, Postcondition, Fold, Unfold, Invariant, Predicate =
-    Value
-}
+object PermutationGenerator {
 
-object ExprType extends Enumeration {
-  type ExprType = Any
-  val Accessibility, Predicate, Default = Value
-}
+  def generatePermutation(
+      labels: List[ASTLabel],
+      template: Program
+  ): Program = {
 
-object SamplingHeuristic extends Enumeration {
-  type SamplingHeuristic = Value
-  val Random, None = Value
-}
+    val predicateLabelMap = mutable.Map[String, mutable.TreeSet[ASTLabel]]()
+    val methodLabelMap = mutable.Map[String, mutable.TreeSet[ASTLabel]]()
+    labels.foreach(label => {
+      label.parent match {
+        case Left(method) =>
+          methodLabelMap.getOrElseUpdate(
+            method.name,
+            mutable.TreeSet[ASTLabel]()(LabelOrdering)
+          ) += label
+        case Right(predicate) =>
+          predicateLabelMap.getOrElseUpdate(
+            predicate.name,
+            mutable.TreeSet[ASTLabel]()(LabelOrdering)
+          ) += label
+      }
+    })
 
-object Labeller {
+    val builtMethods = template.methods
+      .map(method => {
+        buildMethod(
+          ListBuffer.empty ++ methodLabelMap
+            .getOrElse(
+              method.name,
+              mutable.TreeSet[ASTLabel]()(LabelOrdering)
+            ),
+          method
+        )
+      })
+      .toList
+    val builtPredicates = template.predicates
+      .map(predicate => {
+        buildPredicate(
+          ListBuffer.empty ++ predicateLabelMap
+            .getOrElse(
+              predicate.name,
+              mutable.TreeSet[ASTLabel]()(LabelOrdering)
+            ),
+          predicate
+        )
+      })
+      .toList
+    template.copy(builtMethods, builtPredicates)
 
-  case class ASTOffset(labels: List[ASTLabel], offset: Int)
+  }
+  private def buildPredicate(
+      relevantLabels: ListBuffer[ASTLabel],
+      template: Predicate
+  ): Predicate = {
+    template.copy(
+      new IRGraph.Imprecise(
+        buildExpression(
+          relevantLabels,
+          template.expression
+        ).expr
+      )
+    )
+  }
+  private def buildMethod(
+      relevantLabels: ListBuffer[ASTLabel],
+      template: Method
+  ): Method = {
+    var offset = 0;
 
-  def labelAST(program: Program): List[ASTLabel] = {
-    val methodLabels = program.methods.flatMap(labelMethod)
-    val predicateLabels = program.predicates.flatMap(labelPredicate)
-    (methodLabels ++ predicateLabels).toList
+    def buildOptional(exprOp: Option[Expression]): Option[Expression] = {
+      if (exprOp.isDefined) {
+        val built = buildExpression(
+          relevantLabels,
+          template.precondition.get,
+          offset
+        )
+        offset = built.offset
+        built.expr
+      } else {
+        None
+      }
+    }
+    val precondition = buildOptional(template.precondition)
+    val postcondition = buildOptional(template.postcondition)
+
+    template.copy(
+      Some(new IRGraph.Imprecise(precondition)),
+      Some(new IRGraph.Imprecise(postcondition)),
+      buildBlock(
+        ListBuffer.empty ++ relevantLabels,
+        template.body,
+        offset
+      ).lst
+    )
   }
 
-  class PermutationException(val message: String) extends RuntimeException {
-    override def getMessage: String = message
+  def consumeLabel(
+      offset: Int,
+      relevantLabels: ListBuffer[ASTLabel]
+  ): Option[ASTLabel] = {
+    if (relevantLabels.nonEmpty) {
+      val first = relevantLabels(0)
+      if (first.expressionIndex == offset) {
+        Some(relevantLabels.remove(0))
+      } else {
+        None
+      }
+    } else {
+      None
+    }
   }
 
-  private def fact(n: Int): Int = if (n == 0) 1 else n * fact(n - 1)
+  case class BuiltBlock(lst: List[IRGraph.Op], offset: Int)
 
-  private def labelPredicate(predicate: Predicate): List[ASTLabel] = {
-    labelExpression(
-      Right(predicate),
-      SpecType.Predicate,
-      Some(predicate.expression)
-    ).labels
+  class ExpressionBuilder() {
+    val root: Option[Expression] = None;
   }
 
-  private def labelMethod(method: Method): List[ASTLabel] = {
-    labelBlock(method, method.body).labels
-  }
-
-  private def labelBlock(
-      context: Method,
-      block: Block,
+  private def buildBlock(
+      relevantLabels: ListBuffer[ASTLabel],
+      template: Block,
       baseIndex: Int = 0
-  ): ASTOffset = {
-    val astLabelBuffer: ListBuffer[ASTLabel] = ListBuffer()
+  ): BuiltBlock = {
+    val opBuffer: ListBuffer[Op] = ListBuffer.empty
     var offset = baseIndex
-    val it = block.iterator
+    val it = template.iterator
     while (it.hasNext) {
       val op = it.next()
       op match {
         case assert: IRGraph.Assert =>
           if (assert.kind == IRGraph.AssertKind.Specification) {
-            val specAssertOffset =
-              labelExpression(
-                Left(context),
-                SpecType.Assert,
-                Some(assert.value),
-                offset
-              )
-            offset = specAssertOffset.offset
-            astLabelBuffer += specAssertOffset.labels
+            val builtAssertExpr =
+              buildExpression(relevantLabels, assert.value, offset)
+            offset = builtAssertExpr.offset
+            opBuffer += new IRGraph.Assert(
+              new IRGraph.Imprecise(builtAssertExpr.expr),
+              IRGraph.AssertKind.Specification
+            )
+          } else {
+            opBuffer += op
           }
-        case _: IRGraph.Fold =>
-          astLabelBuffer += ASTLabel(
-            Left(context),
-            SpecType.Fold,
-            ExprType.Predicate,
-            offset
-          )
+        case fold: IRGraph.Fold =>
+          if (consumeLabel(offset, relevantLabels).isDefined) {
+            opBuffer += fold
+          }
           offset += 1
-        case _: IRGraph.Unfold =>
-          astLabelBuffer += ASTLabel(
-            Left(context),
-            SpecType.Unfold,
-            ExprType.Predicate,
-            offset
-          )
+        case unfold: IRGraph.Unfold =>
+          if (consumeLabel(offset, relevantLabels).isDefined) {
+            opBuffer += unfold
+          }
           offset += 1
         case ifstmt: IRGraph.If =>
-          val trueBranchOffset = labelBlock(context, ifstmt.ifTrue, offset)
-          val falseBranchOffset =
-            labelBlock(context, ifstmt.ifFalse, trueBranchOffset.offset)
-          offset = falseBranchOffset.offset
-          astLabelBuffer += trueBranchOffset.labels ++ falseBranchOffset.labels
+          val trueBranch = buildBlock(relevantLabels, ifstmt.ifTrue, offset)
+          val falseBranch =
+            buildBlock(relevantLabels, ifstmt.ifFalse, trueBranch.offset)
+          offset = falseBranch.offset
+          opBuffer += ifstmt.copy(trueBranch.lst, falseBranch.lst)
         case whl: IRGraph.While =>
-          val invariantOffset =
-            labelExpression(
-              Left(context),
-              SpecType.Invariant,
-              whl.invariant,
+          val invariant = if (whl.invariant.isDefined) {
+            val builtInvariant =
+              buildExpression(relevantLabels, whl.invariant.get, offset)
+            offset = builtInvariant.offset
+            builtInvariant.expr
+          } else {
+            None
+          }
+          val builtBody =
+            buildBlock(relevantLabels, whl.body, offset)
+          offset = builtBody.offset
+          opBuffer += whl.copy(invariant, builtBody.lst)
+        case op: IRGraph.Op => opBuffer += op
+      }
+    }
+    BuiltBlock(opBuffer.toList, offset)
+  }
+  case class BuiltExpression(expr: Option[Expression], offset: Int)
+
+  def buildExpression(
+      relevantLabels: ListBuffer[ASTLabel],
+      template: Expression,
+      baseIndex: Int = 0
+  ): BuiltExpression = {
+    var offset = baseIndex
+    template match {
+      case conditional: IRGraph.Conditional =>
+        val builtTrueBranch =
+          buildExpression(relevantLabels, conditional.ifTrue, offset)
+        val builtFalseBranch =
+          buildExpression(
+            relevantLabels,
+            conditional.ifFalse,
+            builtTrueBranch.offset
+          )
+        offset = builtFalseBranch.offset
+        builtTrueBranch.expr match {
+          case Some(tBranch) =>
+            builtFalseBranch.expr match {
+              case Some(fBranch) =>
+                BuiltExpression(
+                  Some(
+                    new IRGraph.Conditional(
+                      conditional.condition,
+                      tBranch,
+                      fBranch
+                    )
+                  ),
+                  offset
+                )
+              case None => BuiltExpression(builtTrueBranch.expr, offset)
+            }
+          case None =>
+            builtFalseBranch.expr match {
+              case Some(_) => BuiltExpression(builtFalseBranch.expr, offset)
+              case None    => BuiltExpression(None, offset);
+            }
+        }
+      case binary: IRGraph.Binary =>
+        if (binary.operator == IRGraph.BinaryOp.And) {
+          val builtRight = buildExpression(relevantLabels, binary.right, offset)
+          val builtLeft =
+            buildExpression(relevantLabels, binary.left, builtRight.offset)
+
+          offset = builtLeft.offset
+          if (builtRight.expr.isDefined) {
+            if (builtLeft.expr.isDefined) {
+              BuiltExpression(
+                Some(
+                  new IRGraph.Binary(
+                    IRGraph.BinaryOp.And,
+                    builtLeft.expr.get,
+                    builtRight.expr.get
+                  )
+                ),
+                offset
+              )
+            } else {
+              BuiltExpression(
+                builtRight.expr,
+                offset
+              )
+            }
+          } else {
+            BuiltExpression(
+              builtLeft.expr,
               offset
             )
-          val whlBlockOffset =
-            labelBlock(context, whl.body, invariantOffset.offset)
-          offset = whlBlockOffset.offset
-          astLabelBuffer += invariantOffset.labels ++ whlBlockOffset.labels
-        case _ =>
-      }
-    }
-    ASTOffset(astLabelBuffer.toList, offset)
-  }
-
-  private def labelExpression(
-      context: Either[Method, Predicate],
-      specType: SpecType,
-      expression: Option[Expression],
-      baseIndex: Int = 0
-  ): ASTOffset = {
-
-    expression match {
-      case Some(expr) =>
-        val astLabelBuffer = ListBuffer()
-        val exprStack = ListBuffer(expr)
-        var offset = baseIndex
-        while (exprStack.nonEmpty) {
-          val top = exprStack.remove(exprStack.length - 1)
-          top match {
-            case _: IRGraph.Accessibility =>
-              astLabelBuffer += ASTLabel(
-                context,
-                specType,
-                ExprType.Accessibility,
-                offset
-              )
-              offset += 1
-            case _: IRGraph.PredicateInstance =>
-              astLabelBuffer += ASTLabel(
-                context,
-                specType,
-                ExprType.Predicate,
-                offset
-              )
-              offset += 1
-            case imprecise: IRGraph.Imprecise =>
-              labelExpression(
-                context,
-                specType,
-                imprecise.precise,
-                baseIndex
-              )
-            case conditional: IRGraph.Conditional => {
-              val trueBranchOffset = labelExpression(
-                context,
-                specType,
-                Some(conditional.ifTrue),
-                offset
-              )
-              val falseBranchOffset = labelExpression(
-                context,
-                specType,
-                Some(conditional.ifFalse),
-                trueBranchOffset.offset
-              )
-              offset = falseBranchOffset.offset
-              astLabelBuffer += trueBranchOffset.labels ++ falseBranchOffset.labels
-            }
-            case binary: IRGraph.Binary =>
-              if (binary.operator == IRGraph.BinaryOp.And) {
-                exprStack += binary.left
-                exprStack += binary.right
-              } else {
-                ASTLabel(context, specType, ExprType.Default, offset)
-              }
-            case _ => ASTLabel(context, specType, ExprType.Default, offset)
           }
+        } else {
+          BuiltExpression(
+            if (consumeLabel(offset, relevantLabels).isDefined) Some(binary)
+            else None,
+            offset + 1
+          )
         }
-        ASTOffset(astLabelBuffer.toList, offset)
-      case None => ASTOffset(List.empty, baseIndex)
+      case expr: IRGraph.Expression =>
+        BuiltExpression(
+          if (consumeLabel(offset, relevantLabels).isDefined) Some(expr)
+          else None,
+          offset + 1
+        )
     }
   }
-  def sample(
-      list: List[ASTLabel],
-      heuristic: SamplingHeuristic,
-      nSamples: Int = 1
-  ): List[List[ASTLabel]] = {
-    heuristic match {
-      case SamplingHeuristic.Random =>
-        sampleRandom(list, nSamples)
-      case SamplingHeuristic.None =>
-        sampleAll(list)
-      case _ => throw new PermutationException("Invalid sampling heuristic.")
-    }
-  }
-
-  private def sampleRandom(
-      orderedList: List[ASTLabel],
-      nUniqueSamples: Int
-  ): List[List[ASTLabel]] = {
-    if (nUniqueSamples > fact(orderedList.length)) {
-      throw new PermutationException(
-        "Requested number of random samples exceeds n!."
-      )
-    } else {
-      val permutationBuffer: ListBuffer[List[ASTLabel]] = ListBuffer.empty
-      var prevShuffle = scala.util.Random.shuffle(orderedList.indices.toList)
-      val idSet = mutable.Set[String]()
-      while (permutationBuffer.length < nUniqueSamples) {
-        val nextPermutation = prevShuffle.map(index => orderedList(index))
-        val permutationHash = hashList(nextPermutation)
-        if (!idSet.contains(permutationHash))
-          permutationBuffer += nextPermutation
-        prevShuffle = scala.util.Random.shuffle(prevShuffle)
-      }
-      permutationBuffer.toList
-    }
-  }
-
-  private def sampleAll(orderedList: List[ASTLabel]): List[List[ASTLabel]] = ???
-
-  case class ASTLabel(
-      parent: Either[Method, Predicate],
-      specType: SpecType,
-      exprType: ExprType,
-      expressionIndex: Int
-  )
-
-  def hashList(labelList: List[ASTLabel]): String = {
-    val sb = new StringBuilder
-    for (b <- labelList.flatMap(hashLabel(_))) {
-      sb.append(String.format("%02x", Byte.box(b)))
-    }
-    sb.toString
-  }
-
-  def hashLabel(label: ASTLabel): Array[Byte] = {
-    val name = label.parent match {
-      case Left(value)  => "m." + value.name
-      case Right(value) => "p." + value.name
-    }
-    val representation =
-      name + '.' + label.specType.id + '.' + label.expressionIndex + '.'
-    representation.getBytes()
-  }
-}
-
-object PermutationGenerator {
-  def permute(
-      program: Program,
-      samplingHeuristic: SamplingHeuristic,
-      nPermutations: Int = 1
-  ): List[Program] = {
-    val labels = Labeller.labelAST(program)
-    val permutations =
-      Labeller.sample(labels, samplingHeuristic, nPermutations)
-    permutations.flatMap(perm => {
-      (0 to perm.length).map(index => {
-        generatePermutation(labels.slice(0, index).toSet)
-      })
-    })
-  }
-  def generatePermutation(labels: Set[ASTLabel]): Program = {
-    new Program()
-  }
-  def buildPredicate(relevantLabels: Set[ASTLabel]): PermutedPredicate = ???
-  def buildMethod(relevantLabels: Set[ASTLabel]): PermutedMethod = ???
-  def buildBlock(relevantLabels: Set[ASTLabel]): PermutedBlock = ???
-  def buildExpression(relevantLabels: Set[ASTLabel]): PermutedExpression = ???
 }

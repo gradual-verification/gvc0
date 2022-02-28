@@ -4,19 +4,14 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.visualizer.{
-  DiagramGenerator,
-  Gradualizer,
-  ProgramLattice,
-  VerifierIO
-}
+import gvc.visualizer.{Bench, SamplingHeuristic, SamplingInfo, VerifiedOutput}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silver.verifier
 
 import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets
-import java.io.{File, IOException}
+import java.io.IOException
 import sys.process._
 import scala.language.postfixOps
 
@@ -45,78 +40,14 @@ object Main extends App {
     val inputSource = readFile(config.sourceFile.get)
 
     if (config.permute.isDefined) {
-      val exclusionSource =
-        if (config.permuteExclude.isDefined) readFile(config.permuteExclude.get)
-        else ""
-      val methodsToExclude =
-        Gradualizer.parseMethodExclusionList(exclusionSource)
-      println("Generating permutations...")
-      val c0SourceList =
-        Gradualizer.gradualizeProgram(
-          inputSource,
-          methodsToExclude,
-          config.permuteModes
-        )
-      println(s"Creating lattice of permutations by degree of specification...")
-      val programLattice = ProgramLattice.generateProgramLattice(c0SourceList)
-      println(s"Created lattice.")
-
-      if (config.dump.isDefined && config.dump.get == Config.DumpIR) {
-        println(
-          s"Writing each permutation as C0 to ${config.permuteDumpDir.get}."
-        )
-        ProgramLattice.dumpStrings(
-          programLattice.map(_.map(p => p.source)),
-          config.permuteDumpDir.get,
-          baseName.substring(
-            if (baseName.lastIndexOf(File.separator) >= 0)
-              baseName.lastIndexOf(File.separator) + 1
-            else 0
-          ) + ".c0"
-        )
-      }
-
-      val verifiedLattice =
-        ProgramLattice.verifyProgramLattice(programLattice, fileNames)
-
-      if (config.dump.isDefined) {
-        config.dump.get match {
-          case Config.DumpSilver =>
-            ProgramLattice.dumpStrings(
-              verifiedLattice.map(_.map(v => v.info.silver.toString())),
-              config.permuteDumpDir.get,
-              c0FileName
-            )
-          case Config.DumpC0 =>
-            ProgramLattice.dumpStrings(
-              verifiedLattice.map(_.map(v => v.info.verifiedSource)),
-              config.permuteDumpDir.get,
-              c0FileName
-            )
-          case _ =>
-        }
-
-      }
-
-      val executedLattice =
-        ProgramLattice.executeProgramLattice(
-          verifiedLattice,
-          c0FileName,
-          config
-        )
-      val csvResult = ProgramLattice.generateCSV(
-        programLattice,
-        executedLattice
+      Bench.run(
+        inputSource,
+        SamplingInfo(SamplingHeuristic.Random, 1),
+        fileNames,
+        config
       )
-      writeFile(config.permute.get, csvResult)
-      if (config.permuteTikz.isDefined) {
-        val tikzResult =
-          DiagramGenerator.generateTikZ(programLattice, executedLattice)
-        writeFile(config.permuteTikz.get, tikzResult)
-
-      }
     } else {
-      execute(verify(inputSource, fileNames).verifiedSource, fileNames)
+      execute(verify(inputSource, fileNames).c0Source, fileNames)
     }
   }
 
@@ -131,7 +62,7 @@ object Main extends App {
     try {
       Files.writeString(Paths.get(file), contents, StandardCharsets.UTF_8)
     } catch {
-      case _: IOException => Config.error(s"Could not write file 'file'")
+      case _: IOException => Config.error(s"Could not write file '${file}'")
     }
 
   def deleteFile(file: String): Unit =
@@ -189,7 +120,7 @@ object Main extends App {
   def verify(
       inputSource: String,
       fileNames: OutputFileCollection
-  ): VerifierIO = {
+  ): VerifiedOutput = {
     val ir = generateIR(inputSource)
 
     if (cmdConfig.permute.isEmpty) {
@@ -236,7 +167,7 @@ object Main extends App {
     val c0Source = GraphPrinter.print(ir, includeSpecs = false)
     if (cmdConfig.permute.isEmpty && cmdConfig.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
-    VerifierIO(silver, c0Source)
+    VerifiedOutput(silver, c0Source)
   }
   def execute(
       verifiedSource: String,
