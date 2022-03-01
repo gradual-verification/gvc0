@@ -102,7 +102,15 @@ void addAcc(OwnedFields * fields, int _id, int numFields, int fieldIndex){
   }
 }
 
-void assertAcc(OwnedFields* disjoint, OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
+void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
+    FieldArray* toCheck = find(fields, _id);
+    if(toCheck == NULL || !toCheck->contents[fieldIndex]){
+        error(errorMessage);
+    }
+}
+
+/*
+void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
     FieldArray* toCheck = find(fields, _id);
     if(toCheck != NULL){
         if(fieldIndex >= toCheck->length){
@@ -123,6 +131,17 @@ void assertAcc(OwnedFields* disjoint, OwnedFields* fields, int _id, int fieldInd
         }
     }else{
        error(errorMessage);
+    }
+}*/
+
+void addAccEnsureSeparate(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
+    FieldArray* toCheck = find(fields, _id);
+    if(toCheck == NULL){
+        toCheck = newFieldArray(fields, _id, numFields, false);
+        array->contents[fieldIndex] = true;
+        array->numAccessible += 1;
+    }else{
+        error(errorMessage);
     }
 }
 

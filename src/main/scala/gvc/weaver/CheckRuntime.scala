@@ -41,6 +41,7 @@ object CheckRuntime {
     val loseAcc = "loseAcc"
     val join = "join"
     val assertAcc = "assertAcc"
+    val addAccEnsureSeparate = "addAccEnsureSeparate"
     val find = "find"
     val instanceCounter = "_instanceCounter"
     val id = "_id"
@@ -62,6 +63,8 @@ class CheckRuntime private (program: IRGraph.Program) {
   val addStructAcc: IRGraph.MethodDefinition =
     program.method(Names.addStructAcc)
   val addAcc: IRGraph.MethodDefinition = program.method(Names.addAcc)
+  val addAccEnsureSeparate: IRGraph.MethodDefinition =
+    program.method(Names.addAccEnsureSeparate)
   val loseAcc: IRGraph.MethodDefinition = program.method(Names.loseAcc)
   val join: IRGraph.MethodDefinition = program.method(Names.join)
   val assertAcc: IRGraph.MethodDefinition = program.method(Names.assertAcc)
