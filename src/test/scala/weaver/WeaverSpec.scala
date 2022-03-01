@@ -8,6 +8,8 @@ import fastparse.Parsed.{Success, Failure}
 class WeaverSpec extends AnyFunSuite {
 
   test("resolve empty method") {
+    viper.silicon.state.runtimeChecks.getChecks.clear()
+
     val (c0, silver) = createProgram(
       """
       int main()
@@ -21,7 +23,8 @@ class WeaverSpec extends AnyFunSuite {
     val output = GraphPrinter.print(c0, false)
     assert(
       output ==
-        """|int main();
+        """|#use <runtime>
+         |int main();
          |
          |int main()
          |{

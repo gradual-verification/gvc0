@@ -12,3 +12,5 @@ lazy val gvc = (project in file("."))
 
 Compile / run / fork := true
 Compile / run / javaOptions += "-Xss15m"
+
+parallelExecution in Test := false

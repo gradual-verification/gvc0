@@ -98,6 +98,8 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
   }
 
   def runIntegrationTest(source: String, name: String): IntegrationResult = {
+    viper.silicon.state.runtimeChecks.getChecks.clear()
+
     Parser.parseProgram(source) match {
       case fail: Parsed.Failure => ParseError(fail.trace().longMsg)
       case Parsed.Success(parsed, _) => {

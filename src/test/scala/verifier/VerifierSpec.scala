@@ -40,6 +40,7 @@ class VerifierSpec extends AnyFunSuite with BaseFileSpec {
 
     assertFile(name.replace(".c0", ".vpr"), silver.toString)
 
+    viper.silicon.state.runtimeChecks.getChecks.clear()
     silicon.verify(silver) match {
       case viper.silver.verifier.Success => ()
       case Failure(errors)               => fail(errors.map(e => e.toString()).mkString("\n"))
