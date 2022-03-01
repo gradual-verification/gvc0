@@ -47,7 +47,10 @@ object Main extends App {
         config
       )
     } else {
-      execute(verify(inputSource, fileNames).c0Source, fileNames)
+      val verifiedOutput = verify(inputSource, fileNames)
+      if (verifiedOutput.isDefined) {
+        execute(verifiedOutput.get.c0Source, fileNames)
+      }
     }
   }
 
@@ -120,7 +123,7 @@ object Main extends App {
   def verify(
       inputSource: String,
       fileNames: OutputFileCollection
-  ): VerifiedOutput = {
+  ): Option[VerifiedOutput] = {
     val ir = generateIR(inputSource)
 
     if (cmdConfig.permute.isEmpty) {
@@ -153,10 +156,12 @@ object Main extends App {
     silicon.verify(silver) match {
       case verifier.Success => ()
       case verifier.Failure(errors) =>
-        Config.error(
-          s"Verification errors:\n" +
-            errors.map(_.readableMessage).mkString("\n")
+        val message = s"Verification errors:\n" +
+          errors.map(_.readableMessage).mkString("\n")
+        println(
+          message
         )
+        return None
     }
 
     silicon.stop()
@@ -167,7 +172,7 @@ object Main extends App {
     val c0Source = GraphPrinter.print(ir, includeSpecs = false)
     if (cmdConfig.permute.isEmpty && cmdConfig.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
-    VerifiedOutput(silver, c0Source)
+    Some(VerifiedOutput(silver, c0Source))
   }
   def execute(
       verifiedSource: String,

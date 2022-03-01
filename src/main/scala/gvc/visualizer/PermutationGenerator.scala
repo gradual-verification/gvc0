@@ -176,7 +176,7 @@ object PermutationGenerator {
             val builtInvariant =
               buildExpression(relevantLabels, whl.invariant.get, offset)
             offset = builtInvariant.offset
-            builtInvariant.expr
+            Some(new IRGraph.Imprecise(builtInvariant.expr))
           } else {
             None
           }
