@@ -9,7 +9,7 @@ int main()
 {
   int* a = NULL;
   a = alloc(int);
-  fold testPred(a);
+  //@fold testPred(a);
   test(a);
   return 0;
 }
@@ -17,6 +17,6 @@ int main()
 void test(int* value)
   //@requires testPred(value);
 {
-  unfold testPred(value);
+  //@unfold testPred(value);
   *value = 1;
 }

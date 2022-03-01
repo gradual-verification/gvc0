@@ -5,35 +5,10 @@ import gvc.transformer.IRGraph
 import scala.collection.mutable
 
 object Checker {
-
-  class PredicateImplementation {
-    val addition: mutable.Map[Predicate, MethodDefinition] =
-      mutable.Map[Predicate, MethodDefinition]()
-    val removal: mutable.Map[Predicate, MethodDefinition] =
-      mutable.Map[Predicate, MethodDefinition]()
-    val check: mutable.Map[Predicate, MethodDefinition] =
-      mutable.Map[Predicate, MethodDefinition]()
-  }
-
-  case class OwnedFieldsSet(
-      primary: Expression,
-      temporary: Expression
-  )
   type StructIDTracker = Map[scala.Predef.String, StructField]
-  type PermissionHandler = (
-      FieldMember,
-      OwnedFieldsSet,
-      StructIDTracker
-  ) => Invoke
-  type PredicateHandler = (
-      Predicate,
-      List[Expression],
-      OwnedFieldsSet,
-      StructIDTracker
-  ) => Invoke
 
   def insert(program: CollectedProgram): Unit = {
-    lazy val runtime = CheckRuntime.addToIR(program.program)
+    val runtime = CheckRuntime.addToIR(program.program)
 
     // Add the _id field to each struct
     // Keep a separate map since the name may be something other than `_id` due
@@ -42,19 +17,18 @@ object Checker {
       .map(s => (s.name, s.addField(CheckRuntime.Names.id, IntType)))
       .toMap
 
-    val predicateImplementations = new PredicateImplementation()
+    val implementation = new CheckImplementation(program.program, runtime, structIdFields)
 
     program.methods.values.foreach { method =>
-      insert(program, method, runtime, structIdFields, predicateImplementations)
+      insert(program, method, runtime, implementation)
     }
   }
 
   private def insert(
       programData: CollectedProgram,
       methodData: CollectedMethod,
-      runtime: => CheckRuntime,
-      structIdFields: Map[scala.Predef.String, StructField],
-      predicates: PredicateImplementation
+      runtime: CheckRuntime,
+      implementation: CheckImplementation
   ): Unit = {
     val program = programData.program
     val method = methodData.method
@@ -163,6 +137,7 @@ object Checker {
         (Some(ownedFields), instanceCounter)
       }
     }
+
     def getPrimaryOwnedFields = primaryOwnedFields.getOrElse {
       val ownedFields = method.addVar(
         runtime.ownedFieldsRef,
@@ -179,72 +154,47 @@ object Checker {
     }
 
     def implementAccCheck(
-        check: AccessibilityCheck,
-        temporaryOwnedFields: => Expression,
-        primaryOwnedFields: => Expression
+        check: FieldPermissionCheck,
+        temporaryOwnedFields: => Var,
+        primaryOwnedFields: => Var
     ): Seq[Op] = {
-      // Get the `_id` value that identifies the struct instance
-      val structId = new FieldMember(
-        check.field.root.toIR(program, method, None),
-        structIdFields(check.field.structName)
+      val field = check.field.toIR(program, method, None)
+      val (mode, perms) = check match {
+        case _: FieldSeparationCheck => (SeparationMode, temporaryOwnedFields)
+        case _: FieldAccessibilityCheck => (VerifyMode, primaryOwnedFields)
+      }
+
+      implementation.translateFieldPermission(mode, field, perms)
+    }
+
+    def implementPredicateCheck(
+      check: PredicatePermissionCheck,
+      returnValue: Option[Expression],
+      temporaryOwnedFields: => Var,
+      primaryOwnedFields: => Var
+    ): Seq[Op] = {
+      val instance = new PredicateInstance(
+        program.predicate(check.predicateName),
+        check.arguments.map(_.toIR(program, method, returnValue))
       )
-
-      // Get the number that identifies the struct field
-      val fieldToCheck = check.field.getIRField(program)
-      val fieldIndex =
-        new IRGraph.Int(fieldToCheck.struct.fields.indexOf(fieldToCheck))
-
-      val ops = mutable.ListBuffer[Op]()
-      if (check.checkExists) {
-        ops += new Invoke(
-          runtime.assertAcc,
-          List(
-            primaryOwnedFields,
-            structId,
-            fieldIndex,
-            new String(
-              "Field access runtime check failed for struct " + fieldToCheck.struct.name + "." + fieldToCheck.name
-            )
-          ),
-          None
-        )
+      val (mode, perms) = check match {
+        case _: PredicateSeparationCheck => (SeparationMode, temporaryOwnedFields)
+        case _: PredicateAccessibilityCheck => (VerifyMode, primaryOwnedFields)
       }
-
-      if (check.checkSeparate) {
-        ops += new Invoke(
-          runtime.addAcc,
-          List(
-            temporaryOwnedFields,
-            structId,
-            fieldIndex
-          ),
-          None
-        )
-      }
-      ops.toList
+      implementation.translatePredicateInstance(mode, instance, perms)
     }
 
     def implementCheck(
         check: Check,
         returnValue: Option[IRGraph.Expression],
-        temporaryOwnedFields: => Expression,
-        primaryOwnedFields: => Expression
+        temporaryOwnedFields: => Var,
+        primaryOwnedFields: => Var
     ): Seq[Op] = {
       check match {
-        case acc: AccessibilityCheck =>
+        case acc: FieldPermissionCheck =>
           implementAccCheck(acc, temporaryOwnedFields, primaryOwnedFields)
-        case pc: PredicateCheck =>
-          Seq(
-            resolveCheckPredicate(
-              pc.predicate,
-              pc.args,
-              OwnedFieldsSet(
-                primaryOwnedFields,
-                temporaryOwnedFields
-              ),
-              structIdFields
-            )
-          )
+        case pc: PredicatePermissionCheck =>
+          implementPredicateCheck(pc, returnValue, temporaryOwnedFields, primaryOwnedFields)
         case expr: CheckExpression =>
           Seq(
             new Assert(
@@ -252,43 +202,6 @@ object Checker {
               AssertKind.Imperative
             )
           )
-      }
-    }
-
-    def resolvePredicateDefinition(
-        pred: Predicate,
-        predMap: mutable.Map[Predicate, MethodDefinition],
-        prefix: scala.Predef.String,
-        fieldAccessMutator: PermissionHandler,
-        structFields: StructIDTracker,
-        predicateHandler: PredicateHandler
-    ): MethodDefinition = {
-      if (predMap.contains(pred)) {
-        predMap(pred)
-      } else {
-        val predicateMethod =
-          program.addMethod(prefix + pred.name, None)
-        pred.parameters.foreach(param => {
-          predicateMethod.addParameter(param.valueType.get, param.name)
-        })
-
-        val temporary = predicateMethod.addParameter(
-          new ReferenceType(runtime.ownedFields),
-          CheckRuntime.Names.temporaryOwnedFields
-        )
-        val primary = predicateMethod.addParameter(
-          new ReferenceType(runtime.ownedFields),
-          CheckRuntime.Names.primaryOwnedFields
-        )
-        translateSpec(
-          pred.expression,
-          fieldAccessMutator,
-          OwnedFieldsSet(primary, temporary),
-          structFields,
-          predicateHandler
-        ).foreach(op => predicateMethod.body += op)
-        predMap += (pred -> predicateMethod)
-        predicateMethod
       }
     }
 
@@ -336,255 +249,6 @@ object Checker {
           iff.condition = cond
           ops.foreach(iff.ifTrue += _)
           Seq(iff)
-      }
-    }
-
-    def resolveCheckPredicate(
-        pred: Predicate,
-        args: List[Expression],
-        ownedFieldsSet: OwnedFieldsSet,
-        structIdFields: StructIDTracker
-    ): Invoke = {
-      val defn = resolvePredicateDefinition(
-        pred,
-        predicates.check,
-        CheckRuntime.Names.checkPrefix,
-        assertFieldAccess,
-        structIdFields,
-        resolveCheckPredicate
-      )
-      new Invoke(
-        defn,
-        args ++ List(
-          ownedFieldsSet.temporary,
-          ownedFieldsSet.primary
-        ),
-        None
-      )
-    }
-
-    def resolveAdditionPredicate(
-        pred: Predicate,
-        args: List[Expression],
-        ownedFieldsSet: OwnedFieldsSet,
-        structIdFields: StructIDTracker
-    ): Invoke = {
-      val defn = resolvePredicateDefinition(
-        pred,
-        predicates.addition,
-        CheckRuntime.Names.addPrefix,
-        addFieldAccess,
-        structIdFields,
-        resolveAdditionPredicate
-      )
-      new Invoke(
-        defn,
-        args ++ List(ownedFieldsSet.temporary, ownedFieldsSet.primary),
-        None
-      )
-    }
-
-    def resolveRemovalPredicate(
-        pred: Predicate,
-        args: List[Expression],
-        ownedFieldsSet: OwnedFieldsSet,
-        structIdFields: StructIDTracker
-    ): Invoke = {
-      val defn = resolvePredicateDefinition(
-        pred,
-        predicates.removal,
-        CheckRuntime.Names.removePrefix,
-        removeFieldAccess,
-        structIdFields,
-        resolveRemovalPredicate
-      )
-      new Invoke(
-        defn,
-        args ++ List(ownedFieldsSet.temporary, ownedFieldsSet.primary),
-        None
-      )
-    }
-
-    def addFieldAccess(
-        member: FieldMember,
-        ownedFieldsSet: OwnedFieldsSet,
-        structIdFields: StructIDTracker
-    ): Invoke = {
-      val struct = member.field.struct
-      val instanceId =
-        new FieldMember(member.root, structIdFields(struct.name))
-      val fieldIndex = new Int(struct.fields.indexOf(member.field))
-      val numFields = new Int(struct.fields.length)
-      new Invoke(
-        runtime.addAcc,
-        List(
-          ownedFieldsSet.primary,
-          instanceId,
-          numFields,
-          fieldIndex
-        ),
-        None
-      )
-    }
-
-    def removeFieldAccess(
-        member: FieldMember,
-        ownedFieldsSet: OwnedFieldsSet,
-        structIdFields: StructIDTracker
-    ): Invoke = {
-      val struct = member.field.struct
-      val instanceId = new FieldMember(member.root, structIdFields(struct.name))
-      val fieldIndex = new Int(struct.fields.indexOf(member.field))
-      new Invoke(
-        runtime.loseAcc,
-        List(
-          ownedFieldsSet.primary,
-          instanceId,
-          fieldIndex
-        ),
-        None
-      )
-    }
-
-    def assertFieldAccess(
-        member: FieldMember,
-        ownedFieldsSet: OwnedFieldsSet,
-        structIdFields: StructIDTracker
-    ): Invoke = {
-      val struct = member.field.struct
-      val instanceId = new FieldMember(member.root, structIdFields(struct.name))
-      val fieldIndex = new Int(struct.fields.indexOf(member.field))
-      new Invoke(
-        runtime.assertAcc,
-        List(
-          ownedFieldsSet.primary,
-          instanceId,
-          fieldIndex,
-          //TODO: add support for GraphPrinter.printExpr here
-          new String(
-            "Field access runtime check failed for struct " + member.field.struct.name + "." + member.field.name
-          )
-        ),
-        None
-      )
-    }
-
-    def removePermissionsFromContract(
-        contract: Option[IRGraph.Expression],
-        ownedFieldsTarget: Var,
-        structIdFields: Map[scala.Predef.String, StructField]
-    ): List[Op] = {
-      contract.toList.flatMap(
-        translateSpec(
-          _,
-          removeFieldAccess,
-          OwnedFieldsSet(ownedFieldsTarget, new IRGraph.Null()),
-          structIdFields,
-          resolveRemovalPredicate
-        )
-      )
-    }
-
-    def addPermissionsFromContract(
-        contract: Option[IRGraph.Expression],
-        ownedFieldsTarget: Expression,
-        structIdFields: StructIDTracker
-    ): List[Op] = {
-      contract.toList.flatMap(
-        translateSpec(
-          _,
-          addFieldAccess,
-          OwnedFieldsSet(ownedFieldsTarget, new IRGraph.Null()),
-          structIdFields,
-          resolveAdditionPredicate
-        )
-      )
-    }
-
-    def translateSpec(
-        expr: IRGraph.Expression,
-        permissionHandler: PermissionHandler,
-        ownedFields: OwnedFieldsSet,
-        structIdFields: StructIDTracker,
-        predicateHandler: PredicateHandler
-    ): Seq[Op] = {
-      expr match {
-        case accessibility: IRGraph.Accessibility =>
-          accessibility.member match {
-            case member: FieldMember =>
-              Seq(
-                permissionHandler(member, ownedFields, structIdFields)
-              )
-            case _ =>
-              throw new WeaverException("Invalid conjunct in specification.")
-          }
-
-        case instance: PredicateInstance =>
-          Seq(
-            predicateHandler(
-              instance.predicate,
-              instance.arguments,
-              ownedFields,
-              structIdFields
-            )
-          )
-        case imp: IRGraph.Imprecise =>
-          if (imp.precise.isDefined) {
-            translateSpec(
-              imp.precise.get,
-              permissionHandler,
-              ownedFields,
-              structIdFields,
-              predicateHandler
-            )
-          } else {
-            Seq.empty
-          }
-        case conditional: IRGraph.Conditional => {
-          val trueOps =
-            translateSpec(
-              conditional.ifTrue,
-              permissionHandler,
-              ownedFields,
-              structIdFields,
-              predicateHandler
-            ).toList
-          val falseOps =
-            translateSpec(
-              conditional.ifFalse,
-              permissionHandler,
-              ownedFields,
-              structIdFields,
-              predicateHandler
-            ).toList
-
-          if (trueOps.nonEmpty || falseOps.nonEmpty) {
-            val ifStmt = new If(conditional.condition)
-            ifStmt.ifTrue ++= trueOps
-            ifStmt.ifFalse ++= falseOps
-            Seq(ifStmt)
-          } else {
-            Seq.empty
-          }
-        }
-
-        case binary: Binary if binary.operator == BinaryOp.And =>
-          translateSpec(
-            binary.left,
-            permissionHandler,
-            ownedFields,
-            structIdFields,
-            predicateHandler
-          ) ++
-            translateSpec(
-              binary.right,
-              permissionHandler,
-              ownedFields,
-              structIdFields,
-              predicateHandler
-            )
-        case expr =>
-          Seq(new IRGraph.Assert(expr, IRGraph.AssertKind.Imperative))
       }
     }
 
@@ -636,24 +300,15 @@ object Checker {
 
           // If we need to track precise permisions, add the code at the call site
           if (needsToTrackPrecisePerms) {
-            // Convert precondition into calls to addAcc
+            // Convert precondition into calls to removeAcc
             call.ir.insertBefore(
-              // TODO
-              removePermissionsFromContract(
-                callee.precondition,
-                getPrimaryOwnedFields,
-                structIdFields
-              )
-            )
+              callee.precondition.toSeq.flatMap(
+                  implementation.translate(RemoveMode, _, getPrimaryOwnedFields)))
 
             // Convert postcondition into calls to addAcc
             call.ir.insertAfter(
-              addPermissionsFromContract(
-                callee.postcondition,
-                getPrimaryOwnedFields,
-                structIdFields
-              )
-            )
+              callee.postcondition.toSeq.flatMap(
+                implementation.translate(AddMode, _, getPrimaryOwnedFields)))
           }
         }
 
@@ -661,29 +316,23 @@ object Checker {
         // permissions from the precondition, call the method, and add the temporary set to the
         // primary set
         case PrecisePreCallStyle => {
-
           val tempSet = method.addVar(
             runtime.ownedFieldsRef,
             CheckRuntime.Names.temporaryOwnedFields
           )
-          call.ir.insertBefore(
-            new Invoke(
-              runtime.initOwnedFields,
-              List(instanceCounter),
-              Some(tempSet)
-            ) :: addPermissionsFromContract(
-              callee.precondition,
-              tempSet,
-              structIdFields
-            ) ++ removePermissionsFromContract(
-              callee.precondition,
-              getPrimaryOwnedFields,
-              structIdFields
-            )
+
+          val createTemp = new Invoke(
+            runtime.initOwnedFields,
+            List(instanceCounter),
+            Some(tempSet)
           )
+          val addPermsToTemp = callee.precondition.toSeq.flatMap(
+            implementation.translate(AddMode, _, tempSet)).toList
+          val removePermsFromPrimary = callee.precondition.toSeq.flatMap(
+            implementation.translate(RemoveMode, _, getPrimaryOwnedFields)).toList
 
+          call.ir.insertBefore(createTemp :: addPermsToTemp ++ removePermsFromPrimary)
           call.ir.arguments :+= tempSet
-
           call.ir.insertAfter(
             new Invoke(runtime.join, List(getPrimaryOwnedFields, tempSet), None)
           )
@@ -697,16 +346,12 @@ object Checker {
         alloc match {
           case alloc: AllocStruct => {
             val structType = alloc.struct
+            val idField = new FieldMember(alloc.target, implementation.structIdField(alloc.struct))
             alloc.insertAfter(
               new Invoke(
                 runtime.addStructAcc,
                 List(ownedFields, new Int(structType.fields.length - 1)),
-                Some(
-                  new FieldMember(
-                    alloc.target,
-                    structIdFields(alloc.struct.name)
-                  )
-                )
+                Some(idField)
               )
             )
           }

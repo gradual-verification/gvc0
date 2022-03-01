@@ -320,7 +320,7 @@ object Collector {
         Seq(
           RuntimeCheck(
             location,
-            AccessibilityCheck(field, true, true),
+            FieldSeparationCheck(field),
             condition.map(ConditionValue(_))
           )
         )
@@ -330,7 +330,7 @@ object Collector {
         Seq(
           RuntimeCheck(
             location,
-            PredicateCheck(pred.predicate, pred.arguments),
+            PredicateSeparationCheck(pred.predicate.name, pred.arguments.map(CheckExpression.irValue(_))),
             condition.map(ConditionValue(_))
           )
         )
