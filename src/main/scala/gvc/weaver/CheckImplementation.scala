@@ -141,7 +141,7 @@ class CheckImplementation(
       case AddMode =>
         Seq(new IR.Invoke(
           runtime.addAcc,
-          List(perms, instanceId, fieldIndex, numFields),
+          List(perms, instanceId, numFields, fieldIndex),
           None
         ))
     }
