@@ -1,0 +1,52 @@
+// ERROR Silicon generates a runtime check at a fold statement but does not
+//       translate the variable references to the variables that are passed
+//       into the fold statement. Instead, in the runtime check expression it
+//       incorrectly uses the variables from the predicate declaration in the
+//       runtime check.
+
+struct Node;
+
+struct Node
+{
+  int value;
+  struct Node* next;
+};
+
+//@predicate wrappedAcc(struct Node* node);
+
+//@predicate wrappedAcc(struct Node* node) = acc(node->next);
+
+int main();
+int sumNodes(struct Node* a, struct Node* b, struct Node* c);
+
+int main()
+  //@requires ?;
+  //@ensures ?;
+{
+  struct Node* a = NULL;
+  struct Node* b = NULL;
+  struct Node* c = NULL;
+  int _ = 0;
+  a = alloc(struct Node);
+  b = alloc(struct Node);
+  c = alloc(struct Node);
+  a->next = NULL;
+  b->next = NULL;
+  c->next = NULL;
+  //@assert acc(a->next) && acc(b->value) && acc(b->next) && acc(c->value) && acc(c->next);
+  //@fold wrappedAcc(a);
+  _ = sumNodes(a, b, c);
+  return _;
+}
+
+int sumNodes(struct Node* a, struct Node* b, struct Node* c)
+  //@requires ? && wrappedAcc(a) && wrappedAcc(c);
+  //@ensures ? && wrappedAcc(a) && wrappedAcc(b) && wrappedAcc(c);
+{
+  int sum = 0;
+  //@unfold wrappedAcc(c);
+  sum = a->value + b->value + c->value;
+  //@fold wrappedAcc(b);
+  //@fold wrappedAcc(c);
+  return sum;
+}
