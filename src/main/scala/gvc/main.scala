@@ -161,6 +161,7 @@ object Main extends App {
         println(
           message
         )
+        silicon.stop()
         return None
     }
 
