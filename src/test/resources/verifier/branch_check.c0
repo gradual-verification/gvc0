@@ -30,6 +30,7 @@ void test2(int x, int y)
 }
 
 // Should fail since both execution paths fail
+/*
 void test3(int x, int y)
 //@requires ?;
 {
@@ -40,6 +41,7 @@ void test3(int x, int y)
     //@assert x > 2;
   }
 }
+*/
 
 // Should succeed since one execution path succeeds: x <= 1
 void test4(int x, int y)
@@ -77,6 +79,7 @@ void test6(int x, int y)
 }
 
 // Should fail on else branch due to no imprecision
+/*
 void test7(int x, int y)
 //@requires true;
 {
@@ -87,6 +90,7 @@ void test7(int x, int y)
     //@assert x < 1;
   }
 }
+*/
 
 // Should succeed and force x <= 1 going into loop at run-time
 void testWhile(int x, int y)
@@ -101,6 +105,7 @@ void testWhile(int x, int y)
 }
 
 // Should fail since after loop fails
+/*
 void testWhile2(int x, int y)
 //@requires ?;
 {
@@ -111,6 +116,7 @@ void testWhile2(int x, int y)
   }
   //@assert x > 1;
 }
+*/
 
 // Should succeed since imprecise invariant with run-time check for x <= 1
 void testWhile3(int x, int y)
@@ -125,6 +131,7 @@ void testWhile3(int x, int y)
 }
 
 // Should fail since precise
+/*
 void testWhile4(int x, int y)
 //@requires true;
 {
@@ -135,6 +142,7 @@ void testWhile4(int x, int y)
      x = x - 1;
   }
 }
+*/
 
 int main()
 {
