@@ -277,7 +277,7 @@ object CheckExpression {
 
       case v: vpr.LocalVar =>
         v.name match {
-          case "$return" => Result
+          case "$result" => Result
           case id        => Var(id)
         }
 
