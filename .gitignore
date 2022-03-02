@@ -67,3 +67,5 @@ docker.sh
 *.dSYM
 *.out
 sandbox.c0
+
+*.csv

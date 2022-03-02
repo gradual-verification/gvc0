@@ -15,7 +15,10 @@ object Check {
       case fieldAccess: vpr.FieldAccessPredicate =>
         CheckExpression.fromViper(fieldAccess.loc, method) match {
           case field: CheckExpression.Field => FieldAccessibilityCheck(field)
-          case _ => throw new WeaverException(s"Invalid field accessibility: $fieldAccess")
+          case _ =>
+            throw new WeaverException(
+              s"Invalid field accessibility: $fieldAccess"
+            )
         }
 
       case predicate: vpr.PredicateAccess =>
@@ -48,10 +51,22 @@ sealed trait PredicatePermissionCheck extends PermissionCheck {
   def arguments: List[CheckExpression]
 }
 
-case class FieldSeparationCheck(field: CheckExpression.Field) extends FieldPermissionCheck with SeparationCheck 
-case class FieldAccessibilityCheck(field: CheckExpression.Field) extends FieldPermissionCheck with AccessibilityCheck
-case class PredicateSeparationCheck(predicateName: String, arguments: List[CheckExpression]) extends PredicatePermissionCheck with SeparationCheck
-case class PredicateAccessibilityCheck(predicateName: String, arguments: List[CheckExpression]) extends PredicatePermissionCheck with AccessibilityCheck
+case class FieldSeparationCheck(field: CheckExpression.Field)
+    extends FieldPermissionCheck
+    with SeparationCheck
+case class FieldAccessibilityCheck(field: CheckExpression.Field)
+    extends FieldPermissionCheck
+    with AccessibilityCheck
+case class PredicateSeparationCheck(
+    predicateName: String,
+    arguments: List[CheckExpression]
+) extends PredicatePermissionCheck
+    with SeparationCheck
+case class PredicateAccessibilityCheck(
+    predicateName: String,
+    arguments: List[CheckExpression]
+) extends PredicatePermissionCheck
+    with AccessibilityCheck
 
 sealed trait CheckExpression extends Check {
   def toIR(
@@ -120,8 +135,12 @@ object CheckExpression {
   }
 
   case class Var(name: String) extends Expr {
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
+    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) = {
+      if (name == "node") {
+        println("hello!")
+      }
       m.variable(name)
+    }
   }
 
   case class Field(root: Expr, structName: String, fieldName: String)
@@ -197,40 +216,43 @@ object CheckExpression {
 
   def irValue(value: IR.Expression): Expr = {
     value match {
-      case _: IR.ArrayMember | _: IR.Accessibility | _: IR.PredicateInstance | _: IR.Imprecise =>
+      case _: IR.ArrayMember | _: IR.Accessibility | _: IR.PredicateInstance |
+          _: IR.Imprecise =>
         throw new WeaverException("Invalid expression used as value in spec")
       case n: IR.Var => Var(n.name)
-      case n: IR.FieldMember => Field(irValue(n.root), n.field.struct.name, n.field.name)
+      case n: IR.FieldMember =>
+        Field(irValue(n.root), n.field.struct.name, n.field.name)
       case n: IR.DereferenceMember => Deref(irValue(n.root))
-      case n: IR.Result => Result
-      case n: IR.Int => IntLit(n.value)
-      case n: IR.Char => CharLit(n.value)
-      case n: IR.Bool => BoolLit(n.value)
-      case n: IR.String => StrLit(n.value)
-      case n: IR.Null => NullLit
-      case n: IR.Conditional => Cond(irValue(n.condition), irValue(n.ifTrue), irValue(n.ifFalse))
+      case n: IR.Result            => Result
+      case n: IR.Int               => IntLit(n.value)
+      case n: IR.Char              => CharLit(n.value)
+      case n: IR.Bool              => BoolLit(n.value)
+      case n: IR.String            => StrLit(n.value)
+      case n: IR.Null              => NullLit
+      case n: IR.Conditional =>
+        Cond(irValue(n.condition), irValue(n.ifTrue), irValue(n.ifFalse))
       case n: IR.Binary =>
         val l = irValue(n.left)
         val r = irValue(n.right)
         n.operator match {
-          case IR.BinaryOp.Add => Add(l, r)
-          case IR.BinaryOp.Subtract => Sub(l, r)
-          case IR.BinaryOp.Divide => Div(l, r)
-          case IR.BinaryOp.Multiply => Mul(l, r)
-          case IR.BinaryOp.And => And(l, r)
-          case IR.BinaryOp.Or => Or(l, r)
-          case IR.BinaryOp.Equal => Eq(l, r)
-          case IR.BinaryOp.NotEqual => Not(Eq(l, r))
-          case IR.BinaryOp.Less => Lt(l, r)
-          case IR.BinaryOp.LessOrEqual => LtEq(l, r)
-          case IR.BinaryOp.Greater => Gt(l, r)
+          case IR.BinaryOp.Add            => Add(l, r)
+          case IR.BinaryOp.Subtract       => Sub(l, r)
+          case IR.BinaryOp.Divide         => Div(l, r)
+          case IR.BinaryOp.Multiply       => Mul(l, r)
+          case IR.BinaryOp.And            => And(l, r)
+          case IR.BinaryOp.Or             => Or(l, r)
+          case IR.BinaryOp.Equal          => Eq(l, r)
+          case IR.BinaryOp.NotEqual       => Not(Eq(l, r))
+          case IR.BinaryOp.Less           => Lt(l, r)
+          case IR.BinaryOp.LessOrEqual    => LtEq(l, r)
+          case IR.BinaryOp.Greater        => Gt(l, r)
           case IR.BinaryOp.GreaterOrEqual => GtEq(l, r)
         }
       case n: IR.Unary =>
         val x = irValue(n.operand)
         n.operator match {
           case IR.UnaryOp.Negate => Neg(x)
-          case IR.UnaryOp.Not => Not(x)
+          case IR.UnaryOp.Not    => Not(x)
         }
     }
   }
