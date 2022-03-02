@@ -180,9 +180,9 @@ object Main extends App {
   ): Unit = {
     val outputExe = cmdConfig.output.getOrElse("a.out")
 
-    val runtimeInput =
-      Paths.get(getClass().getResource("/runtime.c0").getPath)
-    val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
+    // TODO: Figure out how we can use the actual resource
+    // Since it is bundled in the JAR we have to extract it and put it somewhere
+    val runtimeIncludeDir = Paths.get("src/main/resources").toAbsolutePath()
 
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
