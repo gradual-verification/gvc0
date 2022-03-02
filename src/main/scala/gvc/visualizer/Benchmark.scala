@@ -29,29 +29,35 @@ object Bench {
       timedIterations: Int,
       fileNames: OutputFileCollection,
       config: Config
-  ): PerformanceMetrics = {
+  ): Option[PerformanceMetrics] = {
     val verifierOutput =
       markVerifier(sourceText, timedIterations, fileNames)
-    val outputExe = config.output.getOrElse("a.out")
-    val runtimeInput =
-      Paths.get(getClass.getResource("/runtime.c0").getPath)
-    val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
 
-    val cc0Options = CC0Options(
-      compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-      saveIntermediateFiles = config.saveFiles,
-      output = Some(outputExe),
-      includeDirs = List(runtimeIncludeDir.toString + "/")
-    )
-    val c0FileName = "temp.c0"
-    writeFile(c0FileName, verifierOutput.output.c0Source)
-    val executionTime =
-      try {
-        CC0Wrapper.execTimed(c0FileName, cc0Options, timedIterations)
-      } finally {
-        deleteFile(c0FileName)
-      }
-    PerformanceMetrics(verifierOutput.duration, executionTime)
+    if (verifierOutput.output.isDefined) {
+
+      val outputExe = config.output.getOrElse("a.out")
+      val runtimeInput =
+        Paths.get(getClass.getResource("/runtime.c0").getPath)
+      val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
+
+      val cc0Options = CC0Options(
+        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+        saveIntermediateFiles = config.saveFiles,
+        output = Some(outputExe),
+        includeDirs = List(runtimeIncludeDir.toString + "/")
+      )
+      val c0FileName = "temp.c0"
+      writeFile(c0FileName, verifierOutput.output.get.c0Source)
+      val executionTime =
+        try {
+          CC0Wrapper.execTimed(c0FileName, cc0Options, timedIterations)
+        } finally {
+          deleteFile(c0FileName)
+        }
+      Some(PerformanceMetrics(verifierOutput.duration, executionTime))
+    } else {
+      None
+    }
   }
 
   private def markVerifier(
@@ -157,22 +163,25 @@ object Bench {
             println(
               "Benchmarking '" + permutationSourceFile.toString + "'...\n"
             )
-            val performance: PerformanceMetrics = Bench.mark(
+            val performance = Bench.mark(
               permutationSourceText,
               timedIterations = 1,
               fileNames,
               config
             )
-            val csvEntry = lattice.createCSVEntry(
-              lattice.add(
-                performance,
-                currentPermutation.toList,
-                permutationSourceFile
-              ),
-              permutationSourceFile.toString
-            )
-            statsFile.write(csvEntry)
-            statsFile.flush()
+
+            if (performance.isDefined) {
+              val csvEntry = lattice.createCSVEntry(
+                lattice.add(
+                  performance.get,
+                  currentPermutation.toList,
+                  permutationSourceFile
+                ),
+                permutationSourceFile.toString
+              )
+              statsFile.write(csvEntry)
+              statsFile.flush()
+            }
 
           } catch {
             case e: Throwable =>
@@ -191,7 +200,7 @@ object Bench {
 
 case class VerifiedOutput(silver: Program, c0Source: String)
 case class TimedVerifiedOutput(
-    output: VerifiedOutput,
+    output: Option[VerifiedOutput],
     duration: Long
 )
 
