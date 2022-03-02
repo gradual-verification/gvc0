@@ -71,7 +71,7 @@ bool testStructCreation(string header){
     int _id = addStructAcc(fields, 80);
 
     for(int i = 0; i<80; i += 1){
-        assertAcc(NULL, fields, _id, i, "(addStructAcc) Failed to verify access to the fields of a newly created struct.");
+        assertAcc(fields, _id, i, "(addStructAcc) Failed to verify access to the fields of a newly created struct.");
     }
     return true;
 }
@@ -88,7 +88,7 @@ bool testFieldAddition(string header){
     int _id = addStructAcc(fields_1, 4);
 
     addAcc(fields_2, _id, 4, 2);
-    assertAcc(NULL, fields_2, _id, 2, "(addAcc/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.");
+    assertAcc(fields_2, _id, 2, "(addAcc/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.");
     return true;
 }
 
@@ -110,18 +110,18 @@ bool testFieldMerging(string header){
 
     for(int i = 0; i<num_fields; i += 1){
         addAcc(fields_1, _id_node_1, num_fields, i);
-        assertAcc(NULL, fields_1, _id_node_1, i, "(addAcc/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
+        assertAcc(fields_1, _id_node_1, i, "(addAcc/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
 
         addAcc(fields_2, _id_node_2, num_fields, i);
-        assertAcc(NULL, fields_2, _id_node_2, i, "(addAcc/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
+        assertAcc(fields_2, _id_node_2, i, "(addAcc/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
     }
 
 
     join(fields_1, fields_2);
 
     for(int i = 0; i<num_fields; i += 1){
-        assertAcc(NULL, fields_1, _id_node_1, i, "(join/assertAcc) Failed to preserve existing permissions after join.");
-        assertAcc(NULL, fields_1, _id_node_2, i, "(join/assertAcc) Failed to add new permissions from join.");
+        assertAcc(fields_1, _id_node_1, i, "(join/assertAcc) Failed to preserve existing permissions after join.");
+        assertAcc(fields_1, _id_node_2, i, "(join/assertAcc) Failed to add new permissions from join.");
     }
     return true;
 }
