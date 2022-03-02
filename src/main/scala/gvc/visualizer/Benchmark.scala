@@ -5,6 +5,7 @@ import gvc.transformer.GraphPrinter
 import gvc.visualizer.Labeller.ASTLabel
 import gvc.visualizer.SamplingHeuristic.SamplingHeuristic
 import viper.silver.ast.Program
+import scala.language.postfixOps
 
 import java.io.FileWriter
 import java.nio.file.{Files, Path, Paths}
@@ -14,22 +15,31 @@ import scala.reflect.io.Directory
 case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
 
 object Bench {
+
+  class BenchmarkException(message: scala.Predef.String)
+      extends Exception(message)
+
+  class VerificationException(message: scala.Predef.String)
+      extends BenchmarkException(message)
+
+  class ExecutionException(message: scala.Predef.String)
+      extends BenchmarkException(message)
+
   private object Names {
     val _stats = "stats.csv"
     val _top = "top.c0"
     val _imprecise_bottom = "bot_imp.c0"
     val _precise_bottom = "bot.c0"
   }
-
   val columnHeaders =
-    "filename,lattice_height,verifier_time_ns,execution_time_ns\n"
+    "path_id,lattice_height,verifier_time_ns,execution_time_ns,total_conjuncts,eliminated_conjuncts,src\n"
 
   private def mark(
       sourceText: String,
       timedIterations: Int,
       fileNames: OutputFileCollection,
       config: Config
-  ): Option[PerformanceMetrics] = {
+  ): PerformanceMetrics = {
     val verifierOutput =
       markVerifier(sourceText, timedIterations, fileNames)
 
@@ -51,12 +61,22 @@ object Bench {
       val executionTime =
         try {
           CC0Wrapper.execTimed(c0FileName, cc0Options, timedIterations)
+        } catch {
+          case _: Throwable => {
+            throw new ExecutionException("Execution failed.")
+          }
         } finally {
           deleteFile(c0FileName)
         }
-      Some(PerformanceMetrics(verifierOutput.duration, executionTime))
+      PerformanceMetrics(
+        verifierOutput.duration,
+        executionTime,
+        verifierOutput.output.get.totalConjuncts,
+        verifierOutput.output.get.eliminatedConjuncts
+      )
+
     } else {
-      None
+      throw new VerificationException("Verification failed.")
     }
   }
 
@@ -118,9 +138,11 @@ object Bench {
     statsFile.write(columnHeaders)
     statsFile.flush()
 
+    var nVerificationFailures = 0
+    var nExecutionFailures = 0
+    var averageExecutionTime: Long = 0
+    var averageVerificationTime: Long = 0
     for (sampleIndex <- 0 until sampling.nSamples) {
-      val directory = dest.resolve(sampleIndex.toString)
-      Files.createDirectories(directory)
 
       val sampleToPermute = Labeller.sample(labels, sampling.heuristic)
 
@@ -128,8 +150,19 @@ object Bench {
       val currentPermutation = mutable.ListBuffer[ASTLabel]()
 
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
+        printProgress(
+          fileNames.baseName + ".c0",
+          sampleIndex + 1,
+          sampling.nSamples,
+          labelIndex + 1,
+          sampleToPermute.length - 1,
+          nVerificationFailures,
+          nExecutionFailures,
+          averageVerificationTime,
+          averageExecutionTime
+        )
         val permutationSourceFile =
-          directory.resolve(
+          dest.resolve(
             (sampleIndex + 1) + "_" + (labelIndex + 1) + ".c0"
           )
 
@@ -140,8 +173,7 @@ object Bench {
         if (potentiallyExists.isDefined) {
 
           val csvEntry = lattice.createCSVEntry(
-            potentiallyExists.get,
-            permutationSourceFile.toString
+            potentiallyExists.get
           )
           statsFile.write(csvEntry)
           statsFile.flush()
@@ -152,7 +184,10 @@ object Bench {
           )
 
           val permutationSourceText =
-            GraphPrinter.print(builtPermutation, includeSpecs = true)
+            appendPathComment(
+              GraphPrinter.print(builtPermutation, includeSpecs = true),
+              currentPermutation
+            )
 
           Main.writeFile(
             permutationSourceFile.toString,
@@ -160,9 +195,6 @@ object Bench {
           )
 
           try {
-            println(
-              "Benchmarking '" + permutationSourceFile.toString + "'...\n"
-            )
             val performance = Bench.mark(
               permutationSourceText,
               timedIterations = 1,
@@ -170,43 +202,115 @@ object Bench {
               config
             )
 
-            if (performance.isDefined) {
-              val csvEntry = lattice.createCSVEntry(
-                lattice.add(
-                  performance.get,
-                  currentPermutation.toList,
-                  permutationSourceFile
-                ),
-                permutationSourceFile.toString
+            if (averageExecutionTime > 0)
+              averageExecutionTime =
+                (averageExecutionTime + performance.execution) / 2
+            else averageExecutionTime = performance.execution
+
+            if (averageVerificationTime > 0)
+              averageVerificationTime =
+                (averageVerificationTime + performance.verification) / 2
+            else averageVerificationTime = performance.verification
+
+            val csvEntry = lattice.createCSVEntry(
+              lattice.add(
+                performance,
+                currentPermutation.toList,
+                sampleIndex + 1,
+                permutationSourceFile
               )
-              statsFile.write(csvEntry)
-              statsFile.flush()
-            }
+            )
+            statsFile.write(csvEntry)
+            statsFile.flush()
 
           } catch {
-            case e: Throwable =>
-              print("\n------------\n")
-              println(
-                "Exception while running benchmark `" + permutationSourceFile.toString + "`:"
-              )
-              e.printStackTrace()
-              print("\n------------\n")
+            case _: VerificationException =>
+              nVerificationFailures += 1
+            case _: ExecutionException =>
+              nExecutionFailures += 1
           }
         }
       }
     }
   }
+
+  def appendPathComment(
+      str: String,
+      labels: mutable.ListBuffer[Labeller.ASTLabel]
+  ): String = {
+    "/*\n" +
+      labels.foldLeft("")(_ + _.hash + '\n') +
+      "*/\n" +
+      str
+  }
+
+  def printProgress(
+      sourceFileName: String,
+      currentPath: Int,
+      maxPath: Int,
+      currentIndex: Int,
+      maxIndex: Int,
+      nVerFailures: Double,
+      nExecFailures: Double,
+      averageVerificationTime: Long,
+      averageExecutionTime: Long
+  ): Unit = {
+
+    def round(x: Double) = {
+      val roundBy = 2
+      val w = math.pow(10, roundBy)
+      (x * w).toLong.toDouble / w
+    }
+    val baseline = (currentIndex + (currentPath * maxIndex))
+
+    val verFailurePercentage = (nVerFailures) / baseline * 100
+    val execFailurePercentage = (nExecFailures) / baseline * 100
+    val failurePercentage =
+      verFailurePercentage + execFailurePercentage
+
+    var timeRemaining =
+      (averageExecutionTime + averageVerificationTime) * (((maxPath - currentPath) * maxIndex) + (maxIndex - currentIndex)) / Math
+        .pow(10, 9) / 60
+    var postfix = "min."
+    if (timeRemaining > 60) {
+      timeRemaining = timeRemaining / 60
+      postfix = "hr."
+    }
+
+    print(
+      s"\rBench: ${sourceFileName} * Path ${currentPath}/${maxPath} * Perm. ${currentIndex}/${maxIndex} * Fails: ${round(
+        failurePercentage
+      )}% - (V: ${round(verFailurePercentage)}% + E: ${round(execFailurePercentage)}%) * Ver. time: ${round(
+        averageVerificationTime / Math
+          .pow(10, 9)
+      )} sec. * Exec time: ${round(
+        averageExecutionTime / Math
+          .pow(10, 9)
+      )} sec. * Time left: ${round(timeRemaining)} ${postfix}"
+    )
+  }
 }
 
-case class VerifiedOutput(silver: Program, c0Source: String)
+case class VerifiedOutput(
+    silver: Program,
+    c0Source: String,
+    totalConjuncts: Int,
+    eliminatedConjuncts: Int
+)
 case class TimedVerifiedOutput(
     output: Option[VerifiedOutput],
     duration: Long
 )
 
-case class PerformanceMetrics(verification: Long, execution: Long)
+case class PerformanceMetrics(
+    verification: Long,
+    execution: Long,
+    nConjuncts: Int,
+    nConjunctsEliminated: Int
+)
 
 case class LatticeElement(
+    pathIndex: Int,
     metrics: PerformanceMetrics,
     specsPresent: List[ASTLabel],
     originallyWrittenTo: Path
@@ -224,9 +328,11 @@ class Lattice {
   def add(
       metrics: PerformanceMetrics,
       specsPresent: List[ASTLabel],
+      pathIndex: Int,
       originallyWrittenTo: Path
   ): LatticeElement = {
     val toAppend = LatticeElement(
+      pathIndex,
       metrics,
       specsPresent,
       originallyWrittenTo
@@ -235,14 +341,17 @@ class Lattice {
     toAppend
   }
   def createCSVEntry(
-      latticeElement: LatticeElement,
-      sourceFileName: String
+      latticeElement: LatticeElement
   ): String = {
     val entry = mutable.ListBuffer[String]()
-    entry += sourceFileName
+    entry += latticeElement.pathIndex.toString
     entry += latticeElement.specsPresent.length.toString
     entry += latticeElement.metrics.execution.toString
     entry += latticeElement.metrics.verification.toString
+    entry += latticeElement.metrics.nConjuncts.toString
+    entry += latticeElement.metrics.nConjunctsEliminated.toString
+    entry += latticeElement.originallyWrittenTo.toString
     entry.foldRight("")(_ + "," + _) + "\n"
   }
+
 }

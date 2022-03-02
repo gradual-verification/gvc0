@@ -7,6 +7,7 @@ import gvc.transformer._
 import gvc.visualizer.{Bench, SamplingHeuristic, SamplingInfo, VerifiedOutput}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
+import viper.silicon.state.profilingInfo
 import viper.silver.verifier
 
 import java.nio.file.{Files, Paths}
@@ -16,6 +17,7 @@ import sys.process._
 import scala.language.postfixOps
 
 case class OutputFileCollection(
+    baseName: String,
     irFileName: String,
     silverFileName: String,
     c0FileName: String
@@ -35,14 +37,19 @@ object Main extends App {
     val silverFileName = baseName + ".vpr"
     val c0FileName = baseName + ".verified.c0"
     val fileNames =
-      OutputFileCollection(irFileName, silverFileName, c0FileName)
+      OutputFileCollection(
+        baseName,
+        irFileName,
+        silverFileName,
+        c0FileName
+      )
 
     val inputSource = readFile(config.sourceFile.get)
 
     if (config.permute.isDefined) {
       Bench.run(
         inputSource,
-        SamplingInfo(SamplingHeuristic.Random, 1),
+        SamplingInfo(SamplingHeuristic.Random, 30000),
         fileNames,
         config
       )
@@ -145,6 +152,7 @@ object Main extends App {
       Seq()
     )
     silicon.start()
+    profilingInfo.reset()
 
     val silver = IRGraphSilver.toSilver(ir)
 
@@ -159,9 +167,10 @@ object Main extends App {
       case verifier.Failure(errors) =>
         val message = s"Verification errors:\n" +
           errors.map(_.readableMessage).mkString("\n")
-        println(
+        /*println(
           message
-        )
+        )*/
+        silicon.stop()
         return None
     }
 
@@ -173,7 +182,11 @@ object Main extends App {
     val c0Source = GraphPrinter.print(ir, includeSpecs = false)
     if (cmdConfig.permute.isEmpty && cmdConfig.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
-    Some(VerifiedOutput(silver, c0Source))
+
+    val totalConjuncts = profilingInfo.getTotalConjuncts
+    val eliminatedConjuncts = profilingInfo.getEliminatedConjuncts
+
+    Some(VerifiedOutput(silver, c0Source, totalConjuncts, eliminatedConjuncts))
   }
   def execute(
       verifiedSource: String,
