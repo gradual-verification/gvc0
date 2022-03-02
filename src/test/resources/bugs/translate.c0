@@ -1,0 +1,28 @@
+//ERROR: java.lang.RuntimeException: Could not translate term into Viper expression! Exiting safely.
+
+struct Node {
+  struct Node *next;
+  int value;
+};
+
+//@predicate list(struct Node *l) = ? && (l != NULL ? acc(l->next) && list(l->next) : true);
+
+void append(struct Node *n, int value)
+  //@requires ?;
+  //@ensures ? && list(n);
+{
+  if (n->next != NULL)
+  {
+    append(n->next, value);
+  }
+  else
+  {
+    n->next = alloc(struct Node);
+    n->next->value = value;
+  }
+}
+
+int main()
+{
+  return 0;
+}

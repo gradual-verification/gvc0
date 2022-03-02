@@ -1,0 +1,28 @@
+// ERROR java.lang.RuntimeException: State merging failed: unexpected mismatch between symbolic states
+
+struct Node {
+  int value;
+  struct Node *next;
+};
+
+typedef struct Node Node;
+/*@
+predicate sorted(struct Node *list) =
+  ? && ((list != NULL && list->next != NULL) ? list->value > list->next->value && sorted(list->next) : true);
+@*/
+
+void append(Node *root, int value)
+  //@requires ?;
+  //@ensures ? && sorted(root);
+{
+  Node *n = root;
+  while (n->next != NULL)
+    n = n->next;
+  n->next = alloc(Node);
+  n->next->value = value;
+}
+
+int main()
+{
+  return 0;
+}

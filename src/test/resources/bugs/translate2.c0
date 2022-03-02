@@ -1,0 +1,25 @@
+//ERROR: java.lang.RuntimeException: Could not translate term into Viper expression! Exiting safely.
+
+struct Box {
+  struct Content *content;
+};
+
+struct Content {
+  int value;
+};
+
+int initialize(struct Box *box)
+  //@requires acc(box->content);
+  //@ensures acc(box->content) && (\result == 0 ? acc(box->content->value) : true);
+{
+  box->content = alloc(struct Content);
+  return 0;
+}
+
+int main()
+  //@requires ?;
+{
+  struct Box *box = alloc(struct Box);
+  initialize(box);
+  return box->content->value;
+}

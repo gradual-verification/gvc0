@@ -1,0 +1,25 @@
+// ERROR: java.lang.RuntimeException: Match error in resolveType!
+
+struct A {
+  int b;
+  int c;
+};
+
+void requirePermissions(struct A *input)
+  //@requires acc(input->b) && (input->b == 0 ? acc(input->c) : true);
+  //@ensures acc(input->b);
+{
+}
+
+void testPermissions(struct A *input)
+//@requires ?;
+{
+  requirePermissions(input);
+}
+
+int main()
+{
+  struct A *value = alloc(struct A);
+  testPermissions(value);
+  return 0;
+}

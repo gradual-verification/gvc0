@@ -1,0 +1,29 @@
+// ERROR: java.lang.RuntimeException: Error translating! Exiting safely.
+
+struct Box {
+  int value;
+};
+
+int initialize(struct Box *box)
+  //@requires acc(box->value);
+  //@ensures acc(box->value) && (\result == 0 ? box->value > 0 : true);
+{
+  box->value = 1;
+  return 0;
+}
+
+int main()
+  //@requires ?;
+  //@ensures true;
+{
+  struct Box *box = alloc(struct Box);
+
+  // We don't save the result of initialize
+  initialize(box);
+
+  // We have a conditional check depending on the result of initialize
+  // But no way to check the result of the call
+  //@assert box->value > 0;
+
+  return box->value;
+}
