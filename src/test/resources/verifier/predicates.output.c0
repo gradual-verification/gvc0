@@ -23,8 +23,8 @@ void wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields);
 
 void add_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
 {
-  addAcc(_ownedFields, node->_id, 0, 3);
-  addAcc(_ownedFields, node->_id, 1, 3);
+  addAcc(_ownedFields, node->_id, 3, 0);
+  addAcc(_ownedFields, node->_id, 3, 1);
 }
 
 int fullyImprecise(struct Node* a, struct OwnedFields* _ownedFields)
