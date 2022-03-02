@@ -19,6 +19,7 @@ int imprecisePostcondition(struct Node* a, struct OwnedFields* _ownedFields);
 int imprecisePrecondition(struct Node* a, struct OwnedFields* _ownedFields);
 int main();
 void remove_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields);
+void sep_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields);
 void wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields);
 
 void add_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
@@ -42,13 +43,16 @@ int fullyPrecise(struct Node* a, int* _instanceCounter)
   int _ = 0;
   struct OwnedFields* _ownedFields = NULL;
   struct OwnedFields* _tempFields = NULL;
+  struct OwnedFields* _tempFields1 = NULL;
   _ownedFields = initOwnedFields(_instanceCounter);
-  _tempFields = initOwnedFields(_instanceCounter);
-  add_wrappedAcc(a, _tempFields);
+  _tempFields1 = initOwnedFields(_instanceCounter);
+  add_wrappedAcc(a, _tempFields1);
   remove_wrappedAcc(a, _ownedFields);
-  _ = imprecisePostcondition(a, _tempFields);
-  join(_ownedFields, _tempFields);
+  _ = imprecisePostcondition(a, _tempFields1);
+  join(_ownedFields, _tempFields1);
+  _tempFields = initOwnedFields(_instanceCounter);
   wrappedAcc(a, _ownedFields);
+  sep_wrappedAcc(a, _tempFields);
   return _;
 }
 
@@ -86,6 +90,12 @@ void remove_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
 {
   loseAcc(_ownedFields, node->_id, 0);
   loseAcc(_ownedFields, node->_id, 1);
+}
+
+void sep_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
+{
+  addAccEnsureSeparate(_ownedFields, node->_id, 0, 3, "Overlapping field permissions for struct Node.value");
+  addAccEnsureSeparate(_ownedFields, node->_id, 1, 3, "Overlapping field permissions for struct Node.next");
 }
 
 void wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
