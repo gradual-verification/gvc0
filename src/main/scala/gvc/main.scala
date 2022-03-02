@@ -83,9 +83,10 @@ object Main extends App {
   def dumpC0(output: String): Nothing = {
     // Print runtime check information for debugging when dumping C0 output
     // This only happens after verification, so runtime checks have been initialized
+    /*
     for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
-      println("Runtime checks required for " + exp.toString + ":")
-      println(
+      //println("Runtime checks required for " + exp.toString + ":")
+      /*println(
         checks
           .map(b =>
             s"  if ${if (b.branchInfo.isEmpty) "true"
@@ -96,8 +97,8 @@ object Main extends App {
                 .mkString(" && ")}: ${b.checks.toString()}"
           )
           .mkString("\n")
-      )
-    }
+      )*/
+    }*/
 
     dump(output)
   }
