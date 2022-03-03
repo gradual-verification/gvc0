@@ -147,7 +147,7 @@ object Bench {
       val sampleToPermute = Labeller.sample(labels, sampling.heuristic)
 
       var permutationHash = ""
-      val currentPermutation = mutable.ListBuffer[ASTLabel]()
+      val currentPermutation = mutable.TreeSet()(Labeller.LabelOrdering)
 
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
         printProgress(
@@ -167,7 +167,7 @@ object Bench {
           )
 
         currentPermutation += sampleToPermute(labelIndex)
-        permutationHash += sampleToPermute(labelIndex).hash
+        permutationHash = currentPermutation.foldLeft("")(_ + _.hash)
 
         val potentiallyExists = lattice.get(permutationHash)
         if (potentiallyExists.isDefined) {
@@ -186,7 +186,7 @@ object Bench {
           val permutationSourceText =
             appendPathComment(
               GraphPrinter.print(builtPermutation, includeSpecs = true),
-              currentPermutation
+              currentPermutation.toList
             )
 
           Main.writeFile(
@@ -236,7 +236,7 @@ object Bench {
 
   def appendPathComment(
       str: String,
-      labels: mutable.ListBuffer[Labeller.ASTLabel]
+      labels: List[Labeller.ASTLabel]
   ): String = {
     "/*\n" +
       labels.foldLeft("")(_ + _.hash + '\n') +
