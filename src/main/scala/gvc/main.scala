@@ -7,6 +7,7 @@ import gvc.transformer._
 import gvc.visualizer.{Bench, SamplingHeuristic, SamplingInfo, VerifiedOutput}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
+import viper.silicon.state.profilingInfo
 import viper.silver.verifier
 
 import java.nio.file.{Files, Paths}
@@ -16,6 +17,7 @@ import sys.process._
 import scala.language.postfixOps
 
 case class OutputFileCollection(
+    baseName: String,
     irFileName: String,
     silverFileName: String,
     c0FileName: String
@@ -35,14 +37,19 @@ object Main extends App {
     val silverFileName = baseName + ".vpr"
     val c0FileName = baseName + ".verified.c0"
     val fileNames =
-      OutputFileCollection(irFileName, silverFileName, c0FileName)
+      OutputFileCollection(
+        baseName,
+        irFileName,
+        silverFileName,
+        c0FileName
+      )
 
     val inputSource = readFile(config.sourceFile.get)
 
     if (config.permute.isDefined) {
       Bench.run(
         inputSource,
-        SamplingInfo(SamplingHeuristic.Random, 1),
+        SamplingInfo(SamplingHeuristic.Random, 30000),
         fileNames,
         config
       )
@@ -83,9 +90,10 @@ object Main extends App {
   def dumpC0(output: String): Nothing = {
     // Print runtime check information for debugging when dumping C0 output
     // This only happens after verification, so runtime checks have been initialized
+    /*
     for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
-      println("Runtime checks required for " + exp.toString + ":")
-      println(
+      //println("Runtime checks required for " + exp.toString + ":")
+      /*println(
         checks
           .map(b =>
             s"  if ${if (b.branchInfo.isEmpty) "true"
@@ -96,8 +104,8 @@ object Main extends App {
                 .mkString(" && ")}: ${b.checks.toString()}"
           )
           .mkString("\n")
-      )
-    }
+      )*/
+    }*/
 
     dump(output)
   }
@@ -144,6 +152,7 @@ object Main extends App {
       Seq()
     )
     silicon.start()
+    profilingInfo.reset()
 
     val silver = IRGraphSilver.toSilver(ir)
 
@@ -161,6 +170,7 @@ object Main extends App {
         println(
           message
         )
+
         silicon.stop()
         return None
     }
@@ -173,7 +183,11 @@ object Main extends App {
     val c0Source = GraphPrinter.print(ir, includeSpecs = false)
     if (cmdConfig.permute.isEmpty && cmdConfig.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
-    Some(VerifiedOutput(silver, c0Source))
+
+    val totalConjuncts = profilingInfo.getTotalConjuncts
+    val eliminatedConjuncts = profilingInfo.getEliminatedConjuncts
+
+    Some(VerifiedOutput(silver, c0Source, totalConjuncts, eliminatedConjuncts))
   }
   def execute(
       verifiedSource: String,

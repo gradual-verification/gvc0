@@ -3,15 +3,17 @@ package gvc.visualizer
 import gvc.transformer.IRGraph
 import gvc.transformer.IRGraph.{Block, Expression, Method, Predicate}
 import gvc.visualizer.ExprType.ExprType
+import gvc.visualizer.Labeller.ASTLabel
 import gvc.visualizer.SpecType.SpecType
+
 import scala.collection.mutable.ListBuffer
 
-abstract class LabelledTraversal[A](
+abstract class SpecExpressionTraversal[A](
 ) {
 
   case class ASTOffset(labels: List[A])
 
-  class LabelException(val message: String) extends RuntimeException {
+  class SpecTraversalException(val message: String) extends RuntimeException {
     override def getMessage: String = message
   }
 
@@ -39,14 +41,14 @@ abstract class LabelledTraversal[A](
             astLabelBuffer ++= specAssertOffset.labels
           }
         case fold: IRGraph.Fold =>
-          astLabelBuffer += labelledOperation(
+          astLabelBuffer += traversedOperation(
             Left(context),
             offset,
             fold
           )
           offset += 1
         case unfold: IRGraph.Unfold =>
-          astLabelBuffer += labelledOperation(
+          astLabelBuffer += traversedOperation(
             Left(context),
             offset,
             unfold
@@ -79,7 +81,7 @@ abstract class LabelledTraversal[A](
           offset += whlBlockOffset.labels.length
           astLabelBuffer ++= invariantOffset.labels ++ whlBlockOffset.labels
 
-        case op => labelledOperation(Left(context), offset, op)
+        case op => traversedOperation(Left(context), offset, op)
       }
     }
     ASTOffset(astLabelBuffer.toList)
@@ -101,7 +103,7 @@ abstract class LabelledTraversal[A](
           val top = exprStack.remove(exprStack.length - 1)
           top match {
             case acc: IRGraph.Accessibility =>
-              astLabelBuffer += labelledExpression(
+              astLabelBuffer += traversedExpression(
                 context,
                 specType,
                 ExprType.Accessibility,
@@ -110,7 +112,7 @@ abstract class LabelledTraversal[A](
               )
               offset += 1
             case pred: IRGraph.PredicateInstance =>
-              astLabelBuffer += labelledExpression(
+              astLabelBuffer += traversedExpression(
                 context,
                 specType,
                 ExprType.Predicate,
@@ -148,7 +150,7 @@ abstract class LabelledTraversal[A](
                 exprStack += binary.left
                 exprStack += binary.right
               } else {
-                labelledExpression(
+                traversedExpression(
                   context,
                   specType,
                   ExprType.Default,
@@ -157,7 +159,13 @@ abstract class LabelledTraversal[A](
                 )
               }
             case _ =>
-              labelledExpression(context, specType, ExprType.Default, offset, _)
+              traversedExpression(
+                context,
+                specType,
+                ExprType.Default,
+                offset,
+                _
+              )
           }
         }
         ASTOffset(astLabelBuffer.toList)
@@ -165,17 +173,51 @@ abstract class LabelledTraversal[A](
     }
   }
 
-  def labelledOperation(
+  def traversedOperation(
       parentContext: Either[Method, Predicate],
       expressionIndex: Int,
       template: IRGraph.Op
   ): A
 
-  def labelledExpression(
+  def traversedExpression(
       parentContext: Either[Method, Predicate],
       specType: SpecType,
       exprType: ExprType,
       expressionIndex: Int,
       template: IRGraph.Expression
   ): A
+}
+
+class LabelSpecs extends SpecExpressionTraversal[ASTLabel] {
+  override def traversedOperation(
+      parentContext: Either[Method, Predicate],
+      expressionIndex: Int,
+      template: IRGraph.Op
+  ): ASTLabel = ???
+
+  override def traversedExpression(
+      parentContext: Either[Method, Predicate],
+      specType: SpecType,
+      exprType: ExprType,
+      expressionIndex: Int,
+      template: Expression
+  ): ASTLabel = ???
+
+}
+
+class BuildProgram extends SpecExpressionTraversal[ASTLabel] {
+  override def traversedOperation(
+      parentContext: Either[Method, Predicate],
+      expressionIndex: Int,
+      template: IRGraph.Op
+  ): ASTLabel = ???
+
+  override def traversedExpression(
+      parentContext: Either[Method, Predicate],
+      specType: SpecType,
+      exprType: ExprType,
+      expressionIndex: Int,
+      template: Expression
+  ): ASTLabel = ???
+
 }

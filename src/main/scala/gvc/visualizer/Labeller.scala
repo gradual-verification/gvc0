@@ -30,7 +30,7 @@ object Labeller {
     val methodLabels = program.methods.flatMap(labelMethod)
     val predicateLabels = program.predicates.flatMap(labelPredicate)
     val totalLabels = (methodLabels ++ predicateLabels).toList
-    if (totalLabels.length == 0)
+    if (totalLabels.isEmpty)
       throw new LabelException(
         "Program doesn't contain any specifications to permute."
       )
@@ -237,7 +237,8 @@ object Labeller {
         x: ASTLabel,
         y: ASTLabel
     ): Int =
-      x.expressionIndex compare y.expressionIndex
+      (x.parent.hashCode() compare y.parent
+        .hashCode()) compare (x.expressionIndex compare y.expressionIndex)
   }
 
   def createLabel(
@@ -262,5 +263,46 @@ object Labeller {
       })
 
     ASTLabel(parent, specType, exprType, expressionIndex, hash)
+  }
+
+  case class LabelMeta(
+      nClausesAssertions: Int,
+      nClausesPreconditions: Int,
+      nClausesPostconditions: Int,
+      nClausesLoopInvariants: Int,
+      nClausesPredicates: Int,
+      nFolds: Int,
+      nUnfolds: Int
+  )
+  def sampleMetadata(list: List[ASTLabel]): LabelMeta = {
+    var nClausesAssertions: Int = 0
+    var nClausesPreconditions: Int = 0
+    var nClausesPostconditions: Int = 0
+    var nClausesLoopInvariants: Int = 0
+    var nClausesPredicates: Int = 0
+    var nFolds: Int = 0
+    var nUnfolds: Int = 0
+
+    list.foreach(label => {
+      label.specType match {
+        case gvc.visualizer.SpecType.Assert       => nClausesAssertions += 1
+        case gvc.visualizer.SpecType.Precondition => nClausesPreconditions += 1
+        case gvc.visualizer.SpecType.Postcondition =>
+          nClausesPostconditions += 1
+        case gvc.visualizer.SpecType.Fold      => nFolds += 1
+        case gvc.visualizer.SpecType.Unfold    => nUnfolds += 1
+        case gvc.visualizer.SpecType.Invariant => nClausesLoopInvariants += 1
+        case gvc.visualizer.SpecType.Predicate => nClausesPredicates += 1
+      }
+    })
+    LabelMeta(
+      nClausesAssertions,
+      nClausesPreconditions,
+      nClausesPostconditions,
+      nClausesLoopInvariants,
+      nClausesPredicates,
+      nFolds,
+      nUnfolds
+    )
   }
 }
