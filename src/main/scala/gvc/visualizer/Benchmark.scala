@@ -31,6 +31,11 @@ object Bench {
     val _precise_bottom = "bot.c0"
     val _temporaryBenchmarkFile = "temp.c0"
     val _compiledOutput = "a.out"
+    val _defaultPermutationOutputDir = "./perms"
+    val _defaultErrorLogOutputDir = "./errors"
+    val _defaultMetricsFileName = "metrics"
+    val _defaultLatticeFileName = "lattice"
+
   }
 
   private def mark(
@@ -95,6 +100,52 @@ object Bench {
     executionTime
   }
 
+  case class BenchmarkOutputFiles(
+      metrics: Path,
+      lattice: Path,
+      errorDirectory: Path,
+      permutationDirectory: Path
+  )
+
+  def resolveOutputFiles(config: Config): BenchmarkOutputFiles = {
+    val permutationOutputDir =
+      Paths.get(
+        config.permuteDumpDir.getOrElse(Names._defaultPermutationOutputDir)
+      )
+    new Directory(permutationOutputDir.toFile).deleteRecursively()
+    Files.createDirectories(permutationOutputDir)
+
+    val errorLogOutputDir =
+      Paths.get(
+        config.permuteErrorDir.getOrElse(Names._defaultErrorLogOutputDir)
+      )
+    new Directory(errorLogOutputDir.toFile).deleteRecursively()
+    Files.createDirectories(errorLogOutputDir)
+
+    val metricsFile =
+      Paths.get(
+        config.permuteMetricsFile.getOrElse(
+          Names._defaultMetricsFileName + ".csv"
+        )
+      )
+    if (Files.exists(metricsFile)) Files.delete(metricsFile)
+
+    val latticeFile =
+      Paths.get(
+        config.permuteLatticeFile.getOrElse(
+          Names._defaultLatticeFileName + ".csv"
+        )
+      )
+    if (Files.exists(latticeFile)) Files.delete(latticeFile)
+
+    BenchmarkOutputFiles(
+      metricsFile,
+      latticeFile,
+      errorLogOutputDir,
+      permutationOutputDir
+    )
+  }
+
   def run(
       inputSource: String,
       sampling: SamplingInfo,
@@ -102,19 +153,17 @@ object Bench {
       config: Config
   ): Unit = {
     val program = Main.generateIR(inputSource)
-    val outputDir = config.permuteDumpDir.getOrElse("./perms")
+    val output = Bench.resolveOutputFiles(config)
 
-    val dest = Paths.get(outputDir)
-    new Directory(dest.toFile).deleteRecursively()
-
-    Files.createDirectories(dest)
-    val outputBottomPrecise = dest.resolve(Names._precise_bottom)
+    val outputBottomPrecise =
+      output.permutationDirectory.resolve(Names._precise_bottom)
     Main.writeFile(
       outputBottomPrecise.toString,
       GraphPrinter.print(program, includeSpecs = false)
     )
 
-    val outputBottomImprecise = dest.resolve(Names._imprecise_bottom)
+    val outputBottomImprecise =
+      output.permutationDirectory.resolve(Names._imprecise_bottom)
     Main.writeFile(
       outputBottomImprecise.toString,
       GraphPrinter.print(
@@ -123,17 +172,15 @@ object Bench {
       )
     )
 
-    val outputTop = dest.resolve(Names._top)
+    val outputTop = output.permutationDirectory.resolve(Names._top)
     Main.writeFile(
       outputTop.toString,
       GraphPrinter.print(program, includeSpecs = true)
     )
 
     val labels = Labeller.labelAST(program)
+    val csv = new CSVLogger(labels, output)
     val lattice = new Lattice()
-    val statsFile =
-      new FileWriter(config.permute.get)
-    statsFile.flush()
 
     var nVerificationFailures = 0
     var nExecutionFailures = 0
@@ -159,7 +206,7 @@ object Bench {
           averageExecutionTime
         )
         val permutationSourceFile =
-          dest.resolve(
+          output.permutationDirectory.resolve(
             (sampleIndex + 1) + "_" + (labelIndex + 1) + ".c0"
           )
 
@@ -167,14 +214,11 @@ object Bench {
         permutationHash = currentPermutation.foldLeft("")(_ + _.hash)
 
         val potentiallyExists = lattice.get(permutationHash)
-        if (potentiallyExists.isDefined) {
 
-          val csvEntry = lattice.createCSVEntry(
-            potentiallyExists.get
-          )
-          statsFile.write(csvEntry)
-          statsFile.flush()
-        } else {
+        if (potentiallyExists.isDefined)
+
+
+        else {
           val builtPermutation = PermutationGenerator.generatePermutation(
             currentPermutation.toList,
             program

@@ -6,6 +6,7 @@ import java.nio.file.Path
 import scala.collection.mutable
 
 case class LatticeElement(
+    id: PermutationID,
     metrics: PerformanceMetrics,
     specsPresent: List[ASTLabel],
     originallyWrittenTo: Path
@@ -22,26 +23,16 @@ class Lattice {
   }
   def add(
       metrics: PerformanceMetrics,
+      id: PermutationID,
       specsPresent: List[ASTLabel],
       originallyWrittenTo: Path
   ): LatticeElement = {
     val toAppend = LatticeElement(
-      metrics,
+      id metrics,
       specsPresent,
       originallyWrittenTo
     )
-    elementMap += specsPresent.foldLeft("")(_ + _.hash) -> toAppend
+    elementMap += Labeller.hashPermutation(specsPresent)
     toAppend
-  }
-  def createCSVEntry(
-      latticeElement: LatticeElement,
-      sourceFileName: String
-  ): String = {
-    val entry = mutable.ListBuffer[String]()
-    entry += sourceFileName
-    entry += latticeElement.specsPresent.length.toString
-    entry += latticeElement.metrics.execution.toString
-    entry += latticeElement.metrics.verification.toString
-    entry.foldRight("")(_ + "," + _) + "\n"
   }
 }

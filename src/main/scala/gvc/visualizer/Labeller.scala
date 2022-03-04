@@ -1,9 +1,6 @@
 package gvc.visualizer
-import gvc.transformer.IRGraph
-import gvc.transformer.IRGraph.{Block, Expression, Method, Predicate, Program}
-import gvc.visualizer.ExprType.ExprType
-import gvc.visualizer.SamplingHeuristic.SamplingHeuristic
-import gvc.visualizer.SpecType.SpecType
+
+import viper.silver.ast.Program
 import scala.collection.mutable.ListBuffer
 
 object SpecType extends Enumeration {
@@ -232,6 +229,11 @@ object Labeller {
       expressionIndex: Int,
       hash: String
   )
+
+  def hashPermutation(labels: List[ASTLabel]): String = {
+    labels.foldLeft("")(_ + _ + '.')
+  }
+
   object LabelOrdering extends Ordering[ASTLabel] {
     override def compare(
         x: ASTLabel,
