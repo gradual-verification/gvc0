@@ -1,5 +1,6 @@
 package gvc
 
+import java.io.ByteArrayOutputStream
 import sys.process._
 import scala.language.postfixOps
 
@@ -54,10 +55,18 @@ object CC0Wrapper {
   ): Long = {
     val command = formatCommand(sourceFile, options)
     var duration: Long = 0;
+    val os = new ByteArrayOutputStream
+
     for (_ <- 1 to iterations) {
       val start = System.nanoTime()
-      command !
+
+      val exitCode = (command #> os) !
+
       val stop = System.nanoTime()
+
+      os.close()
+      if (exitCode != 0) throw new CC0Exception(os.toString())
+
       duration += stop - start
     }
     duration / iterations

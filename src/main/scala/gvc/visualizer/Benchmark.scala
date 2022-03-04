@@ -1,11 +1,10 @@
 package gvc.visualizer
-import gvc.Main.{deleteFile, writeFile}
+import gvc.CC0Wrapper.CC0Exception
+import gvc.Main.{ProfilingInfo, VerifiedOutput, deleteFile, writeFile}
 import gvc.{CC0Options, CC0Wrapper, Config, Main, OutputFileCollection}
 import gvc.transformer.GraphPrinter
 import gvc.visualizer.Labeller.ASTLabel
 import gvc.visualizer.SamplingHeuristic.SamplingHeuristic
-import viper.silver.ast.Program
-import scala.language.postfixOps
 
 import java.io.FileWriter
 import java.nio.file.{Files, Path, Paths}
@@ -30,9 +29,9 @@ object Bench {
     val _top = "top.c0"
     val _imprecise_bottom = "bot_imp.c0"
     val _precise_bottom = "bot.c0"
+    val _temporaryBenchmarkFile = "temp.c0"
+    val _compiledOutput = "a.out"
   }
-  val columnHeaders =
-    "path_id,lattice_height,verifier_time_ns,execution_time_ns,total_conjuncts,eliminated_conjuncts,src\n"
 
   private def mark(
       sourceText: String,
@@ -40,60 +39,60 @@ object Bench {
       fileNames: OutputFileCollection,
       config: Config
   ): PerformanceMetrics = {
-    val verifierOutput =
-      markVerifier(sourceText, timedIterations, fileNames)
-
-    if (verifierOutput.output.isDefined) {
-
-      val outputExe = config.output.getOrElse("a.out")
-      val runtimeInput =
-        Paths.get(getClass.getResource("/runtime.c0").getPath)
-      val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
-
-      val cc0Options = CC0Options(
-        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-        saveIntermediateFiles = config.saveFiles,
-        output = Some(outputExe),
-        includeDirs = List(runtimeIncludeDir.toString + "/")
-      )
-      val c0FileName = "temp.c0"
-      writeFile(c0FileName, verifierOutput.output.get.c0Source)
-      val executionTime =
-        try {
-          CC0Wrapper.execTimed(c0FileName, cc0Options, timedIterations)
-        } catch {
-          case _: Throwable => {
-            throw new ExecutionException("Execution failed.")
-          }
-        } finally {
-          deleteFile(c0FileName)
-        }
-      PerformanceMetrics(
-        verifierOutput.duration,
-        executionTime,
-        verifierOutput.output.get.totalConjuncts,
-        verifierOutput.output.get.eliminatedConjuncts
-      )
-
-    } else {
-      throw new VerificationException("Verification failed.")
-    }
+    val verifierResults =
+      markVerifier(sourceText, timedIterations, fileNames, config)
+    val executionTime =
+      markExecution(verifierResults.output.c0Source, timedIterations, config)
+    PerformanceMetrics(
+      verifierResults.duration,
+      executionTime,
+      verifierResults.output.profiling
+    )
   }
 
   private def markVerifier(
       sourceText: String,
       timedIterations: Int,
-      fileNames: OutputFileCollection
+      fileNames: OutputFileCollection,
+      config: Config
   ): TimedVerifiedOutput = {
     var duration: Long = 0
-    val verifiedIR = Main.verify(sourceText, fileNames)
+    val verifiedIR = Main.verify(sourceText, fileNames, config)
     for (_ <- 1 to timedIterations) {
       val start = System.nanoTime()
-      Main.verify(sourceText, fileNames)
+      Main.verify(sourceText, fileNames, config)
       val stop = System.nanoTime()
       duration = (duration + (stop - start)) / 2
     }
     TimedVerifiedOutput(verifiedIR, duration)
+  }
+
+  private def markExecution(
+      sourceText: String,
+      timedIterations: Int,
+      config: Config
+  ): Long = {
+    val outputExe = config.output.getOrElse(Names._compiledOutput)
+    val runtimeInput =
+      Paths.get(getClass.getResource("/runtime.c0").getPath)
+    val runtimeIncludeDir = runtimeInput.getParent.toAbsolutePath
+
+    val cc0Options = CC0Options(
+      compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+      saveIntermediateFiles = config.saveFiles,
+      output = Some(outputExe),
+      includeDirs = List(Paths.get(runtimeIncludeDir.toString, "/").toString)
+    )
+
+    val c0FileName = Names._temporaryBenchmarkFile
+    writeFile(c0FileName, sourceText)
+    val executionTime =
+      try {
+        CC0Wrapper.execTimed(c0FileName, cc0Options, timedIterations)
+      } finally {
+        deleteFile(c0FileName)
+      }
+    executionTime
   }
 
   def run(
@@ -134,8 +133,6 @@ object Bench {
     val lattice = new Lattice()
     val statsFile =
       new FileWriter(config.permute.get)
-
-    statsFile.write(columnHeaders)
     statsFile.flush()
 
     var nVerificationFailures = 0
@@ -202,32 +199,20 @@ object Bench {
               config
             )
 
-            if (averageExecutionTime > 0)
-              averageExecutionTime =
-                (averageExecutionTime + performance.execution) / 2
-            else averageExecutionTime = performance.execution
-
-            if (averageVerificationTime > 0)
-              averageVerificationTime =
-                (averageVerificationTime + performance.verification) / 2
-            else averageVerificationTime = performance.verification
-
             val csvEntry = lattice.createCSVEntry(
               lattice.add(
                 performance,
                 currentPermutation.toList,
-                sampleIndex + 1,
                 permutationSourceFile
-              )
+              ),
+              permutationSourceFile.toString
             )
             statsFile.write(csvEntry)
             statsFile.flush()
 
           } catch {
-            case _: VerificationException =>
-              nVerificationFailures += 1
-            case _: ExecutionException =>
-              nExecutionFailures += 1
+            case runtime: CC0Exception =>
+
           }
         }
       }
@@ -291,67 +276,13 @@ object Bench {
   }
 }
 
-case class VerifiedOutput(
-    silver: Program,
-    c0Source: String,
-    totalConjuncts: Int,
-    eliminatedConjuncts: Int
-)
 case class TimedVerifiedOutput(
-    output: Option[VerifiedOutput],
+    output: VerifiedOutput,
     duration: Long
 )
 
 case class PerformanceMetrics(
     verification: Long,
     execution: Long,
-    nConjuncts: Int,
-    nConjunctsEliminated: Int
+    profiling: ProfilingInfo
 )
-
-case class LatticeElement(
-    pathIndex: Int,
-    metrics: PerformanceMetrics,
-    specsPresent: List[ASTLabel],
-    originallyWrittenTo: Path
-)
-
-class Lattice {
-  val levels: mutable.ListBuffer[mutable.ListBuffer[LatticeElement]] =
-    mutable.ListBuffer[mutable.ListBuffer[LatticeElement]]()
-  val elementMap: mutable.Map[String, LatticeElement] =
-    mutable.Map[String, LatticeElement]()
-
-  def get(hash: String): Option[LatticeElement] = {
-    elementMap.get(hash)
-  }
-  def add(
-      metrics: PerformanceMetrics,
-      specsPresent: List[ASTLabel],
-      pathIndex: Int,
-      originallyWrittenTo: Path
-  ): LatticeElement = {
-    val toAppend = LatticeElement(
-      pathIndex,
-      metrics,
-      specsPresent,
-      originallyWrittenTo
-    )
-    elementMap += specsPresent.foldLeft("")(_ + _.hash) -> toAppend
-    toAppend
-  }
-  def createCSVEntry(
-      latticeElement: LatticeElement
-  ): String = {
-    val entry = mutable.ListBuffer[String]()
-    entry += latticeElement.pathIndex.toString
-    entry += latticeElement.specsPresent.length.toString
-    entry += latticeElement.metrics.execution.toString
-    entry += latticeElement.metrics.verification.toString
-    entry += latticeElement.metrics.nConjuncts.toString
-    entry += latticeElement.metrics.nConjunctsEliminated.toString
-    entry += latticeElement.originallyWrittenTo.toString
-    entry.foldRight("")(_ + "," + _) + "\n"
-  }
-
-}

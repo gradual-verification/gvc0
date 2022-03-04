@@ -4,10 +4,11 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.visualizer.{Bench, SamplingHeuristic, SamplingInfo, VerifiedOutput}
+import gvc.visualizer.{Bench, SamplingHeuristic, SamplingInfo}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.profilingInfo
+import viper.silver.ast.Program
 import viper.silver.verifier
 
 import java.nio.file.{Files, Paths}
@@ -54,11 +55,10 @@ object Main extends App {
         config
       )
     } else {
-      val verifiedOutput = verify(inputSource, fileNames)
-      if (verifiedOutput.isDefined) {
-        execute(verifiedOutput.get.c0Source, fileNames)
-      }
+      val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+      execute(verifiedOutput.c0Source, fileNames)
     }
+
   }
 
   def readFile(file: String): String =
@@ -127,17 +127,28 @@ object Main extends App {
       )
     GraphTransformer.transform(resolved)
   }
+  case class VerifiedOutput(
+      silver: Program,
+      c0Source: String,
+      profiling: ProfilingInfo
+  )
+
+  case class ProfilingInfo(nConjuncts: Int, nConjunctsEliminated: Int)
+
+  class VerifierException(message: scala.Predef.String)
+      extends Exception(message)
 
   def verify(
       inputSource: String,
-      fileNames: OutputFileCollection
-  ): Option[VerifiedOutput] = {
+      fileNames: OutputFileCollection,
+      config: Config
+  ): VerifiedOutput = {
     val ir = generateIR(inputSource)
 
-    if (cmdConfig.permute.isEmpty) {
-      if (cmdConfig.dump.contains(Config.DumpIR))
+    if (config.permute.isEmpty) {
+      if (config.dump.contains(Config.DumpIR))
         dump(GraphPrinter.print(ir, includeSpecs = true))
-      else if (cmdConfig.saveFiles)
+      else if (config.saveFiles)
         writeFile(
           fileNames.irFileName,
           GraphPrinter.print(ir, includeSpecs = true)
@@ -151,43 +162,45 @@ object Main extends App {
       reporter,
       Seq()
     )
+
+    profilingInfo.reset()
     silicon.start()
     profilingInfo.reset()
 
     val silver = IRGraphSilver.toSilver(ir)
 
-    if (!cmdConfig.permute.isDefined) {
-      if (cmdConfig.dump == Some(Config.DumpSilver)) dump(silver.toString())
-      else if (cmdConfig.saveFiles)
+    if (!config.permute.isDefined) {
+      if (config.dump == Some(Config.DumpSilver)) dump(silver.toString())
+      else if (config.saveFiles)
         writeFile(fileNames.silverFileName, silver.toString())
     }
 
     silicon.verify(silver) match {
       case verifier.Success => ()
       case verifier.Failure(errors) =>
-        val message = s"Verification errors:\n" +
-          errors.map(_.readableMessage).mkString("\n")
-        /*println(
-          message
-        )*/
+        val message = errors.map(_.readableMessage).mkString("\n")
         silicon.stop()
-        return None
+        throw new VerifierException(message)
     }
 
     silicon.stop()
-    if (cmdConfig.permute.isEmpty && cmdConfig.onlyVerify) sys.exit(0)
+    if (config.permute.isEmpty && config.onlyVerify) sys.exit(0)
 
     Weaver.weave(ir, silver)
 
     val c0Source = GraphPrinter.print(ir, includeSpecs = false)
-    if (cmdConfig.permute.isEmpty && cmdConfig.dump.contains(Config.DumpC0))
+    if (config.permute.isEmpty && config.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
-
-    val totalConjuncts = profilingInfo.getTotalConjuncts
-    val eliminatedConjuncts = profilingInfo.getEliminatedConjuncts
-
-    Some(VerifiedOutput(silver, c0Source, totalConjuncts, eliminatedConjuncts))
+    VerifiedOutput(
+      silver,
+      c0Source,
+      ProfilingInfo(
+        profilingInfo.getTotalConjuncts,
+        profilingInfo.getEliminatedConjuncts
+      )
+    )
   }
+
   def execute(
       verifiedSource: String,
       fileNames: OutputFileCollection
