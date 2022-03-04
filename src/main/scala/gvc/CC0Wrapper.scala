@@ -1,5 +1,6 @@
 package gvc
 
+import java.io.ByteArrayOutputStream
 import sys.process._
 import scala.language.postfixOps
 
@@ -41,26 +42,13 @@ object CC0Wrapper {
   class CC0Exception(val message: String) extends RuntimeException {
     override def getMessage: String = message
   }
-
   def exec(sourceFile: String, options: CC0Options): Int = {
+    val os = new ByteArrayOutputStream
     val command = formatCommand(sourceFile, options)
-    command !
-  }
+    val exitCode = (command #> os) !
 
-  def execTimed(
-      sourceFile: String,
-      options: CC0Options,
-      iterations: Int
-  ): Long = {
-    val command = formatCommand(sourceFile, options)
-    var duration: Long = 0;
-    for (_ <- 1 to iterations) {
-      val start = System.nanoTime()
-      command !
-      val stop = System.nanoTime()
-      duration += stop - start
-    }
-    duration / iterations
+    if (exitCode != 0) throw new CC0Exception(os.toString())
+    exitCode
   }
 
   private def formatCommand(

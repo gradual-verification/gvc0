@@ -12,6 +12,7 @@ dot_input.dot
 .scalafmt.conf
 
 perms
+errors
 
 # metals
 project/metals.sbt
