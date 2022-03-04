@@ -4,6 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
+import gvc.visualizer.Bench.VerificationException
 import gvc.visualizer.{Bench, SamplingHeuristic, SamplingInfo}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
@@ -90,10 +91,10 @@ object Main extends App {
   def dumpC0(output: String): Nothing = {
     // Print runtime check information for debugging when dumping C0 output
     // This only happens after verification, so runtime checks have been initialized
-    /*
+
     for ((exp, checks) <- viper.silicon.state.runtimeChecks.getChecks) {
-      //println("Runtime checks required for " + exp.toString + ":")
-      /*println(
+      println("Runtime checks required for " + exp.toString + ":")
+      println(
         checks
           .map(b =>
             s"  if ${if (b.branchInfo.isEmpty) "true"
@@ -104,9 +105,8 @@ object Main extends App {
                 .mkString(" && ")}: ${b.checks.toString()}"
           )
           .mkString("\n")
-      )*/
-    }*/
-
+      )
+    }
     dump(output)
   }
 
@@ -180,7 +180,7 @@ object Main extends App {
       case verifier.Failure(errors) =>
         val message = errors.map(_.readableMessage).mkString("\n")
         silicon.stop()
-        throw new VerifierException(message)
+        throw new VerificationException(message)
     }
 
     silicon.stop()

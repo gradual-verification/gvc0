@@ -42,34 +42,13 @@ object CC0Wrapper {
   class CC0Exception(val message: String) extends RuntimeException {
     override def getMessage: String = message
   }
-
   def exec(sourceFile: String, options: CC0Options): Int = {
-    val command = formatCommand(sourceFile, options)
-    command !
-  }
-
-  def execTimed(
-      sourceFile: String,
-      options: CC0Options,
-      iterations: Int
-  ): Long = {
-    val command = formatCommand(sourceFile, options)
-    var duration: Long = 0;
     val os = new ByteArrayOutputStream
+    val command = formatCommand(sourceFile, options)
+    val exitCode = (command #> os) !
 
-    for (_ <- 1 to iterations) {
-      val start = System.nanoTime()
-
-      val exitCode = (command #> os) !
-
-      val stop = System.nanoTime()
-
-      os.close()
-      if (exitCode != 0) throw new CC0Exception(os.toString())
-
-      duration += stop - start
-    }
-    duration / iterations
+    if (exitCode != 0) throw new CC0Exception(os.toString())
+    exitCode
   }
 
   private def formatCommand(

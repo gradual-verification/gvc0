@@ -265,6 +265,11 @@ object Labeller {
     ASTLabel(parent, specType, exprType, expressionIndex, hash)
   }
 
+
+  def hashPermutation(labels: List[ASTLabel]): String = {
+    labels.foldLeft("")(_ + _ + '.')
+  }
+
   case class LabelMeta(
       nClausesAssertions: Int,
       nClausesPreconditions: Int,
