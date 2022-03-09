@@ -1,23 +1,24 @@
 package gvc.visualizer
-
 import gvc.transformer.IRGraph
 import gvc.transformer.IRGraph.{Block, Expression, Method, Predicate}
 import gvc.visualizer.ExprType.ExprType
 import gvc.visualizer.Labeller.ASTLabel
-import gvc.visualizer.SpecType.SpecType
+import gvc.visualizer.SpecType.{Postcondition, Precondition, SpecType}
 
 import scala.collection.mutable.ListBuffer
 
+/*
 abstract class SpecExpressionTraversal[A](
 ) {
-
   case class ASTOffset(labels: List[A])
 
   class SpecTraversalException(val message: String) extends RuntimeException {
     override def getMessage: String = message
   }
 
-  private def traverseBlock(
+  def exec(program: IRGraph.Program)
+
+  def traverseBlock(
       context: Method,
       block: Block,
       baseIndex: Int = 0
@@ -33,7 +34,7 @@ abstract class SpecExpressionTraversal[A](
             val specAssertOffset =
               traverseExpression(
                 Left(context),
-                SpecType.Assert,
+                Some(SpecType.Assert),
                 Some(assert.value),
                 offset
               )
@@ -41,17 +42,21 @@ abstract class SpecExpressionTraversal[A](
             astLabelBuffer ++= specAssertOffset.labels
           }
         case fold: IRGraph.Fold =>
-          astLabelBuffer += traversedOperation(
+          astLabelBuffer += specOperation(
             Left(context),
             offset,
-            fold
+            fold,
+            Some(SpecType.Fold),
+            ExprType.Predicate
           )
           offset += 1
         case unfold: IRGraph.Unfold =>
-          astLabelBuffer += traversedOperation(
+          astLabelBuffer += specOperation(
             Left(context),
             offset,
-            unfold
+            unfold,
+            Some(SpecType.Unfold),
+            ExprType.Predicate
           )
           offset += 1
         case ifstmt: IRGraph.If =>
@@ -71,7 +76,7 @@ abstract class SpecExpressionTraversal[A](
           val invariantOffset =
             traverseExpression(
               Left(context),
-              SpecType.Invariant,
+              Some(SpecType.Invariant),
               whl.invariant,
               offset
             )
@@ -81,15 +86,15 @@ abstract class SpecExpressionTraversal[A](
           offset += whlBlockOffset.labels.length
           astLabelBuffer ++= invariantOffset.labels ++ whlBlockOffset.labels
 
-        case op => traversedOperation(Left(context), offset, op)
+        case op => specOperation(Left(context), offset, op)
       }
     }
     ASTOffset(astLabelBuffer.toList)
   }
 
-  private def traverseExpression(
+  def traverseExpression(
       context: Either[Method, Predicate],
-      specType: SpecType,
+      specType: Option[SpecType],
       expression: Option[Expression],
       baseIndex: Int = 0
   ): ASTOffset = {
@@ -103,21 +108,21 @@ abstract class SpecExpressionTraversal[A](
           val top = exprStack.remove(exprStack.length - 1)
           top match {
             case acc: IRGraph.Accessibility =>
-              astLabelBuffer += traversedExpression(
+              astLabelBuffer += specExpression(
                 context,
-                specType,
-                ExprType.Accessibility,
                 offset,
-                acc
+                acc,
+                specType,
+                ExprType.Accessibility
               )
               offset += 1
             case pred: IRGraph.PredicateInstance =>
-              astLabelBuffer += traversedExpression(
+              astLabelBuffer += specExpression(
                 context,
-                specType,
-                ExprType.Predicate,
                 offset,
-                pred
+                pred,
+                specType,
+                ExprType.Predicate
               )
               offset += 1
             case imprecise: IRGraph.Imprecise =>
@@ -150,21 +155,19 @@ abstract class SpecExpressionTraversal[A](
                 exprStack += binary.left
                 exprStack += binary.right
               } else {
-                traversedExpression(
+                specExpression(
                   context,
-                  specType,
-                  ExprType.Default,
                   offset,
-                  binary
+                  binary,
+                  specType
                 )
               }
             case _ =>
-              traversedExpression(
+              specExpression(
                 context,
-                specType,
-                ExprType.Default,
                 offset,
-                _
+                _,
+                specType
               )
           }
         }
@@ -173,51 +176,52 @@ abstract class SpecExpressionTraversal[A](
     }
   }
 
-  def traversedOperation(
-      parentContext: Either[Method, Predicate],
-      expressionIndex: Int,
-      template: IRGraph.Op
+  def specOperation(
+                     parentContext: Either[Method, Predicate],
+                     exprIndex: Int,
+                     template: IRGraph.Op,
+                     specType: Option[SpecType] = None,
+                     exprType: ExprType = ExprType.Default
   ): A
 
-  def traversedExpression(
+  def specExpression(
       parentContext: Either[Method, Predicate],
-      specType: SpecType,
-      exprType: ExprType,
       expressionIndex: Int,
-      template: IRGraph.Expression
+      template: IRGraph.Expression,
+      specType: Option[SpecType] = None,
+      exprType: ExprType = ExprType.Default
   ): A
 }
 
 class LabelSpecs extends SpecExpressionTraversal[ASTLabel] {
-  override def traversedOperation(
-      parentContext: Either[Method, Predicate],
-      expressionIndex: Int,
-      template: IRGraph.Op
-  ): ASTLabel = ???
 
-  override def traversedExpression(
-      parentContext: Either[Method, Predicate],
-      specType: SpecType,
-      exprType: ExprType,
-      expressionIndex: Int,
-      template: Expression
-  ): ASTLabel = ???
+  override def exec(program: IRGraph.Program): Unit = {
+    val predicateLabels = program.predicates.flatMap(pred => traverseExpression(Right(pred), specType = Some(SpecType.Predicate), expression = Some(pred.expression)).labels)
+    val methodLabels = program.methods.flatMap(method => {
+      val precondition = traverseExpression(Left(method), specType = Some(Precondition), expression = method.precondition)
+      val postcondition = traverseExpression(Left(method), specType = Some(Postcondition), expression = method.precondition)
+      val body = traverseBlock(method, method.body)
+      precondition.labels ++ postcondition.labels ++ body.labels
+    })
+    predicateLabels ++ methodLabels
+  }
 
-}
+  override def visitOperation(parentContext: Either[Method, Predicate], exprIndex: Int, template: IRGraph.Op, specType: Option[SpecType], exprType: ExprType): List[ASTLabel]  = {
+    if(specType.isDefined){
+      List(new ASTLabel(parentContext, specType.get, exprType, exprIndex))
+    }else{
+      List.empty
+    }
+  }
 
-class BuildProgram extends SpecExpressionTraversal[ASTLabel] {
-  override def traversedOperation(
-      parentContext: Either[Method, Predicate],
-      expressionIndex: Int,
-      template: IRGraph.Op
-  ): ASTLabel = ???
-
-  override def traversedExpression(
-      parentContext: Either[Method, Predicate],
-      specType: SpecType,
-      exprType: ExprType,
-      expressionIndex: Int,
-      template: Expression
-  ): ASTLabel = ???
+  override def visitExpression(parentContext: Either[Method, Predicate], expressionIndex: Int, template: Expression, specType: Option[SpecType], exprType: ExprType): ASTLabel = {
+    if(specType.isDefined) {
+      new ASTLabel()
+    }else{
+      new ASTLabel()
+    }
+  }
 
 }
+*/
+

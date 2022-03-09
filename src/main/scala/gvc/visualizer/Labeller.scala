@@ -22,6 +22,8 @@ object SamplingHeuristic extends Enumeration {
   val Random, None = Value
 }
 
+case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
+
 object Labeller {
 
   case class ASTOffset(labels: List[ASTLabel])
@@ -198,9 +200,9 @@ object Labeller {
                 exprStack += binary.left
                 exprStack += binary.right
               } else {
-                createLabel(context, specType, ExprType.Default, offset)
+                createLabel(context, specType,exprType=ExprType.Default, offset)
               }
-            case _ => createLabel(context, specType, ExprType.Default, offset)
+            case _ => createLabel(context, specType, exprType=ExprType.Default, offset)
           }
         }
         ASTOffset(astLabelBuffer.toList)
@@ -225,20 +227,35 @@ object Labeller {
     shuffle.map(index => orderedList(index))
   }
 
-  case class ASTLabel(
-      parent: Either[Method, Predicate],
-      specType: SpecType,
-      exprType: ExprType,
-      expressionIndex: Int,
-      hash: String
-  )
+  class ASTLabel(
+      val parent: Either[Method, Predicate],
+      val specType: SpecType,
+      val exprType: ExprType,
+      val exprIndex: Int,
+                ) {
+    val hash = {
+      val name = parent match {
+        case Left(value)  => "m." + value.name
+        case Right(value) => "p." + value.name
+      }
+      name + '.' + specType.id + '.' + exprIndex + '.' + (specType match {
+        case SpecType.Postcondition => "post"
+        case SpecType.Assert        => "assert"
+        case SpecType.Precondition  => "pre"
+        case SpecType.Unfold        => "unfold"
+        case SpecType.Fold          => "fold"
+        case SpecType.Predicate     => "pred"
+        case SpecType.Invariant     => "inv"
+      })
+    }
+  }
   object LabelOrdering extends Ordering[ASTLabel] {
     override def compare(
         x: ASTLabel,
         y: ASTLabel
     ): Int =
       (x.parent.hashCode() compare y.parent
-        .hashCode()) compare (x.expressionIndex compare y.expressionIndex)
+        .hashCode()) compare (x.exprIndex compare y.exprIndex)
   }
 
   def createLabel(
@@ -247,67 +264,10 @@ object Labeller {
       exprType: ExprType,
       expressionIndex: Int
   ): ASTLabel = {
-    val name = parent match {
-      case Left(value)  => "m." + value.name
-      case Right(value) => "p." + value.name
-    }
-    val hash =
-      name + '.' + specType.id + '.' + expressionIndex + '.' + (specType match {
-        case SpecType.Postcondition => "postcondition"
-        case SpecType.Assert        => "assert"
-        case SpecType.Precondition  => "precondition"
-        case SpecType.Unfold        => "unfold"
-        case SpecType.Fold          => "fold"
-        case SpecType.Predicate     => "predicate"
-        case SpecType.Invariant     => "invariant"
-      })
-
-    ASTLabel(parent, specType, exprType, expressionIndex, hash)
+    new ASTLabel(parent, specType, exprType, expressionIndex)
   }
-
 
   def hashPermutation(labels: List[ASTLabel]): String = {
     labels.foldLeft("")(_ + _ + '.')
-  }
-
-  case class LabelMeta(
-      nClausesAssertions: Int,
-      nClausesPreconditions: Int,
-      nClausesPostconditions: Int,
-      nClausesLoopInvariants: Int,
-      nClausesPredicates: Int,
-      nFolds: Int,
-      nUnfolds: Int
-  )
-  def sampleMetadata(list: List[ASTLabel]): LabelMeta = {
-    var nClausesAssertions: Int = 0
-    var nClausesPreconditions: Int = 0
-    var nClausesPostconditions: Int = 0
-    var nClausesLoopInvariants: Int = 0
-    var nClausesPredicates: Int = 0
-    var nFolds: Int = 0
-    var nUnfolds: Int = 0
-
-    list.foreach(label => {
-      label.specType match {
-        case gvc.visualizer.SpecType.Assert       => nClausesAssertions += 1
-        case gvc.visualizer.SpecType.Precondition => nClausesPreconditions += 1
-        case gvc.visualizer.SpecType.Postcondition =>
-          nClausesPostconditions += 1
-        case gvc.visualizer.SpecType.Fold      => nFolds += 1
-        case gvc.visualizer.SpecType.Unfold    => nUnfolds += 1
-        case gvc.visualizer.SpecType.Invariant => nClausesLoopInvariants += 1
-        case gvc.visualizer.SpecType.Predicate => nClausesPredicates += 1
-      }
-    })
-    LabelMeta(
-      nClausesAssertions,
-      nClausesPreconditions,
-      nClausesPostconditions,
-      nClausesLoopInvariants,
-      nClausesPredicates,
-      nFolds,
-      nUnfolds
-    )
   }
 }

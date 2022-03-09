@@ -1,5 +1,4 @@
 package gvc.verifier
-
 import fastparse.Parsed.Success
 import gvc.Config
 import gvc.analyzer.ErrorSink
@@ -17,10 +16,8 @@ import org.scalatest.ConfigMap
 
 class VerifierSpec extends AnyFunSuite with BaseFileSpec {
   var silicon: Silicon = null
-
   val testFiles = getFiles("verifier")
     .filter { name => name.endsWith(".c0") && !name.endsWith(".output.c0") }
-
   for (name <- testFiles) {
     test("test " + name) {
       runVerifierTest(name)

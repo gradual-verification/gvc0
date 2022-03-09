@@ -133,31 +133,30 @@ object Collector {
 
   private object ViperBranch {
     def apply(
-        branch: (vpr.Exp, vpr.Node, Option[CheckPosition]),
+        branch: (vpr.Exp, Option[CheckPosition]),
         program: vpr.Program
     ) = branch match {
       case (
             condition,
-            source,
             Some(CheckPosition.GenericNode(invoke: vpr.MethodCall))
           ) => {
         // This must be a method pre-condition or post-condition
         val callee = program.findMethod(invoke.methodName)
         val location: ViperLocation =
-          if (isContained(source, callee.posts)) ViperLocation.PostInvoke
+          if (isContained(condition, callee.posts)) ViperLocation.PostInvoke
           else ViperLocation.PreInvoke
         new ViperBranch(invoke, location, condition)
       }
 
-      case (condition, source, Some(CheckPosition.Loop(inv, position))) => {
+      case (condition, Some(CheckPosition.Loop(inv, position))) => {
         // This must be an invariant
         if (inv.tail.nonEmpty)
           throw new WeaverException("Invalid loop invariant")
         new ViperBranch(inv.head, ViperLocation.loop(position), condition)
       }
 
-      case (condition, source, None) => {
-        new ViperBranch(source, ViperLocation.Value, condition)
+      case (condition, None) => {
+        new ViperBranch(condition, ViperLocation.Value, condition)
       }
 
       case _ => throw new WeaverException("Invalid branch condition")

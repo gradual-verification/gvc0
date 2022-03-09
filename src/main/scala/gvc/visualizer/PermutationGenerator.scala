@@ -116,7 +116,7 @@ object PermutationGenerator {
   ): Option[ASTLabel] = {
     if (relevantLabels.nonEmpty) {
       val first = relevantLabels(0)
-      if (first.expressionIndex == offset) {
+      if (first.exprIndex == offset) {
         Some(relevantLabels.remove(0))
       } else {
         None

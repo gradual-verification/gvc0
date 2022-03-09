@@ -14,9 +14,15 @@ trait BaseFileSpec extends BeforeAndAfterAllConfigMap {
     UPDATE = configMap.contains("update_files")
   }
 
-  def getFiles(dir: String) = new File(getClass().getResource("/" + dir).getFile())
-    .listFiles()
-    .map(f => dir + "/" + f.getName())
+  def getFiles(dir: String):List[String] = {
+    val base =  new File(getClass().getResource("/" + dir).getFile())
+    val contents = base.listFiles()
+    if(contents != null) {
+      contents.map(f => dir + "/" + f.getName()).toList
+    }else{
+      List()
+    }
+  }
 
   def getFile(name: String): Option[String] = getClass().getResource("/" + name) match {
     case null => None

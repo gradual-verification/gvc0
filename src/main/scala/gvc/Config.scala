@@ -8,13 +8,14 @@ sealed trait DumpType
 case class Config(
     dump: Option[DumpType] = None,
     output: Option[String] = None,
-    permute: Option[String] = None,
+
+    permute: Option[Int] = None,
     permuteExclude: Option[String] = None,
-    permuteTikz: Option[String] = None,
     permuteDumpDir: Option[String] = None,
     permuteErrorDir: Option[String] = None,
-    permuteMetricsFile: Option[String] = None,
-    permuteLatticeFile: Option[String] = None,
+    permuteMetadataFile: Option[String] = None,
+
+    benchmark: Option[String] = None,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
@@ -37,19 +38,19 @@ case class Config(
       else if (!Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
       else if (
-        permute.isDefined && permuteExclude.isDefined && !Files.exists(
+        !permute.isDefined && permuteExclude.isDefined && !Files.exists(
           Paths.get(permuteExclude.get)
         )
       )
         Some(
           s"Permutation exclusion list '${permuteExclude.get}' does not exist'"
         )
-      else if (permute.isEmpty && permuteExclude.isDefined)
-        Some(s"Option --permute must be enabled to use --permute-exclude")
-      else if (permute.isEmpty && permuteTikz.isDefined)
-        Some(s"Option --permute must be enabled to use --permute-tikz")
-      else if (permute.isEmpty && permuteDumpDir.isDefined)
-        Some(s"Option --permute must be enabled to use --permute-dump-dir")
+      else if (!permute.isDefined && permuteExclude.isDefined)
+        Some(s"Option --perm must be enabled to use --permute-exclude")
+      else if (!permute.isDefined && permuteDumpDir.isDefined)
+        Some(s"Option --perm must be enabled to use --permute-dump-dir")
+      else if (!permute.isDefined && permuteMetadataFile.isDefined)
+        Some(s"Option --perm must be enabled to use --permute-meta-file")
       else None
     ).foreach(Config.error)
   }
@@ -69,17 +70,17 @@ object Config {
                |  -v         --only-verify                  Stop after static verification
                |  -s         --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
                |  -x         --exec                         Execute the compiled file
-               |  -p <file>  --perm=<file>                  Generate, verify, execute, and profile all permutations of specs for a program,
-               |                                            saving the output to <file> in .csv format.
+               |  -p         --perm=<n>                     Generate 'n' paths of permutations for the given program; default n = 10.
                |             --perm-ex=<file>               Provide a comma-separated list of methods to keep constant in all permutations.
-               |             --perm-tikz=<file>             Specify the location to save a LaTeX-formatted lattice diagram of runtime statistics.
-               |             --perm-dump-dir=<dir>          Specify the directory to dump permuted programs, if --dump is enabled."""
+               |             --perm-dump=<dir>              Specify the directory to dump permuted programs; default is "./perms".
+               |             --perm-meta=<file>             Specify the file to store metadata on generated permutations; default is "./perm_meta.csv""""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val permuteArg = raw"--perm=(.+)".r
-  private val permuteExcludeArg = raw"--perm-exclude=(.+)".r
-  private val permuteTikzArg = raw"--perm-tikz=(.+)".r
-  private val permuteDumpDir = raw"--perm-dump-dir=(.+)".r
+  private val permuteExcludeArg = raw"--perm-ex=(.+)".r
+  private val permuteDumpDir = raw"--perm-dump=(.+)".r
+  private val permuteMeta = raw"--perm-meta=(.+)".r
+
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
@@ -104,11 +105,18 @@ object Config {
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
       case "-o" :: f :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
-      case "-p" :: f :: tail =>
+      case "-p" :: tail =>
         fromCommandLineArgs(
           tail,
           current.copy(
-            permute = Some(f)
+            permute = Some(10)
+          )
+        )
+      case "-b" :: f :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(
+             benchmark = Some(f)
           )
         )
       case outputArg(f) :: tail =>
@@ -117,15 +125,15 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(
-            permute = Some(f)
+            permute = Some(f.toInt)
           )
         )
       case permuteExcludeArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteExclude = Some(f)))
-      case permuteTikzArg(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(permuteTikz = Some(f)))
       case permuteDumpDir(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteDumpDir = Some(f)))
+      case permuteMeta(f) :: tail =>
+        fromCommandLineArgs(tail, current.copy(permuteMetadataFile = Some(f)))
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>

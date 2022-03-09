@@ -4,11 +4,10 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.visualizer.Bench.VerificationException
-import gvc.visualizer.{Bench, SamplingHeuristic, SamplingInfo}
+import gvc.visualizer.{Permute, SamplingHeuristic, SamplingInfo}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
-import viper.silicon.state.profilingInfo
+import viper.silicon.state.{profilingInfo, runtimeChecks}
 import viper.silver.ast.Program
 import viper.silver.verifier
 
@@ -49,17 +48,15 @@ object Main extends App {
     val inputSource = readFile(config.sourceFile.get)
 
     if (config.permute.isDefined) {
-      Bench.run(
+      Permute.exec(
         inputSource,
-        SamplingInfo(SamplingHeuristic.Random, 30000),
-        fileNames,
-        config
+        config,
+        SamplingHeuristic.Random
       )
-    } else {
+    }else{
       val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
       execute(verifiedOutput.c0Source, fileNames)
     }
-
   }
 
   def readFile(file: String): String =
@@ -100,7 +97,7 @@ object Main extends App {
             s"  if ${if (b.branchInfo.isEmpty) "true"
             else
               b.branchInfo
-                .map { case (branch, _, _) => branch }
+                .map { case (branch, _) => branch }
                 .map(c => "(" + c.toString() + ")")
                 .mkString(" && ")}: ${b.checks.toString()}"
           )
@@ -145,7 +142,7 @@ object Main extends App {
   ): VerifiedOutput = {
     val ir = generateIR(inputSource)
 
-    if (config.permute.isEmpty) {
+    if (config.permute.isDefined) {
       if (config.dump.contains(Config.DumpIR))
         dump(GraphPrinter.print(ir, includeSpecs = true))
       else if (config.saveFiles)
@@ -163,9 +160,9 @@ object Main extends App {
       Seq()
     )
 
-    profilingInfo.reset()
+    profilingInfo.reset
+    runtimeChecks.reset
     silicon.start()
-    profilingInfo.reset()
 
     val silver = IRGraphSilver.toSilver(ir)
 
@@ -184,12 +181,12 @@ object Main extends App {
     }
 
     silicon.stop()
-    if (config.permute.isEmpty && config.onlyVerify) sys.exit(0)
+    if (config.permute.isDefined && config.onlyVerify) sys.exit(0)
 
     Weaver.weave(ir, silver)
 
     val c0Source = GraphPrinter.print(ir, includeSpecs = false)
-    if (config.permute.isEmpty && config.dump.contains(Config.DumpC0))
+    if (config.permute.isDefined && config.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
     VerifiedOutput(
       silver,
@@ -240,3 +237,5 @@ object Main extends App {
   }
 
 }
+
+case class VerificationException(message: String) extends Exception(message)
