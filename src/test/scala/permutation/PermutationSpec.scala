@@ -1,10 +1,8 @@
 package permutation
-
 import gvc.{Config, Main}
 import gvc.specs.BaseFileSpec
-import gvc.visualizer.Labeller.LabelException
 import gvc.visualizer.Permute.{CSVPrinter, PermuteOutputFiles}
-import gvc.visualizer.{Labeller, Permute, SamplingHeuristic}
+import gvc.visualizer.{LabelException, LabelOrdering, LabelVisitor, Permute, SamplingHeuristic}
 import org.scalatest.ConfigMap
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -27,7 +25,8 @@ class PermutationSpec extends AnyFunSuite with BaseFileSpec {
   test("Runtime check infrastructure"){
     val files = PermuteOutputFiles(perms, Paths.get("./metadata.csv"), Paths.get("./mapping.csv"))
     val ir = Main.generateIR(dependency.get)
-    val labels = Labeller.labelAST(ir)
+    val visitor = new LabelVisitor()
+    val labels = visitor.visit(ir)
     val csv = new CSVPrinter(files, labels)
 
     var totalPrograms = 0
@@ -45,8 +44,8 @@ class PermutationSpec extends AnyFunSuite with BaseFileSpec {
 
       val compareIR = Main.generateIR(Files.readString(path))
         try{
-          val compareLabels = Labeller.labelAST(compareIR)
-          val currentPermutation = mutable.TreeSet()(Labeller.LabelOrdering)
+          val compareLabels = visitor.visit(compareIR)
+          val currentPermutation = mutable.TreeSet()(LabelOrdering)
           compareLabels.foreach(currentPermutation += _)
           val filename = path.getFileName.toString
           val generatedID = filename.substring(filename.lastIndexOf('/') + 1, filename.indexOf(".c0"))

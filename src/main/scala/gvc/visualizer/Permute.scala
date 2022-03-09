@@ -2,7 +2,6 @@ package gvc.visualizer
 
 import gvc.{Config, Main}
 import gvc.transformer.GraphPrinter
-import gvc.visualizer.Labeller.ASTLabel
 import gvc.visualizer.SamplingHeuristic.SamplingHeuristic
 
 import java.io.FileWriter
@@ -62,22 +61,22 @@ object Permute {
       outputTop.toString,
       GraphPrinter.print(ir, includeSpecs = true)
     )
-
-    val labels = Labeller.labelAST(ir)
+    val labeller = new LabelVisitor()
+    val labels = labeller.visit(ir)
     val alreadySampled = mutable.Set[String]()
     val csv = new CSVPrinter(files, labels)
     var previousID: Option[String] = None
-    println(Labeller.hashPermutation(labels))
+    println(LabelTools.hashPermutation(labels))
     for (sampleIndex <- 0 until config.permute.get) {
 
-      val sampleToPermute = Labeller.sample(labels, heuristic)
-      val currentPermutation = mutable.TreeSet()(Labeller.LabelOrdering)
+      val sampleToPermute = LabelTools.sample(labels, heuristic)
+      val currentPermutation = mutable.TreeSet()(LabelOrdering)
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
-        currentPermutation += (sampleToPermute(labelIndex))
+        currentPermutation += sampleToPermute(labelIndex)
 
         val id = csv.createID(currentPermutation)
 
-        if(previousID.isDefined && (previousID.get) == id) {
+        if(previousID.isDefined && previousID.get == id) {
           println(sampleToPermute(labelIndex).hash)
           throw new Exception("invalid step in permutation")
         }
@@ -92,7 +91,7 @@ object Permute {
             ir
           )
           val permutationSourceText =
-            appendPathComment(
+            LabelTools.appendPathComment(
               GraphPrinter.print(builtPermutation, includeSpecs = true),
               currentPermutation.toList
             )
@@ -109,24 +108,15 @@ object Permute {
       }
     }
   }
-  def appendPathComment(
-                         str: String,
-                         labels: List[Labeller.ASTLabel]
-                       ): String = {
-    "/*\n" +
-      labels.foldLeft("")(_ + _.hash + '\n') +
-      "*/\n" +
-      str
-  }
 
   class CSVPrinter(files: PermuteOutputFiles, template: List[ASTLabel]) {
     val metaWriter = new FileWriter(files.metadata.toString)
     val mappingWriter = new FileWriter(files.mapping.toString)
 
-    val metadataColumnNames = (List("id") ++ template.map(_.hash)).foldRight("")(_ + "," + _) + '\n'
+    val metadataColumnNames: String = (List("id") ++ template.map(_.hash)).foldRight("")(_ + "," + _) + '\n'
     metaWriter.write(metadataColumnNames)
 
-    val mappingColumnNames = List("id", "path_id", "level_id").foldRight("")(_ + "," + _) + '\n'
+    val mappingColumnNames: String = List("id", "path_id", "level_id").foldRight("")(_ + "," + _) + '\n'
     mappingWriter.write(mappingColumnNames)
 
     def createID(permutation: mutable.TreeSet[ASTLabel]): String = {

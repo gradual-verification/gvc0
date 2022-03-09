@@ -8,7 +8,6 @@ import gvc.transformer.IRGraph.{
   Predicate,
   Program
 }
-import gvc.visualizer.Labeller.{ASTLabel, LabelOrdering}
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -19,55 +18,38 @@ object PermutationGenerator {
       labels: List[ASTLabel],
       template: Program
   ): Program = {
-
-    val predicateLabelMap = mutable.Map[String, mutable.TreeSet[ASTLabel]]()
-    val methodLabelMap = mutable.Map[String, mutable.TreeSet[ASTLabel]]()
-
-    labels.foreach(label => {
-      label.parent match {
-        case Left(method) =>
-          methodLabelMap.getOrElseUpdate(
-            method.name,
-            mutable.TreeSet[ASTLabel]()(LabelOrdering)
-          ) += label
-        case Right(predicate) =>
-          predicateLabelMap.getOrElseUpdate(
-            predicate.name,
-            mutable.TreeSet[ASTLabel]()(LabelOrdering)
-          ) += label
-      }
-    })
-
+    val labelBuffer = mutable.ListBuffer.empty ++ labels
     var offset = 0
+
     val builtMethods = template.methods
       .map(method => {
-        val built = buildMethod(
-          ListBuffer.empty ++ methodLabelMap
-            .getOrElse(
-              method.name,
-              mutable.TreeSet[ASTLabel]()(LabelOrdering)
-            ),
-          method,
-          offset
-        )
-        offset = built.offset
-        built.method
+        if(labelBuffer.nonEmpty){
+          val built = buildMethod(
+            labelBuffer,
+            method,
+            offset
+          )
+          offset = built.offset
+          built.method
+        }else{
+          method
+        }
       })
       .toList
 
     val builtPredicates = template.predicates
       .map(predicate => {
-        val built = buildPredicate(
-          ListBuffer.empty ++ predicateLabelMap
-            .getOrElse(
-              predicate.name,
-              mutable.TreeSet[ASTLabel]()(LabelOrdering)
-            ),
-          predicate,
-          offset
-        )
-        offset = built.offset
-        built.predicate
+        if(labelBuffer.nonEmpty){
+          val built = buildPredicate(
+            labelBuffer,
+            predicate,
+            offset
+          )
+          offset = built.offset
+          built.predicate
+        }else{
+          predicate
+        }
       })
       .toList
     template.copy(builtMethods, builtPredicates)
