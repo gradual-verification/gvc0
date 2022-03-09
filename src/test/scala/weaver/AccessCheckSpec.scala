@@ -5,6 +5,7 @@ import gvc.specs.BaseFileSpec
 import org.scalatest.ConfigMap
 import org.scalatest.funsuite.AnyFunSuite
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import sys.process._
 import scala.language.postfixOps
@@ -12,11 +13,12 @@ import scala.language.postfixOps
 class AccessCheckSpec extends AnyFunSuite with BaseFileSpec {
   val dependency = getFile("c0/test.c0")
   var cc0Path:String = "cc0"
-  val cmd = cc0Path + " " + dependency + "  -L " + "-o ./a.out"
+  val cmd = cc0Path + " ./test.c0 -L src/main/resources/ -o ./a.out"
 
   override protected def beforeAll(config: ConfigMap): Unit = {
     super.beforeAll(config)
     val cc0 = Config.resolveToolPath("cc0", "CC0_EXE")
+
     assert(
       !cc0.isEmpty,
       "Add cc0 to $PATH or configure the CC0_EXE variable with the full path to cc0"
@@ -25,10 +27,11 @@ class AccessCheckSpec extends AnyFunSuite with BaseFileSpec {
     assert(dependency.isDefined,
       "Unable to located c0/test.c0 in test resources directory."
     )
+    Files.writeString(Paths.get("./test.c0"), dependency.get, StandardCharsets.UTF_8)
   }
 
   test("Runtime check infrastructure"){
-    /*
+
     val compileExitCode: Int = cmd !
 
       assert(compileExitCode == 0, "Failed to compile unit tests for runtime check infrastructure.")
@@ -39,13 +42,13 @@ class AccessCheckSpec extends AnyFunSuite with BaseFileSpec {
     val runExitCode = "./a.out" !
 
       assert(runExitCode == 0, "Unit tests of runtime check infrastructure failed.")
-  */
+
   }
 
   override protected def afterAll(config: ConfigMap): Unit = {
     super.afterAll(config)
-  //  Files.delete(Paths.get("./a.out"))
-
+    Files.delete(Paths.get("./a.out"))
+    Files.delete(Paths.get("./test.c0"))
   }
 }
 
