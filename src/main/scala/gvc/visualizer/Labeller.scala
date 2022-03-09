@@ -127,10 +127,7 @@ object Labeller {
   ):Unit = {
     expression match {
       case Some(expr) =>
-        val exprStack = ListBuffer(expr)
-        while (exprStack.nonEmpty) {
-          val top = exprStack.remove(exprStack.length - 1)
-          top match {
+          expr match {
             case _: IRGraph.Accessibility =>
               labels += createLabel(
                 context,
@@ -167,14 +164,13 @@ object Labeller {
               )
             case binary: IRGraph.Binary =>
               if (binary.operator == IRGraph.BinaryOp.And) {
-                exprStack += binary.left
-                exprStack += binary.right
+                labelExpression(context, specType, Some(binary.right), labels)
+                labelExpression(context, specType, Some(binary.left), labels)
               } else {
                 labels += createLabel(context, specType,exprType=ExprType.Default, labels.length)
               }
             case _ => labels += createLabel(context, specType, exprType=ExprType.Default, labels.length)
           }
-        }
       case None =>
     }
   }

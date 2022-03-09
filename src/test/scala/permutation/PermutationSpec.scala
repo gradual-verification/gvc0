@@ -2,10 +2,12 @@ package permutation
 
 import gvc.{Config, Main}
 import gvc.specs.BaseFileSpec
+import gvc.visualizer.Labeller.LabelException
 import gvc.visualizer.Permute.{CSVPrinter, PermuteOutputFiles}
 import gvc.visualizer.{Labeller, Permute, SamplingHeuristic}
 import org.scalatest.ConfigMap
 import org.scalatest.funsuite.AnyFunSuite
+
 import java.nio.file.{Files, Paths}
 import scala.collection.mutable
 import scala.language.postfixOps
@@ -28,7 +30,8 @@ class PermutationSpec extends AnyFunSuite with BaseFileSpec {
     val labels = Labeller.labelAST(ir)
     val csv = new CSVPrinter(files, labels)
 
-
+    var totalPrograms = 0
+    var totalIncorrect = 0
     val config = new Config(permute = Some(10))
     Permute.exec(
       dependency.get,
@@ -37,14 +40,23 @@ class PermutationSpec extends AnyFunSuite with BaseFileSpec {
     )
 
     Files.list(perms).forEach(path => {
-        val compareIR = Main.generateIR(Files.readString(path))
-        val compareLabels = Labeller.labelAST(compareIR)
-        val currentPermutation = mutable.TreeSet()(Labeller.LabelOrdering)
-        compareLabels.foreach(currentPermutation += _)
-        val filename = path.getFileName.toString
-        val generatedID = filename.substring(filename.lastIndexOf('/') + 1, filename.indexOf(".c0"))
-        val compareID = csv.createID(currentPermutation)
-        assert(generatedID.equals(compareID), "Generation is incompatible with labelling.")
+      if(path.getFileName.getFileName.toString.endsWith(".c0")) {
+        totalPrograms += 1
+
+      val compareIR = Main.generateIR(Files.readString(path))
+        try{
+          val compareLabels = Labeller.labelAST(compareIR)
+          val currentPermutation = mutable.TreeSet()(Labeller.LabelOrdering)
+          compareLabels.foreach(currentPermutation += _)
+          val filename = path.getFileName.toString
+          val generatedID = filename.substring(filename.lastIndexOf('/') + 1, filename.indexOf(".c0"))
+          val compareID = csv.createID(currentPermutation)
+          assert(generatedID.equals(compareID), s"$generatedID =/= $compareID for $filename")
+          if(!generatedID.equals(compareID)) totalIncorrect += 1
+        }catch{
+          case _:LabelException => totalIncorrect += 1
+        }
+      }
     })
   }
 
