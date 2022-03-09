@@ -176,9 +176,7 @@ object IRGraph {
         replacementPost: Option[Expression],
         replacementBody: List[Op]
     ): Method = {
-      val copyOf = new Method(name, returnType, precondition, postcondition)
-      copyOf.precondition = replacementPre
-      copyOf.postcondition = replacementPost
+      val copyOf = new Method(name, returnType, replacementPre, replacementPost)
       _parameters.foreach(copyOf._parameters += _)
       _variables.foreach(copyOf._variables += _)
       scope.foreach(tuple => { copyOf.scope += tuple })

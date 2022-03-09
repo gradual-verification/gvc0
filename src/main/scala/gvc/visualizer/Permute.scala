@@ -2,11 +2,15 @@ package gvc.visualizer
 
 import gvc.{Config, Main}
 import gvc.transformer.GraphPrinter
+import gvc.visualizer.Labeller.ASTLabel
 import gvc.visualizer.SamplingHeuristic.SamplingHeuristic
 
+import java.io.FileWriter
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 import scala.reflect.io.Directory
+import java.math.BigInteger
 
 
 object Permute {
@@ -17,17 +21,19 @@ object Permute {
     val _precise_bottom = "bot.c0"
     val _defaultPermuteDumpDir = "./perms"
     val _defaultMetadataFilename = "./perms.csv"
+    val _defaultMappingFilename = "./levels.csv"
   }
 
-  case class PermuteOutputFiles(permDumpDir: Path, metadata: Path)
+  case class PermuteOutputFiles(permDumpDir: Path, metadata: Path, mapping: Path)
 
   private def resolveOutputFiles(config: Config):PermuteOutputFiles = {
     val dumpDir = Paths.get(config.permuteDumpDir.getOrElse(Names._defaultPermuteDumpDir))
     new Directory(dumpDir.toFile).deleteRecursively()
     Files.createDirectories(dumpDir)
 
-    val metadata = Paths.get(config.permuteMetadataFile.getOrElse(Names._defaultMetadataFilename))
-    PermuteOutputFiles(dumpDir, metadata)
+    val metadata = dumpDir.resolve(Names._defaultMetadataFilename)
+    val mapping = dumpDir.resolve(Names._defaultMappingFilename)
+    PermuteOutputFiles(dumpDir, metadata, mapping)
   }
 
   def exec(source: String, config: Config, heuristic: SamplingHeuristic): Unit = {
@@ -59,19 +65,28 @@ object Permute {
 
     val labels = Labeller.labelAST(ir)
     val alreadySampled = mutable.Set[String]()
-
+    val csv = new CSVPrinter(files, labels)
+    var previousID: Option[String] = None
+    println(Labeller.hashPermutation(labels))
     for (sampleIndex <- 0 until config.permute.get) {
+
       val sampleToPermute = Labeller.sample(labels, heuristic)
       val currentPermutation = mutable.TreeSet()(Labeller.LabelOrdering)
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
+        currentPermutation += (sampleToPermute(labelIndex))
 
-        val permutationSourceFile =
-         files.permDumpDir.resolve(
-            (sampleIndex + 1) + "_" + (labelIndex + 1) + ".c0"
-         )
-        currentPermutation += sampleToPermute(labelIndex)
-        val permutationHash = Labeller.hashPermutation(currentPermutation.toList)
-        if(!alreadySampled.contains(permutationHash)){
+        val id = csv.createID(currentPermutation)
+
+        if(previousID.isDefined && (previousID.get) == id) {
+          println(sampleToPermute(labelIndex).hash)
+          throw new Exception("invalid step in permutation")
+        }
+
+        if(!alreadySampled.contains(id)){
+          val permutationSourceFile =
+            files.permDumpDir.resolve(
+              id + ".c0"
+            )
           val builtPermutation = PermutationGenerator.generatePermutation(
             currentPermutation.toList,
             ir
@@ -85,10 +100,12 @@ object Permute {
             permutationSourceFile.toString,
             permutationSourceText
           )
-          alreadySampled += permutationHash
-          print(s"\rGenerated ${alreadySampled.size} unique programs, ${sampleIndex + 1}/${config.permute.get} paths completed...")
-
+          csv.logPermutation(id, currentPermutation)
+          alreadySampled += id
         }
+        csv.logStep(id, sampleIndex + 1, labelIndex + 1)
+        print(s"\rGenerated ${alreadySampled.size} unique programs, ${sampleIndex + 1}/${config.permute.get} paths completed...")
+        previousID = Some(id)
       }
     }
   }
@@ -102,4 +119,36 @@ object Permute {
       str
   }
 
+  class CSVPrinter(files: PermuteOutputFiles, template: List[ASTLabel]) {
+    val metaWriter = new FileWriter(files.metadata.toString)
+    val mappingWriter = new FileWriter(files.mapping.toString)
+
+    val metadataColumnNames = (List("id") ++ template.map(_.hash)).foldRight("")(_ + "," + _) + '\n'
+    metaWriter.write(metadataColumnNames)
+
+    val mappingColumnNames = List("id", "path_id", "level_id").foldRight("")(_ + "," + _) + '\n'
+    mappingWriter.write(mappingColumnNames)
+
+    def createID(permutation: mutable.TreeSet[ASTLabel]): String = {
+      new BigInteger(template.map(label => {
+        (if(permutation.contains(label)) 1 else 0).toString
+      }).foldRight("")(_ + _), 2).toString(16)
+    }
+
+    def logPermutation(id: String, permutation: mutable.TreeSet[ASTLabel]): String ={
+      val entry = ListBuffer[String](id)
+      template.foreach(label => {
+          val toAppend = (if(permutation.contains(label)) 1 else 0).toString
+          entry += toAppend
+      })
+      metaWriter.write(entry.foldRight("")(_ + "," + _) + '\n')
+      metaWriter.flush()
+      id
+    }
+
+    def logStep(id: String, pathIndex: Int, levelIndex: Int): Unit = {
+      mappingWriter.write(List(id, pathIndex, levelIndex).foldRight("")(_ + "," + _) + '\n')
+      mappingWriter.flush()
+    }
+  }
 }

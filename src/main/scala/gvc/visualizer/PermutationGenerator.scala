@@ -22,6 +22,7 @@ object PermutationGenerator {
 
     val predicateLabelMap = mutable.Map[String, mutable.TreeSet[ASTLabel]]()
     val methodLabelMap = mutable.Map[String, mutable.TreeSet[ASTLabel]]()
+
     labels.foreach(label => {
       label.parent match {
         case Left(method) =>
@@ -37,51 +38,65 @@ object PermutationGenerator {
       }
     })
 
+    var offset = 0
     val builtMethods = template.methods
       .map(method => {
-        buildMethod(
+        val built = buildMethod(
           ListBuffer.empty ++ methodLabelMap
             .getOrElse(
               method.name,
               mutable.TreeSet[ASTLabel]()(LabelOrdering)
             ),
-          method
+          method,
+          offset
         )
+        offset = built.offset
+        built.method
       })
       .toList
+
     val builtPredicates = template.predicates
       .map(predicate => {
-        buildPredicate(
+        val built = buildPredicate(
           ListBuffer.empty ++ predicateLabelMap
             .getOrElse(
               predicate.name,
               mutable.TreeSet[ASTLabel]()(LabelOrdering)
             ),
-          predicate
+          predicate,
+          offset
         )
+        offset = built.offset
+        built.predicate
       })
       .toList
     template.copy(builtMethods, builtPredicates)
-
   }
   private def buildPredicate(
       relevantLabels: ListBuffer[ASTLabel],
-      template: Predicate
-  ): Predicate = {
-    template.copy(
-      new IRGraph.Imprecise(
-        buildExpression(
-          relevantLabels,
-          template.expression
-        ).expr
-      )
+      template: Predicate,
+      offset: Int
+  ): BuiltPredicate = {
+    val built = buildExpression(
+      relevantLabels,
+      template.expression,
+      offset
     )
+    BuiltPredicate(template.copy(
+      new IRGraph.Imprecise(built.expr)),
+      built.offset
+      )
   }
+
+  case class BuiltMethod(method: Method, offset: Int)
+  case class BuiltPredicate(predicate: Predicate, offset: Int)
+
   private def buildMethod(
       relevantLabels: ListBuffer[ASTLabel],
-      template: Method
-  ): Method = {
-    var offset = 0;
+      template: Method,
+      offsetStart: Int
+  ): BuiltMethod = {
+    var offset = offsetStart
 
     def buildOptional(exprOp: Option[Expression]): Option[Expression] = {
       if (exprOp.isDefined) {
@@ -98,15 +113,16 @@ object PermutationGenerator {
     }
     val precondition = buildOptional(template.precondition)
     val postcondition = buildOptional(template.postcondition)
-
-    template.copy(
+    val block = buildBlock(
+      ListBuffer.empty ++ relevantLabels,
+      template.body,
+      offset
+    )
+    BuiltMethod(template.copy(
       Some(new IRGraph.Imprecise(precondition)),
       Some(new IRGraph.Imprecise(postcondition)),
-      buildBlock(
-        ListBuffer.empty ++ relevantLabels,
-        template.body,
-        offset
-      ).lst
+      block.lst),
+      block.offset
     )
   }
 
@@ -115,7 +131,7 @@ object PermutationGenerator {
       relevantLabels: ListBuffer[ASTLabel]
   ): Option[ASTLabel] = {
     if (relevantLabels.nonEmpty) {
-      val first = relevantLabels(0)
+      val first = relevantLabels.head
       if (first.exprIndex == offset) {
         Some(relevantLabels.remove(0))
       } else {
@@ -129,13 +145,13 @@ object PermutationGenerator {
   case class BuiltBlock(lst: List[IRGraph.Op], offset: Int)
 
   class ExpressionBuilder() {
-    val root: Option[Expression] = None;
+    val root: Option[Expression] = None
   }
 
   private def buildBlock(
       relevantLabels: ListBuffer[ASTLabel],
       template: Block,
-      baseIndex: Int = 0
+      baseIndex: Int
   ): BuiltBlock = {
     val opBuffer: ListBuffer[Op] = ListBuffer.empty
     var offset = baseIndex
@@ -170,22 +186,25 @@ object PermutationGenerator {
           offset += 1
         case ifstmt: IRGraph.If =>
           val trueBranch = buildBlock(relevantLabels, ifstmt.ifTrue, offset)
-          val falseBranch =
-            buildBlock(relevantLabels, ifstmt.ifFalse, trueBranch.offset)
+          offset = trueBranch.offset
+
+          val falseBranch = buildBlock(relevantLabels, ifstmt.ifFalse, offset)
           offset = falseBranch.offset
+
           opBuffer += ifstmt.copy(trueBranch.lst, falseBranch.lst)
         case whl: IRGraph.While =>
           val invariant = if (whl.invariant.isDefined) {
             val builtInvariant =
               buildExpression(relevantLabels, whl.invariant.get, offset)
             offset = builtInvariant.offset
+
             Some(new IRGraph.Imprecise(builtInvariant.expr))
           } else {
             None
           }
-          val builtBody =
-            buildBlock(relevantLabels, whl.body, offset)
+          val builtBody = buildBlock(relevantLabels, whl.body, offset)
           offset = builtBody.offset
+
           opBuffer += whl.copy(invariant, builtBody.lst)
         case op: IRGraph.Op => opBuffer += op
       }
@@ -197,97 +216,102 @@ object PermutationGenerator {
   def buildExpression(
       relevantLabels: ListBuffer[ASTLabel],
       template: Expression,
-      baseIndex: Int = 0
+      baseIndex: Int
   ): BuiltExpression = {
     var offset = baseIndex
+    template match {
+      case imprec: IRGraph.Imprecise =>
+        if (imprec.precise.isDefined)
+          buildExpression(relevantLabels, imprec.precise.get, baseIndex)
+        else {
+          BuiltExpression(None, offset)
+        }
+      case _ =>
+        template match {
+          case conditional: IRGraph.Conditional =>
 
-    if (template.isInstanceOf[IRGraph.Imprecise]) {
-      val imprec = template.asInstanceOf[IRGraph.Imprecise]
-      if (imprec.precise.isDefined) {
-        buildExpression(relevantLabels, imprec.precise.get)
-      } else {
-        BuiltExpression(None, offset)
-      }
-    } else {
-      template match {
-        case conditional: IRGraph.Conditional =>
-          val builtTrueBranch =
-            buildExpression(relevantLabels, conditional.ifTrue, offset)
-          val builtFalseBranch =
-            buildExpression(
-              relevantLabels,
-              conditional.ifFalse,
-              builtTrueBranch.offset
-            )
-          offset = builtFalseBranch.offset
-          builtTrueBranch.expr match {
-            case Some(tBranch) =>
-              builtFalseBranch.expr match {
-                case Some(fBranch) =>
+            val builtTrueBranch =
+              buildExpression(relevantLabels, conditional.ifTrue, offset)
+            offset = builtTrueBranch.offset
+
+            val builtFalseBranch =
+              buildExpression(
+                relevantLabels,
+                conditional.ifFalse,
+                offset
+              )
+            offset = builtFalseBranch.offset
+            builtTrueBranch.expr match {
+              case Some(tBranch) =>
+                builtFalseBranch.expr match {
+                  case Some(fBranch) =>
+                    BuiltExpression(
+                      Some(
+                        new IRGraph.Conditional(
+                          conditional.condition,
+                          tBranch,
+                          fBranch
+                        )
+                      ),
+                      offset
+                    )
+                  case None => BuiltExpression(builtTrueBranch.expr, offset)
+                }
+              case None =>
+                builtFalseBranch.expr match {
+                  case Some(_) => BuiltExpression(builtFalseBranch.expr, offset)
+                  case None => BuiltExpression(None, offset);
+                }
+            }
+          case binary: IRGraph.Binary =>
+            if (binary.operator == IRGraph.BinaryOp.And) {
+
+              val builtRight =
+                buildExpression(relevantLabels, binary.right, offset)
+              offset = builtRight.offset
+
+              val builtLeft =
+                buildExpression(relevantLabels, binary.left, offset)
+              offset = builtLeft.offset
+
+              if (builtRight.expr.isDefined) {
+                if (builtLeft.expr.isDefined) {
                   BuiltExpression(
                     Some(
-                      new IRGraph.Conditional(
-                        conditional.condition,
-                        tBranch,
-                        fBranch
+                      new IRGraph.Binary(
+                        IRGraph.BinaryOp.And,
+                        builtLeft.expr.get,
+                        builtRight.expr.get
                       )
                     ),
                     offset
                   )
-                case None => BuiltExpression(builtTrueBranch.expr, offset)
-              }
-            case None =>
-              builtFalseBranch.expr match {
-                case Some(_) => BuiltExpression(builtFalseBranch.expr, offset)
-                case None    => BuiltExpression(None, offset);
-              }
-          }
-        case binary: IRGraph.Binary =>
-          if (binary.operator == IRGraph.BinaryOp.And) {
-            val builtRight =
-              buildExpression(relevantLabels, binary.right, offset)
-            val builtLeft =
-              buildExpression(relevantLabels, binary.left, builtRight.offset)
-
-            offset = builtLeft.offset
-            if (builtRight.expr.isDefined) {
-              if (builtLeft.expr.isDefined) {
-                BuiltExpression(
-                  Some(
-                    new IRGraph.Binary(
-                      IRGraph.BinaryOp.And,
-                      builtLeft.expr.get,
-                      builtRight.expr.get
-                    )
-                  ),
-                  offset
-                )
+                } else {
+                  BuiltExpression(
+                    builtRight.expr,
+                    offset
+                  )
+                }
               } else {
                 BuiltExpression(
-                  builtRight.expr,
+                  builtLeft.expr,
                   offset
                 )
               }
             } else {
               BuiltExpression(
-                builtLeft.expr,
-                offset
+                if (consumeLabel(offset, relevantLabels).isDefined) Some(binary)
+                else None,
+                offset + 1
               )
             }
-          } else {
+          case expr: Expression =>
             BuiltExpression(
-              if (consumeLabel(offset, relevantLabels).isDefined) Some(binary)
+              if (consumeLabel(offset, relevantLabels).isDefined) Some(expr)
               else None,
               offset + 1
             )
-          }
-        case expr: IRGraph.Expression =>
-          BuiltExpression(
-            if (consumeLabel(offset, relevantLabels).isDefined) Some(expr)
-            else None,
-            offset + 1
-          )
-      }
+        }
     }
   }
 }
