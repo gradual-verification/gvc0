@@ -1,4 +1,7 @@
 DIR="$1"
+EXP="$2"
+JAR="$3"
+
 if [[ $1 != */ ]]
 then
   DIR="$DIR/"
@@ -15,5 +18,16 @@ for i in "${INDIVIDUALS[@]}"; do
       FINAL_LIST="$FINAL_LIST,$DIR$i"
   fi
 done
-hyperfine --warmup 1 --runs 1 -i -L files $FINAL_LIST 'java -jar target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar {files}' --show-output
 
+hyperfine --warmup 1 --runs 1 -i -L files $FINAL_LIST "java -jar $JAR {files}" --show-output --export-csv $EXP
+
+while read line; do
+  IFS=',' read -ra COLUMNS <<< "$line";
+  FILE=$(echo ${COLUMNS[0]} | awk '{print $NF}');
+  ID=$(basename $FILE | sed 's/\.[^.]*$//');
+  LINE=$ID
+  for i in "${COLUMNS[@]:1}"; do
+    LINE="$LINE,$i"
+  done
+  echo $LINE
+done < ./verified.csv

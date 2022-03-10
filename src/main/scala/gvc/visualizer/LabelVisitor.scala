@@ -7,40 +7,74 @@ import gvc.visualizer.SpecType.SpecType
 
 import scala.collection.mutable
 
-class LabelVisitor extends SpecVisitor[IRGraph.Program, List[ASTLabel]]{
-
+class LabelVisitor extends SpecVisitor[IRGraph.Program, List[ASTLabel]] {
 
   private var labelSet = mutable.ListBuffer[ASTLabel]()
 
   override def reset(): Unit = {
-    super.reset
+    super.reset()
     labelSet = mutable.ListBuffer[ASTLabel]()
   }
 
-  override def visitSpec(parent: Either[Method, Predicate], template: Expression, specType: SpecType, exprType: ExprType): Unit = {
+  override def visitSpec(
+      parent: Either[Method, Predicate],
+      template: Expression,
+      specType: SpecType,
+      exprType: ExprType
+  ): Unit = {
     super.visitSpec(parent, template, specType, exprType)
     addLabel(parent, specType, exprType)
   }
 
-  override def visitSpec(parent: Either[Method, Predicate], template: IRGraph.Op, specType: SpecType, exprType: ExprType): Unit = {
+  override def visitSpec(
+      parent: Either[Method, Predicate],
+      template: IRGraph.Op,
+      specType: SpecType,
+      exprType: ExprType
+  ): Unit = {
     super.visitSpec(parent, template, specType, exprType)
     addLabel(parent, specType, exprType)
   }
 
-  def addLabel(parent: Either[Method, Predicate], specType: SpecType, exprType: ExprType): Unit = {
+  def addLabel(
+      parent: Either[Method, Predicate],
+      specType: SpecType,
+      exprType: ExprType
+  ): Unit = {
     labelSet += new ASTLabel(parent, specType, exprType, this.specIndex)
   }
-  override def visitOp(parent: Either[Method, Predicate], template: IRGraph.Op):Unit = {}
+  override def visitOp(
+      parent: Either[Method, Predicate],
+      template: IRGraph.Op
+  ): Unit = {}
 
-  override def collectOutput(): List[ASTLabel] = {labelSet.toList}
+  override def collectOutput(): List[ASTLabel] = { labelSet.toList }
+
+  override def collectAssertion(): Unit = {}
+
+  override def collectIf(template: IRGraph.If): Unit = {}
+
+  override def collectConditional(template: IRGraph.Conditional): Unit = {}
+
+  override def collectWhile(template: IRGraph.While): Unit = {}
+
+  override def leaveExpr(): Unit = {}
+
+  override def enterBlock(): Unit = {}
+
+  override def leaveBlock(): Unit = {}
+
+  override def enterExpr(): Unit = {}
+
+  override def switchContext(newContext: Either[Method, Predicate]): Unit = {}
 }
 
 class ASTLabel(
-                val parent: Either[Method, Predicate],
-                val specType: SpecType,
-                val exprType: ExprType,
-                val exprIndex: Int,
-              ) {
+    val parent: Either[Method, Predicate],
+    val specType: SpecType,
+    val exprType: ExprType,
+    val exprIndex: Int
+) {
   val hash: String = {
     val name = parent match {
       case Left(value)  => "m." + value.name
@@ -60,8 +94,8 @@ class ASTLabel(
 
 object LabelOrdering extends Ordering[ASTLabel] {
   override def compare(
-                        x: ASTLabel,
-                        y: ASTLabel
-                      ): Int =
+      x: ASTLabel,
+      y: ASTLabel
+  ): Int =
     x.exprIndex compare y.exprIndex
 }

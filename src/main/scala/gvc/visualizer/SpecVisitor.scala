@@ -17,16 +17,42 @@ object ExprType extends Enumeration {
 
 abstract class SpecVisitor[I, O] {
   var specIndex = 0
+  private var currentContext: Option[Either[Method, Predicate]] = None
 
   def reset(): Unit = specIndex = 0
 
-  def visitSpec(parent: Either[Method, Predicate], template: Expression, specType: SpecType, exprType: ExprType): Unit =
+  def visitSpec(
+      parent: Either[Method, Predicate],
+      template: Expression,
+      specType: SpecType,
+      exprType: ExprType
+  ): Unit = {
+    if (currentContext.isDefined && currentContext.get != parent) {
+      switchContext(parent)
+    }
+    currentContext = Some(parent)
     specIndex += 1
+  }
 
-  def visitSpec(parent: Either[Method, Predicate], template: IRGraph.Op, specType: SpecType, exprType: ExprType): Unit =
+  def visitSpec(
+      parent: Either[Method, Predicate],
+      template: IRGraph.Op,
+      specType: SpecType,
+      exprType: ExprType
+  ): Unit = {
+    if (currentContext.isDefined && currentContext.get != parent) {
+      switchContext(parent)
+    }
+    currentContext = Some(parent)
     specIndex += 1
+  }
 
-  def visitOp(parent: Either[Method, Predicate], template: IRGraph.Op): Unit
+  def visitOp(parent: Either[Method, Predicate], template: IRGraph.Op): Unit = {
+    if (currentContext.isDefined && currentContext.get != parent) {
+      switchContext(parent)
+    }
+    currentContext = Some(parent)
+  }
 
   def visit(input: IRGraph.Program): O = {
     new SpecTraversal[I, O]().visitAST(input, this)
@@ -35,8 +61,19 @@ abstract class SpecVisitor[I, O] {
     output
   }
 
-  def collectOutput(): O
+  def switchContext(newContext: Either[Method, Predicate]): Unit
 
+  def collectAssertion(): Unit
+  def collectIf(stmt: IRGraph.If): Unit
+  def collectConditional(cond: IRGraph.Conditional): Unit
+  def collectWhile(whl: IRGraph.While): Unit
+
+  def enterExpr(): Unit
+  def leaveExpr(): Unit
+  def enterBlock(): Unit
+  def leaveBlock(): Unit
+
+  def collectOutput(): O
 }
 
 class SpecTraversal[I, O] {
@@ -49,7 +86,10 @@ class SpecTraversal[I, O] {
     override def getMessage: String = message
   }
 
-  private def visitPredicate(predicate: Predicate, visitor: SpecVisitor[I,O]): Unit = {
+  private def visitPredicate(
+      predicate: Predicate,
+      visitor: SpecVisitor[I, O]
+  ): Unit = {
     visitExpression(
       Right(predicate),
       SpecType.Predicate,
@@ -58,26 +98,36 @@ class SpecTraversal[I, O] {
     )
   }
 
-  private def visitMethod(method: Method, visitor: SpecVisitor[I,O]): Unit = {
-    visitExpression(Left(method), SpecType.Precondition, method.precondition, visitor)
+  private def visitMethod(method: Method, visitor: SpecVisitor[I, O]): Unit = {
+
+    visitExpression(
+      Left(method),
+      SpecType.Precondition,
+      method.precondition,
+      visitor
+    )
+
     visitExpression(
       Left(method),
       SpecType.Postcondition,
       method.postcondition,
       visitor
     )
+
     visitBlock(
       method,
       method.body,
       visitor
     )
+
   }
 
   private def visitBlock(
-                          context: Method,
-                          block: Block,
-                          visitor: SpecVisitor[I, O]
-                        ): Unit = {
+      context: Method,
+      block: Block,
+      visitor: SpecVisitor[I, O]
+  ): Unit = {
+    visitor.enterBlock()
     val it = block.iterator
     while (it.hasNext) {
       val op = it.next()
@@ -88,9 +138,10 @@ class SpecTraversal[I, O] {
               Left(context),
               SpecType.Assert,
               Some(assert.value),
-              visitor,
+              visitor
             )
-          }else {
+            visitor.collectAssertion()
+          } else {
             visitor.visitOp(Left(context), op)
           }
         case _: IRGraph.Fold =>
@@ -98,7 +149,7 @@ class SpecTraversal[I, O] {
             Left(context),
             op,
             SpecType.Fold,
-            ExprType.Predicate,
+            ExprType.Predicate
           )
         case _: IRGraph.Unfold =>
           visitor.visitSpec(
@@ -110,6 +161,7 @@ class SpecTraversal[I, O] {
         case ifstmt: IRGraph.If =>
           visitBlock(context, ifstmt.ifTrue, visitor)
           visitBlock(context, ifstmt.ifFalse, visitor)
+          visitor.collectIf(ifstmt)
         case whl: IRGraph.While =>
           visitExpression(
             Left(context),
@@ -118,17 +170,30 @@ class SpecTraversal[I, O] {
             visitor
           )
           visitBlock(context, whl.body, visitor)
+          visitor.collectWhile(whl)
         case _ => visitor.visitOp(Left(context), op)
       }
     }
+    visitor.leaveBlock()
   }
 
   private def visitExpression(
-                               context: Either[Method, Predicate],
-                               specType: SpecType,
-                               expression: Option[Expression],
-                               visitor: SpecVisitor[I,O]
-                             ): Unit = {
+      context: Either[Method, Predicate],
+      specType: SpecType,
+      expression: Option[Expression],
+      visitor: SpecVisitor[I, O]
+  ): Unit = {
+    visitor.enterExpr()
+    buildExpression(context, specType, expression, visitor)
+    visitor.leaveExpr()
+  }
+
+  private def buildExpression(
+      context: Either[Method, Predicate],
+      specType: SpecType,
+      expression: Option[Expression],
+      visitor: SpecVisitor[I, O]
+  ): Unit = {
     expression match {
       case Some(expr) =>
         expr match {
@@ -137,17 +202,17 @@ class SpecTraversal[I, O] {
               context,
               expr,
               specType,
-              ExprType.Accessibility,
+              ExprType.Accessibility
             )
           case _: IRGraph.PredicateInstance =>
             visitor.visitSpec(
               context,
               expr,
               specType,
-              ExprType.Predicate,
+              ExprType.Predicate
             )
           case imprecise: IRGraph.Imprecise =>
-            visitExpression(
+            buildExpression(
               context,
               specType,
               imprecise.precise,
@@ -166,14 +231,26 @@ class SpecTraversal[I, O] {
               Some(conditional.ifFalse),
               visitor
             )
+            visitor.collectConditional(conditional)
           case binary: IRGraph.Binary =>
             if (binary.operator == IRGraph.BinaryOp.And) {
-              visitExpression(context, specType, Some(binary.right), visitor)
-              visitExpression(context, specType, Some(binary.left), visitor)
+              buildExpression(context, specType, Some(binary.right), visitor)
+              buildExpression(context, specType, Some(binary.left), visitor)
             } else {
-              visitor.visitSpec(context, expr, specType, exprType = ExprType.Default)
+              visitor.visitSpec(
+                context,
+                expr,
+                specType,
+                exprType = ExprType.Default
+              )
             }
-          case _ => visitor.visitSpec(context, expr, specType, exprType = ExprType.Default)
+          case _ =>
+            visitor.visitSpec(
+              context,
+              expr,
+              specType,
+              exprType = ExprType.Default
+            )
         }
       case None =>
     }
