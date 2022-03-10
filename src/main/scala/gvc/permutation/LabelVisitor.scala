@@ -1,9 +1,9 @@
-package gvc.visualizer
+package gvc.permutation
 
 import gvc.transformer.IRGraph
 import gvc.transformer.IRGraph.{Expression, Method, Predicate}
-import gvc.visualizer.ExprType.ExprType
-import gvc.visualizer.SpecType.SpecType
+import gvc.permutation.ExprType.ExprType
+import gvc.permutation.SpecType.SpecType
 
 import scala.collection.mutable
 

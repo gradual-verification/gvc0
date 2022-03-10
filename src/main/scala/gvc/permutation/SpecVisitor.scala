@@ -1,8 +1,8 @@
-package gvc.visualizer
+package gvc.permutation
 import gvc.transformer.IRGraph
 import gvc.transformer.IRGraph.{Block, Expression, Method, Predicate}
-import gvc.visualizer.ExprType.ExprType
-import gvc.visualizer.SpecType.SpecType
+import gvc.permutation.ExprType.ExprType
+import gvc.permutation.SpecType.SpecType
 
 object SpecType extends Enumeration {
   type SpecType = Value
@@ -20,7 +20,7 @@ abstract class SpecVisitor[I, O] {
   private var currentContext: Option[Either[Method, Predicate]] = None
 
   def reset(): Unit = specIndex = 0
-
+  def previous(): Int = this.specIndex - 1
   def visitSpec(
       parent: Either[Method, Predicate],
       template: Expression,

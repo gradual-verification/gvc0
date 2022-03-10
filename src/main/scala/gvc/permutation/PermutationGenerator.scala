@@ -1,4 +1,4 @@
-package gvc.visualizer
+package gvc.permutation
 import gvc.transformer.IRGraph
 import gvc.transformer.IRGraph.{
   Block,
@@ -23,7 +23,7 @@ object PermutationGenerator {
 
     val builtMethods = template.methods
       .map(method => {
-        if(labelBuffer.nonEmpty){
+        if (labelBuffer.nonEmpty) {
           val built = buildMethod(
             labelBuffer,
             method,
@@ -31,7 +31,7 @@ object PermutationGenerator {
           )
           offset = built.offset
           built.method
-        }else{
+        } else {
           method
         }
       })
@@ -39,7 +39,7 @@ object PermutationGenerator {
 
     val builtPredicates = template.predicates
       .map(predicate => {
-        if(labelBuffer.nonEmpty){
+        if (labelBuffer.nonEmpty) {
           val built = buildPredicate(
             labelBuffer,
             predicate,
@@ -47,7 +47,7 @@ object PermutationGenerator {
           )
           offset = built.offset
           built.predicate
-        }else{
+        } else {
           predicate
         }
       })
@@ -64,10 +64,10 @@ object PermutationGenerator {
       template.expression,
       offset
     )
-    BuiltPredicate(template.copy(
-      new IRGraph.Imprecise(built.expr)),
+    BuiltPredicate(
+      template.copy(new IRGraph.Imprecise(built.expr)),
       built.offset
-      )
+    )
   }
 
   case class BuiltMethod(method: Method, offset: Int)
@@ -100,10 +100,12 @@ object PermutationGenerator {
       template.body,
       offset
     )
-    BuiltMethod(template.copy(
-      Some(new IRGraph.Imprecise(precondition)),
-      Some(new IRGraph.Imprecise(postcondition)),
-      block.lst),
+    BuiltMethod(
+      template.copy(
+        Some(new IRGraph.Imprecise(precondition)),
+        Some(new IRGraph.Imprecise(postcondition)),
+        block.lst
+      ),
       block.offset
     )
   }
@@ -211,7 +213,6 @@ object PermutationGenerator {
       case _ =>
         template match {
           case conditional: IRGraph.Conditional =>
-
             val builtTrueBranch =
               buildExpression(relevantLabels, conditional.ifTrue, offset)
             offset = builtTrueBranch.offset
@@ -242,7 +243,7 @@ object PermutationGenerator {
               case None =>
                 builtFalseBranch.expr match {
                   case Some(_) => BuiltExpression(builtFalseBranch.expr, offset)
-                  case None => BuiltExpression(None, offset);
+                  case None    => BuiltExpression(None, offset);
                 }
             }
           case binary: IRGraph.Binary =>

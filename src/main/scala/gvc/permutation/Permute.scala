@@ -1,8 +1,8 @@
-package gvc.visualizer
+package gvc.permutation
 
 import gvc.{Config, Main}
 import gvc.transformer.GraphPrinter
-import gvc.visualizer.SamplingHeuristic.SamplingHeuristic
+import gvc.permutation.SamplingHeuristic.SamplingHeuristic
 
 import java.io.FileWriter
 import java.nio.file.{Files, Path, Paths}
@@ -10,7 +10,6 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.reflect.io.Directory
 import java.math.BigInteger
-
 
 object Permute {
   private object Names {
@@ -23,10 +22,15 @@ object Permute {
     val _defaultMappingFilename = "./levels.csv"
   }
 
-  case class PermuteOutputFiles(permDumpDir: Path, metadata: Path, mapping: Path)
+  case class PermuteOutputFiles(
+      permDumpDir: Path,
+      metadata: Path,
+      mapping: Path
+  )
 
-  private def resolveOutputFiles(config: Config):PermuteOutputFiles = {
-    val dumpDir = Paths.get(config.permuteDumpDir.getOrElse(Names._defaultPermuteDumpDir))
+  private def resolveOutputFiles(config: Config): PermuteOutputFiles = {
+    val dumpDir =
+      Paths.get(config.permuteDumpDir.getOrElse(Names._defaultPermuteDumpDir))
     new Directory(dumpDir.toFile).deleteRecursively()
     Files.createDirectories(dumpDir)
 
@@ -35,9 +39,14 @@ object Permute {
     PermuteOutputFiles(dumpDir, metadata, mapping)
   }
 
-  def exec(source: String, config: Config, heuristic: SamplingHeuristic): Unit = {
+  def exec(
+      source: String,
+      config: Config,
+      heuristic: SamplingHeuristic
+  ): Unit = {
     val ir = Main.generateIR(source)
     val files = resolveOutputFiles(config)
+    val selector = new SelectVisitor(ir)
 
     val outputBottomPrecise =
       files.permDumpDir.resolve(Names._precise_bottom)
@@ -51,7 +60,7 @@ object Permute {
     Main.writeFile(
       outputBottomImprecise.toString,
       GraphPrinter.print(
-        PermutationGenerator.generatePermutation(List.empty, ir),
+        selector.visit(mutable.TreeSet.empty[Int]),
         includeSpecs = true
       )
     )
@@ -63,33 +72,32 @@ object Permute {
     )
     val labeller = new LabelVisitor()
     val labels = labeller.visit(ir)
+
     val alreadySampled = mutable.Set[String]()
     val csv = new CSVPrinter(files, labels)
     var previousID: Option[String] = None
-    println(LabelTools.hashPermutation(labels))
+
     for (sampleIndex <- 0 until config.permute.get) {
 
       val sampleToPermute = LabelTools.sample(labels, heuristic)
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
+      val permutationIndices = mutable.TreeSet[Int]()
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
         currentPermutation += sampleToPermute(labelIndex)
-
+        permutationIndices += sampleToPermute(labelIndex).exprIndex
         val id = csv.createID(currentPermutation)
 
-        if(previousID.isDefined && previousID.get == id) {
+        if (previousID.isDefined && previousID.get == id) {
           println(sampleToPermute(labelIndex).hash)
           throw new Exception("invalid step in permutation")
         }
 
-        if(!alreadySampled.contains(id)){
+        if (!alreadySampled.contains(id)) {
           val permutationSourceFile =
             files.permDumpDir.resolve(
               id + ".c0"
             )
-          val builtPermutation = PermutationGenerator.generatePermutation(
-            currentPermutation.toList,
-            ir
-          )
+          val builtPermutation = selector.visit(permutationIndices)
           val permutationSourceText =
             LabelTools.appendPathComment(
               GraphPrinter.print(builtPermutation, includeSpecs = true),
@@ -103,7 +111,9 @@ object Permute {
           alreadySampled += id
         }
         csv.logStep(id, sampleIndex + 1, labelIndex + 1)
-        print(s"\rGenerated ${alreadySampled.size} unique programs, ${sampleIndex + 1}/${config.permute.get} paths completed...")
+        print(
+          s"\rGenerated ${alreadySampled.size} unique programs, ${sampleIndex + 1}/${config.permute.get} paths completed..."
+        )
         previousID = Some(id)
       }
     }
@@ -113,23 +123,33 @@ object Permute {
     val metaWriter = new FileWriter(files.metadata.toString)
     val mappingWriter = new FileWriter(files.mapping.toString)
 
-    val metadataColumnNames: String = (List("id") ++ template.map(_.hash)).foldRight("")(_ + "," + _) + '\n'
+    val metadataColumnNames: String =
+      (List("id") ++ template.map(_.hash)).foldRight("")(_ + "," + _) + '\n'
     metaWriter.write(metadataColumnNames)
 
-    val mappingColumnNames: String = List("id", "path_id", "level_id").foldRight("")(_ + "," + _) + '\n'
+    val mappingColumnNames: String =
+      List("id", "path_id", "level_id").foldRight("")(_ + "," + _) + '\n'
     mappingWriter.write(mappingColumnNames)
 
     def createID(permutation: mutable.TreeSet[ASTLabel]): String = {
-      new BigInteger(template.map(label => {
-        (if(permutation.contains(label)) 1 else 0).toString
-      }).foldRight("")(_ + _), 2).toString(16)
+      new BigInteger(
+        template
+          .map(label => {
+            (if (permutation.contains(label)) 1 else 0).toString
+          })
+          .foldRight("")(_ + _),
+        2
+      ).toString(16)
     }
 
-    def logPermutation(id: String, permutation: mutable.TreeSet[ASTLabel]): String ={
+    def logPermutation(
+        id: String,
+        permutation: mutable.TreeSet[ASTLabel]
+    ): String = {
       val entry = ListBuffer[String](id)
       template.foreach(label => {
-          val toAppend = (if(permutation.contains(label)) 1 else 0).toString
-          entry += toAppend
+        val toAppend = (if (permutation.contains(label)) 1 else 0).toString
+        entry += toAppend
       })
       metaWriter.write(entry.foldRight("")(_ + "," + _) + '\n')
       metaWriter.flush()
@@ -137,7 +157,9 @@ object Permute {
     }
 
     def logStep(id: String, pathIndex: Int, levelIndex: Int): Unit = {
-      mappingWriter.write(List(id, pathIndex, levelIndex).foldRight("")(_ + "," + _) + '\n')
+      mappingWriter.write(
+        List(id, pathIndex, levelIndex).foldRight("")(_ + "," + _) + '\n'
+      )
       mappingWriter.flush()
     }
   }

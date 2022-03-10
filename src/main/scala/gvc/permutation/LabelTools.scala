@@ -1,5 +1,5 @@
-package gvc.visualizer
-import gvc.visualizer.SamplingHeuristic.SamplingHeuristic
+package gvc.permutation
+import gvc.permutation.SamplingHeuristic.SamplingHeuristic
 object SamplingHeuristic extends Enumeration {
   type SamplingHeuristic = Value
   val Random, None = Value
@@ -33,9 +33,9 @@ object LabelTools {
   }
 
   def appendPathComment(
-                         str: String,
-                         labels: List[ASTLabel]
-                       ): String = {
+      str: String,
+      labels: List[ASTLabel]
+  ): String = {
     "/*\n" +
       labels.foldLeft("")(_ + _.hash + '\n') +
       "*/\n" +
