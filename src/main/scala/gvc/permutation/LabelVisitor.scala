@@ -86,7 +86,7 @@ class ASTLabel(
       case Left(value)  => "m." + value.name
       case Right(value) => "p." + value.name
     }
-    name + '.' + specType.id + '.' + exprIndex + '.' + (specType match {
+    name + '.' + specType.id + '.' + (specType match {
       case SpecType.Postcondition => "post"
       case SpecType.Assert        => "assert"
       case SpecType.Precondition  => "pre"
@@ -94,7 +94,7 @@ class ASTLabel(
       case SpecType.Fold          => "fold"
       case SpecType.Predicate     => "pred"
       case SpecType.Invariant     => "inv"
-    })
+    }) + '.' + exprIndex
   }
 }
 
