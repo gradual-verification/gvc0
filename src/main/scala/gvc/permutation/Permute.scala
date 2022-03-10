@@ -34,8 +34,8 @@ object Permute {
     new Directory(dumpDir.toFile).deleteRecursively()
     Files.createDirectories(dumpDir)
 
-    val metadata = dumpDir.resolve(Names._defaultMetadataFilename)
-    val mapping = dumpDir.resolve(Names._defaultMappingFilename)
+    val metadata = Paths.get(Names._defaultMetadataFilename)
+    val mapping = Paths.get(Names._defaultMappingFilename)
     PermuteOutputFiles(dumpDir, metadata, mapping)
   }
 
@@ -112,7 +112,7 @@ object Permute {
         }
         csv.logStep(id, sampleIndex + 1, labelIndex + 1)
         print(
-          s"\rGenerated ${alreadySampled.size} unique programs, ${sampleIndex + 1}/${config.permute.get} paths completed..."
+          s"\rGenerated ${alreadySampled.size + 3} unique programs, ${sampleIndex + 1}/${config.permute.get} paths completed..."
         )
         previousID = Some(id)
       }

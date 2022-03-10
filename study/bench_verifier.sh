@@ -22,9 +22,12 @@ for i in "${INDIVIDUALS[@]}"; do
       FINAL_LIST="$FINAL_LIST,$DIR$i"
   fi
 done
-RESULTS=$(hyperfine --runs 1 -i -L files $FINAL_LIST "java -jar $JAR {files}" --show-output --export-csv $CSV)
+
+rm -f $LOG
+echo "Executing benchmarks..."
+hyperfine --runs 1 -i -L files $FINAL_LIST "java -jar $JAR {files} >> $LOG 2>&1" --export-csv $CSV >> $LOG 2>&1
 echo "Benchmarks completed."
-FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $RESULTS | wc -l)
+FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $LOG | wc -l)
 echo "There were $FAILS failing benchmarks."
 echo "Cleaning CSV file..."
 REWRITTEN=""
@@ -33,7 +36,7 @@ while read line; do
   FILE=$(echo ${COLUMNS[0]} | awk '{print $NF}');
   ID=$(basename $FILE | sed 's/\.[^.]*$//');
   LINE=$ID
-  for i in "${COLUMNS[@]:1:-1}"; do
+  for i in "${COLUMNS[@]:1:${#COLUMNS[@]}-1}"; do
     LINE="$LINE,$i"
   done
   REWRITTEN="$REWRITTEN\n$LINE"
