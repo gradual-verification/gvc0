@@ -135,12 +135,19 @@ class SelectVisitor(program: IRGraph.Program)
         }
     }
   }
-
+  override def enterPredicate(predicate: Predicate): Unit = {
+    this.currentContext = Some(Right(predicate))
+  }
   override def leavePredicate(): Unit = {
     val pred = this.currentContext.get.right.get
     val body = this.finishedExpr.remove(0)
     this.predicates += pred.copy(new IRGraph.Imprecise(body))
   }
+
+  override def enterMethod(method: Method): Unit = {
+    this.currentContext = Some(Left(method))
+  }
+
   override def leaveMethod(): Unit = {
     val method = this.currentContext.get.left.get
     val postcondition = Some(

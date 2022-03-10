@@ -63,7 +63,10 @@ abstract class SpecVisitor[I, O] {
   def leaveBlock(): Unit
 
   def leavePredicate(): Unit
+  def enterPredicate(predicate: Predicate): Unit
+
   def leaveMethod(): Unit
+  def enterMethod(method: Method): Unit
 
   def collectOutput(): O
 }
@@ -82,6 +85,7 @@ class SpecTraversal[I, O] {
       predicate: Predicate,
       visitor: SpecVisitor[I, O]
   ): Unit = {
+    visitor.enterPredicate(predicate)
     visitExpression(
       Right(predicate),
       SpecType.Predicate,
@@ -92,9 +96,8 @@ class SpecTraversal[I, O] {
   }
 
   private def visitMethod(method: Method, visitor: SpecVisitor[I, O]): Unit = {
-    if (method.name == "list_insert") {
-      print("hi")
-    }
+    visitor.enterMethod(method)
+
     visitExpression(
       Left(method),
       SpecType.Precondition,
@@ -116,7 +119,6 @@ class SpecTraversal[I, O] {
     )
 
     visitor.leaveMethod()
-
   }
 
   private def visitBlock(

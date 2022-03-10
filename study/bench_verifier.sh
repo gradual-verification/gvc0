@@ -19,7 +19,7 @@ for i in "${INDIVIDUALS[@]}"; do
   fi
 done
 
-hyperfine --warmup 1 --runs 1 -i -L files $FINAL_LIST "java -jar $JAR {files}" --show-output --export-csv $EXP
+hyperfine --warmup 1 --runs 1 -i -L files $FINAL_LIST "java -jar $JAR {files}" --show-output --export-csv ./verify.csv
 
 while read line; do
   IFS=',' read -ra COLUMNS <<< "$line";
