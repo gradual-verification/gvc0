@@ -1,11 +1,14 @@
-DIR="$1"
-EXP="$2"
-JAR="$3"
+FILE="$1"
+NPATHS="$2"
+JAR="target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar"
+CSV="./verify.csv"
 
-if [[ $1 != */ ]]
-then
-  DIR="$DIR/"
-fi
+echo "Generating permutations:"
+java -jar $JAR $1 --perm=$NPATHS
+echo "\nFinished generating permutations."
+
+DIR="./perms/"
+
 TARGETLIST=$(ls -m "$DIR")
 TARGETS_NOSPACE=$(echo $TARGETLIST | tr -d '[:space:]')
 IFS=',' read -ra INDIVIDUALS <<< "$TARGETS_NOSPACE"
@@ -19,15 +22,21 @@ for i in "${INDIVIDUALS[@]}"; do
   fi
 done
 
-hyperfine --warmup 1 --runs 1 -i -L files $FINAL_LIST "java -jar $JAR {files}" --show-output --export-csv ./verify.csv
+hyperfine --warmup 1 --runs 1 -i -L files $FINAL_LIST "java -jar $JAR {files}" --show-output --export-csv $CSV
 
+echo "Benchmarks completed."
+echo "Cleaning CSV file..."
+
+REWRITTEN=""
 while read line; do
   IFS=',' read -ra COLUMNS <<< "$line";
   FILE=$(echo ${COLUMNS[0]} | awk '{print $NF}');
   ID=$(basename $FILE | sed 's/\.[^.]*$//');
   LINE=$ID
-  for i in "${COLUMNS[@]:1}"; do
+  for i in "${COLUMNS[@]:1:-1}"; do
     LINE="$LINE,$i"
   done
-  echo $LINE
-done < ./verified.csv
+  REWRITTEN="$REWRITTEN\n$LINE"
+done < $CSV
+echo $REWRITTEN > $CSV
+echo "CSV file cleaned."
