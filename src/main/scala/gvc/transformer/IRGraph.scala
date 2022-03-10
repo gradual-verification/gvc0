@@ -139,9 +139,9 @@ object IRGraph {
   ) extends MethodDefinition {
     // Variables/parameters are added to both a list and a map to preserve order and speedup lookup
     // Scope is a map of both parameters and variables
-    private val _parameters = mutable.ListBuffer[Parameter]()
-    private val _variables = mutable.ListBuffer[Var]()
-    private val scope = mutable.Map[scala.Predef.String, Var]()
+    private var _parameters = mutable.ListBuffer[Parameter]()
+    private var _variables = mutable.ListBuffer[Var]()
+    private var scope = mutable.Map[scala.Predef.String, Var]()
 
     var body = new MethodBlock(this)
 
@@ -177,14 +177,20 @@ object IRGraph {
         replacementBody: List[Op]
     ): Method = {
       val copyOf = new Method(name, returnType, replacementPre, replacementPost)
-      _parameters.foreach(copyOf._parameters += _)
-      _variables.foreach(copyOf._variables += _)
-      scope.foreach(tuple => { copyOf.scope += tuple })
+      _variables.foreach(v => copyOf.addVar(v.varType, v.name))
+      _parameters.foreach(p => copyOf.addParameter(p.varType, p.name))
+      scope.foreach(entry => {
+        if (!copyOf.scope.contains(entry._1)) {
+          copyOf.scope += entry._1 -> new IRGraph.Var(
+            entry._2.varType,
+            entry._2.name
+          )
+        }
+      })
       replacementBody.foreach(copyOf.body += _.copy)
       copyOf
     }
   }
-
   class Predicate(
       val name: scala.Predef.String,
       var expression: IRGraph.Expression

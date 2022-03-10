@@ -66,7 +66,9 @@ class LabelVisitor extends SpecVisitor[IRGraph.Program, List[ASTLabel]] {
 
   override def enterExpr(): Unit = {}
 
-  override def switchContext(newContext: Either[Method, Predicate]): Unit = {}
+  override def leavePredicate(): Unit = {}
+
+  override def leaveMethod(): Unit = {}
 }
 
 class ASTLabel(

@@ -62,7 +62,7 @@ class SelectVisitor(program: IRGraph.Program)
 
   override def collectAssertion(): Unit = {
     this.incompleteBlocks.head += new IRGraph.Assert(
-      this.incompleteExpr.remove(0).get,
+      this.finishedExpr.remove(0).get,
       IRGraph.AssertKind.Specification
     )
   }
@@ -103,19 +103,19 @@ class SelectVisitor(program: IRGraph.Program)
         }
     }
     val top = this.incompleteExpr.remove(0)
-    this.incompleteExpr += mergeBinary(top, resolvedConditional)
+    this.incompleteExpr.insert(0, mergeBinary(top, resolvedConditional))
   }
 
-  override def enterExpr(): Unit = this.incompleteExpr += None
+  override def enterExpr(): Unit = this.incompleteExpr.insert(0, None)
 
   override def leaveExpr(): Unit =
-    this.finishedExpr += this.incompleteExpr.remove(0)
+    this.finishedExpr.insert(0, this.incompleteExpr.remove(0))
 
   override def enterBlock(): Unit =
-    this.incompleteBlocks += new ListBuffer[Op]()
+    this.incompleteBlocks.insert(0, new ListBuffer[Op]())
 
   override def leaveBlock(): Unit =
-    this.finishedBlocks += this.incompleteBlocks.remove(0)
+    this.finishedBlocks.insert(0, this.incompleteBlocks.remove(0))
 
   private def mergeBinary(
       lVal: Option[IRGraph.Expression],
@@ -136,24 +136,24 @@ class SelectVisitor(program: IRGraph.Program)
     }
   }
 
-  override def switchContext(newContext: Either[Method, Predicate]): Unit = {
-    newContext match {
-      case Left(method: Method) =>
-        val postcondition = Some(
-          new IRGraph.Imprecise(this.finishedExpr.remove(0))
-        )
-        val precondition = Some(
-          new IRGraph.Imprecise(this.finishedExpr.remove(0))
-        )
-        val body = this.finishedBlocks.remove(0)
-        this.methods += method.copy(
-          precondition,
-          postcondition,
-          body.toList
-        )
-      case Right(pred: Predicate) =>
-        val body = this.finishedExpr.remove(0)
-        this.predicates += pred.copy(new IRGraph.Imprecise(body))
-    }
+  override def leavePredicate(): Unit = {
+    val pred = this.currentContext.get.right.get
+    val body = this.finishedExpr.remove(0)
+    this.predicates += pred.copy(new IRGraph.Imprecise(body))
+  }
+  override def leaveMethod(): Unit = {
+    val method = this.currentContext.get.left.get
+    val postcondition = Some(
+      new IRGraph.Imprecise(this.finishedExpr.remove(0))
+    )
+    val precondition = Some(
+      new IRGraph.Imprecise(this.finishedExpr.remove(0))
+    )
+    val body = this.finishedBlocks.remove(0)
+    this.methods += method.copy(
+      precondition,
+      postcondition,
+      body.toList
+    )
   }
 }

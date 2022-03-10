@@ -17,7 +17,7 @@ object ExprType extends Enumeration {
 
 abstract class SpecVisitor[I, O] {
   var specIndex = 0
-  private var currentContext: Option[Either[Method, Predicate]] = None
+  var currentContext: Option[Either[Method, Predicate]] = None
 
   def reset(): Unit = specIndex = 0
   def previous(): Int = this.specIndex - 1
@@ -27,9 +27,6 @@ abstract class SpecVisitor[I, O] {
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
-    if (currentContext.isDefined && currentContext.get != parent) {
-      switchContext(parent)
-    }
     currentContext = Some(parent)
     specIndex += 1
   }
@@ -40,17 +37,11 @@ abstract class SpecVisitor[I, O] {
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
-    if (currentContext.isDefined && currentContext.get != parent) {
-      switchContext(parent)
-    }
     currentContext = Some(parent)
     specIndex += 1
   }
 
   def visitOp(parent: Either[Method, Predicate], template: IRGraph.Op): Unit = {
-    if (currentContext.isDefined && currentContext.get != parent) {
-      switchContext(parent)
-    }
     currentContext = Some(parent)
   }
 
@@ -61,8 +52,6 @@ abstract class SpecVisitor[I, O] {
     output
   }
 
-  def switchContext(newContext: Either[Method, Predicate]): Unit
-
   def collectAssertion(): Unit
   def collectIf(stmt: IRGraph.If): Unit
   def collectConditional(cond: IRGraph.Conditional): Unit
@@ -72,6 +61,9 @@ abstract class SpecVisitor[I, O] {
   def leaveExpr(): Unit
   def enterBlock(): Unit
   def leaveBlock(): Unit
+
+  def leavePredicate(): Unit
+  def leaveMethod(): Unit
 
   def collectOutput(): O
 }
@@ -96,10 +88,13 @@ class SpecTraversal[I, O] {
       Some(predicate.expression),
       visitor
     )
+    visitor.leavePredicate()
   }
 
   private def visitMethod(method: Method, visitor: SpecVisitor[I, O]): Unit = {
-
+    if (method.name == "list_insert") {
+      print("hi")
+    }
     visitExpression(
       Left(method),
       SpecType.Precondition,
@@ -119,6 +114,8 @@ class SpecTraversal[I, O] {
       method.body,
       visitor
     )
+
+    visitor.leaveMethod()
 
   }
 
