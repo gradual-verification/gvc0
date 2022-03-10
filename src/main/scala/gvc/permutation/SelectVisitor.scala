@@ -61,10 +61,13 @@ class SelectVisitor(program: IRGraph.Program)
     program.copy(this.methods.toList, this.predicates.toList)
 
   override def collectAssertion(): Unit = {
-    this.incompleteBlocks.head += new IRGraph.Assert(
-      this.finishedExpr.remove(0).get,
-      IRGraph.AssertKind.Specification
-    )
+    val assertion = this.finishedExpr.remove(0)
+    if (assertion.isDefined) {
+      this.incompleteBlocks.head += new IRGraph.Assert(
+        assertion.get,
+        IRGraph.AssertKind.Specification
+      )
+    }
   }
 
   override def collectIf(template: IRGraph.If): Unit = {
