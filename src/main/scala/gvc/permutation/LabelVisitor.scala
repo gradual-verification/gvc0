@@ -41,7 +41,7 @@ class LabelVisitor extends SpecVisitor[IRGraph.Program, List[ASTLabel]] {
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
-    labelSet += new ASTLabel(parent, specType, exprType, this.specIndex)
+    labelSet += new ASTLabel(parent, specType, exprType, this.previous())
   }
   override def visitOp(
       parent: Either[Method, Predicate],
