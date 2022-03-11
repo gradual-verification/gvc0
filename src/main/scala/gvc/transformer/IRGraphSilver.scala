@@ -3,6 +3,16 @@ import viper.silver.{ast => vpr}
 import scala.collection.mutable
 import IRGraph._
 
+case class SilverVarId(methodName: java.lang.String, varName: java.lang.String)
+
+class SilverProgram(
+  val program: vpr.Program,
+
+  // Map of (methodName, varName) Silver variables that represent the result
+  // of the invoke
+  val temporaryVars: Map[SilverVarId, IRGraph.Invoke]
+)
+
 object IRGraphSilver {
   def toSilver(program: IRGraph.Program) = new Converter(program).convert()
 
@@ -11,6 +21,22 @@ object IRGraphSilver {
     val RefPointerValue = "$refValue"
     val IntPointerValue = "$intValue"
     val BoolPointerValue = "$boolValue"
+  }
+
+  private class TempVars(methodName: java.lang.String, index: mutable.Map[SilverVarId, Invoke]) {
+    private var counter = -1
+    val declarations = mutable.ListBuffer[vpr.LocalVarDecl]()
+
+    def next(invoke: Invoke, t: vpr.Type): vpr.LocalVar = {
+      counter += 1
+      val name = "$result_" + counter
+
+      index += SilverVarId(methodName, name) -> invoke
+
+      val decl = vpr.LocalVarDecl(name, t)()
+      declarations += decl
+      decl.localVar
+    }
   }
 
   class Converter(ir: IRGraph.Program) {
@@ -27,12 +53,13 @@ object IRGraphSilver {
     lazy val intPointer = declareField(Names.IntPointerValue, vpr.Int)
     lazy val boolPointer = declareField(Names.BoolPointerValue, vpr.Bool)
 
-    def convert(): vpr.Program = {
+    def convert(): SilverProgram = {
       val predicates = ir.predicates.map(convertPredicate).toList
-      val methods = ir.methods.map(convertMethod).toList
+      val tempVarIndex = mutable.Map[SilverVarId, Invoke]()
+      val methods = ir.methods.map(convertMethod(_, tempVarIndex)).toList
       val fields = this.fields.toSeq.sortBy(_.name).toList
 
-      vpr.Program(
+      val program = vpr.Program(
         Seq.empty,
         fields,
         Seq.empty,
@@ -40,9 +67,13 @@ object IRGraphSilver {
         methods,
         Seq.empty
       )()
+
+      new SilverProgram(program, tempVarIndex.toMap)
     }
 
-    def convertMethod(method: Method): vpr.Method = {
+    private def convertMethod(method: Method, tempVarIndex: mutable.Map[SilverVarId, Invoke]): vpr.Method = {
+      var tempCount = 0
+
       val params = method.parameters.map(convertDecl).toList
       val vars = method.variables.map(convertDecl).toList
       val ret = method.returnType
@@ -50,7 +81,9 @@ object IRGraphSilver {
         .toSeq
       val pre = method.precondition.map(convertExpr).toSeq
       val post = method.postcondition.map(convertExpr).toSeq
-      val body = method.body.flatMap(convertOp).toList
+      val tempVars = new TempVars(method.name, tempVarIndex)
+      val body = method.body.flatMap(convertOp(_, tempVars)).toList
+      val decls = vars ++ tempVars.declarations.toList
 
       vpr.Method(
         method.name,
@@ -58,7 +91,7 @@ object IRGraphSilver {
         ret,
         pre,
         post,
-        Some(vpr.Seqn(body, vars)())
+        Some(vpr.Seqn(body, decls)())
       )()
     }
 
@@ -94,10 +127,10 @@ object IRGraphSilver {
     def getReturnVar(method: Method): vpr.LocalVar =
       vpr.LocalVar(Names.ResultVar, convertType(method.returnType.get))()
 
-    def convertOp(op: Op): Seq[vpr.Stmt] = op match {
+    private def convertOp(op: Op, tempVars: TempVars): Seq[vpr.Stmt] = op match {
       case iff: If => {
-        val ifTrue = iff.ifTrue.flatMap(convertOp).toList
-        val ifFalse = iff.ifFalse.flatMap(convertOp).toList
+        val ifTrue = iff.ifTrue.flatMap(convertOp(_, tempVars)).toList
+        val ifFalse = iff.ifFalse.flatMap(convertOp(_, tempVars)).toList
         Seq(
           vpr.If(
             convertExpr(iff.condition),
@@ -112,19 +145,26 @@ object IRGraphSilver {
           vpr.While(
             convertExpr(loop.condition),
             loop.invariant.map(convertExpr).toList,
-            vpr.Seqn(loop.body.flatMap(convertOp).toList, Seq.empty)()
+            vpr.Seqn(loop.body.flatMap(convertOp(_, tempVars)).toList, Seq.empty)()
           )()
         )
       }
 
       case invoke: Invoke => {
-        val target = invoke.target.map({
-          case v: Var => convertVar(v)
-          case _ =>
+        val target: Option[vpr.LocalVar] = invoke.target match {
+          case Some(v: Var) => Some(convertVar(v))
+          case Some(_) =>
             throw new IRException(
               "Complex invoke target cannot be converted to Silver"
             )
-        })
+          
+          case None => invoke.callee.returnType match {
+            case Some(retType) =>
+              Some(tempVars.next(invoke, convertType(retType)))
+            case None =>
+              None
+          }
+        }
 
         val args = invoke.arguments.map(convertExpr).toList
         Seq(

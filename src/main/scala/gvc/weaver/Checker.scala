@@ -1,11 +1,33 @@
 package gvc.weaver
 import gvc.transformer.IRGraph._
 import Collector._
-import gvc.transformer.IRGraph
+import gvc.transformer.{IRGraph, SilverVarId}
 import scala.collection.mutable
 
 object Checker {
   type StructIDTracker = Map[scala.Predef.String, StructField]
+
+  class CheckerMethod(
+    val method: Method,
+    tempVars: Map[SilverVarId, Invoke]
+  ) extends CheckMethod {
+    val resultVars = mutable.Map[java.lang.String, Var]()
+
+    def resultVar(name: java.lang.String): Var = {
+      resultVars.getOrElseUpdate(name, {
+        val invoke = tempVars.getOrElse(
+          SilverVarId(method.name, name),
+          throw new WeaverException(s"Missing temporary variable '$name'")
+        )
+
+        val retType = invoke.method.returnType.getOrElse(throw new WeaverException(s"Invalid temporary variable '$name' for void method"))
+        val tempVar = method.addVar(retType)
+        invoke.target = Some(tempVar)
+
+        tempVar
+      })
+    }
+  }
 
   def insert(program: CollectedProgram): Unit = {
     val runtime = CheckRuntime.addToIR(program.program)
@@ -32,6 +54,7 @@ object Checker {
   ): Unit = {
     val program = programData.program
     val method = methodData.method
+    val checkMethod = new CheckerMethod(method, programData.temporaryVars)
 
     // `ops` is a function that generates the operations, given the current return value at that
     // position. DO NOT construct the ops before passing them to this method since multiple copies
@@ -76,9 +99,9 @@ object Checker {
 
     def getTrackedConditionValue(cond: TrackedCondition): Expression =
       cond.when.flatMap(getDisjunction(_)) match {
-        case None => cond.value.toIR(program, method, None)
+        case None => cond.value.toIR(program, checkMethod, None)
         case Some(when) =>
-          new Binary(BinaryOp.And, when, cond.value.toIR(program, method, None))
+          new Binary(BinaryOp.And, when, cond.value.toIR(program, checkMethod, None))
       }
 
     def getCondition(cond: Condition): Option[Expression] = cond match {
@@ -86,7 +109,7 @@ object Checker {
       case cond: ConditionValue =>
         cond.value match {
           case CheckExpression.TrueLit => None
-          case value                   => Some(value.toIR(program, method, None))
+          case value                   => Some(value.toIR(program, checkMethod, None))
         }
     }
 
@@ -158,7 +181,7 @@ object Checker {
         temporaryOwnedFields: => Var,
         primaryOwnedFields: => Var
     ): Seq[Op] = {
-      val field = check.field.toIR(program, method, None)
+      val field = check.field.toIR(program, checkMethod, None)
       val (mode, perms) = check match {
         case _: FieldSeparationCheck => (SeparationMode, temporaryOwnedFields)
         case _: FieldAccessibilityCheck => (VerifyMode, primaryOwnedFields)
@@ -175,7 +198,7 @@ object Checker {
     ): Seq[Op] = {
       val instance = new PredicateInstance(
         program.predicate(check.predicateName),
-        check.arguments.map(_.toIR(program, method, returnValue))
+        check.arguments.map(_.toIR(program, checkMethod, returnValue))
       )
       val (mode, perms) = check match {
         case _: PredicateSeparationCheck => (SeparationMode, temporaryOwnedFields)
@@ -198,7 +221,7 @@ object Checker {
         case expr: CheckExpression =>
           Seq(
             new Assert(
-              expr.toIR(program, method, returnValue),
+              expr.toIR(program, checkMethod, returnValue),
               AssertKind.Imperative
             )
           )

@@ -2,6 +2,7 @@ package gvc.weaver
 
 import scala.collection.mutable
 import gvc.transformer.IRGraph._
+import gvc.transformer.{SilverProgram, SilverVarId}
 import viper.silver.ast.MethodCall
 import viper.silver.{ast => vpr}
 import viper.silicon.state.CheckPosition
@@ -55,13 +56,14 @@ object Collector {
 
   class CollectedProgram(
       val program: Program,
+      val temporaryVars: Map[SilverVarId, Invoke],
       val methods: Map[scala.Predef.String, CollectedMethod]
   )
 
   case class CollectedInvocation(ir: Invoke, vpr: MethodCall)
 
-  def collect(irProgram: Program, vprProgram: vpr.Program): CollectedProgram = {
-    val checks = collectChecks(vprProgram)
+  def collect(irProgram: Program, vprProgram: SilverProgram): CollectedProgram = {
+    val checks = collectChecks(vprProgram.program)
 
     val methods = irProgram.methods
       .map(m =>
@@ -69,9 +71,9 @@ object Collector {
           m.name,
           collect(
             irProgram,
-            vprProgram,
+            vprProgram.program,
             m,
-            vprProgram.findMethod(m.name),
+            vprProgram.program.findMethod(m.name),
             checks
           )
         )
@@ -80,6 +82,7 @@ object Collector {
 
     new CollectedProgram(
       program = irProgram,
+      temporaryVars = vprProgram.temporaryVars,
       methods = methods
     )
   }

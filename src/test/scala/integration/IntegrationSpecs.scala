@@ -126,7 +126,7 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
                   val silver = IRGraphSilver.toSilver(ir)
 
                   assertFile(name.replace(".c0", ".ir.c0"), irSrc)
-                  assertFile(name.replace(".c0", ".vpr"), silver.toString())
+                  assertFile(name.replace(".c0", ".vpr"), silver.program.toString())
 
                   Weaver.weave(ir, silver)
                   ValidProgram

@@ -35,10 +35,10 @@ class VerifierSpec extends AnyFunSuite with BaseFileSpec {
     var ir = GraphTransformer.transform(result.get)
     val silver = IRGraphSilver.toSilver(ir)
 
-    assertFile(name.replace(".c0", ".vpr"), silver.toString)
+    assertFile(name.replace(".c0", ".vpr"), silver.program.toString)
 
     viper.silicon.state.runtimeChecks.getChecks.clear()
-    silicon.verify(silver) match {
+    silicon.verify(silver.program) match {
       case viper.silver.verifier.Success => ()
       case Failure(errors)               => fail(errors.map(e => e.toString()).mkString("\n"))
     }

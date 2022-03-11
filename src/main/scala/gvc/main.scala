@@ -168,7 +168,7 @@ object Main extends App {
     else if (config.saveFiles)
       writeFile(fileNames.silverFileName, silver.toString())
 
-    silicon.verify(silver) match {
+    silicon.verify(silver.program) match {
       case verifier.Success => ()
       case verifier.Failure(errors) =>
         val message = errors.map(_.readableMessage).mkString("\n")
@@ -185,7 +185,7 @@ object Main extends App {
     if (config.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
     VerifiedOutput(
-      silver,
+      silver.program,
       c0Source,
       ProfilingInfo(
         profilingInfo.getTotalConjuncts,

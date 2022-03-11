@@ -5,6 +5,11 @@ import gvc.transformer.IRGraphSilver.Names
 
 sealed trait Check
 
+trait CheckMethod {
+  def method: IR.Method
+  def resultVar(name: String): IR.Var
+}
+
 object Check {
   def fromViper(
       check: vpr.Exp,
@@ -71,7 +76,7 @@ case class PredicateAccessibilityCheck(
 sealed trait CheckExpression extends Check {
   def toIR(
       p: IR.Program,
-      m: IR.Method,
+      m: CheckMethod,
       returnValue: Option[IR.Expression]
   ): IR.Expression
 }
@@ -83,7 +88,7 @@ object CheckExpression {
     val left: CheckExpression
     val right: CheckExpression
     def op: IR.BinaryOp
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]): IR.Binary =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]): IR.Binary =
       new IR.Binary(op, left.toIR(p, m, r), right.toIR(p, m, r))
   }
 
@@ -124,7 +129,7 @@ object CheckExpression {
   sealed trait Unary extends CheckExpression {
     val operand: Expr
     def op: IR.UnaryOp
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]): IR.Unary =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]): IR.Unary =
       new IR.Unary(op, operand.toIR(p, m, r))
   }
   case class Not(operand: Expr) extends Unary {
@@ -135,11 +140,17 @@ object CheckExpression {
   }
 
   case class Var(name: String) extends Expr {
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) = {
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) = {
       if (name == "node") {
         println("hello!")
       }
-      m.variable(name)
+      m.method.variable(name)
+    }
+  }
+
+  case class ResultVar(name: String) extends Expr {
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) = {
+      m.resultVar(name)
     }
   }
 
@@ -153,35 +164,35 @@ object CheckExpression {
           throw new WeaverException(s"Field '$fieldName' does not exist")
         )
 
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.FieldMember(root.toIR(p, m, r), getIRField(p))
   }
 
   case class Deref(operand: Expr) extends Expr {
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.DereferenceMember(operand.toIR(p, m, r))
   }
 
   sealed trait Literal extends Expr
   case class IntLit(value: Int) extends Literal {
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.Int(value)
   }
   case class CharLit(value: Char) extends Literal {
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.Char(value)
   }
   case class StrLit(value: String) extends Literal {
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.String(value)
   }
   case object NullLit extends Literal {
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.Null()
   }
   sealed trait BoolLit extends Expr {
     def value: Boolean
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.Bool(value)
   }
   object BoolLit {
@@ -195,7 +206,7 @@ object CheckExpression {
   }
 
   case class Cond(cond: Expr, ifTrue: Expr, ifFalse: Expr) extends Expr {
-    def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
+    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.Conditional(
         cond.toIR(p, m, r),
         ifTrue.toIR(p, m, r),
@@ -206,11 +217,11 @@ object CheckExpression {
   case object Result extends Expr {
     def toIR(
         p: IR.Program,
-        m: IR.Method,
+        m: CheckMethod,
         returnValue: Option[IR.Expression]
     ): IR.Expression =
       returnValue.getOrElse(
-        throw new WeaverException("Invalid \result expression")
+        throw new WeaverException("Invalid \\result expression")
       )
   }
 
@@ -300,6 +311,7 @@ object CheckExpression {
       case v: vpr.LocalVar =>
         v.name match {
           case "$result" => Result
+          case temp if temp.startsWith("$result_") => ResultVar(temp)
           case id        => Var(id)
         }
 

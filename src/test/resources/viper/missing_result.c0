@@ -1,0 +1,31 @@
+
+// TODO: This should be a verifier test to check that temp vars are inserted
+// into the generated program when needed.
+
+int doSomething(int x)
+//@requires true;
+//@ensures \result == 0 ? x == 0 : true;
+{
+  return 1;
+}
+
+int random()
+//@ensures ?;
+{
+  return 0;
+}
+
+int main()
+{
+  // Result is not needed in the final program, so no temp var should be generated
+  doSomething(1);
+
+  int x = random();
+
+  // Result is needed for runtime check, so temp var should be generated
+  doSomething(x);
+
+  //@assert x == 0;
+
+  return 0;
+}

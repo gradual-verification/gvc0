@@ -1,11 +1,11 @@
 package gvc.weaver
-import gvc.transformer.IRGraph._
-import viper.silver.{ast => vpr}
+import gvc.transformer.{IRGraph=>IR}
+import gvc.transformer.SilverProgram
 
-class WeaverException(message: scala.Predef.String) extends Exception(message)
+class WeaverException(message: String) extends Exception(message)
 
 object Weaver {
-  def weave(ir: Program, silver: vpr.Program): Unit = {
+  def weave(ir: IR.Program, silver: SilverProgram): Unit = {
     Checker.insert(Collector.collect(ir, silver))
   }
 }

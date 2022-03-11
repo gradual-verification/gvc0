@@ -1,0 +1,24 @@
+method doSomething(x: Int) returns ($result: Int)
+  requires true
+  ensures ($result == 0 ? x == 0 : true)
+{
+  $result := 1
+}
+
+method main() returns ($result: Int)
+{
+  var x: Int
+  var $result_0: Int
+  var $result_1: Int
+  $result_0 := doSomething(1)
+  x := random()
+  $result_1 := doSomething(x)
+  assert x == 0
+  $result := 0
+}
+
+method random() returns ($result: Int)
+  ensures ? && true
+{
+  $result := 0
+}
