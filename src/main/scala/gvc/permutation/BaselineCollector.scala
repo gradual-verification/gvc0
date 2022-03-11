@@ -9,9 +9,9 @@ import gvc.transformer.IRGraph.{
   Method,
   Op,
   Program,
-  Return
+  Return,
+  While
 }
-import viper.silver.ast.While
 
 import scala.collection.mutable
 
