@@ -142,15 +142,13 @@ object Main extends App {
   ): VerifiedOutput = {
     val ir = generateIR(inputSource)
 
-    if (config.permute.isDefined) {
-      if (config.dump.contains(Config.DumpIR))
-        dump(GraphPrinter.print(ir, includeSpecs = true))
-      else if (config.saveFiles)
-        writeFile(
-          fileNames.irFileName,
-          GraphPrinter.print(ir, includeSpecs = true)
-        )
-    }
+    if (config.dump.contains(Config.DumpIR))
+      dump(GraphPrinter.print(ir, includeSpecs = true))
+    else if (config.saveFiles)
+      writeFile(
+        fileNames.irFileName,
+        GraphPrinter.print(ir, includeSpecs = true)
+      )
 
     val reporter = viper.silver.reporter.StdIOReporter()
     val z3Exe = Config.resolveToolPath("z3", "Z3_EXE")
@@ -166,27 +164,25 @@ object Main extends App {
 
     val silver = IRGraphSilver.toSilver(ir)
 
-    if (!config.permute.isDefined) {
-      if (config.dump == Some(Config.DumpSilver)) dump(silver.toString())
-      else if (config.saveFiles)
-        writeFile(fileNames.silverFileName, silver.toString())
-    }
+    if (config.dump == Some(Config.DumpSilver)) dump(silver.toString())
+    else if (config.saveFiles)
+      writeFile(fileNames.silverFileName, silver.toString())
 
     silicon.verify(silver) match {
       case verifier.Success => ()
       case verifier.Failure(errors) =>
         val message = errors.map(_.readableMessage).mkString("\n")
         silicon.stop()
-        throw new VerificationException(message)
+        throw VerificationException(message)
     }
 
     silicon.stop()
-    if (config.permute.isDefined && config.onlyVerify) sys.exit(0)
+    if (config.onlyVerify) sys.exit(0)
 
     Weaver.weave(ir, silver)
 
     val c0Source = GraphPrinter.print(ir, includeSpecs = false)
-    if (config.permute.isDefined && config.dump.contains(Config.DumpC0))
+    if (config.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
     VerifiedOutput(
       silver,
@@ -235,7 +231,6 @@ object Main extends App {
     }
 
   }
-
 }
 
 case class VerificationException(message: String) extends Exception(message)

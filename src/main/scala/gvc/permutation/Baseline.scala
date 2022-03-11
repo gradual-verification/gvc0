@@ -1,41 +1,19 @@
 package gvc.permutation
 
-import gvc.transformer.IRGraph
 import gvc.transformer.IRGraph.{
-  AllocStruct,
   AllocValue,
-  Block,
-  Expression,
   FieldMember,
-  Int,
   IntType,
   Invoke,
   Method,
   Op,
   PointerType,
-  Predicate,
-  PredicateInstance,
   Program,
-  StructField,
   Var
 }
-import gvc.weaver.{
-  CheckImplementation,
-  CheckRuntime,
-  FieldAccessibilityCheck,
-  FieldPermissionCheck,
-  FieldSeparationCheck,
-  PredicateAccessibilityCheck,
-  PredicatePermissionCheck,
-  PredicateSeparationCheck,
-  SeparationMode,
-  VerifyMode,
-  WeaverException
-}
+import gvc.weaver.{CheckImplementation, CheckRuntime}
 
 import scala.collection.mutable
-
-val CollectedChecks
 
 object Baseline {
 
@@ -99,7 +77,6 @@ object Baseline {
       )
       ownedFields
     }
-
 
   }
 }
