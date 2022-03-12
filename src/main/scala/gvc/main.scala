@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets
 import java.io.IOException
 import sys.process._
 import scala.language.postfixOps
+import viper.silicon.state.BranchCond
 
 case class OutputFileCollection(
     baseName: String,
@@ -97,7 +98,7 @@ object Main extends App {
             s"  if ${if (b.branchInfo.isEmpty) "true"
             else
               b.branchInfo
-                .map { case (branch, _) => branch }
+                .map { case BranchCond(branch, _, _) => branch }
                 .map(c => "(" + c.toString() + ")")
                 .mkString(" && ")}: ${b.checks.toString()}"
           )

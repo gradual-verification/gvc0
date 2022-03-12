@@ -7,6 +7,7 @@ import viper.silver.ast.MethodCall
 import viper.silver.{ast => vpr}
 import viper.silicon.state.CheckPosition
 import viper.silicon.state.LoopPosition
+import viper.silicon.state.BranchCond
 
 object Collector {
   sealed trait Location
@@ -136,30 +137,32 @@ object Collector {
 
   private object ViperBranch {
     def apply(
-        branch: (vpr.Exp, Option[CheckPosition]),
+        branch: BranchCond,
         program: vpr.Program
     ) = branch match {
-      case (
+      case BranchCond(
             condition,
+            position,
             Some(CheckPosition.GenericNode(invoke: vpr.MethodCall))
           ) => {
         // This must be a method pre-condition or post-condition
         val callee = program.findMethod(invoke.methodName)
         val location: ViperLocation =
-          if (isContained(condition, callee.posts)) ViperLocation.PostInvoke
-          else ViperLocation.PreInvoke
+          if (isContained(position, callee.posts)) ViperLocation.PostInvoke
+          else if (isContained(position, callee.pres)) ViperLocation.PreInvoke
+          else ViperLocation.Value
         new ViperBranch(invoke, location, condition)
       }
 
-      case (condition, Some(CheckPosition.Loop(inv, position))) => {
+      case BranchCond(condition, _, Some(CheckPosition.Loop(inv, position))) => {
         // This must be an invariant
         if (inv.tail.nonEmpty)
           throw new WeaverException("Invalid loop invariant")
         new ViperBranch(inv.head, ViperLocation.loop(position), condition)
       }
 
-      case (condition, None) => {
-        new ViperBranch(condition, ViperLocation.Value, condition)
+      case BranchCond(condition, position, None) => {
+        new ViperBranch(position, ViperLocation.Value, condition)
       }
 
       case _ => throw new WeaverException("Invalid branch condition")
