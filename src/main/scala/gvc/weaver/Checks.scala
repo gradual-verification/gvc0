@@ -88,7 +88,11 @@ object CheckExpression {
     val left: CheckExpression
     val right: CheckExpression
     def op: IR.BinaryOp
-    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]): IR.Binary =
+    def toIR(
+        p: IR.Program,
+        m: CheckMethod,
+        r: Option[IR.Expression]
+    ): IR.Binary =
       new IR.Binary(op, left.toIR(p, m, r), right.toIR(p, m, r))
   }
 
@@ -129,7 +133,11 @@ object CheckExpression {
   sealed trait Unary extends CheckExpression {
     val operand: Expr
     def op: IR.UnaryOp
-    def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]): IR.Unary =
+    def toIR(
+        p: IR.Program,
+        m: CheckMethod,
+        r: Option[IR.Expression]
+    ): IR.Unary =
       new IR.Unary(op, operand.toIR(p, m, r))
   }
   case class Not(operand: Expr) extends Unary {
@@ -141,9 +149,6 @@ object CheckExpression {
 
   case class Var(name: String) extends Expr {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) = {
-      if (name == "node") {
-        println("hello!")
-      }
       m.method.variable(name)
     }
   }
@@ -310,9 +315,9 @@ object CheckExpression {
 
       case v: vpr.LocalVar =>
         v.name match {
-          case "$result" => Result
+          case "$result"                           => Result
           case temp if temp.startsWith("$result_") => ResultVar(temp)
-          case id        => Var(id)
+          case id                                  => Var(id)
         }
 
       case lit: vpr.BoolLit => if (lit.value) TrueLit else FalseLit

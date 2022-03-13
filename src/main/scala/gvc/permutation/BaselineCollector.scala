@@ -3,55 +3,66 @@ import gvc.transformer.IRGraph
 import gvc.transformer.IRGraph.{
   Assert,
   AssertKind,
+  Assign,
   Block,
+  FieldMember,
   Invoke,
-  Member,
   Method,
   Op,
   Program,
   Return,
+  Var,
   While
 }
-
+import gvc.weaver.CheckMethod
+import gvc.weaver.Collector.hasImplicitReturn
 import scala.collection.mutable
+object BaselineCollector {
 
-class BaselineCollector {
+  case class CollectedFraming(op: Op, fields: List[FieldMember])
+  class BaselineMethod(
+      val method: Method,
+      val rets: List[Return]
+  ) extends CheckMethod {
 
-  case class BaselineCollectedProgram(
-      program: Program,
-      methods: Map[scala.Predef.String, BaselineCollectedMethod]
-  )
+    val resultVars: Map[java.lang.String, Var] =
+      rets
+        .filter(ret => ret.value.isDefined)
+        .map(_.value.get.asInstanceOf[Var])
+        .map(varExp => varExp.name -> varExp)
+        .toMap
 
-  case class CollectedFraming(op: Op, member: List[Member])
-
+    def resultVar(name: java.lang.String): Var = {
+      resultVars(name)
+    }
+  }
   case class BaselineCollectedMethod(
-      method: Method,
+      baseMethod: BaselineMethod,
       calls: List[Invoke],
       allocations: List[Op],
-      specAssertions: List[Assert],
-      whileInvariants: List[While],
-      dereferences: List[CollectedFraming]
+      assertions: List[Assert],
+      whileLoops: List[While],
+      framing: List[CollectedFraming],
+      returns: List[Return],
+      hasImplicitReturn: Boolean
   )
-  def collect(irProgram: Program): BaselineCollectedProgram = {
-    val methods =
-      irProgram.methods.map(m => (m.name, collect(irProgram, m))).toMap
-
-    BaselineCollectedProgram(irProgram, methods)
+  def collect(irProgram: Program): Map[String, BaselineCollectedMethod] = {
+    irProgram.methods.map(m => (m.name, collect(m))).toMap
   }
-  def collect(irProgram: Program, irMethod: Method): BaselineCollectedMethod = {
+  def collect(irMethod: Method): BaselineCollectedMethod = {
     val calls = mutable.ListBuffer[Invoke]()
     val allocations = mutable.ListBuffer[Op]()
-    val specAssertions = mutable.ListBuffer[Assert]()
-    val whileInvariants = mutable.ListBuffer[While]()
-    val dereferences = mutable.ListBuffer[CollectedFraming]()
+    val assertions = mutable.ListBuffer[Assert]()
+    val whileLoops = mutable.ListBuffer[While]()
+    val framing = mutable.ListBuffer[CollectedFraming]()
     val returns = mutable.ListBuffer[Return]()
 
     def collectMembers(
         expr: IRGraph.Expression,
-        members: mutable.ListBuffer[Member]
+        members: mutable.ListBuffer[FieldMember]
     ): Unit = {
       expr match {
-        case member: Member => members += member
+        case member: FieldMember => members += member
         case conditional: IRGraph.Conditional =>
           collectMembers(conditional.condition, members)
           collectMembers(conditional.ifTrue, members)
@@ -64,9 +75,9 @@ class BaselineCollector {
       }
     }
 
-    def collectBlock(block: Block): Unit = {
+    def collectBlock(block: Block): Unit =
       block.foreach(op => {
-        val members = mutable.ListBuffer[Member]()
+        val members = mutable.ListBuffer[FieldMember]()
 
         op match {
           case invoke: Invoke =>
@@ -86,7 +97,10 @@ class BaselineCollector {
             allocations += array
 
           case assignMember: IRGraph.AssignMember =>
-            members += assignMember.member
+            assignMember.member match {
+              case member: FieldMember => members += member
+              case _                   =>
+            }
             collectMembers(assignMember.value, members)
 
           case assign: IRGraph.Assign =>
@@ -94,15 +108,25 @@ class BaselineCollector {
 
           case assert: Assert =>
             if (assert.kind == AssertKind.Specification)
-              specAssertions += assert
+              assertions += assert
             else
               collectMembers(assert.value, members)
 
           case returnStmt: IRGraph.Return =>
-            returns += returnStmt
-            if (returnStmt.value.isDefined)
-              collectMembers(returnStmt.value.get, members)
-
+            val replaced = returnStmt.value match {
+              case Some(value) => {
+                val tempVar = block.method.addVar(value.valueType.get)
+                returnStmt.insertBefore(new Assign(tempVar, value))
+                val tempVarReturn = new Return(Some(tempVar))
+                returnStmt.getPrev.get.insertAfter(tempVarReturn)
+                returnStmt.remove()
+                returns += tempVarReturn
+                tempVarReturn
+              }
+              case None => returnStmt
+            }
+            if (replaced.value.isDefined)
+              collectMembers(replaced.value.get, members)
           case value: IRGraph.If =>
             collectMembers(value.condition, members)
             collectBlock(value.ifTrue)
@@ -110,25 +134,32 @@ class BaselineCollector {
 
           case value: IRGraph.While =>
             if (value.invariant.isDefined)
-              whileInvariants += value
+              whileLoops += value
             collectMembers(value.condition, members)
             collectBlock(value.body)
 
           case _ =>
         }
         if (members.nonEmpty)
-          dereferences += CollectedFraming(op, members.toList)
+          framing += CollectedFraming(op, members.toList)
       })
-    }
 
     collectBlock(irMethod.body)
+
+    val impliedReturn =
+      irMethod.body.lastOption match {
+        case None         => true
+        case Some(tailOp) => hasImplicitReturn(tailOp)
+      }
     BaselineCollectedMethod(
-      irMethod,
+      new BaselineMethod(irMethod, returns.toList),
       calls.toList,
       allocations.toList,
-      specAssertions.toList,
-      whileInvariants.toList,
-      dereferences.toList
+      assertions.toList,
+      whileLoops.toList,
+      framing.toList,
+      returns.toList,
+      impliedReturn
     )
   }
 }

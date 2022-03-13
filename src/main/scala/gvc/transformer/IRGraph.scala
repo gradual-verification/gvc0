@@ -76,19 +76,19 @@ object IRGraph {
       throw new IRException(s"Predicate '$name' not found")
     )
 
-    def replaceMethods(methodList: List[MethodDefinition]): Unit =
+    def replaceMethods(methodList: Seq[MethodDefinition]): Unit =
       _methods = methodList.foldLeft(
         mutable.Map[scala.Predef.String, MethodDefinition]()
       )((m, defn) => {
         m + (defn.name -> defn)
       })
 
-    def replacePredicates(predicateList: List[Predicate]): Unit =
+    def replacePredicates(predicateList: Seq[Predicate]): Unit =
       _predicates = predicateList.foldLeft(
         mutable.Map[scala.Predef.String, Predicate]()
       )((m, pred) => { m + (pred.name -> pred) })
 
-    def copy(methods: List[Method], predicates: List[Predicate]) = {
+    def copy(methods: Seq[Method], predicates: Seq[Predicate]) = {
       val newProgram = new IRGraph.Program()
       newProgram.replacePredicates(predicates)
       newProgram.replaceMethods(methods)
@@ -172,9 +172,9 @@ object IRGraph {
     def getVar(name: scala.Predef.String): Option[Var] = scope.get(name)
 
     def copy(
-        replacementPre: Option[Expression],
-        replacementPost: Option[Expression],
-        replacementBody: List[Op]
+        replacementPre: Option[Expression] = precondition,
+        replacementPost: Option[Expression] = postcondition,
+        replacementBody: List[Op] = body.toList
     ): Method = {
       val copyOf = new Method(name, returnType, replacementPre, replacementPost)
       _variables.foreach(v => copyOf.addVar(v.varType, v.name))

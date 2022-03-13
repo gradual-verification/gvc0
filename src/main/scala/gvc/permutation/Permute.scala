@@ -15,8 +15,7 @@ object Permute {
   private object Names {
     val _baseline = "baseline.c0"
     val _top = "top.c0"
-    val _imprecise_bottom = "bot_imp.c0"
-    val _precise_bottom = "bot.c0"
+    val _bottom = "bot.c0"
     val _defaultPermuteDumpDir = "./perms"
     val _defaultMetadataFilename = "./perms.csv"
     val _defaultMappingFilename = "./levels.csv"
@@ -48,17 +47,10 @@ object Permute {
     val files = resolveOutputFiles(config)
     val selector = new SelectVisitor(ir)
 
-    val outputBottomPrecise =
-      files.permDumpDir.resolve(Names._precise_bottom)
+    val outputBottom =
+      files.permDumpDir.resolve(Names._bottom)
     Main.writeFile(
-      outputBottomPrecise.toString,
-      GraphPrinter.print(ir, includeSpecs = false)
-    )
-
-    val outputBottomImprecise =
-      files.permDumpDir.resolve(Names._imprecise_bottom)
-    Main.writeFile(
-      outputBottomImprecise.toString,
+      outputBottom.toString,
       GraphPrinter.print(
         selector.visit(mutable.TreeSet.empty[Int]),
         includeSpecs = true
@@ -70,6 +62,7 @@ object Permute {
       outputTop.toString,
       GraphPrinter.print(ir, includeSpecs = true)
     )
+
     val labeller = new LabelVisitor()
     val labels = labeller.visit(ir)
 
@@ -117,6 +110,17 @@ object Permute {
         previousID = Some(id)
       }
     }
+    Baseline.insert(ir)
+
+    val outputBaseline =
+      files.permDumpDir.resolve(Names._baseline)
+    Main.writeFile(
+      outputBaseline.toString,
+      GraphPrinter.print(
+        ir,
+        includeSpecs = false
+      )
+    )
   }
 
   class CSVPrinter(files: PermuteOutputFiles, template: List[ASTLabel]) {

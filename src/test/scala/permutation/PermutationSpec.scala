@@ -38,10 +38,10 @@ class PermutationSpec extends AnyFunSuite with BaseFileSpec {
     Files
       .list(perms)
       .forEach(path => {
-        if (path.getFileName.getFileName.toString.endsWith(".c0")) {
+        if (path.getFileName.getFileName.toString.matches(".*\\.c0")) {
           val contents = Files.readString(path)
-          val compareIR = Main.generateIR(contents)
           if (contents.indexOf("/*") >= 0 && contents.indexOf("*/") >= 0) {
+            val compareIR = Main.generateIR(contents)
             val currentLabels = contents
               .substring(contents.indexOf("/*") + 2, contents.indexOf("*/"))
               .trim()
