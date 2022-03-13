@@ -20,22 +20,22 @@ import gvc.transformer.IRGraph.{
   Program,
   Var
 }
-import gvc.weaver.Checker.addAllocationTracking
-import gvc.weaver.Collector.{
-  CheckInfo,
-  ConditionValue,
-  resolveValue,
-  traversePermissions
-}
+import gvc.weaver.Checker.{CheckContext, addAllocationTracking, implementChecks}
+import gvc.weaver.Collector.{CheckInfo, ConditionValue, resolveValue}
 import gvc.weaver.{
   CheckExpression,
   CheckImplementation,
   CheckRuntime,
+  CheckType,
   FieldAccessibilityCheck,
+  FieldPermissionCheck,
+  FieldSeparationCheck,
+  PermissionCheck,
   PredicateAccessibilityCheck,
   PredicatePermissionCheck,
   PredicateSeparationCheck,
-  SeparationMode,
+  Separation,
+  Verification,
   VerifyMode,
   WeaverException
 }
@@ -77,6 +77,8 @@ object Baseline {
   ): Method = {
 
     val initializeOps = mutable.ListBuffer[Op]()
+    val context =
+      CheckContext(program, collected.method, implementation, runtime)
     val method = collected.method
 
     var (primaryOwnedFields, instanceCounter) = method.name match {
@@ -124,34 +126,106 @@ object Baseline {
     )
 
     def checkSpec(
-        ir: Program,
         expr: Expression,
         returnValue: Option[Expression] = None
     ): Seq[Op] = {
-      val temporaryOwnedFields = method.addVar(
-        runtime.ownedFieldsRef,
-        CheckRuntime.Names.temporaryOwnedFields
-      )
+      val perms = createCheckTree(expr, None, None)
+      collectTranslation(perms, returnValue)
+    }
 
-      val collectedChecks = createCheckTree(expr, None, None)
-
-      /*val irChecks = collectedChecks.map(info =>
+    def convertTo(info: CheckInfo, mode: CheckType): CheckInfo = {
+      CheckInfo(
         info.check match {
-          case check: PermissionCheck =>
-            check match {
-              case check: FieldPermissionCheck =>
-                new Accessibility(check.field.toIR(ir, method, returnValue))
-              case check: PredicatePermissionCheck =>
-                new PredicateInstance(
-                  ir.predicate(check.predicateName),
-                  check.arguments.map(_.toIR(ir, method, returnValue))
-                )
+          case perm: PermissionCheck =>
+            perm match {
+              case field: FieldPermissionCheck =>
+                mode match {
+                  case Verification =>
+                    field match {
+                      case FieldSeparationCheck(field) =>
+                        FieldAccessibilityCheck(field)
+                      case _ => field
+                    }
+                  case Separation =>
+                    field match {
+                      case FieldAccessibilityCheck(field) =>
+                        FieldSeparationCheck(field)
+                      case _ => field
+                    }
+                }
+              case pred: PredicatePermissionCheck =>
+                mode match {
+                  case Verification =>
+                    pred match {
+                      case PredicateSeparationCheck(predicateName, arguments) =>
+                        PredicateAccessibilityCheck(
+                          predicateName,
+                          arguments
+                        )
+                      case _ =>
+                        pred
+                    }
+                  case Separation =>
+                    pred match {
+                      case PredicateAccessibilityCheck(
+                            predicateName,
+                            arguments
+                          ) =>
+                        PredicateSeparationCheck(predicateName, arguments)
+                      case _ =>
+                        pred
+                    }
+                }
             }
-          case expression: CheckExpression =>
-            expression.toIR(ir, method, returnValue)
-        }
-      )*/
-      Seq()
+          case expression: CheckExpression => expression
+        },
+        info.when
+      )
+    }
+    def collectTranslation(
+        node: CheckNode,
+        returnValue: Option[Expression] = None,
+        separate: Boolean = false
+    ): Seq[Op] = {
+      val separation = separate || needsSeparation(node)
+      val checks: Seq[CheckInfo] =
+        (if (separation) {
+           node.checksAtLevel
+             .filter(
+               _.check
+                 .isInstanceOf[PermissionCheck]
+             )
+             .map(convertTo(_, Separation))
+         } else {
+           Seq()
+         }) ++ node.checksAtLevel
+      val grouped = checks
+        .groupBy(info => info.when)
+        .map(entry =>
+          (
+            if (entry._1.isDefined) entry._1.get match {
+              case ConditionValue(value) =>
+                Some(value.toIR(context.program, context.method, returnValue))
+              case _ => None
+            }
+            else None,
+            entry._2.map(info => info.check).toList
+          )
+        )
+        .flatMap(irEntry => {
+          implementChecks(
+            irEntry._1,
+            irEntry._2,
+            returnValue,
+            getPrimaryOwnedFields,
+            instanceCounter,
+            context
+          )
+        })
+        .toSeq
+      grouped ++ node.branches.flatMap(node =>
+        collectTranslation(node, returnValue, separate)
+      )
     }
 
     collected.calls.foreach(call => {
@@ -171,80 +245,65 @@ object Baseline {
     })
 
     collected.assertions.foreach(assert => {
-      assert.insertBefore(checkSpec(program, assert.value))
+      assert.insertBefore(checkSpec(assert.value))
     })
 
     collected.whileLoops.foreach(whl => {
       if (whl.invariant.isDefined) {
-        val check = checkSpec(program, whl.invariant.get)
+        val check = checkSpec(whl.invariant.get)
         check ++=: whl.body
         whl.insertAfter(check.map(_.copy))
       }
     })
 
     if (method.precondition.isDefined)
-      initializeOps ++= checkSpec(program, method.precondition.get)
+      initializeOps ++= checkSpec(method.precondition.get)
 
     if (method.postcondition.isDefined) {
       collected.returns.foreach(ret =>
         ret.insertBefore(
-          checkSpec(program, method.postcondition.get, ret.value)
+          checkSpec(method.postcondition.get, ret.value)
         )
       )
       if (collected.hasImplicitReturn)
-        method.body ++= checkSpec(program, method.postcondition.get, None)
+        method.body ++= checkSpec(method.postcondition.get, None)
     }
 
     // Finally, add all the initialization ops to the beginning
     initializeOps ++=: method.body
     method
+
   }
 
-  class CheckCollection(
-      basic: Seq[CheckInfo] = Seq(),
-      field: Seq[CheckInfo] = Seq()
-  ) {
-    val basicChecks = basic
-    val fieldChecks = field
-    def ++(rVal: CheckCollection): CheckCollection = {
-      new CheckCollection(
-        basicChecks ++ rVal.basicChecks,
-        fieldChecks ++ rVal.fieldChecks
-      )
-    }
+  def needsSeparation(node: CheckNode): Boolean = {
+    val found =
+      node.checksAtLevel.find(info => info.check.isInstanceOf[PermissionCheck])
+    (found.isDefined && node.checksAtLevel.exists(info =>
+      info.check.isInstanceOf[PermissionCheck] && !info.equals(found.get)
+    )) || node.branches.exists(node => needsSeparation(node))
   }
 
   class CheckNode {
-    val checksAtLevel = mutable.ListBuffer[CheckInfo]()
-    var branches: mutable.Map[CheckExpression, CheckNode] =
-      mutable.Map[CheckExpression, CheckNode]()
-    var containsFieldChecks = false
+    val checksAtLevel: mutable.ListBuffer[CheckInfo] =
+      mutable.ListBuffer[CheckInfo]()
+    var branches: mutable.ListBuffer[CheckNode] =
+      mutable.ListBuffer[CheckNode]()
+
     def ++(rVal: CheckNode): CheckNode = {
       val combined = new CheckNode()
       combined.checksAtLevel ++= checksAtLevel
-      combined.branches = branches
-      rVal.branches.keys.foreach(key =>
-        if (combined.branches.contains(key)) {
-          combined.branches += key -> combined
-            .branches(key)
-            .++(rVal.branches(key))
-        } else {
-          combined.branches += (key -> rVal.branches(key))
-        }
-      )
-      combined.containsFieldChecks =
-        containsFieldChecks || rVal.containsFieldChecks
-
+      combined.branches = branches ++ rVal.branches
       combined
     }
   }
+
   def createCheckTree(
       spec: Expression,
       arguments: Option[Map[Parameter, CheckExpression]],
       condition: Option[CheckExpression]
   ): CheckNode = spec match {
     // Imprecise expressions just needs the precise part checked.
-    case imp: Imprecise => {
+    case imp: Imprecise =>
       if (imp.precise.isDefined) {
         createCheckTree(
           imp.precise.get,
@@ -254,10 +313,9 @@ object Baseline {
       } else {
         new CheckNode()
       }
-    }
 
     // And expressions just traverses both parts
-    case and: Binary if and.operator == BinaryOp.And => {
+    case and: Binary if and.operator == BinaryOp.And =>
       val left =
         createCheckTree(and.left, arguments, condition)
       val right =
@@ -267,7 +325,6 @@ object Baseline {
           condition
         )
       right ++ left
-    }
 
     // A condition expression traverses each side with its respective condition, joined with the
     // existing condition if provided to support nested conditionals.
@@ -283,18 +340,18 @@ object Baseline {
           )
       }
       val node = new CheckNode()
-      node.branches += (trueCond ->
+      node.branches +=
         createCheckTree(
           cond.ifTrue,
           arguments,
           Some(trueCond)
-        ))
-      node.branches += (falseCond ->
+        )
+      node.branches +=
         createCheckTree(
           cond.ifFalse,
           arguments,
           Some(falseCond)
-        ))
+        )
       node
     }
     // A single accessibility check
@@ -306,7 +363,6 @@ object Baseline {
       }
 
       val node = new CheckNode()
-      node.containsFieldChecks = true
       node.checksAtLevel += CheckInfo(
         FieldAccessibilityCheck(field),
         condition.map(ConditionValue)
@@ -315,7 +371,6 @@ object Baseline {
     }
     case pred: PredicateInstance => {
       val node = new CheckNode()
-      node.containsFieldChecks = true
       node.checksAtLevel +=
         CheckInfo(
           PredicateAccessibilityCheck(

@@ -621,7 +621,7 @@ object Collector {
       }
 
       val separationChecks =
-        traversePermissions(spec, arguments, None).map(info =>
+        traversePermissions(spec, arguments, None, Separation).map(info =>
           RuntimeCheck(location, info.check, info.when)
         )
 
@@ -653,21 +653,22 @@ object Collector {
   def traversePermissions(
       spec: Expression,
       arguments: Option[Map[Parameter, CheckExpression]],
-      condition: Option[CheckExpression]
+      condition: Option[CheckExpression],
+      checkType: CheckType
   ): Seq[CheckInfo] = spec match {
     // Imprecise expressions just needs the precise part checked.
     // TODO: This should also enable framing checks.
     case imp: Imprecise => {
       imp.precise.toSeq.flatMap(
-        traversePermissions(_, arguments, condition)
+        traversePermissions(_, arguments, condition, checkType)
       )
     }
 
     // And expressions just traverses both parts
     case and: Binary if and.operator == BinaryOp.And => {
-      val left = traversePermissions(and.left, arguments, condition)
+      val left = traversePermissions(and.left, arguments, condition, checkType)
       val right =
-        traversePermissions(and.right, arguments, condition)
+        traversePermissions(and.right, arguments, condition, checkType)
       left ++ right
     }
 
@@ -686,11 +687,12 @@ object Collector {
       }
 
       val truePerms =
-        traversePermissions(cond.ifTrue, arguments, Some(trueCond))
+        traversePermissions(cond.ifTrue, arguments, Some(trueCond), checkType)
       val falsePerms = traversePermissions(
         cond.ifFalse,
         arguments,
-        Some(falseCond)
+        Some(falseCond),
+        checkType
       )
       truePerms ++ falsePerms
     }
@@ -703,23 +705,48 @@ object Collector {
           throw new WeaverException(s"Invalid acc() argument: '$invalid'")
       }
 
-      Seq(
-        CheckInfo(
-          FieldSeparationCheck(field),
-          condition.map(ConditionValue)
-        )
-      )
+      checkType match {
+        case Separation =>
+          Seq(
+            CheckInfo(
+              FieldSeparationCheck(field),
+              condition.map(ConditionValue)
+            )
+          )
+        case Verification =>
+          Seq(
+            CheckInfo(
+              FieldAccessibilityCheck(field),
+              condition.map(ConditionValue)
+            )
+          )
+      }
+
     }
     case pred: PredicateInstance => {
-      Seq(
-        CheckInfo(
-          PredicateSeparationCheck(
-            pred.predicate.name,
-            pred.arguments.map(CheckExpression.irValue)
-          ),
-          condition.map(ConditionValue)
-        )
-      )
+      checkType match {
+        case Separation =>
+          Seq(
+            CheckInfo(
+              PredicateSeparationCheck(
+                pred.predicate.name,
+                pred.arguments.map(CheckExpression.irValue)
+              ),
+              condition.map(ConditionValue)
+            )
+          )
+        case Verification =>
+          Seq(
+            CheckInfo(
+              PredicateAccessibilityCheck(
+                pred.predicate.name,
+                pred.arguments.map(CheckExpression.irValue)
+              ),
+              condition.map(ConditionValue)
+            )
+          )
+      }
+
     }
     case _ => {
       // Otherwise there can be no permission specifiers in this term or its children

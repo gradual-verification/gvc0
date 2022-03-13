@@ -154,114 +154,10 @@ object Checker {
       ownedFields
     }
 
-    def implementAccCheck(
-        check: FieldPermissionCheck,
-        temporaryOwnedFields: => Var,
-        primaryOwnedFields: => Var
-    ): Seq[Op] = {
-      val field = check.field.toIR(program, method, None)
-      val (mode, perms) = check match {
-        case _: FieldSeparationCheck    => (SeparationMode, temporaryOwnedFields)
-        case _: FieldAccessibilityCheck => (VerifyMode, primaryOwnedFields)
-      }
-
-      implementation.translateFieldPermission(mode, field, perms)
-    }
-
-    def implementPredicateCheck(
-        check: PredicatePermissionCheck,
-        returnValue: Option[Expression],
-        temporaryOwnedFields: => Var,
-        primaryOwnedFields: => Var
-    ): Seq[Op] = {
-      val instance = new PredicateInstance(
-        program.predicate(check.predicateName),
-        check.arguments.map(_.toIR(program, method, returnValue))
-      )
-      val (mode, perms) = check match {
-        case _: PredicateSeparationCheck =>
-          (SeparationMode, temporaryOwnedFields)
-        case _: PredicateAccessibilityCheck => (VerifyMode, primaryOwnedFields)
-      }
-      implementation.translatePredicateInstance(mode, instance, perms)
-    }
-
-    def implementCheck(
-        check: Check,
-        returnValue: Option[IRGraph.Expression],
-        temporaryOwnedFields: => Var,
-        primaryOwnedFields: => Var
-    ): Seq[Op] = {
-      check match {
-        case acc: FieldPermissionCheck =>
-          implementAccCheck(acc, temporaryOwnedFields, primaryOwnedFields)
-        case pc: PredicatePermissionCheck =>
-          implementPredicateCheck(
-            pc,
-            returnValue,
-            temporaryOwnedFields,
-            primaryOwnedFields
-          )
-        case expr: CheckExpression =>
-          Seq(
-            new Assert(
-              expr.toIR(program, method, returnValue),
-              AssertKind.Imperative
-            )
-          )
-      }
-    }
-
-    def implementChecks(
-        cond: Option[Expression],
-        checks: List[Check],
-        returnValue: Option[Expression]
-    ): Seq[Op] = {
-      // Create a temporary owned fields instance when it is required
-      var temporaryOwnedFields: Option[Var] = None
-      def getTemporaryOwnedFields: Var = temporaryOwnedFields.getOrElse {
-        val tempVar = method.addVar(
-          runtime.ownedFieldsRef,
-          CheckRuntime.Names.temporaryOwnedFields
-        )
-        temporaryOwnedFields = Some(tempVar)
-        tempVar
-      }
-
-      // Collect all the ops for the check
-      var ops =
-        checks.flatMap(
-          implementCheck(
-            _,
-            returnValue,
-            getTemporaryOwnedFields,
-            getPrimaryOwnedFields
-          )
-        )
-
-      // Prepend op to initialize owned fields if it is required
-      temporaryOwnedFields.foreach { tempOwned =>
-        ops = new Invoke(
-          runtime.initOwnedFields,
-          List(instanceCounter),
-          Some(tempOwned)
-        ) :: ops
-      }
-
-      // Wrap in an if statement if it is conditional
-      cond match {
-        case None => ops
-        case Some(cond) =>
-          val iff = new If(cond)
-          iff.condition = cond
-          ops.foreach(iff.ifTrue += _)
-          Seq(iff)
-      }
-    }
-
     // Insert the runtime checks
     // Group them by location and condition, so that multiple checks can be contained in a single
     // if block.
+    val context = CheckContext(program, method, implementation, runtime)
     methodData.checks
       .groupBy(c => (c.location, c.when))
       .foreach { case ((loc, when), checks) =>
@@ -271,7 +167,10 @@ object Checker {
           implementChecks(
             condition,
             checks.map(_.check),
-            _
+            _,
+            getPrimaryOwnedFields,
+            instanceCounter,
+            context
           )
         )
       }
@@ -400,4 +299,128 @@ object Checker {
     }
   }
 
+  def implementAccCheck(
+      check: FieldPermissionCheck,
+      fields: FieldCollection,
+      context: CheckContext
+  ): Seq[Op] = {
+    val field = check.field.toIR(context.program, context.method, None)
+    val (mode, perms) = check match {
+      case _: FieldSeparationCheck =>
+        (SeparationMode, fields.temporaryOwnedFields)
+      case _: FieldAccessibilityCheck =>
+        (VerifyMode, fields.primaryOwnedFields)
+    }
+    context.implementation.translateFieldPermission(mode, field, perms)
+  }
+
+  def implementPredicateCheck(
+      check: PredicatePermissionCheck,
+      returnValue: Option[Expression],
+      fields: FieldCollection,
+      context: CheckContext
+  ): Seq[Op] = {
+    val instance = new PredicateInstance(
+      context.program.predicate(check.predicateName),
+      check.arguments.map(_.toIR(context.program, context.method, returnValue))
+    )
+    val (mode, perms) = check match {
+      case _: PredicateSeparationCheck =>
+        (SeparationMode, fields.temporaryOwnedFields)
+      case _: PredicateAccessibilityCheck =>
+        (VerifyMode, fields.primaryOwnedFields)
+    }
+    context.implementation.translatePredicateInstance(mode, instance, perms)
+  }
+
+  case class FieldCollection(
+      temporaryOwnedFields: Var,
+      primaryOwnedFields: Var
+  )
+
+  case class CheckContext(
+      program: Program,
+      method: Method,
+      implementation: CheckImplementation,
+      runtime: CheckRuntime
+  )
+
+  def implementCheck(
+      check: Check,
+      returnValue: Option[IRGraph.Expression],
+      fields: FieldCollection,
+      context: CheckContext
+  ): Seq[Op] = {
+    check match {
+      case acc: FieldPermissionCheck =>
+        implementAccCheck(
+          acc,
+          fields,
+          context
+        )
+      case pc: PredicatePermissionCheck =>
+        implementPredicateCheck(
+          pc,
+          returnValue,
+          fields,
+          context
+        )
+      case expr: CheckExpression =>
+        Seq(
+          new Assert(
+            expr.toIR(context.program, context.method, returnValue),
+            AssertKind.Imperative
+          )
+        )
+    }
+  }
+
+  def implementChecks(
+      cond: Option[Expression],
+      checks: List[Check],
+      returnValue: Option[Expression],
+      getPrimaryOwnedFields: => Var,
+      instanceCounter: Expression,
+      context: CheckContext
+  ): Seq[Op] = {
+    // Create a temporary owned fields instance when it is required
+    var temporaryOwnedFields: Option[Var] = None
+    def getTemporaryOwnedFields: Var = temporaryOwnedFields.getOrElse {
+      val tempVar = context.method.addVar(
+        context.runtime.ownedFieldsRef,
+        CheckRuntime.Names.temporaryOwnedFields
+      )
+      temporaryOwnedFields = Some(tempVar)
+      tempVar
+    }
+    // Collect all the ops for the check
+    var ops =
+      checks.flatMap(
+        implementCheck(
+          _,
+          returnValue,
+          FieldCollection(getPrimaryOwnedFields, getTemporaryOwnedFields),
+          context
+        )
+      )
+
+    // Prepend op to initialize owned fields if it is required
+    temporaryOwnedFields.foreach { tempOwned =>
+      ops = new Invoke(
+        context.runtime.initOwnedFields,
+        List(instanceCounter),
+        Some(tempOwned)
+      ) :: ops
+    }
+
+    // Wrap in an if statement if it is conditional
+    cond match {
+      case None => ops
+      case Some(cond) =>
+        val iff = new If(cond)
+        iff.condition = cond
+        ops.foreach(iff.ifTrue += _)
+        Seq(iff)
+    }
+  }
 }
