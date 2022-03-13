@@ -6,7 +6,6 @@ import gvc.permutation.{LabelVisitor, Permute, SamplingHeuristic}
 import org.scalatest.ConfigMap
 import org.scalatest.funsuite.AnyFunSuite
 import java.nio.file.{Files, Paths}
-import scala.language.postfixOps
 import scala.reflect.io.Directory
 
 class PermutationSpec extends AnyFunSuite with BaseFileSpec {

@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.permutation.{Permute, SamplingHeuristic, SamplingInfo}
+import gvc.permutation.{Permute, SamplingHeuristic}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
