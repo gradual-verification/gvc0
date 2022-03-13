@@ -108,7 +108,7 @@ object Baseline {
         (Some(ownedFields), instanceCounter)
     }
 
-    def getPrimaryOwnedFields = primaryOwnedFields.getOrElse {
+    def getPrimaryOwnedFields(): Var = primaryOwnedFields.getOrElse {
       val ownedFields = method.addVar(
         runtime.ownedFieldsRef,
         CheckRuntime.Names.primaryOwnedFields
