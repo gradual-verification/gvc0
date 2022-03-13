@@ -29,6 +29,10 @@ object Collector {
   case class TrackedDisjunction(cases: List[TrackedConjunction])
       extends Condition
 
+  case class CheckInfo(
+      check: Check,
+      when: Option[Condition]
+  )
   case class RuntimeCheck(
       location: Location,
       check: Check,
@@ -260,86 +264,6 @@ object Collector {
 
     // Collects all permissions in the given specification, and adds checks for them at the given
     // location.
-    // TODO: Factor this out
-    def traversePermissions(
-        location: Location,
-        spec: Expression,
-        arguments: Option[Map[Parameter, CheckExpression]],
-        condition: Option[CheckExpression]
-    ): Seq[RuntimeCheck] = spec match {
-      // Imprecise expressions just needs the precise part checked.
-      // TODO: This should also enable framing checks.
-      case imp: Imprecise => {
-        imp.precise.toSeq.flatMap(
-          traversePermissions(location, _, arguments, condition)
-        )
-      }
-
-      // And expressions just traverses both parts
-      case and: Binary if and.operator == BinaryOp.And => {
-        val left = traversePermissions(location, and.left, arguments, condition)
-        val right =
-          traversePermissions(location, and.right, arguments, condition)
-        left ++ right
-      }
-
-      // A condition expression traverses each side with its respective condition, joined with the
-      // existing condition if provided to support nested conditionals.
-      case cond: Conditional => {
-        val baseCond = resolveValue(cond.condition, arguments)
-        val negCond = CheckExpression.Not(baseCond)
-        val (trueCond, falseCond) = condition match {
-          case None => (baseCond, negCond)
-          case Some(otherCond) =>
-            (
-              CheckExpression.And(otherCond, baseCond),
-              CheckExpression.And(otherCond, negCond)
-            )
-        }
-
-        val truePerms =
-          traversePermissions(location, cond.ifTrue, arguments, Some(trueCond))
-        val falsePerms = traversePermissions(
-          location,
-          cond.ifFalse,
-          arguments,
-          Some(falseCond)
-        )
-        truePerms ++ falsePerms
-      }
-
-      // A single accessibility check
-      case acc: Accessibility => {
-        val field = resolveValue(acc.member, arguments) match {
-          case f: CheckExpression.Field => f
-          case invalid =>
-            throw new WeaverException(s"Invalid acc() argument: '$invalid'")
-        }
-
-        Seq(
-          RuntimeCheck(
-            location,
-            FieldSeparationCheck(field),
-            condition.map(ConditionValue(_))
-          )
-        )
-      }
-
-      case pred: PredicateInstance => {
-        Seq(
-          RuntimeCheck(
-            location,
-            PredicateSeparationCheck(pred.predicate.name, pred.arguments.map(CheckExpression.irValue(_))),
-            condition.map(ConditionValue(_))
-          )
-        )
-      }
-
-      case _ => {
-        // Otherwise there can be no permission specifiers in this term or its children
-        Seq.empty
-      }
-    }
 
     // Finds all the runtime checks required by the given Viper node, and adds them at the given
     // IR location.
@@ -696,15 +620,17 @@ object Collector {
           )
       }
 
-      // TODO: These checks are only for separation, not existence
       val separationChecks =
-        traversePermissions(location, spec, arguments, None)
+        traversePermissions(spec, arguments, None).map(info =>
+          RuntimeCheck(location, info.check, info.when)
+        )
 
       // Since the checks are for separation, only include them if there is more than one
-        // otherwise, there can be no overlap
+      // otherwise, there can be no overlap
       val needsSeparationCheck =
         separationChecks.length > 1 ||
-        separationChecks.length == 1 && !separationChecks.head.check.isInstanceOf[FieldSeparationCheck]
+          separationChecks.length == 1 && !separationChecks.head.check
+            .isInstanceOf[FieldSeparationCheck]
       if (needsSeparationCheck) {
         collectedChecks ++= separationChecks
       }
@@ -723,10 +649,87 @@ object Collector {
       checkedSpecificationLocations = needsFullPermissionChecking.toSet
     )
   }
+  // TODO: Factor this out
+  def traversePermissions(
+      spec: Expression,
+      arguments: Option[Map[Parameter, CheckExpression]],
+      condition: Option[CheckExpression]
+  ): Seq[CheckInfo] = spec match {
+    // Imprecise expressions just needs the precise part checked.
+    // TODO: This should also enable framing checks.
+    case imp: Imprecise => {
+      imp.precise.toSeq.flatMap(
+        traversePermissions(_, arguments, condition)
+      )
+    }
 
+    // And expressions just traverses both parts
+    case and: Binary if and.operator == BinaryOp.And => {
+      val left = traversePermissions(and.left, arguments, condition)
+      val right =
+        traversePermissions(and.right, arguments, condition)
+      left ++ right
+    }
+
+    // A condition expression traverses each side with its respective condition, joined with the
+    // existing condition if provided to support nested conditionals.
+    case cond: Conditional => {
+      val baseCond = resolveValue(cond.condition, arguments)
+      val negCond = CheckExpression.Not(baseCond)
+      val (trueCond, falseCond) = condition match {
+        case None => (baseCond, negCond)
+        case Some(otherCond) =>
+          (
+            CheckExpression.And(otherCond, baseCond),
+            CheckExpression.And(otherCond, negCond)
+          )
+      }
+
+      val truePerms =
+        traversePermissions(cond.ifTrue, arguments, Some(trueCond))
+      val falsePerms = traversePermissions(
+        cond.ifFalse,
+        arguments,
+        Some(falseCond)
+      )
+      truePerms ++ falsePerms
+    }
+
+    // A single accessibility check
+    case acc: Accessibility => {
+      val field = resolveValue(acc.member, arguments) match {
+        case f: CheckExpression.Field => f
+        case invalid =>
+          throw new WeaverException(s"Invalid acc() argument: '$invalid'")
+      }
+
+      Seq(
+        CheckInfo(
+          FieldSeparationCheck(field),
+          condition.map(ConditionValue)
+        )
+      )
+    }
+    case pred: PredicateInstance => {
+      Seq(
+        CheckInfo(
+          PredicateSeparationCheck(
+            pred.predicate.name,
+            pred.arguments.map(CheckExpression.irValue)
+          ),
+          condition.map(ConditionValue)
+        )
+      )
+    }
+    case _ => {
+      // Otherwise there can be no permission specifiers in this term or its children
+      Seq.empty
+    }
+  }
   // Checks if execution can fall-through a given Op
-  private def hasImplicitReturn(tailOp: Op): Boolean = tailOp match {
+  def hasImplicitReturn(tailOp: Op): Boolean = tailOp match {
     case r: Return => false
+    case _: While  => true
     case _: While  => true
     case iff: If =>
       (iff.ifTrue.lastOption, iff.ifFalse.lastOption) match {
@@ -753,7 +756,7 @@ object Collector {
   // Changes an expression from an IR expression into a CheckExpression. If an argument lookup
   // mapping is given, it will use this mapping to resolve variables. Otherwise, it will assume
   // any variables are accessible in the current scope.
-  private def resolveValue(
+  def resolveValue(
       input: Expression,
       arguments: Option[Map[Parameter, CheckExpression]] = None
   ): CheckExpression = {

@@ -136,9 +136,6 @@ object CheckExpression {
 
   case class Var(name: String) extends Expr {
     def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) = {
-      if (name == "node") {
-        println("hello!")
-      }
       m.variable(name)
     }
   }

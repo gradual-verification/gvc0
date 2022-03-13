@@ -17,7 +17,8 @@ object Checker {
       .map(s => (s.name, s.addField(CheckRuntime.Names.id, IntType)))
       .toMap
 
-    val implementation = new CheckImplementation(program.program, runtime, structIdFields)
+    val implementation =
+      new CheckImplementation(program.program, runtime, structIdFields)
 
     program.methods.values.foreach { method =>
       insert(program, method, runtime, implementation)
@@ -160,7 +161,7 @@ object Checker {
     ): Seq[Op] = {
       val field = check.field.toIR(program, method, None)
       val (mode, perms) = check match {
-        case _: FieldSeparationCheck => (SeparationMode, temporaryOwnedFields)
+        case _: FieldSeparationCheck    => (SeparationMode, temporaryOwnedFields)
         case _: FieldAccessibilityCheck => (VerifyMode, primaryOwnedFields)
       }
 
@@ -168,17 +169,18 @@ object Checker {
     }
 
     def implementPredicateCheck(
-      check: PredicatePermissionCheck,
-      returnValue: Option[Expression],
-      temporaryOwnedFields: => Var,
-      primaryOwnedFields: => Var
+        check: PredicatePermissionCheck,
+        returnValue: Option[Expression],
+        temporaryOwnedFields: => Var,
+        primaryOwnedFields: => Var
     ): Seq[Op] = {
       val instance = new PredicateInstance(
         program.predicate(check.predicateName),
         check.arguments.map(_.toIR(program, method, returnValue))
       )
       val (mode, perms) = check match {
-        case _: PredicateSeparationCheck => (SeparationMode, temporaryOwnedFields)
+        case _: PredicateSeparationCheck =>
+          (SeparationMode, temporaryOwnedFields)
         case _: PredicateAccessibilityCheck => (VerifyMode, primaryOwnedFields)
       }
       implementation.translatePredicateInstance(mode, instance, perms)
@@ -194,7 +196,12 @@ object Checker {
         case acc: FieldPermissionCheck =>
           implementAccCheck(acc, temporaryOwnedFields, primaryOwnedFields)
         case pc: PredicatePermissionCheck =>
-          implementPredicateCheck(pc, returnValue, temporaryOwnedFields, primaryOwnedFields)
+          implementPredicateCheck(
+            pc,
+            returnValue,
+            temporaryOwnedFields,
+            primaryOwnedFields
+          )
         case expr: CheckExpression =>
           Seq(
             new Assert(
@@ -303,12 +310,16 @@ object Checker {
             // Convert precondition into calls to removeAcc
             call.ir.insertBefore(
               callee.precondition.toSeq.flatMap(
-                  implementation.translate(RemoveMode, _, getPrimaryOwnedFields)))
+                implementation.translate(RemoveMode, _, getPrimaryOwnedFields)
+              )
+            )
 
             // Convert postcondition into calls to addAcc
             call.ir.insertAfter(
               callee.postcondition.toSeq.flatMap(
-                implementation.translate(AddMode, _, getPrimaryOwnedFields)))
+                implementation.translate(AddMode, _, getPrimaryOwnedFields)
+              )
+            )
           }
         }
 
@@ -326,12 +337,18 @@ object Checker {
             List(instanceCounter),
             Some(tempSet)
           )
-          val addPermsToTemp = callee.precondition.toSeq.flatMap(
-            implementation.translate(AddMode, _, tempSet)).toList
-          val removePermsFromPrimary = callee.precondition.toSeq.flatMap(
-            implementation.translate(RemoveMode, _, getPrimaryOwnedFields)).toList
+          val addPermsToTemp = callee.precondition.toSeq
+            .flatMap(implementation.translate(AddMode, _, tempSet))
+            .toList
+          val removePermsFromPrimary = callee.precondition.toSeq
+            .flatMap(
+              implementation.translate(RemoveMode, _, getPrimaryOwnedFields)
+            )
+            .toList
 
-          call.ir.insertBefore(createTemp :: addPermsToTemp ++ removePermsFromPrimary)
+          call.ir.insertBefore(
+            createTemp :: addPermsToTemp ++ removePermsFromPrimary
+          )
           call.ir.arguments :+= tempSet
           call.ir.insertAfter(
             new Invoke(runtime.join, List(getPrimaryOwnedFields, tempSet), None)
@@ -341,12 +358,31 @@ object Checker {
     }
 
     // If a primary owned fields instance is required for this method, add all allocations into it
-    for (ownedFields <- primaryOwnedFields)
-      for (alloc <- methodData.allocations) {
+    addAllocationTracking(
+      primaryOwnedFields,
+      methodData.allocations,
+      implementation,
+      runtime
+    )
+    // Finally, add all the initialization ops to the beginning
+    initializeOps ++=: method.body
+  }
+
+  def addAllocationTracking(
+      primaryOwnedFields: Option[Var],
+      allocations: List[Op],
+      implementation: CheckImplementation,
+      runtime: CheckRuntime
+  ): Unit = {
+    for (ownedFields <- primaryOwnedFields) {
+      for (alloc <- allocations) {
         alloc match {
           case alloc: AllocStruct => {
             val structType = alloc.struct
-            val idField = new FieldMember(alloc.target, implementation.structIdField(alloc.struct))
+            val idField = new FieldMember(
+              alloc.target,
+              implementation.structIdField(alloc.struct)
+            )
             alloc.insertAfter(
               new Invoke(
                 runtime.addStructAcc,
@@ -361,7 +397,7 @@ object Checker {
             )
         }
       }
-    // Finally, add all the initialization ops to the beginning
-    initializeOps ++=: method.body
+    }
   }
+
 }
