@@ -241,7 +241,7 @@ object Baseline {
     }
 
     collected.calls.foreach(call => {
-      call.arguments = call.arguments ++ List(getPrimaryOwnedFields)
+      call.arguments = call.arguments ++ List(getPrimaryOwnedFields())
     })
 
     collected.framing.foreach(framing => {
@@ -250,7 +250,7 @@ object Baseline {
           implementation.translateFieldPermission(
             VerifyMode,
             _,
-            getPrimaryOwnedFields
+            getPrimaryOwnedFields()
           )
         )
       )

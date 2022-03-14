@@ -5,6 +5,7 @@ import gvc.transformer.IRGraph.{
   AssertKind,
   Assign,
   Block,
+  Expression,
   FieldMember,
   Invoke,
   Method,
@@ -16,6 +17,7 @@ import gvc.transformer.IRGraph.{
 }
 import gvc.weaver.CheckMethod
 import gvc.weaver.Collector.hasImplicitReturn
+
 import scala.collection.mutable
 object BaselineCollector {
 
@@ -49,6 +51,36 @@ object BaselineCollector {
   def collect(irProgram: Program): Map[String, BaselineCollectedMethod] = {
     irProgram.methods.map(m => (m.name, collect(m))).toMap
   }
+
+  def requiresResult(expr: Option[Expression]): Boolean = {
+    expr match {
+      case Some(expr) =>
+        expr match {
+          case spec: IRGraph.SpecificationExpression =>
+            spec match {
+              case _: IRGraph.Accessibility => false
+              case instance: IRGraph.PredicateInstance =>
+                instance.arguments.exists(arg => requiresResult(Some(arg)))
+              case _: IRGraph.Result => true
+              case imprecise: IRGraph.Imprecise =>
+                requiresResult(imprecise.precise)
+            }
+          case cond: IRGraph.Conditional =>
+            requiresResult(Some(cond.condition)) || requiresResult(
+              Some(cond.ifFalse)
+            ) || requiresResult(Some(cond.ifTrue))
+          case binary: IRGraph.Binary =>
+            requiresResult(Some(binary.right)) || requiresResult(
+              Some(binary.left)
+            )
+          case unary: IRGraph.Unary => requiresResult(Some(unary.operand))
+          case _                    => false
+        }
+      case None => false
+    }
+
+  }
+
   def collect(irMethod: Method): BaselineCollectedMethod = {
     val calls = mutable.ListBuffer[Invoke]()
     val allocations = mutable.ListBuffer[Op]()
@@ -113,18 +145,26 @@ object BaselineCollector {
               collectMembers(assert.value, members)
 
           case returnStmt: IRGraph.Return =>
-            val replaced = returnStmt.value match {
-              case Some(value) => {
-                val tempVar = block.method.addVar(value.valueType.get)
-                returnStmt.insertBefore(new Assign(tempVar, value))
+            val replaced =
+              if (
+                requiresResult(block.method.postcondition)
+                &&
+                !returnStmt.value.get
+                  .isInstanceOf[Var]
+              ) {
+                val tempVar =
+                  block.method.addVar(returnStmt.value.get.valueType.get)
+                returnStmt.insertBefore(
+                  new Assign(tempVar, returnStmt.value.get)
+                )
                 val tempVarReturn = new Return(Some(tempVar))
                 returnStmt.getPrev.get.insertAfter(tempVarReturn)
                 returnStmt.remove()
                 returns += tempVarReturn
                 tempVarReturn
+              } else {
+                returnStmt
               }
-              case None => returnStmt
-            }
             if (replaced.value.isDefined)
               collectMembers(replaced.value.get, members)
           case value: IRGraph.If =>

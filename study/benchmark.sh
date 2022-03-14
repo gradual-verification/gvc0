@@ -24,7 +24,7 @@ VERIFY_CSV="./verify.csv"
 
 EXEC_DIR="./compiled"
 EXEC_CSV="./exec.csv"
-EXEC_LOG="./bench_exec.log"
+EXEC_LOG="./exec.log"
 STAT_COLS="id,mean,stddev,median,user,system,min,max"
 
 rm -rf $EXEC_DIR
@@ -85,7 +85,7 @@ echo "$SUCCESS Compiled baseline.\n"
 PERM_C0_LIST=$(collect_files $PERM_DIR)
 echo "$START Executing verifier, compiling to $EXEC_DIR..."
 hyperfine --runs 1 -i -L files $PERM_C0_LIST "java -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
-echo "$SUCCESS Verification completed."
+echo "$SUCCESS Verification completed, logs at $VERIFY_LOG"
 
 FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $VERIFY_LOG | wc -l)
 FAILS_NOSP=$(echo $FAILS | sed 's/ *$//g')
@@ -98,7 +98,7 @@ rm -rf $EXEC_DIR/*.dSYM
 EXEC_FILE_LIST=$(collect_files $EXEC_DIR)
 echo "$START Beginning executions..."
 hyperfine -N --runs 1 -i -L files $EXEC_FILE_LIST "$EXEC_DIR/{files} >> $EXEC_LOG 2>&1" --export-csv $EXEC_CSV >> $EXEC_LOG 2>&1
-echo "$SUCCESS Executions completed.\n"
+echo "$SUCCESS Executions completed, logs at $EXEC_LOG\n"
 
 echo "$START Cleaning Execution CSV file..."
 clean_csv $EXEC_CSV
