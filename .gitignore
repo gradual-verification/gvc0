@@ -70,3 +70,4 @@ docker.sh
 sandbox.c0
 
 *.csv
+*.log
