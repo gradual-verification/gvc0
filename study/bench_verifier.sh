@@ -13,6 +13,7 @@ java -jar $JAR $1 --perm=$NPATHS
 echo "\nFinished generating permutations."
 
 TARGETLIST=$(ls -m "$PERMS")
+echo $TARGETLIST
 TARGETS_NOSPACE=$(echo $TARGETLIST | tr -d '[:space:]')
 IFS=',' read -ra INDIVIDUALS <<< "$TARGETS_NOSPACE"
 FINAL_LIST=""
@@ -24,12 +25,19 @@ for i in "${INDIVIDUALS[@]}"; do
       FINAL_LIST="$FINAL_LIST,$i"
   fi
 done
+echo $TARGETLIST
+
+
 rm -f $LOG
+echo "Compiling baseline..."
+cc0 ./perms/baseline.c0 -o ./compiled/baseline.out -L ./src/main/resources/
+echo "Compiled baseline."
+
 echo "Executing verifier..."
 hyperfine --runs 1 -i -L files $FINAL_LIST "java -jar $JAR $PERMS/{files} --output=$EXE/{files}.out --save-files >> $LOG 2>&1" --export-csv $CSV >> $LOG 2>&1
 rm -rf $EXE*.dSYM
-
 echo "Verification completed."
+
 FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $LOG | wc -l)
 echo "There were $FAILS failing benchmarks."
 echo "Cleaning CSV file..."
