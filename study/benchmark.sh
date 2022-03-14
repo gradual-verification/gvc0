@@ -10,7 +10,6 @@ then
   exit 1
 fi
 
-
 FILE="$1"
 NPATHS="$2"
 JAR="target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar"
@@ -63,11 +62,14 @@ collect_files(){
  IFS=',' read -ra INDIVIDUALS <<< "$TARGETS_NOSPACE"
  FINAL_LIST=""
  for i in "${INDIVIDUALS[@]}"; do
-   if [[ "$FINAL_LIST" == "" ]]
-     then
-       FINAL_LIST="$i"
-     else
-       FINAL_LIST="$FINAL_LIST,$i"
+   if [ "$i" != "$2" ]
+   then
+      if [[ "$FINAL_LIST" == "" ]]
+      then
+          FINAL_LIST="$i"
+      else
+          FINAL_LIST="$FINAL_LIST,$i"
+      fi
    fi
  done
  echo $FINAL_LIST
@@ -82,7 +84,7 @@ echo "$START Compiling baseline..."
 cc0 ./perms/baseline.c0 -o ./compiled/baseline.out -L ./src/main/resources/
 echo "$SUCCESS Compiled baseline.\n"
 
-PERM_C0_LIST=$(collect_files $PERM_DIR)
+PERM_C0_LIST=$(collect_files $PERM_DIR "baseline.c0")
 echo "$START Executing verifier, compiling to $EXEC_DIR..."
 hyperfine --runs 1 -i -L files $PERM_C0_LIST "java -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
 echo "$SUCCESS Verification completed, logs at $VERIFY_LOG"
@@ -104,4 +106,4 @@ echo "$START Cleaning Execution CSV file..."
 clean_csv $EXEC_CSV
 echo "$SUCCESS Execution CSV file cleaned, output to $EXEC_CSV."
 
-echo "$SUCCESS finished."
+echo "$SUCCESS Finished."
