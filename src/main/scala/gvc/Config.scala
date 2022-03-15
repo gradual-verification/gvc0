@@ -8,14 +8,12 @@ sealed trait DumpType
 case class Config(
     dump: Option[DumpType] = None,
     output: Option[String] = None,
-
     permute: Option[Int] = None,
     permuteExclude: Option[String] = None,
     permuteDumpDir: Option[String] = None,
     permuteErrorDir: Option[String] = None,
     permuteMetadataFile: Option[String] = None,
-
-    benchmark: Option[String] = None,
+    baseline: Option[String] = None,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
@@ -73,13 +71,15 @@ object Config {
                |  -p         --perm=<n>                     Generate 'n' paths of permutations for the given program; default n = 10.
                |             --perm-ex=<file>               Provide a comma-separated list of methods to keep constant in all permutations.
                |             --perm-dump=<dir>              Specify the directory to dump permuted programs; default is "./perms".
-               |             --perm-meta=<file>             Specify the file to store metadata on generated permutations; default is "./perm_meta.csv""""
+               |             --perm-meta=<file>             Specify the file to store metadata on generated permutations; default is "./perm_meta.csv"
+               |  -b <file>  --baseline=<file>              Translate every specification in the program to a runtime check, and compile it to the specified output file."""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val permuteArg = raw"--perm=(.+)".r
   private val permuteExcludeArg = raw"--perm-ex=(.+)".r
   private val permuteDumpDir = raw"--perm-dump=(.+)".r
   private val permuteMeta = raw"--perm-meta=(.+)".r
+  private val baselineOut = raw"--baseline=(.+)".r
 
   def error(message: String): Nothing = {
     println(message)
@@ -116,7 +116,7 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(
-             benchmark = Some(f)
+            baseline = Some(f)
           )
         )
       case outputArg(f) :: tail =>
@@ -134,6 +134,8 @@ object Config {
         fromCommandLineArgs(tail, current.copy(permuteDumpDir = Some(f)))
       case permuteMeta(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteMetadataFile = Some(f)))
+      case baselineOut(f) :: tail =>
+        fromCommandLineArgs(tail, current.copy(baseline = Some(f)))
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>

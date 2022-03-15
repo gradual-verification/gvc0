@@ -110,17 +110,6 @@ object Permute {
         previousID = Some(id)
       }
     }
-    Baseline.insert(ir)
-
-    val outputBaseline =
-      files.permDumpDir.resolve(Names._baseline)
-    Main.writeFile(
-      outputBaseline.toString,
-      GraphPrinter.print(
-        ir,
-        includeSpecs = false
-      )
-    )
   }
 
   class CSVPrinter(files: PermuteOutputFiles, template: List[ASTLabel]) {

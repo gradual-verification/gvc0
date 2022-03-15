@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.permutation.{Permute, SamplingHeuristic}
+import gvc.permutation.{Baseline, Permute, SamplingHeuristic}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -47,8 +47,17 @@ object Main extends App {
       )
 
     val inputSource = readFile(config.sourceFile.get)
-
-    if (config.permute.isDefined) {
+    if (config.baseline.isDefined) {
+      val ir = generateIR(inputSource)
+      Baseline.insert(ir)
+      val verifiedText =
+        GraphPrinter.print(
+          ir,
+          includeSpecs = false
+        )
+      writeFile(Paths.get(config.baseline.get).toString, verifiedText)
+      execute(verifiedText, fileNames)
+    } else if (config.permute.isDefined) {
       Permute.exec(
         inputSource,
         config,
@@ -71,7 +80,7 @@ object Main extends App {
     try {
       Files.writeString(Paths.get(file), contents, StandardCharsets.UTF_8)
     } catch {
-      case _: IOException => Config.error(s"Could not write file '${file}'")
+      case _: IOException => Config.error(s"Could not write file '$file'")
     }
 
   def deleteFile(file: String): Unit =
@@ -165,9 +174,9 @@ object Main extends App {
 
     val silver = IRGraphSilver.toSilver(ir)
 
-    if (config.dump == Some(Config.DumpSilver)) dump(silver.toString())
+    if (config.dump.contains(Config.DumpSilver)) dump(silver.toString)
     else if (config.saveFiles)
-      writeFile(fileNames.silverFileName, silver.toString())
+      writeFile(fileNames.silverFileName, silver.toString)
 
     silicon.verify(silver.program) match {
       case verifier.Success => ()
@@ -203,7 +212,7 @@ object Main extends App {
 
     // TODO: Figure out how we can use the actual resource
     // Since it is bundled in the JAR we have to extract it and put it somewhere
-    val runtimeIncludeDir = Paths.get("src/main/resources").toAbsolutePath()
+    val runtimeIncludeDir = Paths.get("src/main/resources").toAbsolutePath
 
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),

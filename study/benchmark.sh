@@ -4,14 +4,15 @@ SUCCESS="[\033[0;32m✓\033[0m] -"
 START="[\033[0;35m*\033[0m] -"
 ERR="[\033[0;31mx\033[0m] -"
 
-if [ -z $1 ] || [ -z $2 ]
+if [ -z $1 ] || [ -z $2 ] || [ -z $3 ]
 then
-  echo "$ERR Usage: ./benchmark.sh [file] [n]"
+  echo "$ERR Usage: ./benchmark.sh [file] [n paths] [n iterations]"
   exit 1
 fi
 
 FILE="$1"
 NPATHS="$2"
+NITER="$3"
 JAR="target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar"
 
 PERM_DIR="./perms"
@@ -20,6 +21,8 @@ PERM_LEVELS="./levels.csv"
 
 VERIFY_LOG="./verify.log"
 VERIFY_CSV="./verify.csv"
+
+BASE_CSV="./baseline.csv"
 
 EXEC_DIR="./compiled"
 EXEC_CSV="./exec.csv"
@@ -36,12 +39,12 @@ rm -f $EXEC_LOG
 rm -f $EXEC_CSV
 rm -f $VERIFY_CSV
 
-clean_csv () {
+clean_param_csv () {
   REWRITTEN=""
   while read line; do
     IFS=',' read -ra COLUMNS <<< "$line";
     ID=$(basename ${COLUMNS[8]} | sed 's/\.[^/]*$//');
-    if [[ "$ID" != "parameter_files" ]]
+    if [[ "$ID" != "parameter_$2" ]]
       then
         LINE=$ID
         unset 'COLUMNS[${#COLUMNS[@]}-1]'
@@ -80,30 +83,42 @@ java -jar $JAR $1 --perm=$NPATHS
 echo "\n\n$SUCCESS Finished generating permutations."
 echo "$SUCCESS Metadata stored in $PERM_META and $PERM_LEVELS.\n"
 
-echo "$START Compiling baseline..."
-cc0 ./perms/baseline.c0 -o ./compiled/baseline.out -L ./src/main/resources/
-echo "$SUCCESS Compiled baseline.\n"
+
+echo "$START Compiling baseline to $PERM_DIR/baseline.c0 and $EXEC_DIR/baseline.out..."
+hyperfine --runs $NITER -i "java -jar $JAR $1 --baseline=$PERM_DIR/baseline.c0 --output=$EXEC_DIR/baseline.out >> $VERIFY_LOG 2>&1" --export-csv $BASE_CSV >> $VERIFY_LOG 2>&1
+echo "$SUCCESS Compiled baseline, logs at $VERIFY_LOG\n"
 
 PERM_C0_LIST=$(collect_files $PERM_DIR "baseline.c0")
 echo "$START Executing verifier, compiling to $EXEC_DIR..."
-hyperfine --runs 1 -i -L files $PERM_C0_LIST "java -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
+hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
 echo "$SUCCESS Verification completed, logs at $VERIFY_LOG"
 
 FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $VERIFY_LOG | wc -l)
 FAILS_NOSP=$(echo $FAILS | sed 's/ *$//g')
 echo "$ERR There were $FAILS_NOSP failing benchmarks.\n"
-echo "$START Cleaning Verification CSV file..."
-clean_csv $VERIFY_CSV
-echo "$SUCCESS Verification CSV file cleaned, output to $VERIFY_CSV.\n"
+
+echo "$START Cleaning verification CSV file $VERIFY_CSV..."
+clean_param_csv $VERIFY_CSV "files"
+echo "$SUCCESS Verification CSV file cleaned.\n"
+
+echo "$START Cleaning baseline CSV file $BASE_CSV..."
+BASE_CSV_STATS=$(cat $BASE_CSV | sed -n 2p)
+IFS=',' read -ra BASE_CSV_STAT_ITEMS <<< "$BASE_CSV_STATS"
+BASELINE_ENTRY="baseline"
+for i in "${BASE_CSV_STAT_ITEMS[@]:1}"; do
+  BASELINE_ENTRY="$BASELINE_ENTRY,$i"
+done
+echo $BASELINE_ENTRY >> $VERIFY_CSV
+echo "$SUCCESS Baseline CSV file cleaned."
 
 rm -rf $EXEC_DIR/*.dSYM
 EXEC_FILE_LIST=$(collect_files $EXEC_DIR)
 echo "$START Beginning executions..."
-hyperfine -N --runs 1 -i -L files $EXEC_FILE_LIST "$EXEC_DIR/{files} >> $EXEC_LOG 2>&1" --export-csv $EXEC_CSV >> $EXEC_LOG 2>&1
+hyperfine -N --runs $NITER -i -L files $EXEC_FILE_LIST "$EXEC_DIR/{files} >> $EXEC_LOG 2>&1" --export-csv $EXEC_CSV >> $EXEC_LOG 2>&1
 echo "$SUCCESS Executions completed, logs at $EXEC_LOG\n"
 
-echo "$START Cleaning Execution CSV file..."
-clean_csv $EXEC_CSV
-echo "$SUCCESS Execution CSV file cleaned, output to $EXEC_CSV."
+echo "$START Cleaning execution CSV file $EXEC_CSV..."
+clean_param_csv $EXEC_CSV "files"
+echo "$SUCCESS Execution CSV file cleaned."
 
 echo "$SUCCESS Finished."
