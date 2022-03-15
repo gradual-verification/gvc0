@@ -124,12 +124,14 @@ object Baseline {
     }
 
     // If a primary owned fields instance is required for this method, add all allocations into it
-    addAllocationTracking(
-      primaryOwnedFields,
-      collected.allocations,
-      implementation,
-      runtime
-    )
+    if (collected.allocations.nonEmpty) {
+      addAllocationTracking(
+        Some(getPrimaryOwnedFields()),
+        collected.allocations,
+        implementation,
+        runtime
+      )
+    }
 
     def checkSpec(
         expr: Expression,
