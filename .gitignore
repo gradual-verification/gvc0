@@ -71,3 +71,5 @@ sandbox.c0
 
 *.csv
 *.log
+
+benchmark
