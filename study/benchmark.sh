@@ -90,7 +90,7 @@ echo "$SUCCESS Compiled baseline, logs at $VERIFY_LOG\n"
 
 PERM_C0_LIST=$(collect_files $PERM_DIR "baseline.c0")
 echo "$START Executing verifier, compiling to $EXEC_DIR..."
-hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
+hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -Xss15m -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
 echo "$SUCCESS Verification completed, logs at $VERIFY_LOG"
 
 FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $VERIFY_LOG | wc -l)
