@@ -10,34 +10,40 @@ then
   exit 1
 fi
 
-FILE="$1"
 NPATHS="$2"
 NITER="$3"
 JAR="target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar"
 
-PERM_DIR="./perms"
-PERM_META="./perms.csv"
-PERM_LEVELS="./levels.csv"
+ROOT="./benchmark"
+LOGS="$ROOT/logs"
+PERM_DIR="$ROOT/perms"
+PERM_META="$ROOT/perms.csv"
+PERM_LEVELS="$ROOT/levels.csv"
 
-VERIFY_LOG="./verify.log"
-VERIFY_CSV="./verify.csv"
+VERIFY_LOG="$LOGS/verify.log"
+VERIFY_CSV="$ROOT/verify.csv"
 
-BASE_CSV="./baseline.csv"
+EXEC_DIR="$ROOT/compiled"
+EXEC_CSV="$ROOT/exec.csv"
+EXEC_LOG="$LOGS/exec.log"
 
-EXEC_DIR="./compiled"
-EXEC_CSV="./exec.csv"
-EXEC_LOG="./exec.log"
+BASE_GEN_LOG="$LOGS/baseline_gen.log"
+BASE_EXEC_LOG="$LOGS/baseline_exec.log"
+BASE_PERM_DIR="$ROOT/baseline_perms"
+BASE_EXEC_DIR="$ROOT/baseline_compiled"
+BASE_GEN_CSV="$ROOT/baseline_gen.csv"
+BASE_EXEC_CSV="$ROOT/baseline_exec.csv"
+
+
 STAT_COLS="id,mean,stddev,median,user,system,min,max"
 
-rm -rf $EXEC_DIR
-mkdir $EXEC_DIR
-rm -rf $PERM_DIR
+rm -rf $ROOT
+mkdir $ROOT
+mkdir $LOGS
 mkdir $PERM_DIR
-
-rm -f $VERIFY_LOG
-rm -f $EXEC_LOG
-rm -f $EXEC_CSV
-rm -f $VERIFY_CSV
+mkdir $BASE_PERM_DIR
+mkdir $EXEC_DIR
+mkdir $BASE_EXEC_DIR
 
 clean_param_csv () {
   REWRITTEN=""
@@ -79,18 +85,26 @@ collect_files(){
 }
 
 echo "$START Generating permutations to $PERM_DIR...\n"
-java -jar $JAR $1 --perm=$NPATHS
+java -jar $JAR $1 --perm=$NPATHS --output=$PERM_DIR
 echo "\n\n$SUCCESS Finished generating permutations."
 echo "$SUCCESS Metadata stored in $PERM_META and $PERM_LEVELS.\n"
 
+PERM_C0_LIST=$(collect_files $PERM_DIR)
 
-echo "$START Compiling baseline to $PERM_DIR/baseline.c0 and $EXEC_DIR/baseline.out..."
-hyperfine --runs $NITER -i "java -jar $JAR $1 --baseline=$PERM_DIR/baseline.c0 --output=$EXEC_DIR/baseline.out >> $VERIFY_LOG 2>&1" --export-csv $BASE_CSV >> $VERIFY_LOG 2>&1
-echo "$SUCCESS Compiled baseline, logs at $VERIFY_LOG\n"
 
-PERM_C0_LIST=$(collect_files $PERM_DIR "baseline.c0")
+echo "$START Generating the baseline for each permutation to $BASE_PERM_DIR...\n"
+hyperfine --runs $NITER -i -L files "$PERM_C0_LIST" "java -jar $JAR $PERM_DIR/{files} --baseline=$BASE_PERM_DIR/{files} --output=$BASE_EXEC_DIR/{files}.out >> $BASE_GEN_LOG 2>&1" --export-csv $BASE_GEN_CSV >> $BASE_GEN_LOG 2>&1
+rm -rf $BASE_EXEC_DIR/*.dSYM
+echo "\n\n$SUCCESS Finished generating the baseline for each permutation."
+echo "$SUCCESS Generation time data stored in $BASE_GEN_CSV.\n"
+
+echo "$START Cleaning baseline CSV file $BASE_GEN_CSV..."
+clean_param_csv $BASE_GEN_CSV "files"
+echo "$SUCCESS Baseline CSV file cleaned.\n"
+
 echo "$START Executing verifier, compiling to $EXEC_DIR..."
 hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -Xss15m -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
+rm -rf $EXEC_DIR/*.dSYM
 echo "$SUCCESS Verification completed, logs at $VERIFY_LOG"
 
 FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $VERIFY_LOG | wc -l)
@@ -101,17 +115,6 @@ echo "$START Cleaning verification CSV file $VERIFY_CSV..."
 clean_param_csv $VERIFY_CSV "files"
 echo "$SUCCESS Verification CSV file cleaned.\n"
 
-echo "$START Cleaning baseline CSV file $BASE_CSV..."
-BASE_CSV_STATS=$(cat $BASE_CSV | sed -n 2p)
-IFS=',' read -ra BASE_CSV_STAT_ITEMS <<< "$BASE_CSV_STATS"
-BASELINE_ENTRY="baseline"
-for i in "${BASE_CSV_STAT_ITEMS[@]:1}"; do
-  BASELINE_ENTRY="$BASELINE_ENTRY,$i"
-done
-echo $BASELINE_ENTRY >> $VERIFY_CSV
-echo "$SUCCESS Baseline CSV file cleaned."
-
-rm -rf $EXEC_DIR/*.dSYM
 EXEC_FILE_LIST=$(collect_files $EXEC_DIR)
 echo "$START Beginning executions..."
 hyperfine -N --runs $NITER -i -L files $EXEC_FILE_LIST "$EXEC_DIR/{files} >> $EXEC_LOG 2>&1" --export-csv $EXEC_CSV >> $EXEC_LOG 2>&1
@@ -119,6 +122,15 @@ echo "$SUCCESS Executions completed, logs at $EXEC_LOG\n"
 
 echo "$START Cleaning execution CSV file $EXEC_CSV..."
 clean_param_csv $EXEC_CSV "files"
+echo "$SUCCESS Execution CSV file cleaned."
+
+BASE_EXEC_FILE_LIST=$(collect_files $BASE_EXEC_DIR)
+echo "$START Beginning executions..."
+hyperfine -N --runs $NITER -i -L files $BASE_EXEC_FILE_LIST "$BASE_EXEC_DIR/{files} >> $BASE_EXEC_LOG 2>&1" --export-csv $BASE_EXEC_CSV >> $BASE_EXEC_LOG 2>&1
+echo "$SUCCESS Executions completed, logs at $BASE_EXEC_LOG\n"
+
+echo "$START Cleaning execution CSV file $BASE_EXEC_CSV..."
+clean_param_csv $BASE_EXEC_CSV "files"
 echo "$SUCCESS Execution CSV file cleaned."
 
 echo "$SUCCESS Finished."

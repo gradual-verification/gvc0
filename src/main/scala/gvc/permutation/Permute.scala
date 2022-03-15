@@ -29,7 +29,7 @@ object Permute {
 
   private def resolveOutputFiles(config: Config): PermuteOutputFiles = {
     val dumpDir =
-      Paths.get(config.permuteDumpDir.getOrElse(Names._defaultPermuteDumpDir))
+      Paths.get(config.output.getOrElse(Names._defaultPermuteDumpDir))
     new Directory(dumpDir.toFile).deleteRecursively()
     Files.createDirectories(dumpDir)
 
