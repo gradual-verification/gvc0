@@ -173,8 +173,7 @@ object Main extends App {
     silicon.start()
 
     val silver = IRGraphSilver.toSilver(ir)
-
-    if (config.dump.contains(Config.DumpSilver)) dump(silver.toString)
+    if (config.dump == Some(Config.DumpSilver)) dump(silver.program.toString())
     else if (config.saveFiles)
       writeFile(fileNames.silverFileName, silver.toString)
 
