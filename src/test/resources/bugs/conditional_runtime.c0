@@ -1,0 +1,101 @@
+struct Node;
+
+struct Node
+{
+  int val;
+  struct Node* next;
+};
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal);
+int main();
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal)
+  //@requires ? && (b == c ? true : b->val == bVal) && acc(c->val);
+  //@ensures ? && true;
+{
+  if (!(b == c))
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+    }
+    else
+    {
+      appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal);
+    }
+  }
+}
+
+int main()
+  //@requires ? && true;
+  //@ensures ?;
+{
+  struct Node* l = NULL;
+  struct Node* l1 = NULL;
+  struct Node* l11 = NULL;
+  struct Node* l111 = NULL;
+  return 0;
+}
+
+/* -d c0 console output */
+/*
+[info] Runtime checks required for GenericNode(a.Node$val):
+[info]   if (!(a == c)) && (c == b) && (c == b) && (b == c): acc(a.Node$val, write)
+[info] Runtime checks required for GenericNode(a.Node$next):
+[info]   if (!(a == c)) && (c == b) && (c == b) && (b == c): acc(a.Node$next, write)
+[info] #use <runtime>
+[info] struct Node;
+[info] struct Node
+[info] {
+[info]   int val;
+[info]   struct Node* next;
+[info]   int _id;
+[info] };
+[info] void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields);
+[info] int main();
+[info] void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields)
+[info] {
+[info]   bool _cond_0 = false;
+[info]   bool _cond_1 = false;
+[info]   bool _cond_2 = false;
+[info]   bool _cond_3 = false;
+[info]   _cond_1 = _cond_0 && c == b;
+[info]   _cond_0 = b == c;
+[info]   _cond_2 = _cond_0 && _cond_1 && c == b;
+[info]   if (!(b == c))
+[info]   {
+[info]   }
+[info]   else
+[info]   {
+[info]     _cond_3 = _cond_0 && _cond_1 && _cond_2 && a == c;
+[info]     if (a == b)
+[info]     {
+[info]     }
+[info]     else
+[info]     {
+[info]       if (_cond_0 && _cond_1 && _cond_2 && !_cond_3)
+[info]       {
+[info]         assertAcc(_ownedFields, a->_id, 1, "Field access runtime check failed for struct Node.next");
+[info]         assertAcc(_ownedFields, a->_id, 0, "Field access runtime check failed for struct Node.val");
+[info]       }
+[info]       appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal, _ownedFields);
+[info]     }
+[info]   }
+[info] }
+[info] int main()
+[info] {
+[info]   struct Node* l = NULL;
+[info]   struct Node* l1 = NULL;
+[info]   struct Node* l11 = NULL;
+[info]   struct Node* l111 = NULL;
+[info]   int* _instanceCounter = NULL;
+[info]   _instanceCounter = alloc(int);
+[info]   l = NULL;
+[info]   l1 = NULL;
+[info]   l11 = NULL;
+[info]   l111 = NULL;
+[info]   return 0;
+[info] }
+*/
