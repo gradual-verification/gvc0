@@ -106,6 +106,8 @@ object Collector {
     case object PostInvoke extends ViperLocation
     case object PreLoop extends ViperLocation
     case object PostLoop extends ViperLocation
+    case object Fold extends ViperLocation
+    case object Unfold extends ViperLocation
     case object InvariantLoopStart extends ViperLocation
     case object InvariantLoopEnd extends ViperLocation
 
@@ -121,6 +123,7 @@ object Collector {
         case at: AtOp =>
           vprLocation match {
             case ViperLocation.PreInvoke | ViperLocation.PreLoop |
+                ViperLocation.Fold | ViperLocation.Unfold |
                 ViperLocation.Value =>
               Pre(at.op)
             case ViperLocation.PostInvoke | ViperLocation.PostLoop =>
@@ -160,6 +163,11 @@ object Collector {
           else ViperLocation.Value
         new ViperBranch(invoke, location, condition)
       }
+
+      case BranchCond(condition, position, Some(CheckPosition.GenericNode(unfold: vpr.Unfold))) =>
+        new ViperBranch(unfold, ViperLocation.Fold, condition)
+      case BranchCond(condition, position, Some(CheckPosition.GenericNode(unfold: vpr.Fold))) =>
+        new ViperBranch(unfold, ViperLocation.Unfold, condition)
 
       case BranchCond(
             condition,
@@ -300,7 +308,8 @@ object Collector {
                     Post(at.op)
                   case _ => Pre(at.op)
                 }
-              case ViperLocation.PreLoop | ViperLocation.PreInvoke => Pre(at.op)
+              case ViperLocation.PreLoop | ViperLocation.PreInvoke |
+                ViperLocation.Fold | ViperLocation.Unfold => Pre(at.op)
               case ViperLocation.PostLoop | ViperLocation.PostInvoke =>
                 Post(at.op)
               case ViperLocation.InvariantLoopStart => LoopStart(at.op)
@@ -613,6 +622,16 @@ object Collector {
                 Some(
                   op.method.parameters
                     .zip(op.arguments.map(resolveValue(_)))
+                    .toMap
+                )
+              )
+            // TODO: Do we need unfold?
+            case op: Fold =>
+              (
+                op.instance.predicate.expression,
+                Some(
+                  op.instance.predicate.parameters
+                    .zip(op.instance.arguments.map(resolveValue(_)))
                     .toMap
                 )
               )
