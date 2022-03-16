@@ -14,7 +14,7 @@ NPATHS="$2"
 NITER="$3"
 JAR="target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar"
 
-ROOT="./benchmark"
+ROOT="./study/data"
 LOGS="$ROOT/logs"
 PERM_DIR="$ROOT/perms"
 PERM_META="$ROOT/perms.csv"
@@ -102,6 +102,13 @@ echo "$START Cleaning baseline CSV file $BASE_GEN_CSV..."
 clean_param_csv $BASE_GEN_CSV "files"
 echo "$SUCCESS Baseline CSV file cleaned.\n"
 
+FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $BASE_GEN_LOG | wc -l)
+FAILS_NOSP=$(echo $FAILS | sed 's/ *$//g')
+if [ "$FAILS_NOSP" != "0" ]
+then
+echo "$ERR There were $FAILS_NOSP baseline permutations that failed to compile.\n"
+fi
+
 echo "$START Executing verifier, compiling to $EXEC_DIR..."
 hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -Xss15m -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
 rm -rf $EXEC_DIR/*.dSYM
@@ -109,7 +116,10 @@ echo "$SUCCESS Verification completed, logs at $VERIFY_LOG"
 
 FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $VERIFY_LOG | wc -l)
 FAILS_NOSP=$(echo $FAILS | sed 's/ *$//g')
-echo "$ERR There were $FAILS_NOSP failing benchmarks.\n"
+if [ "$FAILS_NOSP" != "0" ]
+then
+echo "$ERR There were $FAILS_NOSP permutations that failed to verify.\n"
+fi
 
 echo "$START Cleaning verification CSV file $VERIFY_CSV..."
 clean_param_csv $VERIFY_CSV "files"
@@ -120,6 +130,14 @@ echo "$START Beginning executions..."
 hyperfine -N --runs $NITER -i -L files $EXEC_FILE_LIST "$EXEC_DIR/{files} >> $EXEC_LOG 2>&1" --export-csv $EXEC_CSV >> $EXEC_LOG 2>&1
 echo "$SUCCESS Executions completed, logs at $EXEC_LOG\n"
 
+FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $EXEC_LOG | wc -l)
+FAILS_NOSP=$(echo $FAILS | sed 's/ *$//g')
+if [ "$FAILS_NOSP" != "0" ]
+then
+echo "$ERR There were $FAILS_NOSP permutations that failed to execute.\n"
+fi
+
+
 echo "$START Cleaning execution CSV file $EXEC_CSV..."
 clean_param_csv $EXEC_CSV "files"
 echo "$SUCCESS Execution CSV file cleaned."
@@ -128,6 +146,13 @@ BASE_EXEC_FILE_LIST=$(collect_files $BASE_EXEC_DIR)
 echo "$START Beginning executions..."
 hyperfine -N --runs $NITER -i -L files $BASE_EXEC_FILE_LIST "$BASE_EXEC_DIR/{files} >> $BASE_EXEC_LOG 2>&1" --export-csv $BASE_EXEC_CSV >> $BASE_EXEC_LOG 2>&1
 echo "$SUCCESS Executions completed, logs at $BASE_EXEC_LOG\n"
+
+FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $BASE_EXEC_LOG | wc -l)
+FAILS_NOSP=$(echo $FAILS | sed 's/ *$//g')
+if [ "$FAILS_NOSP" != "0" ]
+then
+echo "$ERR There were $FAILS_NOSP baseline permutations that failed to execute.\n"
+fi
 
 echo "$START Cleaning execution CSV file $BASE_EXEC_CSV..."
 clean_param_csv $BASE_EXEC_CSV "files"
