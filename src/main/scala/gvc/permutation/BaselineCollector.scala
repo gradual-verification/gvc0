@@ -153,7 +153,8 @@ object BaselineCollector {
                   .isInstanceOf[Var]
               ) {
                 val tempVar =
-                  block.method.addVar(returnStmt.value.get.valueType.get)
+                  block.method.addVar(block.method.returnType.get)
+
                 returnStmt.insertBefore(
                   new Assign(tempVar, returnStmt.value.get)
                 )
