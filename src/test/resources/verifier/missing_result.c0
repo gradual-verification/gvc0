@@ -18,7 +18,7 @@ int random()
 int main()
 {
   // Result is not needed in the final program, so no temp var should be generated
-  doSomething(1);
+  doSomething(0);
 
   int x = random();
 

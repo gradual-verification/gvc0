@@ -1,0 +1,41 @@
+#use <runtime>
+int doSomething(int x, int* _instanceCounter);
+int main();
+int random(struct OwnedFields* _ownedFields);
+
+int doSomething(int x, int* _instanceCounter)
+  //@requires true;
+  //@ensures \result == 0 ? x == 0 : true;
+{
+  return 1;
+}
+
+int main()
+{
+  int x = 0;
+  bool _cond_1 = false;
+  int _ = 0;
+  int* _instanceCounter = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  doSomething(0, _instanceCounter);
+  _tempFields = initOwnedFields(_instanceCounter);
+  x = random(_tempFields);
+  join(_ownedFields, _tempFields);
+  _ = doSomething(x, _instanceCounter);
+  _cond_1 = _ == 0;
+  if (!_cond_1)
+  {
+    assert(x == 0);
+  }
+  //@assert x == 0;
+  return 0;
+}
+
+int random(struct OwnedFields* _ownedFields)
+  //@ensures ?;
+{
+  return 0;
+}

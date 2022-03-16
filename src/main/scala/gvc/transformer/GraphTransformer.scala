@@ -453,7 +453,7 @@ object GraphTransformer {
     def implementPredicate(input: ResolvedPredicateDefinition): Unit = {
       val predicate = ir.predicate(input.name)
       val scope = new PredicateScope(predicate)
-      predicate.expression = transformExpr(input.body, scope)
+      predicate.expression = transformSpec(input.body, scope)
     }
 
     def not(condition: IRGraph.Expression) =

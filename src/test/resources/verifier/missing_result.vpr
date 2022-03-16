@@ -10,7 +10,7 @@ method main() returns ($result: Int)
   var x: Int
   var $result_0: Int
   var $result_1: Int
-  $result_0 := doSomething(1)
+  $result_0 := doSomething(0)
   x := random()
   $result_1 := doSomething(x)
   assert x == 0
