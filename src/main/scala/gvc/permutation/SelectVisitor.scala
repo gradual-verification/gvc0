@@ -83,28 +83,17 @@ class SelectVisitor(program: IRGraph.Program)
   }
 
   override def collectConditional(template: Conditional): Unit = {
-    val falseBranch = this.finishedExpr.remove(0)
-    val trueBranch = this.finishedExpr.remove(0)
-
-    val resolvedConditional: Option[Expression] = trueBranch match {
-      case Some(tBranch) =>
-        falseBranch match {
-          case Some(fBranch) =>
-            Some(
-              new IRGraph.Conditional(
-                template.condition,
-                tBranch,
-                fBranch
-              )
-            )
-          case None => trueBranch
-        }
-      case None =>
-        falseBranch match {
-          case Some(_) => falseBranch
-          case None    => None
-        }
-    }
+    val falseBranch =
+      this.finishedExpr.remove(0).getOrElse(new IRGraph.Bool(true))
+    val trueBranch =
+      this.finishedExpr.remove(0).getOrElse(new IRGraph.Bool(true))
+    val resolvedConditional = Some(
+      new IRGraph.Conditional(
+        template.condition,
+        trueBranch,
+        falseBranch
+      )
+    )
     val top = this.incompleteExpr.remove(0)
     this.incompleteExpr.insert(0, mergeBinary(top, resolvedConditional))
   }

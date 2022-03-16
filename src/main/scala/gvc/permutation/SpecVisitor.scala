@@ -244,12 +244,14 @@ class SpecTraversal[I, O] {
               )
             }
           case _ =>
-            visitor.visitSpec(
-              context,
-              expr,
-              specType,
-              exprType = ExprType.Default
-            )
+            if (!expr.isInstanceOf[IRGraph.Bool]) {
+              visitor.visitSpec(
+                context,
+                expr,
+                specType,
+                exprType = ExprType.Default
+              )
+            }
         }
       case None =>
     }
