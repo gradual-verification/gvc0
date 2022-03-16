@@ -39,6 +39,9 @@ void grow(OwnedFields* fields)
     if(fields->contents[i] != NULL && !fields->contents[i]->deleted){
         int _id = fields->contents[i]->_id;
         int newIndex = hash(_id, fields->capacity);
+        while(newContents[newIndex] != NULL){
+            newIndex += 1;
+        }
         newContents[newIndex] = fields->contents[i];
     }
   }
