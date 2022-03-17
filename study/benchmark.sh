@@ -27,13 +27,15 @@ EXEC_DIR="$ROOT/compiled"
 EXEC_CSV="$ROOT/exec.csv"
 EXEC_LOG="$LOGS/exec.log"
 
+PROF_DIR="$ROOT/prof"
+
 BASE_GEN_LOG="$LOGS/baseline_gen.log"
 BASE_EXEC_LOG="$LOGS/baseline_exec.log"
 BASE_PERM_DIR="$ROOT/baseline_perms"
 BASE_EXEC_DIR="$ROOT/baseline_compiled"
 BASE_GEN_CSV="$ROOT/baseline_gen.csv"
 BASE_EXEC_CSV="$ROOT/baseline_exec.csv"
-
+BASE_PROF_DIR="$ROOT/baseline_prof"
 
 STAT_COLS="id,mean,stddev,median,user,system,min,max"
 
@@ -43,7 +45,9 @@ mkdir $LOGS
 mkdir $PERM_DIR
 mkdir $BASE_PERM_DIR
 mkdir $EXEC_DIR
+mkdir $PROF_DIR
 mkdir $BASE_EXEC_DIR
+mkdir $BASE_PROF_DIR
 
 clean_param_csv () {
   REWRITTEN=""
@@ -90,10 +94,8 @@ echo "\n\n$SUCCESS Finished generating permutations."
 echo "$SUCCESS Metadata stored in $PERM_META and $PERM_LEVELS.\n"
 
 PERM_C0_LIST=$(collect_files $PERM_DIR)
-
-
 echo "$START Generating the baseline for each permutation to $BASE_PERM_DIR...\n"
-hyperfine --runs $NITER -i -L files "$PERM_C0_LIST" "java -jar $JAR $PERM_DIR/{files} --baseline=$BASE_PERM_DIR/{files} --output=$BASE_EXEC_DIR/{files}.out >> $BASE_GEN_LOG 2>&1" --export-csv $BASE_GEN_CSV >> $BASE_GEN_LOG 2>&1
+hyperfine --runs $NITER -i -L files "$PERM_C0_LIST" "java -jar $JAR $PERM_DIR/{files} --baseline=$BASE_PERM_DIR/{files} --output=$BASE_EXEC_DIR/{files}.out --profile=$BASE_PROF_DIR/{files}.out >> $BASE_GEN_LOG 2>&1" --export-csv $BASE_GEN_CSV >> $BASE_GEN_LOG 2>&1
 rm -rf $BASE_EXEC_DIR/*.dSYM
 echo "\n\n$SUCCESS Finished generating the baseline for each permutation."
 echo "$SUCCESS Generation time data stored in $BASE_GEN_CSV.\n"
@@ -110,7 +112,7 @@ echo "$ERR There were $FAILS_NOSP baseline permutations that failed to compile.\
 fi
 
 echo "$START Executing verifier, compiling to $EXEC_DIR..."
-hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -Xss15m -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
+hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -Xss15m -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files --profile=$PROF_DIR/{files}.out >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
 rm -rf $EXEC_DIR/*.dSYM
 echo "$SUCCESS Verification completed, logs at $VERIFY_LOG"
 

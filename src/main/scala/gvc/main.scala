@@ -217,7 +217,9 @@ object Main extends App {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = List(runtimeIncludeDir.toString + "/")
+      includeDirs = List(runtimeIncludeDir.toString + "/"),
+      compilerArgs =
+        if (cmdConfig.profiling.isDefined) List("-lprofiler") else List()
     )
 
     // Always write the intermediate C0 file, but then delete it
@@ -233,7 +235,10 @@ object Main extends App {
     if (compilerExit != 0) Config.error("Compilation failed")
 
     if (cmdConfig.exec) {
-      val outputCommand = Paths.get(outputExe).toAbsolutePath.toString
+      var outputCommand = Paths.get(outputExe).toAbsolutePath.toString
+      if (cmdConfig.profiling.isDefined)
+        outputCommand =
+          "CPUPROFILE=" + cmdConfig.profiling.get + " " + outputCommand
       sys.exit(Seq(outputCommand) !)
     } else {
       sys.exit(0)

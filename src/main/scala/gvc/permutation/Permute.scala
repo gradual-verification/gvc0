@@ -65,7 +65,7 @@ object Permute {
 
     val labeller = new LabelVisitor()
     val labels = labeller.visit(ir)
-    println(s"# of conjuncts: ${labels.length}")
+    println(s"# of components: ${labels.length}")
     val alreadySampled = mutable.Set[String]()
     val csv = new CSVPrinter(files, labels)
     var previousID: Option[String] = None

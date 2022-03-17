@@ -13,6 +13,7 @@ case class Config(
     permuteDumpDir: Option[String] = None,
     permuteErrorDir: Option[String] = None,
     permuteMetadataFile: Option[String] = None,
+    profiling: Option[String] = None,
     baseline: Option[String] = None,
     saveFiles: Boolean = false,
     exec: Boolean = false,
@@ -72,7 +73,8 @@ object Config {
                |             --perm-ex=<file>               Provide a comma-separated list of methods to keep constant in all permutations.
                |             --perm-dump=<dir>              Specify the directory to dump permuted programs; default is "./perms".
                |             --perm-meta=<file>             Specify the file to store metadata on generated permutations; default is "./perm_meta.csv"
-               |  -b <file>  --baseline=<file>              Translate every specification in the program to a runtime check, and compile it to the specified output file."""
+               |  -b <file>  --baseline=<file>              Translate every specification in the program to a runtime check, and compile it to the specified output file.
+               |             --profile                      Enable -pg option in clang when compiling."""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val permuteArg = raw"--perm=(.+)".r
@@ -80,6 +82,7 @@ object Config {
   private val permuteDumpDir = raw"--perm-dump=(.+)".r
   private val permuteMeta = raw"--perm-meta=(.+)".r
   private val baselineOut = raw"--baseline=(.+)".r
+  private val profileOut = raw"--profile=(.+)".r
 
   def error(message: String): Nothing = {
     println(message)
@@ -128,6 +131,8 @@ object Config {
             permute = Some(f.toInt)
           )
         )
+      case profileOut(f) :: tail =>
+        fromCommandLineArgs(tail, current.copy(profiling = Some(f)))
       case permuteExcludeArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(permuteExclude = Some(f)))
       case permuteDumpDir(f) :: tail =>

@@ -23,9 +23,9 @@ object LabelTools {
   private def sampleRandom(
       orderedList: List[ASTLabel]
   ): List[ASTLabel] = {
+    util.Random.setSeed(41L)
     val shuffle = scala.util.Random.shuffle(orderedList.indices.toList)
     shuffle.map(index => orderedList(index))
-
   }
 
   def hashPermutation(labels: List[ASTLabel]): String = {
