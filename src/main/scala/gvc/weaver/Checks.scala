@@ -1,4 +1,5 @@
 package gvc.weaver
+import gvc.transformer.IRGraph.{FieldMember, StructField}
 import viper.silver.{ast => vpr}
 import gvc.transformer.{IRGraph => IR}
 import gvc.transformer.IRGraphSilver.Names
@@ -273,7 +274,10 @@ object CheckExpression {
     }
   }
 
-  def fromViper(value: vpr.Exp, method: IR.Method): Expr = {
+  def fromViper(
+      value: vpr.Exp,
+      method: IR.Method
+  ): Expr = {
     def expr(e: vpr.Exp) = fromViper(e, method)
     value match {
       case eq: vpr.EqCmp  => Eq(expr(eq.left), expr(eq.right))
@@ -305,10 +309,21 @@ object CheckExpression {
               Names.RefPointerValue =>
             Deref(root)
           case field => {
-            val segments = field.split('$')
-            if (segments.length != 2)
-              throw new WeaverException(s"Invalid field name '$field'")
-            Field(root, segments(0), segments(1))
+            val segments = field.split('.')
+            var modifiedRoot = root
+            val base =
+              if (segments.length != 0) segments(segments.length - 1) else field
+            val structName = base.split('$')(0)
+            val fieldName = base.split('$')(1)
+            if (segments.length > 1) {
+              segments
+                .slice(0, segments.length - 1)
+                .foreach(seg => {
+                  val elements = seg.split('$')
+                  modifiedRoot = Field(root, elements(0), elements(1))
+                })
+            }
+            Field(root, structName, fieldName)
           }
         }
       }
