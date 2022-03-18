@@ -10,6 +10,7 @@ then
   exit 1
 fi
 
+
 NPATHS="$2"
 NITER="$3"
 JAR="target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar"
@@ -36,6 +37,18 @@ BASE_EXEC_DIR="$ROOT/baseline_compiled"
 BASE_GEN_CSV="$ROOT/baseline_gen.csv"
 BASE_EXEC_CSV="$ROOT/baseline_exec.csv"
 BASE_PROF_DIR="$ROOT/baseline_prof"
+
+BASE_PROF=""
+if [ -n "$4" ]
+then
+  BASE_PROF="--profile=$BASE_PROF_DIR/{files}.out"
+fi
+
+EXEC_PROF=""
+if [ -n "$4" ]
+then EXEC_PROF="--profile=$PROF_DIR/{files}.out"
+fi
+
 
 STAT_COLS="id,mean,stddev,median,user,system,min,max"
 
@@ -95,7 +108,7 @@ echo "$SUCCESS Metadata stored in $PERM_META and $PERM_LEVELS.\n"
 
 PERM_C0_LIST=$(collect_files $PERM_DIR)
 echo "$START Generating the baseline for each permutation to $BASE_PERM_DIR...\n"
-hyperfine --runs $NITER -i -L files "$PERM_C0_LIST" "java -jar $JAR $PERM_DIR/{files} --baseline=$BASE_PERM_DIR/{files} --output=$BASE_EXEC_DIR/{files}.out --profile=$BASE_PROF_DIR/{files}.out >> $BASE_GEN_LOG 2>&1" --export-csv $BASE_GEN_CSV >> $BASE_GEN_LOG 2>&1
+hyperfine --runs $NITER -i -L files "$PERM_C0_LIST" "java -jar $JAR $PERM_DIR/{files} --baseline=$BASE_PERM_DIR/{files} --output=$BASE_EXEC_DIR/{files}.out $BASE_PROF >> $BASE_GEN_LOG 2>&1" --export-csv $BASE_GEN_CSV >> $BASE_GEN_LOG 2>&1
 rm -rf $BASE_EXEC_DIR/*.dSYM
 echo "\n\n$SUCCESS Finished generating the baseline for each permutation."
 echo "$SUCCESS Generation time data stored in $BASE_GEN_CSV.\n"
@@ -112,7 +125,7 @@ echo "$ERR There were $FAILS_NOSP baseline permutations that failed to compile.\
 fi
 
 echo "$START Executing verifier, compiling to $EXEC_DIR..."
-hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -Xss15m -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files --profile=$PROF_DIR/{files}.out >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
+hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -Xss15m -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files $EXEC_PROF >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
 rm -rf $EXEC_DIR/*.dSYM
 echo "$SUCCESS Verification completed, logs at $VERIFY_LOG"
 
