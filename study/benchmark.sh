@@ -44,11 +44,14 @@ then
   BASE_PROF="--profile=$BASE_PROF_DIR/{files}.out"
 fi
 
+echo $BASE_PROF
+
 EXEC_PROF=""
-if [ -n "$4" ]
+if [ -n "$4" ] && [ "$4" -eq 1 ]
 then EXEC_PROF="--profile=$PROF_DIR/{files}.out"
 fi
 
+echo $EXEC_PROF
 
 STAT_COLS="id,mean,stddev,median,user,system,min,max"
 
