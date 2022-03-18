@@ -1,19 +1,63 @@
 
 # shellcheck disable=SC1019
+JAR="target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar"
 SUCCESS="[\033[0;32m✓\033[0m] -"
 START="[\033[0;35m*\033[0m] -"
 ERR="[\033[0;31mx\033[0m] -"
 
-if [ -z $1 ] || [ -z $2 ] || [ -z $3 ]
+NITER=1
+NPATHS=1
+BASE_PROF=""
+EXEC_PROF=""
+SLIM=0
+TIMEOUT="15m"
+for i in "$@"; do
+  case $i in
+   -i=*|--iter=*)
+     NITER="${i#*=}"
+     shift # past argument=value
+     ;;
+    -p=*|--paths=*)
+      NPATHS="${i#*=}"
+      shift # past argument=value
+      ;;
+    --profiling)
+      BASE_PROF="--profile=$BASE_PROF_DIR/{files}.out"
+      EXEC_PROF="--profile=$PROF_DIR/{files}.out"
+      shift # past argument=value
+      ;;
+    -t=*|--timeout=*)
+      TIMEOUT="${i#*=}"
+      shift
+      ;;
+    -s|--slim)
+      SLIM=1
+      shift
+      ;;
+    -*|--*)
+      echo "Unknown option $i"
+      exit 1
+      ;;
+    *)
+      FILE="${i#*=}"
+      ;;
+  esac
+done
+
+echo "$START Generating $NPATHS paths with $NITER iterations for $FILE, timeout $TIMEOUT".
+if [ "$SLIM" -eq 0 ]
 then
-  echo "$ERR Usage: ./benchmark.sh [file] [n paths] [n iterations] [enable profiling]"
-  exit 1
+    echo "$START Baseline \033[0;32menabled\033[0m."
+else
+    echo "$START Baseline \033[0;31mdisabled\033[0m."
 fi
-
-
-NPATHS="$2"
-NITER="$3"
-JAR="target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar"
+if [ "$EXEC_PROF" != "" ]
+then
+    echo "$START Profiling \033[0;32menabled\033[0m."
+else
+    echo "$START Profiling \033[0;31mdisabled\033[0m."
+fi
+echo "\n"
 
 ROOT="./study/data"
 LOGS="$ROOT/logs"
@@ -29,7 +73,8 @@ EXEC_CSV="$ROOT/exec.csv"
 EXEC_LOG="$LOGS/exec.log"
 
 PROF_DIR="$ROOT/prof"
-
+if [ "$SLIM" -eq 0 ]
+  then
 BASE_GEN_LOG="$LOGS/baseline_gen.log"
 BASE_EXEC_LOG="$LOGS/baseline_exec.log"
 BASE_PERM_DIR="$ROOT/baseline_perms"
@@ -37,33 +82,21 @@ BASE_EXEC_DIR="$ROOT/baseline_compiled"
 BASE_GEN_CSV="$ROOT/baseline_gen.csv"
 BASE_EXEC_CSV="$ROOT/baseline_exec.csv"
 BASE_PROF_DIR="$ROOT/baseline_prof"
-
-BASE_PROF=""
-if [ -n "$4" ] && [ "$4" -eq 1 ]
-then
-  BASE_PROF="--profile=$BASE_PROF_DIR/{files}.out"
 fi
-
-echo $BASE_PROF
-
-EXEC_PROF=""
-if [ -n "$4" ] && [ "$4" -eq 1 ]
-then EXEC_PROF="--profile=$PROF_DIR/{files}.out"
-fi
-
-echo $EXEC_PROF
-
 STAT_COLS="id,mean,stddev,median,user,system,min,max"
 
 rm -rf $ROOT
 mkdir $ROOT
 mkdir $LOGS
 mkdir $PERM_DIR
-mkdir $BASE_PERM_DIR
 mkdir $EXEC_DIR
-mkdir $PROF_DIR
-mkdir $BASE_EXEC_DIR
-mkdir $BASE_PROF_DIR
+if [ "$SLIM" -eq 0 ]
+then
+  mkdir $PROF_DIR
+  mkdir $BASE_PERM_DIR
+  mkdir $BASE_EXEC_DIR
+  mkdir $BASE_PROF_DIR
+fi
 
 clean_param_csv () {
   REWRITTEN=""
@@ -105,13 +138,15 @@ collect_files(){
 }
 
 echo "$START Generating permutations to $PERM_DIR...\n"
-java -jar $JAR $1 --perm=$NPATHS --output=$PERM_DIR
+java -jar $JAR $FILE --perm=$NPATHS --output=$PERM_DIR
 echo "\n\n$SUCCESS Finished generating permutations."
 echo "$SUCCESS Metadata stored in $PERM_META and $PERM_LEVELS.\n"
-
 PERM_C0_LIST=$(collect_files $PERM_DIR)
+
+if [ "$SLIM" -eq 0 ]
+then
 echo "$START Generating the baseline for each permutation to $BASE_PERM_DIR...\n"
-hyperfine --runs $NITER -i -L files "$PERM_C0_LIST" "java -jar $JAR $PERM_DIR/{files} --baseline=$BASE_PERM_DIR/{files} --output=$BASE_EXEC_DIR/{files}.out $BASE_PROF >> $BASE_GEN_LOG 2>&1" --export-csv $BASE_GEN_CSV >> $BASE_GEN_LOG 2>&1
+hyperfine --runs $NITER -i -L files "$PERM_C0_LIST" "timeout -k $TIMEOUT $TIMEOUT java -jar $JAR $PERM_DIR/{files} --baseline=$BASE_PERM_DIR/{files} --output=$BASE_EXEC_DIR/{files}.out $BASE_PROF >> $BASE_GEN_LOG 2>&1" --export-csv $BASE_GEN_CSV >> $BASE_GEN_LOG 2>&1
 rm -rf $BASE_EXEC_DIR/*.dSYM
 echo "\n\n$SUCCESS Finished generating the baseline for each permutation."
 echo "$SUCCESS Generation time data stored in $BASE_GEN_CSV.\n"
@@ -126,9 +161,10 @@ if [ "$FAILS_NOSP" != "0" ]
 then
 echo "$ERR There were $FAILS_NOSP baseline permutations that failed to compile.\n"
 fi
+fi
 
 echo "$START Executing verifier, compiling to $EXEC_DIR..."
-hyperfine --runs $NITER -i -L files $PERM_C0_LIST "java -Xss15m -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files $EXEC_PROF >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
+hyperfine --runs $NITER -i -L files $PERM_C0_LIST "timeout -k $TIMEOUT $TIMEOUT java -Xss15m -jar $JAR $PERM_DIR/{files} --output=$EXEC_DIR/{files}.out --save-files $EXEC_PROF >> $VERIFY_LOG 2>&1" --export-csv $VERIFY_CSV >> $VERIFY_LOG 2>&1
 rm -rf $EXEC_DIR/*.dSYM
 echo "$SUCCESS Verification completed, logs at $VERIFY_LOG"
 
@@ -160,6 +196,8 @@ echo "$START Cleaning execution CSV file $EXEC_CSV..."
 clean_param_csv $EXEC_CSV "files"
 echo "$SUCCESS Execution CSV file cleaned."
 
+if [ "$SLIM" -eq 0 ]
+then
 BASE_EXEC_FILE_LIST=$(collect_files $BASE_EXEC_DIR)
 echo "$START Beginning executions..."
 hyperfine -N --runs $NITER -i -L files $BASE_EXEC_FILE_LIST "$BASE_EXEC_DIR/{files} >> $BASE_EXEC_LOG 2>&1" --export-csv $BASE_EXEC_CSV >> $BASE_EXEC_LOG 2>&1
@@ -175,5 +213,6 @@ fi
 echo "$START Cleaning execution CSV file $BASE_EXEC_CSV..."
 clean_param_csv $BASE_EXEC_CSV "files"
 echo "$SUCCESS Execution CSV file cleaned."
+fi
 
 echo "$SUCCESS Finished."
