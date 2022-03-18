@@ -6,7 +6,7 @@ ERR="[\033[0;31mx\033[0m] -"
 
 if [ -z $1 ] || [ -z $2 ] || [ -z $3 ]
 then
-  echo "$ERR Usage: ./benchmark.sh [file] [n paths] [n iterations]"
+  echo "$ERR Usage: ./benchmark.sh [file] [n paths] [n iterations] [enable profiling]"
   exit 1
 fi
 
@@ -39,7 +39,7 @@ BASE_EXEC_CSV="$ROOT/baseline_exec.csv"
 BASE_PROF_DIR="$ROOT/baseline_prof"
 
 BASE_PROF=""
-if [ -n "$4" ]
+if [ -n "$4" ] && [ "$4" -eq 1 ]
 then
   BASE_PROF="--profile=$BASE_PROF_DIR/{files}.out"
 fi
