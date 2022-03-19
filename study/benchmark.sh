@@ -10,6 +10,7 @@ NPATHS=1
 BASE_PROF=""
 EXEC_PROF=""
 SLIM=0
+HELP=0
 TIMEOUT="15m"
 for i in "$@"; do
   case $i in
@@ -34,6 +35,10 @@ for i in "$@"; do
       SLIM=1
       shift
       ;;
+    -h|--help)
+      HELP=1
+      shift
+      ;;
     -*|--*)
       echo "Unknown option $i"
       exit 1
@@ -43,6 +48,17 @@ for i in "$@"; do
       ;;
   esac
 done
+if [ -z "$FILE" ] || [ "$HELP" -ne 0 ]
+then
+  echo "Usage: ./study/benchmark.sh [OPTION] SOURCEFILE"
+  echo "where OPTIONS is"
+  echo "  -i <n>     --iter=<n>     The number of iterations for timing execution.                     (Default: 1)"
+  echo "  -p <n>     --paths=<n>    The number of paths to sample.                                     (Default: 1)"
+  echo "  -t <n>     --timeout=<n>  The maximum duration the verifier will run for before termination. (Default: 15m)"
+  echo "  -s         --slim         Disable the baseline.                                              (Default: enabled)"
+  echo "  -h         --help         Print the options."
+  exit 0
+fi
 
 echo "$START Generating $NPATHS paths with $NITER iterations for $FILE, timeout $TIMEOUT".
 if [ "$SLIM" -eq 0 ]
