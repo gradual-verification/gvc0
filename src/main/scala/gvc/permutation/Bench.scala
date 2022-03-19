@@ -237,6 +237,29 @@ object Bench {
         )
         previousID = Some(id)
       }
+      if (!config.disableBaseline) {
+        Baseline.insert(ir)
+        val baselineFile =
+          files.baselinePerms.get.resolve(Names._baseline).toString
+        val baselineSourceText = GraphPrinter.print(ir, includeSpecs = false)
+        Main.writeFile(
+          baselineFile,
+          baselineSourceText
+        )
+        val baselineCompiledFile =
+          files.baselineCompiled.get.resolve("baseline.out").toString
+        val exitCodeBaseline = compile(
+          baselineCompiledFile,
+          baselineSourceText,
+          config
+        )
+        if (exitCodeBaseline != 0) {
+          baselineCompilationFailures += 1
+        }
+      }
+      print(
+        s"\rGenerated ${alreadySampled.size + 3} unique programs, ${sampleIndex + 1}/$maxPaths paths completed. Errors: ($verificationFailures V, $defaultCompilationFailures C, $baselineCompilationFailures CB"
+      )
     }
     csv.close()
   }
