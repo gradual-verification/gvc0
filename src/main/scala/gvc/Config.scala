@@ -8,13 +8,10 @@ sealed trait DumpType
 case class Config(
     dump: Option[DumpType] = None,
     output: Option[String] = None,
-    permute: Option[Int] = None,
-    permuteExclude: Option[String] = None,
-    permuteDumpDir: Option[String] = None,
-    permuteErrorDir: Option[String] = None,
-    permuteMetadataFile: Option[String] = None,
-    profiling: Option[String] = None,
-    baseline: Option[String] = None,
+    compileBenchmark: Option[String] = None,
+    benchmarkPaths: Option[Int] = None,
+    disableBaseline: Boolean = false,
+    enableProfiling: Boolean = false,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
@@ -36,20 +33,10 @@ case class Config(
       else if (sourceFile.isEmpty) Some("No source file specified")
       else if (!Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
-      else if (
-        !permute.isDefined && permuteExclude.isDefined && !Files.exists(
-          Paths.get(permuteExclude.get)
-        )
-      )
-        Some(
-          s"Permutation exclusion list '${permuteExclude.get}' does not exist'"
-        )
-      else if (!permute.isDefined && permuteExclude.isDefined)
-        Some(s"Option --perm must be enabled to use --permute-exclude")
-      else if (!permute.isDefined && permuteDumpDir.isDefined)
-        Some(s"Option --perm must be enabled to use --permute-dump-dir")
-      else if (!permute.isDefined && permuteMetadataFile.isDefined)
-        Some(s"Option --perm must be enabled to use --permute-meta-file")
+      else if (disableBaseline && compileBenchmark.isEmpty)
+        Some(s"Benchmarking must be enabled to use --disable-baseline.")
+      else if (benchmarkPaths.isDefined && compileBenchmark.isEmpty)
+        Some(s"Benchmarking must be enabled to use -p or --paths.")
       else None
     ).foreach(Config.error)
   }
@@ -69,21 +56,14 @@ object Config {
                |  -v         --only-verify                  Stop after static verification
                |  -s         --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
                |  -x         --exec                         Execute the compiled file
-               |  -p         --perm=<n>                     Generate 'n' paths of permutations for the given program; default n = 10.
-               |             --perm-ex=<file>               Provide a comma-separated list of methods to keep constant in all permutations.
-               |             --perm-dump=<dir>              Specify the directory to dump permuted programs; default is "./perms".
-               |             --perm-meta=<file>             Specify the file to store metadata on generated permutations; default is "./perm_meta.csv"
-               |  -b <file>  --baseline=<file>              Translate every specification in the program to a runtime check, and compile it to the specified output file.
-               |             --profile                      Enable -pg option in clang when compiling."""
+               |  -b <dir>   --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
+               |  -p <n>     --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
+               |             --disable-baseline             Speedup benchmark generation by skipping the baseline.
+               |             --profile                      Enable -lprofiler option in clang for gperftools when compiling."""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
-  private val permuteArg = raw"--perm=(.+)".r
-  private val permuteExcludeArg = raw"--perm-ex=(.+)".r
-  private val permuteDumpDir = raw"--perm-dump=(.+)".r
-  private val permuteMeta = raw"--perm-meta=(.+)".r
-  private val baselineOut = raw"--baseline=(.+)".r
-  private val profileOut = raw"--profile=(.+)".r
-
+  private val benchmarkDir = raw"--benchmark=(.+)".r
+  private val paths = raw"--paths=(.+)".r
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
@@ -108,39 +88,30 @@ object Config {
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
       case "-o" :: f :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
-      case "-p" :: tail =>
+      case paths(f) :: tail =>
+        fromCommandLineArgs(tail, current.copy(benchmarkPaths = Some(f.toInt)))
+      case "-p" :: f :: tail =>
         fromCommandLineArgs(
           tail,
           current.copy(
-            permute = Some(10)
+            benchmarkPaths = Some(f.toInt)
           )
         )
+      case benchmarkDir(f) :: tail =>
+        fromCommandLineArgs(tail, current.copy(compileBenchmark = Some(f)))
       case "-b" :: f :: tail =>
         fromCommandLineArgs(
           tail,
           current.copy(
-            baseline = Some(f)
+            compileBenchmark = Some(f)
           )
         )
       case outputArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
-      case permuteArg(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(
-            permute = Some(f.toInt)
-          )
-        )
-      case profileOut(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(profiling = Some(f)))
-      case permuteExcludeArg(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(permuteExclude = Some(f)))
-      case permuteDumpDir(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(permuteDumpDir = Some(f)))
-      case permuteMeta(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(permuteMetadataFile = Some(f)))
-      case baselineOut(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(baseline = Some(f)))
+      case "--disable-baseline" :: tail =>
+        fromCommandLineArgs(tail, current.copy(disableBaseline = true))
+      case "--profile" :: tail =>
+        fromCommandLineArgs(tail, current.copy(enableProfiling = true))
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>

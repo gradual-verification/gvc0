@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.permutation.{Baseline, Permute, SamplingHeuristic}
+import gvc.permutation.Bench
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -22,7 +22,8 @@ case class OutputFileCollection(
     baseName: String,
     irFileName: String,
     silverFileName: String,
-    c0FileName: String
+    c0FileName: String,
+    profilingName: String
 )
 
 object Main extends App {
@@ -38,32 +39,21 @@ object Main extends App {
     val irFileName = baseName + ".ir.c0"
     val silverFileName = baseName + ".vpr"
     val c0FileName = baseName + ".verified.c0"
+    val profilingName = baseName + ".prof.out"
+
     val fileNames =
       OutputFileCollection(
         baseName,
         irFileName,
         silverFileName,
-        c0FileName
+        c0FileName,
+        profilingName
       )
 
     val inputSource = readFile(config.sourceFile.get)
-    if (config.baseline.isDefined) {
-      val ir = generateIR(inputSource)
-      Baseline.insert(ir)
-      val verifiedText =
-        GraphPrinter.print(
-          ir,
-          includeSpecs = false
-        )
-      writeFile(Paths.get(config.baseline.get).toString, verifiedText)
-      execute(verifiedText, fileNames)
-    } else if (config.permute.isDefined) {
-      Permute.exec(
-        inputSource,
-        config,
-        SamplingHeuristic.Random
-      )
-    } else {
+    if (config.compileBenchmark.isDefined)
+      Bench.mark(inputSource, config, fileNames)
+    else {
       val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
       execute(verifiedOutput.c0Source, fileNames)
     }
@@ -219,7 +209,7 @@ object Main extends App {
       output = Some(outputExe),
       includeDirs = List(runtimeIncludeDir.toString + "/"),
       compilerArgs =
-        if (cmdConfig.profiling.isDefined) List("-lprofiler") else List()
+        if (cmdConfig.enableProfiling) List("-lprofiler") else List()
     )
 
     // Always write the intermediate C0 file, but then delete it
@@ -236,9 +226,10 @@ object Main extends App {
 
     if (cmdConfig.exec) {
       var outputCommand = Paths.get(outputExe).toAbsolutePath.toString
-      if (cmdConfig.profiling.isDefined)
+
+      if (cmdConfig.enableProfiling)
         outputCommand =
-          "CPUPROFILE=" + cmdConfig.profiling.get + " " + outputCommand
+          "CPUPROFILE=" + fileNames.profilingName + " " + outputCommand
       sys.exit(Seq(outputCommand) !)
     } else {
       sys.exit(0)

@@ -47,7 +47,6 @@ object CC0Wrapper {
     val command = formatCommand(sourceFile, options)
     val exitCode = (command #> os) !
 
-    if (exitCode != 0) throw new CC0Exception(os.toString())
     exitCode
   }
 

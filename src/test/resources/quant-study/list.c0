@@ -1,3 +1,5 @@
+#use <args>
+
 // List node
 struct Node {
   int val;
@@ -264,10 +266,12 @@ struct Node *list_insert(struct Node *list, int val)
 //---------------------------------------------------------------------main below
 
 // main
-int main() 
-  //@ requires true;
-  //@ ensures true;
+int main()
 {
+  int* stressLevel = alloc(int);
+ // args_int("stress", stressLevel);
+ // args_parse();
+
   struct Node *l = create_list(3);
   l = list_insert(l, 4);
   l = list_insert(l, -1);
