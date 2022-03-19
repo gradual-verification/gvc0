@@ -20,14 +20,15 @@ class CheckImplementation(
     structIds: Map[String, IR.StructField]
 ) {
   private val predicateImplementations =
-    mutable.Map[(CheckMode, IR.Predicate), Option[IR.MethodDefinition]]()
+    mutable.Map[(CheckMode, String), Option[IR.MethodDefinition]]()
 
   private def resolvePredicateDefinition(
       mode: CheckMode,
       pred: IR.Predicate
   ): Option[IR.MethodDefinition] = {
+
     predicateImplementations.getOrElse(
-      (mode, pred),
+      (mode, pred.name),
       implementPredicate(mode, pred)
     )
   }
@@ -36,9 +37,10 @@ class CheckImplementation(
       mode: CheckMode,
       pred: IR.Predicate
   ): Option[IR.MethodDefinition] = {
+
     // TODO: allow name collisions when adding methods
     val defn = program.addMethod(mode.prefix + pred.name, None)
-    predicateImplementations += (mode, pred) -> Some(defn)
+    predicateImplementations += ((mode, pred.name) -> Some(defn))
 
     val newParams = pred.parameters
       .map((p: IR.Var) => p -> defn.addParameter(p.varType, p.name))
@@ -60,7 +62,7 @@ class CheckImplementation(
     } else {
       // Otherwise, this predicate implementation is a no-op, and it can be ignored
       // TODO: Remove the no-op method definition
-      predicateImplementations.update((mode, pred), None)
+      predicateImplementations.update((mode, pred.name), None)
       None
     }
   }
