@@ -1,5 +1,7 @@
 package gvc
 
+import gvc.CC0Wrapper.CompilationOutput
+
 import java.io.ByteArrayOutputStream
 import sys.process._
 import scala.language.postfixOps
@@ -48,6 +50,20 @@ object CC0Wrapper {
     val exitCode = (command #> os) !
 
     exitCode
+  }
+
+  case class CompilationOutput(exitCode: Int, output: String)
+
+  def exec_output(
+      sourceFile: String,
+      options: CC0Options
+  ): CompilationOutput = {
+    val os = new ByteArrayOutputStream
+    val command = formatCommand(sourceFile, options)
+    val exitCode = (command #> os).!
+
+    os.close()
+    CompilationOutput(exitCode, os.toString("UTF-8"))
   }
 
   private def formatCommand(

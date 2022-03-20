@@ -90,10 +90,14 @@ object IRGraph {
 
     def copy(methods: Seq[Method], predicates: Seq[Predicate]) = {
       val newProgram = new IRGraph.Program()
+
       newProgram.replacePredicates(predicates)
       newProgram.replaceMethods(methods)
+
       newProgram._structs = _structs
-      newProgram._dependencies = _dependencies
+
+      newProgram._dependencies = mutable.ListBuffer()
+      _dependencies.foreach(newProgram._dependencies += _)
       newProgram
     }
   }
@@ -115,7 +119,6 @@ object IRGraph {
       _fields += field
       field
     }
-
     def fields: Seq[StructField] = _fields
   }
 

@@ -1,5 +1,5 @@
 package gvc.permutation
-
+import gvc.CC0Wrapper.CompilationOutput
 import gvc.Main.verify
 import gvc.transformer.GraphPrinter
 import gvc.{
@@ -29,6 +29,10 @@ object Bench {
       compiled: Path,
       baselinePerms: Option[Path],
       baselineCompiled: Option[Path],
+      logs: Path,
+      verifyLogs: Path,
+      baselineCompilationLogs: Path,
+      compilationLogs: Path,
       levels: Path,
       metadata: Path
   )
@@ -37,24 +41,34 @@ object Bench {
     val _baseline = "baseline.c0"
     val _top = "top.c0"
     val _bottom = "bot.c0"
-    val perms = "/perms"
-    val verified_perms = "/verified_perms"
-    val compiled = "/compiled"
-    val baselinePerms = "/baseline_perms"
-    val baselineCompiled = "'/baseline_compiled"
-    val levels = "/levels.csv"
-    val metadata = "/metadata.csv"
+    val perms = "perms"
+    val verified_perms = "verified_perms"
+    val compiled = "compiled"
+    val baselinePerms = "baseline_perms"
+    val baselineCompiled = "baseline_compiled"
+    val levels = "levels.csv"
+    val metadata = "metadata.csv"
+    val verifyLogs = "verify.log"
+    val compilationLogs = "cc0.log"
+    val baselineCompilationLogs = "cc0_baseline.log"
+    val profilerLinkingFlag = "-lprofiler"
+    val logs = "logs"
   }
 
-  def compile(input: String, output: String, config: Config): Int = {
+  def compile(
+      input: String,
+      output: String,
+      config: Config
+  ): CompilationOutput = {
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
       output = Some(output),
       includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
-      compilerArgs = if (config.enableProfiling) List("-lprofiler") else List()
+      compilerArgs =
+        if (config.enableProfiling) List(Names.profilerLinkingFlag) else List()
     )
-    CC0Wrapper.exec(input, cc0Options)
+    CC0Wrapper.exec_output(input, cc0Options)
   }
 
   def resolveOutputFiles(
@@ -92,15 +106,27 @@ object Bench {
 
     val levels = root.resolve(Names.levels)
     val metadata = root.resolve(Names.metadata)
+
+    val logs = root.resolve(Names.logs)
+    Files.createDirectories(logs)
+
+    val verifyLog = logs.resolve(Names.verifyLogs)
+    val compileLog = logs.resolve(Names.compilationLogs)
+    val baselineCompileLog = logs.resolve(Names.baselineCompilationLogs)
+
     BenchmarkOutputFiles(
-      root,
-      perms,
-      verifiedPerms,
-      compiled,
-      baselinePerms,
-      baselineCompiled,
-      levels,
-      metadata
+      root = root,
+      perms = perms,
+      verifiedPerms = verifiedPerms,
+      compiled = compiled,
+      baselinePerms = baselinePerms,
+      baselineCompiled = baselineCompiled,
+      logs = logs,
+      verifyLogs = verifyLog,
+      compilationLogs = compileLog,
+      baselineCompilationLogs = baselineCompileLog,
+      levels = levels,
+      metadata = metadata
     )
   }
 
@@ -132,16 +158,55 @@ object Bench {
 
     val labeller = new LabelVisitor()
     val labels = labeller.visit(ir)
-    println(s"# of components: ${labels.length}")
 
     val alreadySampled = mutable.Set[String]()
     val csv = new CSVPrinter(files, labels)
+    val err = new ErrorPrinter(files)
     var previousID: Option[String] = None
     val maxPaths = config.benchmarkPaths.getOrElse(1)
 
     var verificationFailures = 0
     var defaultCompilationFailures = 0
     var baselineCompilationFailures = 0
+
+    def dumpPermutation(
+        dir: Path,
+        name: String,
+        permutation: mutable.TreeSet[ASTLabel],
+        sourceText: String
+    ): Path = {
+      val filePath = dir.resolve(name)
+      Main.writeFile(
+        filePath.toString,
+        LabelTools.appendPathComment(sourceText, permutation.toList)
+      )
+      filePath
+    }
+
+    def compilePermutation(
+        dir: Path,
+        name: String,
+        inputPath: Path,
+        config: Config
+    ): CompilationOutput = {
+      val compileDefault =
+        dir.resolve(name).toString
+      compile(inputPath.toString, compileDefault, config)
+    }
+
+    def printProgress(sampleIndex: Int) = {
+      val allErrors =
+        verificationFailures + baselineCompilationFailures + defaultCompilationFailures
+      val successRate = Math.floor(
+        (alreadySampled.size - allErrors) / alreadySampled.size.toDouble * 10000
+      ) / 100
+      print(
+        s"\rGenerated ${alreadySampled.size} unique programs, ${sampleIndex}/$maxPaths paths (${labels.length} perms/path) completed. Success: ${successRate}%, Failures: ($verificationFailures verification, ${defaultCompilationFailures + baselineCompilationFailures} cc0)"
+      )
+    }
+
+    def c0(basename: String): String = basename + ".c0"
+    def out(basename: String): String = basename + ".out"
 
     for (sampleIndex <- 0 until maxPaths) {
       val sampleToPermute = LabelTools.sample(labels, SamplingHeuristic.Random)
@@ -157,111 +222,120 @@ object Bench {
           println(sampleToPermute(labelIndex).hash)
           throw new Exception("invalid step in permutation")
         }
-
         if (!alreadySampled.contains(id)) {
-          val permutationSourceFile =
-            files.perms.resolve(
-              id + ".c0"
-            )
           val builtPermutation = selector.visit(permutationIndices)
           val sourceText =
             GraphPrinter.print(builtPermutation, includeSpecs = true)
-
-          val permutationSourceText =
-            LabelTools.appendPathComment(
-              sourceText,
-              currentPermutation.toList
-            )
-          Main.writeFile(
-            permutationSourceFile.toString,
-            permutationSourceText
+          dumpPermutation(
+            files.perms,
+            c0(id),
+            currentPermutation,
+            sourceText
           )
-
-          val verifiedPermutationSourceFile =
-            files.perms.resolve(
-              id + ".c0"
-            )
           try {
             val verifiedPermutation = verify(sourceText, outputFiles, config)
-
-            val verifiedSourceText = LabelTools.appendPathComment(
-              verifiedPermutation.c0Source,
-              currentPermutation.toList
+            val verifiedPath = dumpPermutation(
+              files.verifiedPerms,
+              c0(id),
+              currentPermutation,
+              verifiedPermutation.c0Source
             )
+            val defaultExit =
+              compilePermutation(files.compiled, out(id), verifiedPath, config)
 
-            Main.writeFile(
-              verifiedPermutationSourceFile.toString,
-              verifiedSourceText
-            )
-
-            val compileDefault =
-              files.compiled.resolve(id + ".out").toString
-
-            val exitCodeDefault: Int =
-              compile(permutationSourceFile.toString, compileDefault, config)
-            if (exitCodeDefault != 0) defaultCompilationFailures += 1
+            if (defaultExit.exitCode != 0) {
+              defaultCompilationFailures += 1
+              err.logCompilationError(id, defaultExit.output)
+            }
 
             if (!config.disableBaseline) {
-              val baselinePermutationSourceFile =
-                files.baselinePerms.get.resolve(
-                  id + ".c0"
-                )
-              Baseline.insert(builtPermutation)
-              val baselinePermutationSourceText = LabelTools.appendPathComment(
-                GraphPrinter.print(builtPermutation, includeSpecs = false),
-                currentPermutation.toList
+              val baselinePermutation = selector.visit(permutationIndices)
+              Baseline.insert(baselinePermutation)
+              val baselineSourceText =
+                GraphPrinter.print(baselinePermutation, includeSpecs = false)
+              val baselinePath = dumpPermutation(
+                files.baselinePerms.get,
+                c0(id),
+                currentPermutation,
+                baselineSourceText
               )
-              Main.writeFile(
-                baselinePermutationSourceFile.toString,
-                baselinePermutationSourceText
-              )
-              val compileBaseline =
-                files.baselineCompiled.get.resolve(id + ".out").toString
-              val exitCodeBaseline = compile(
-                baselinePermutationSourceFile.toString,
-                compileBaseline,
+              val baselineExit = compilePermutation(
+                files.baselineCompiled.get,
+                out(id),
+                baselinePath,
                 config
               )
-              if (exitCodeBaseline != 0) baselineCompilationFailures += 1
+              if (baselineExit.exitCode != 0) {
+                baselineCompilationFailures += 1
+                err.logBaselineCompilationError(id, baselineExit.output)
+              }
             }
           } catch {
-            case _: VerificationException => verificationFailures += 1
+            case ex: VerificationException =>
+              verificationFailures += 1
+              err.logVerificationError(id, ex.message)
           }
-
           csv.logPermutation(id, currentPermutation)
           alreadySampled += id
         }
         csv.logStep(id, sampleIndex + 1, labelIndex + 1)
-        print(
-          s"\rGenerated ${alreadySampled.size + 3} unique programs, ${sampleIndex + 1}/$maxPaths paths completed. Errors: ($verificationFailures V, $defaultCompilationFailures C, $baselineCompilationFailures CB"
-        )
+        printProgress(sampleIndex)
         previousID = Some(id)
       }
-      if (!config.disableBaseline) {
-        Baseline.insert(ir)
-        val baselineFile =
-          files.baselinePerms.get.resolve(Names._baseline).toString
-        val baselineSourceText = GraphPrinter.print(ir, includeSpecs = false)
-        Main.writeFile(
-          baselineFile,
-          baselineSourceText
-        )
-        val baselineCompiledFile =
-          files.baselineCompiled.get.resolve("baseline.out").toString
-        val exitCodeBaseline = compile(
-          baselineCompiledFile,
-          baselineSourceText,
-          config
-        )
-        if (exitCodeBaseline != 0) {
-          baselineCompilationFailures += 1
-        }
-      }
-      print(
-        s"\rGenerated ${alreadySampled.size + 3} unique programs, ${sampleIndex + 1}/$maxPaths paths completed. Errors: ($verificationFailures V, $defaultCompilationFailures C, $baselineCompilationFailures CB"
-      )
     }
+    if (!config.disableBaseline) {
+      Baseline.insert(ir)
+      val baselineSourceText = GraphPrinter.print(ir, includeSpecs = false)
+      val baselinePath = dumpPermutation(
+        files.baselinePerms.get,
+        c0(Names._baseline),
+        mutable.TreeSet[ASTLabel]()(LabelOrdering),
+        baselineSourceText
+      )
+      val exit = compilePermutation(
+        files.baselineCompiled.get,
+        out(Names._baseline),
+        baselinePath,
+        config
+      )
+      if (exit.exitCode != 0) {
+        baselineCompilationFailures += 1
+        err.logBaselineCompilationError(Names._baseline, exit.output)
+      }
+    }
+    printProgress(maxPaths)
     csv.close()
+    err.close()
+  }
+
+  class ErrorPrinter(files: BenchmarkOutputFiles) {
+    val verifyWriter = new FileWriter(files.verifyLogs.toString)
+    val compileWriter = new FileWriter(files.compilationLogs.toString)
+    val compileBaselineWriter = new FileWriter(
+      files.baselineCompilationLogs.toString
+    )
+
+    def formatSection(name: String): String =
+      s"-----[ Error in ${name} ]-----\n"
+
+    def logVerificationError(name: String, err: String): Unit = {
+      verifyWriter.write(formatSection(name) + err + "\n")
+      verifyWriter.flush()
+    }
+
+    def logCompilationError(name: String, err: String): Unit = {
+      compileWriter.write(formatSection(name) + err + '\n')
+      compileWriter.flush()
+    }
+    def logBaselineCompilationError(name: String, err: String): Unit = {
+      compileBaselineWriter.write(formatSection(name) + err + '\n')
+      compileBaselineWriter.flush()
+    }
+    def close(): Unit = {
+      verifyWriter.close()
+      compileWriter.close()
+      compileBaselineWriter.close()
+    }
   }
 
   class CSVPrinter(files: BenchmarkOutputFiles, template: List[ASTLabel]) {
