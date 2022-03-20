@@ -10,6 +10,8 @@ import viper.silicon.state.LoopPosition
 import viper.silicon.state.BranchCond
 
 object Collector {
+  private val DoSimplification = sys.env.get("DISABLE_SIMPLIFICATION") != Some("1")
+
   sealed trait Location
   sealed trait AtOp extends Location { val op: Op }
   case class Pre(override val op: Op) extends AtOp
@@ -613,7 +615,7 @@ object Collector {
       usedConditions.getOrElseUpdate(
         id, {
           val (loc, value, when) = conditionIndex(id)
-          val simplified = Logic.simplify(when)
+          val simplified = if (DoSimplification) Logic.simplify(when) else when
           val condition = convertDisjunction(simplified)
           TrackedCondition(id, normalizeLocation(loc), value, condition)
         }
@@ -624,7 +626,9 @@ object Collector {
     val collectedChecks = mutable.ListBuffer[RuntimeCheck]()
     for ((loc, locChecks) <- checks)
       for ((check, conditions) <- locChecks) {
-        val simplified = Logic.simplify(Logic.Disjunction(conditions.toSet))
+        val simplified =
+          if (DoSimplification) Logic.simplify(Logic.Disjunction(conditions.toSet))
+          else Logic.Disjunction(conditions.toSet)
         val condition = convertDisjunction(simplified)
         collectedChecks += RuntimeCheck(loc, check, condition)
       }
