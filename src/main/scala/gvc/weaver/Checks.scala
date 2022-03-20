@@ -1,5 +1,4 @@
 package gvc.weaver
-import gvc.transformer.IRGraph.{FieldMember, StructField}
 import viper.silver.{ast => vpr}
 import gvc.transformer.{IRGraph => IR}
 import gvc.transformer.IRGraphSilver.Names

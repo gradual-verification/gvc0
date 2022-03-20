@@ -552,6 +552,24 @@ object Collector {
       case Some(tailOp) => hasImplicitReturn(tailOp)
     }
 
+
+    def normalizeLocation(loc: Location): Location = loc match {
+      // Pre of first op in the method is the same as MethodPre
+      case Pre(op) if (op.getPrev.isEmpty && op.block == irMethod.body) => MethodPre
+
+      // Post is the same as Pre of the next op
+      case Post(op) if (op.getNext.isDefined) => Pre(op.getNext.get)
+
+      // LoopStart is the same as Pre of the first op in the loop
+      case LoopStart(op: While) if op.body.nonEmpty => Pre(op.body.head)
+
+      // LoopEnd is the same as Post of the last op in the loop
+      case LoopEnd(op: While) if op.body.nonEmpty => Post(op.body.last)
+
+      // Otherwise, don't change
+      case loc => loc
+    }
+
     // Collect and simplify all the conditions
     val usedConditions = mutable.Map[scala.Int, TrackedCondition]()
     val conditionIndex = conditions.map { case ((loc, value), cond) =>
@@ -597,7 +615,7 @@ object Collector {
           val (loc, value, when) = conditionIndex(id)
           val simplified = Logic.simplify(when)
           val condition = convertDisjunction(simplified)
-          TrackedCondition(id, loc, value, condition)
+          TrackedCondition(id, normalizeLocation(loc), value, condition)
         }
       )
     }

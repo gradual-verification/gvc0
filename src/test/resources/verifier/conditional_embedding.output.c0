@@ -1,0 +1,25 @@
+#use <runtime>
+int main();
+int test(int input, struct OwnedFields* _ownedFields);
+
+int main()
+{
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  return 0;
+}
+
+int test(int input, struct OwnedFields* _ownedFields)
+  //@requires ?;
+  //@ensures \result > 0 ? \result < 2 : \result > -2;
+{
+  if (input > 0)
+  {
+    assert(input < 2);
+  }
+  if (!(input > 0))
+  {
+    assert(input > -2);
+  }
+  return input;
+}

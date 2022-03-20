@@ -82,30 +82,42 @@ object Checker {
       }
 
     // Define condition variables and create a map from term ID to variables
-    val trackedConditions = methodData.conditions
-      .map(cond => (cond.id, method.addVar(BoolType, s"_cond_${cond.id}")))
-      .toMap
+    val trackedConditions = mutable.Map[scala.Int, Var]()
+    val sortedConditions = mutable.ListBuffer[(Location, Var, Expression)]()
+    def getTrackedCondition(cond: TrackedCondition) = {
+      trackedConditions.getOrElseUpdate(cond.id, {
+        val flag = method.addVar(BoolType, s"_cond_${cond.id}")
+        sortedConditions += ((cond.location, flag, getTrackedConditionValue(cond)))
+        flag
+      })
+    }
 
-    def getConjunction(conj: TrackedConjunction): Option[Expression] =
+    def getConjunction(conj: TrackedConjunction, loc: Location): Option[Expression] =
       conj.values.foldLeft[Option[Expression]](None) {
         case (expr, (cond, flag)) =>
-          val variable = trackedConditions(cond.id)
-          val value = if (flag) variable else new Unary(UnaryOp.Not, variable)
+          val flagExpr =
+            if (loc == cond.location) {
+              getTrackedConditionValue(cond)
+            } else {
+              getTrackedCondition(cond)
+            }
+
+          val value = if (flag) flagExpr else new Unary(UnaryOp.Not, flagExpr)
           expr match {
             case None       => Some(value)
             case Some(expr) => Some(new Binary(BinaryOp.And, expr, value))
           }
       }
 
-    def getDisjunction(disj: TrackedDisjunction): Option[Expression] =
+    def getDisjunction(disj: TrackedDisjunction, loc: Location): Option[Expression] =
       disj.cases.foldLeft[Option[Expression]](None) {
         case (Some(expr), conj) =>
-          getConjunction(conj).map(new Binary(BinaryOp.Or, expr, _))
-        case (None, conj) => getConjunction(conj)
+          getConjunction(conj, loc).map(new Binary(BinaryOp.Or, expr, _))
+        case (None, conj) => getConjunction(conj, loc)
       }
 
     def getTrackedConditionValue(cond: TrackedCondition): Expression =
-      cond.when.flatMap(getDisjunction(_)) match {
+      cond.when.flatMap(getDisjunction(_, cond.location)) match {
         case None => cond.value.toIR(program, checkMethod, None)
         case Some(when) =>
           new Binary(
@@ -115,27 +127,13 @@ object Checker {
           )
       }
 
-    def getCondition(cond: Condition): Option[Expression] = cond match {
-      case tracked: TrackedDisjunction => getDisjunction(tracked)
+    def getCondition(cond: Condition, loc: Location): Option[Expression] = cond match {
+      case tracked: TrackedDisjunction => getDisjunction(tracked, loc)
       case cond: ConditionValue =>
         cond.value match {
           case CheckExpression.TrueLit => None
           case value                   => Some(value.toIR(program, checkMethod, None))
         }
-    }
-
-    // Insert the required assignments to condition variables
-    methodData.conditions.foreach { cond =>
-      insertAt(
-        cond.location,
-        _ =>
-          Seq(
-            new Assign(
-              trackedConditions(cond.id),
-              getTrackedConditionValue(cond)
-            )
-          )
-      )
     }
 
     val initializeOps = mutable.ListBuffer[Op]()
@@ -194,7 +192,7 @@ object Checker {
     methodData.checks
       .groupBy(c => (c.location, c.when))
       .foreach { case ((loc, when), checks) =>
-        val condition = when.flatMap(getCondition(_))
+        val condition = when.flatMap(getCondition(_, loc))
         insertAt(
           loc,
           implementChecks(
@@ -296,6 +294,18 @@ object Checker {
       implementation,
       runtime
     )
+
+    // Add all conditions that need tracked
+    // Group all conditions for a single location and insert in sequence
+    // to preserve the correct ordering of conditions.
+    sortedConditions
+      .groupBy { case (loc, _, _) => loc }
+      .foreach {
+        case (loc, conds) => insertAt(loc, retVal => {
+          conds.map { case (_, flag, value) => new Assign(flag, value) }
+        })
+    }
+
     // Finally, add all the initialization ops to the beginning
     initializeOps ++=: method.body
   }
