@@ -4,6 +4,7 @@ JAR="target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar"
 SUCCESS="[\033[0;32m✓\033[0m] -"
 START="[\033[0;35m*\033[0m] -"
 ERR="[\033[0;31mx\033[0m] -"
+export DISABLE_SIMPLIFICATION=1
 
 NITER=1
 NPATHS=1
