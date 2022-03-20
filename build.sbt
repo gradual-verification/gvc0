@@ -7,6 +7,8 @@ lazy val gvc = (project in file("."))
     libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.3.3"
   )
   .dependsOn(silicon)
-Compile / run / fork := true
-Compile / run / javaOptions += "-Xss15m"
-parallelExecution in Test := false
+
+Compile / fork := true
+Compile / javaOptions ++= "-Xss15m"
+
+Test / parallelExecution := false
