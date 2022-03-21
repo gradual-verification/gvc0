@@ -15,7 +15,9 @@ case class Config(
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
-    sourceFile: Option[String] = None
+    sourceFile: Option[String] = None,
+    linkedLibraries: List[String] = List.empty,
+    excludeMain: Boolean = false
 ) {
   def validate(): Unit = {
     (
@@ -59,7 +61,8 @@ object Config {
                |  -b <dir>   --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
                |  -p <n>     --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
                |             --disable-baseline             Speedup benchmark generation by skipping the baseline.
-               |             --profile                      Enable -lprofiler option in clang for gperftools when compiling."""
+               |             --profile                      Enable -lprofiler option in clang for gperftools when compiling.
+               |             --ex-main                      Exclude main() from the pipeline to allow use of unsupported, standard C0 features and libraries."""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val benchmarkDir = raw"--benchmark=(.+)".r
@@ -108,6 +111,8 @@ object Config {
         )
       case outputArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
+      case "--ex-main" :: tail =>
+        fromCommandLineArgs(tail, current.copy(excludeMain = true))
       case "--disable-baseline" :: tail =>
         fromCommandLineArgs(tail, current.copy(disableBaseline = true))
       case "--profile" :: tail =>

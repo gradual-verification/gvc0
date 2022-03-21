@@ -3,8 +3,12 @@ package gvc.analyzer
 import gvc.parser.Definition
 
 object Validator {
-  def validateParsed(defn: List[Definition], errors: ErrorSink): Option[ResolvedProgram] = {
-    val result = Resolver.resolveProgram(defn, errors)
+  def validateParsed(
+      defn: List[Definition],
+      librarySearchPaths: List[String],
+      errors: ErrorSink
+  ): Option[ResolvedProgram] = {
+    val result = Resolver.resolveProgram(defn, librarySearchPaths, errors)
     (if (errors.errors.isEmpty) Some(result) else None)
       .filter(validate(_, errors))
   }

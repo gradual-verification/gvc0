@@ -104,7 +104,7 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
       case fail: Parsed.Failure => ParseError(fail.trace().longMsg)
       case Parsed.Success(parsed, _) => {
         val sink = new ErrorSink()
-        val result = Resolver.resolveProgram(parsed, sink)
+        val result = Resolver.resolveProgram(parsed, List(), sink)
         if (!sink.errors.isEmpty) {
           ResolverError(sink.errors.map(_.message))
         } else {
@@ -126,7 +126,10 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
                   val silver = IRGraphSilver.toSilver(ir)
 
                   assertFile(name.replace(".c0", ".ir.c0"), irSrc)
-                  assertFile(name.replace(".c0", ".vpr"), silver.program.toString())
+                  assertFile(
+                    name.replace(".c0", ".vpr"),
+                    silver.program.toString()
+                  )
 
                   Weaver.weave(ir, silver)
                   ValidProgram

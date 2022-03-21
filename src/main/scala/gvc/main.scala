@@ -27,6 +27,9 @@ case class OutputFileCollection(
 )
 
 object Main extends App {
+  val defaultLibraryDirectory =
+    Paths.get("src/main/resources").toAbsolutePath.toString + '/'
+
   val cmdConfig = Config.fromCommandLineArgs(args.toList)
   cmdConfig.validate()
   run(cmdConfig)
@@ -52,7 +55,12 @@ object Main extends App {
 
     val inputSource = readFile(config.sourceFile.get)
     if (config.compileBenchmark.isDefined)
-      Bench.mark(inputSource, config, fileNames)
+      Bench.mark(
+        inputSource,
+        config,
+        fileNames,
+        config.linkedLibraries ++ List(defaultLibraryDirectory)
+      )
     else {
       val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
       execute(verifiedOutput.c0Source, fileNames)
@@ -107,7 +115,10 @@ object Main extends App {
     dump(output)
   }
 
-  def generateIR(inputSource: String): IRGraph.Program = {
+  def generateIR(
+      inputSource: String,
+      librarySearchPaths: List[String]
+  ): IRGraph.Program = {
     val parsed = Parser.parseProgram(inputSource) match {
       case fail: Failure =>
         Config.error(s"Parse error:\n${fail.trace().longAggregateMsg}")
@@ -115,7 +126,7 @@ object Main extends App {
     }
     val errors = new ErrorSink()
     val resolved = Validator
-      .validateParsed(parsed, errors)
+      .validateParsed(parsed, librarySearchPaths, errors)
       .getOrElse(
         Config.error(
           s"Errors:\n" +
@@ -140,7 +151,11 @@ object Main extends App {
       fileNames: OutputFileCollection,
       config: Config
   ): VerifiedOutput = {
-    val ir = generateIR(inputSource)
+    val ir =
+      generateIR(
+        inputSource,
+        config.linkedLibraries ++ List(defaultLibraryDirectory)
+      )
 
     if (config.dump.contains(Config.DumpIR))
       dump(GraphPrinter.print(ir, includeSpecs = true))
@@ -201,13 +216,12 @@ object Main extends App {
 
     // TODO: Figure out how we can use the actual resource
     // Since it is bundled in the JAR we have to extract it and put it somewhere
-    val runtimeIncludeDir = Paths.get("src/main/resources").toAbsolutePath
 
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = List(runtimeIncludeDir.toString + "/"),
+      includeDirs = List(defaultLibraryDirectory),
       compilerArgs =
         if (cmdConfig.enableProfiling) List("-lprofiler") else List()
     )

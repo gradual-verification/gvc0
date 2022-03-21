@@ -17,9 +17,16 @@ class ResolverSpec extends AnyFunSuite {
 
   test("resolve variable declaration") {
     val input = List(
-      methodDef("main", namedType("int"), List(), Some(block(
-        varDef("x", namedType("int"), Some(intVal(1)))
-      )))
+      methodDef(
+        "main",
+        namedType("int"),
+        List(),
+        Some(
+          block(
+            varDef("x", namedType("int"), Some(intVal(1)))
+          )
+        )
+      )
     )
 
     val result = resolveSuccess(input)
@@ -35,9 +42,16 @@ class ResolverSpec extends AnyFunSuite {
 
   test("identity function") {
     val input = List(
-      methodDef("identity", namedType("int"), List("value" -> namedType("int")), Some(block(
-        ReturnStatement(Some(varRef("value")), null)
-      )))
+      methodDef(
+        "identity",
+        namedType("int"),
+        List("value" -> namedType("int")),
+        Some(
+          block(
+            ReturnStatement(Some(varRef("value")), null)
+          )
+        )
+      )
     )
 
     val result = resolveSuccess(input)
@@ -54,24 +68,36 @@ class ResolverSpec extends AnyFunSuite {
   }
 
   // Helper methods
-  def methodDef(name: String, retType: Type, arguments: List[(String, Type)], body: Option[BlockStatement] = None) =
+  def methodDef(
+      name: String,
+      retType: Type,
+      arguments: List[(String, Type)],
+      body: Option[BlockStatement] = None
+  ) =
     MethodDefinition(
       id = Identifier(name, null),
       returnType = retType,
-      arguments = arguments.map { case (name, typ) => MemberDefinition(Identifier(name, null), typ, null) },
+      arguments = arguments.map { case (name, typ) =>
+        MemberDefinition(Identifier(name, null), typ, null)
+      },
       body = body,
       specifications = List.empty,
       span = null
     )
 
-  def block(body: Statement *) = BlockStatement(body.toList, null, List(), List())
+  def block(body: Statement*) =
+    BlockStatement(body.toList, null, List(), List())
   def namedType(name: String): Type = NamedType(Identifier(name, null), null)
-  def varDef(name: String, typ: Type, value: Option[Expression]) = VariableStatement(typ, Identifier(name, null), value, null)
+  def varDef(name: String, typ: Type, value: Option[Expression]) =
+    VariableStatement(typ, Identifier(name, null), value, null)
   def varRef(name: String) = VariableExpression(Identifier(name, null), null)
   def intVal(value: Int) = IntegerExpression(value.toString(), value, null)
   def strVal(value: String) = StringExpression(value, value, null)
 
-  def getMethod(program: ResolvedProgram, name: String): ResolvedMethodDefinition = {
+  def getMethod(
+      program: ResolvedProgram,
+      name: String
+  ): ResolvedMethodDefinition = {
     val method = program.methodDefinitions.find(_.name == name)
     assert(method.isDefined, "Method " + name + " not found")
     method.get
@@ -79,7 +105,7 @@ class ResolverSpec extends AnyFunSuite {
 
   def resolveSuccess(program: List[Definition]): ResolvedProgram = {
     val errors = new ErrorSink()
-    val resolved = Resolver.resolveProgram(program, errors)
+    val resolved = Resolver.resolveProgram(program, List(), errors)
     assert(errors.errors.isEmpty)
 
     resolved

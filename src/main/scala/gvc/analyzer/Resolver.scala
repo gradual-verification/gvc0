@@ -1,5 +1,9 @@
 package gvc.analyzer
+import fastparse.Parsed.{Failure, Success}
+import gvc.Config
 import gvc.parser._
+
+import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.ListBuffer
 
 trait ResolvedNode {
@@ -329,11 +333,11 @@ object Resolver {
     }
 
   def resolveBlock(
-    parsed: Statement,
-    scope: Scope,
-    body: List[Statement],
-    specifications: List[Specification] = List.empty,
-    trailingSpecifications: List[Specification] = List.empty
+      parsed: Statement,
+      scope: Scope,
+      body: List[Statement],
+      specifications: List[Specification] = List.empty,
+      trailingSpecifications: List[Specification] = List.empty
   ): ResolvedBlock = {
     var blockScope = scope
     var defs = ListBuffer[ResolvedVariable]()
@@ -392,7 +396,7 @@ object Resolver {
     // single statement to always be a block statement.
     val (body, trailing) = input match {
       case block: BlockStatement => (block.body, block.trailingSpecifications)
-      case _ => (List(input), List.empty)
+      case _                     => (List(input), List.empty)
     }
 
     resolveBlock(input, scope, body, input.specifications, trailing)
@@ -719,7 +723,10 @@ object Resolver {
     }
   }
 
-  def resolveSpecs(specs: List[Specification], scope: Scope): List[ResolvedStatement] = {
+  def resolveSpecs(
+      specs: List[Specification],
+      scope: Scope
+  ): List[ResolvedStatement] = {
     specs.flatMap {
       case assert: AssertSpecification => {
         val value = resolveExpression(assert.value, scope, SpecificationContext)
@@ -727,12 +734,24 @@ object Resolver {
       }
 
       case unfold: UnfoldSpecification => {
-        val predicate = resolvePredicate(unfold, unfold.predicate, unfold.arguments, scope, SpecificationContext)
+        val predicate = resolvePredicate(
+          unfold,
+          unfold.predicate,
+          unfold.arguments,
+          scope,
+          SpecificationContext
+        )
         Some(ResolvedUnfoldPredicate(unfold, predicate))
       }
 
       case fold: FoldSpecification => {
-        val predicate = resolvePredicate(fold, fold.predicate, fold.arguments, scope, SpecificationContext)
+        val predicate = resolvePredicate(
+          fold,
+          fold.predicate,
+          fold.arguments,
+          scope,
+          SpecificationContext
+        )
         Some(ResolvedFoldPredicate(fold, predicate))
       }
       case other => {
@@ -802,8 +821,13 @@ object Resolver {
     val loopInvariants = stmt.specifications.collect {
       case li: LoopInvariantSpecification => li
     }
-    val invariant = combineBooleans(loopInvariants.map(spec => resolveExpression(spec.value, scope, SpecificationContext)))
-    val otherSpecs = stmt.specifications.filterNot(_.isInstanceOf[LoopInvariantSpecification])
+    val invariant = combineBooleans(
+      loopInvariants.map(spec =>
+        resolveExpression(spec.value, scope, SpecificationContext)
+      )
+    )
+    val otherSpecs =
+      stmt.specifications.filterNot(_.isInstanceOf[LoopInvariantSpecification])
     (invariant, stmt.withSpecifications(otherSpecs))
   }
 
@@ -826,8 +850,18 @@ object Resolver {
     val postconditions = ListBuffer[ResolvedExpression]()
     for (spec <- input.specifications) {
       spec match {
-        case requires: RequiresSpecification => preconditions += resolveExpression(requires.value, specScope, SpecificationContext)
-        case ensures: EnsuresSpecification => postconditions += resolveExpression(ensures.value, specScope, PostConditionContext(retType))
+        case requires: RequiresSpecification =>
+          preconditions += resolveExpression(
+            requires.value,
+            specScope,
+            SpecificationContext
+          )
+        case ensures: EnsuresSpecification =>
+          postconditions += resolveExpression(
+            ensures.value,
+            specScope,
+            PostConditionContext(retType)
+          )
 
         // Continue checking values for resolving errors, even if invalid
         // TODO: Should invalid values also be type-checked?
@@ -840,11 +874,15 @@ object Resolver {
           scope.errors.error(assert, "Invalid assert")
         }
         case fold: FoldSpecification => {
-          fold.arguments.foreach(resolveExpression(_, specScope, SpecificationContext))
+          fold.arguments.foreach(
+            resolveExpression(_, specScope, SpecificationContext)
+          )
           scope.errors.error(fold, "Invalid fold")
         }
         case unfold: UnfoldSpecification => {
-          unfold.arguments.foreach(resolveExpression(_, specScope, SpecificationContext))
+          unfold.arguments.foreach(
+            resolveExpression(_, specScope, SpecificationContext)
+          )
           scope.errors.error(unfold, "Invalid unfold")
         }
       }
@@ -898,19 +936,42 @@ object Resolver {
       scope: Scope
   ): ResolvedPredicateDefinition = {
     val predicateScope = scope.declareVariables(localDecl.arguments)
-    val body = resolveExpression(input.body.get, predicateScope, SpecificationContext)
+    val body =
+      resolveExpression(input.body.get, predicateScope, SpecificationContext)
     ResolvedPredicateDefinition(input, localDecl, body)
   }
 
   def resolveUseDeclaration(
       use: UseDeclaration,
+      librarySearchPaths: List[String],
       scope: Scope
-  ): ResolvedUseDeclaration = {
-    ResolvedUseDeclaration(use, use.path.value, use.isLibrary)
+  ): Option[ResolvedUseDeclaration] = {
+    val foundPath: Option[Path] = librarySearchPaths
+      .map(
+        Paths
+          .get(_)
+          .resolve(
+            if (use.isLibrary) use.path.value + ".h0" else use.path.value
+          )
+      )
+      .find(Files.exists(_))
+    if (foundPath.isDefined) {
+      Some(
+        ResolvedUseDeclaration(
+          use,
+          use.path.value,
+          use.isLibrary,
+          foundPath.get
+        )
+      )
+    } else {
+      None
+    }
   }
 
   def resolveProgram(
       program: List[Definition],
+      librarySearchPaths: List[String],
       errors: ErrorSink
   ): ResolvedProgram = {
     val methodDeclarations = ListBuffer[ResolvedMethodDeclaration]()
@@ -933,10 +994,58 @@ object Resolver {
 
     for (definition <- program) {
       definition match {
-        // TODO: Implement use declarations
         case u: UseDeclaration => {
-          val dep = resolveUseDeclaration(u, scope)
-          dependencies += dep
+          def libError(): Unit = {
+            val libNameError =
+              if (u.isLibrary) "<" + u.path.value + ">"
+              else "\"" + u.path.value + "\""
+            errors.error(u, s"Unable to find library $libNameError")
+          }
+          val dep = resolveUseDeclaration(u, librarySearchPaths, scope)
+          if (dep.isDefined) {
+
+            try {
+              val librarySource = Files.readString(dep.get.filePath)
+              val parsedLibrary = Parser.parseProgram(librarySource) match {
+                case fail: Failure =>
+                  Config.error(
+                    s"Parse error:\n${fail.trace().longAggregateMsg}"
+                  )
+                case Success(value, _) => value
+              }
+              val resolvedLibraryProgram =
+                resolveProgram(parsedLibrary, librarySearchPaths, errors)
+
+              resolvedLibraryProgram.types.foreach(t => {
+                types += t
+                scope = scope.defineType(t)
+              })
+
+              resolvedLibraryProgram.methodDeclarations.foreach(mdc => {
+                mdc.fromHeader = true
+                methodDeclarations += mdc
+                scope = scope.declareMethod(mdc)
+              })
+
+              resolvedLibraryProgram.structDefinitions.foreach(sd => {
+                structDefinitions += sd
+                scope = scope.defineStruct(sd)
+              })
+
+              resolvedLibraryProgram.predicateDeclarations.foreach(pd => {
+                predicateDeclarations += pd
+                scope = scope.declarePredicate(pd)
+              })
+
+              dependencies ++= resolvedLibraryProgram.dependencies
+
+            } catch {
+              case _: Throwable => libError()
+            }
+
+          } else {
+            libError()
+          }
         }
         case t: TypeDefinition => {
           val typeDef = resolveTypeDef(t, scope)

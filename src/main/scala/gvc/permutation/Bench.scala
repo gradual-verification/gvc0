@@ -133,9 +133,10 @@ object Bench {
   def mark(
       source: String,
       config: Config,
-      outputFiles: OutputFileCollection
+      outputFiles: OutputFileCollection,
+      librarySearchDirs: List[String]
   ): Unit = {
-    val ir = Main.generateIR(source)
+    val ir = Main.generateIR(source, librarySearchDirs)
     val files =
       resolveOutputFiles(config.compileBenchmark.get, config.disableBaseline)
     val selector = new SelectVisitor(ir)

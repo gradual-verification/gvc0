@@ -41,7 +41,7 @@ class WeaverSpec extends AnyFunSuite {
       case _: Failure => fail("could not parse")
       case Success(parsed, _) => {
         val sink = new ErrorSink()
-        val result = Validator.validateParsed(parsed, sink)
+        val result = Validator.validateParsed(parsed, List(), sink)
         assert(sink.errors.isEmpty)
         assert(result.isDefined)
 

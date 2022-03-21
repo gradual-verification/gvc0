@@ -13,17 +13,24 @@ object ImplementationValidator {
     }
 
     def expression(expr: ResolvedExpression): Unit = {
-      ExpressionVisitor.visit(expr, _ match {
-        case invoke: ResolvedInvoke if invoke.method.isDefined && !definedMethods.contains(invoke.method.get.name) => {
-          errors.error(invoke, s"'${invoke.methodName}' is never implemented")
-        }
+      ExpressionVisitor.visit(
+        expr,
+        _ match {
+          case invoke: ResolvedInvoke
+              if invoke.method.isDefined && !invoke.method.get.fromHeader && !definedMethods
+                .contains(invoke.method.get.name) => {
+            errors.error(invoke, s"'${invoke.methodName}' is never implemented")
+          }
 
-        case pred: ResolvedPredicate if pred.predicate.isDefined && !definedPredicates.contains(pred.predicate.get.name) => {
-          errors.error(pred, s"'${pred.predicateName}' is never implemented")
-        }
+          case pred: ResolvedPredicate
+              if pred.predicate.isDefined && !definedPredicates
+                .contains(pred.predicate.get.name) => {
+            errors.error(pred, s"'${pred.predicateName}' is never implemented")
+          }
 
-        case _ => ()
-      })
+          case _ => ()
+        }
+      )
     }
 
     def statement(stmt: ResolvedStatement): Unit = {
@@ -45,11 +52,12 @@ object ImplementationValidator {
         }
         case x: ResolvedReturn => x.value.foreach(expression)
         case x: ResolvedAssert => expression(x.value)
-        case x: ResolvedAssertSpecification => () // Abstract predicates allowed in asserts
-        case x: ResolvedError => expression(x.value)
-        case x: ResolvedBlock => x.statements.foreach(statement)
+        case x: ResolvedAssertSpecification =>
+          () // Abstract predicates allowed in asserts
+        case x: ResolvedError           => expression(x.value)
+        case x: ResolvedBlock           => x.statements.foreach(statement)
         case x: ResolvedUnfoldPredicate => expression(x.predicate)
-        case x: ResolvedFoldPredicate => expression(x.predicate)
+        case x: ResolvedFoldPredicate   => expression(x.predicate)
       }
     }
 

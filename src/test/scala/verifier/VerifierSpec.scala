@@ -28,7 +28,7 @@ class VerifierSpec extends AnyFunSuite with BaseFileSpec {
     val Success(parsed, _) = Parser.parseProgram(getFile(name).get)
     val sink = new ErrorSink()
 
-    val result = Validator.validateParsed(parsed, sink)
+    val result = Validator.validateParsed(parsed, List(), sink)
     assert(sink.errors.isEmpty)
     assert(result.isDefined)
 

@@ -1,6 +1,7 @@
 package gvc.transformer
 import scala.collection.mutable
 import gvc.analyzer._
+import gvc.transformer.IRGraph.MethodDefinition
 
 class TransformerException(message: String) extends Exception(message)
 
@@ -663,7 +664,11 @@ object GraphTransformer {
 
     def resolveMethod(invoke: ResolvedInvoke): IRGraph.MethodDefinition =
       invoke.method
-        .map(m => ir.method(m.name))
+        .map(m =>
+          if (m.fromHeader)
+            ir.addMethod(m.name, transformReturnType(m.returnType))
+          else ir.method(m.name)
+        )
         .getOrElse(throw new TransformerException("Invalid invoke"))
 
     def resolvePredicate(pred: ResolvedPredicate): IRGraph.Predicate =

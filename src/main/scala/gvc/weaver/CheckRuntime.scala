@@ -17,7 +17,7 @@ object CheckRuntime {
     }
 
     val errors = new ErrorSink()
-    val resolved = Resolver.resolveProgram(parsed, errors)
+    val resolved = Resolver.resolveProgram(parsed, List(), errors)
     if (errors.errors.nonEmpty)
       throw new WeaverException("Cannot resolve runtime header")
 

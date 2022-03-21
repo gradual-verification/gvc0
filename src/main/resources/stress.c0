@@ -1,0 +1,8 @@
+#use <args>
+
+int readStress() {
+  int* arg = alloc(int);
+  args_int("stress", stressLevel);
+  args_parse();
+  *arg;
+}
