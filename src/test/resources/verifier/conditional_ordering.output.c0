@@ -15,25 +15,47 @@ void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, in
   //@requires ? && (b == c ? true : b->val == bVal) && acc(c->val);
   //@ensures ? && true;
 {
-  bool _cond_0 = false;
   bool _cond_1 = false;
   bool _cond_2 = false;
   bool _cond_3 = false;
-  _cond_0 = b == c;
-  _cond_2 = b == c && b == c && c == b && c == b;
-  _cond_1 = b == c && c == b;
+  bool _cond_4 = false;
+  bool _cond_5 = false;
+  bool _cond_6 = false;
+  bool _cond_7 = false;
+  bool _cond_8 = false;
+  bool _cond_9 = false;
+  bool _cond_10 = false;
+  bool _cond_11 = false;
+  bool _cond_12 = false;
+  bool _cond_13 = false;
+  bool _cond_14 = false;
+  bool _cond_15 = false;
+  _cond_1 = b == c;
+  _cond_14 = _cond_11 && _cond_13 && c == b;
+  _cond_13 = _cond_12 && c == b;
+  _cond_12 = b == c;
+  _cond_11 = b == c;
+  _cond_10 = _cond_9 && c == b;
+  _cond_9 = b == c;
+  _cond_8 = b == c;
+  _cond_7 = _cond_4 && _cond_6 && c == b;
+  _cond_6 = _cond_5 && c == b;
+  _cond_5 = b == c;
+  _cond_4 = b == c;
+  _cond_3 = _cond_2 && c == b;
+  _cond_2 = b == c;
   if (!(b == c))
   {
   }
   else
   {
-    _cond_3 = _cond_0 && _cond_1 && _cond_2 && a == c;
+    _cond_15 = _cond_8 && _cond_10 && _cond_14 && !(a == c);
     if (a == b)
     {
     }
     else
     {
-      if (_cond_0 && _cond_1 && _cond_2 && !_cond_3)
+      if (_cond_1 && _cond_3 && _cond_7 && _cond_15)
       {
         assertAcc(_ownedFields, a->_id, 1, "Field access runtime check failed for struct Node.next");
         assertAcc(_ownedFields, a->_id, 0, "Field access runtime check failed for struct Node.val");

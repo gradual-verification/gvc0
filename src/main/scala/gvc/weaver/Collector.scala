@@ -22,16 +22,14 @@ object Collector {
   case object MethodPost extends Location
 
   sealed trait Condition
-  case class ConditionValue(value: CheckExpression) extends Condition
+  case class AndCondition(values: List[Condition]) extends Condition
+  case class OrCondition(values: List[Condition]) extends Condition
+  case class ImmediateCondition(value: CheckExpression) extends Condition
   case class TrackedCondition(
-      id: scala.Int,
       location: Location,
       value: CheckExpression,
-      when: Option[TrackedDisjunction]
-  )
-  case class TrackedConjunction(values: List[(TrackedCondition, Boolean)])
-  case class TrackedDisjunction(cases: List[TrackedConjunction])
-      extends Condition
+      when: Option[Condition]
+  ) extends Condition
 
   case class CheckInfo(
       check: Check,
@@ -259,9 +257,8 @@ object Collector {
     val invokes = mutable.ListBuffer[CollectedInvocation]()
     val allocations = mutable.ListBuffer[Op]()
 
-    // The collection of conditions that are used in runtime checks. Not all conditions may be
-    // necessary after simplification.
-    val conditions = mutable.Map[(Location, CheckExpression), ConditionTerm]()
+    // The collection of conditions that are used in runtime checks
+    val trackedConditions = mutable.ListBuffer[TrackedCondition]()
 
     // The collection of runtime checks that are required, mapping a runtime check to the list of
     // conjuncts where one conjunct must be true in order for the runtime check to occur.
@@ -269,7 +266,7 @@ object Collector {
     // determines (this is important for acc checks of a nested field, for example).
     val checks =
       mutable.Map[Location, mutable.ListBuffer[
-        (Check, mutable.Set[Logic.Conjunction])
+        (Check, mutable.ListBuffer[Option[Condition]])
       ]]()
 
     // A set of all locations that need the full specification walked to verify separation. Used
@@ -298,8 +295,6 @@ object Collector {
         loopInvs: List[vpr.Exp]
     ): Unit = {
       for (vprCheck <- vprChecks.get(node.uniqueIdentifier).toSeq.flatten) {
-        val condition = branchCondition(vprCheck.conditions, loopInvs)
-
         val checkLocation = loc match {
           case at: AtOp =>
             vprCheck.location match {
@@ -324,6 +319,8 @@ object Collector {
           }
         }
 
+        val condition = branchCondition(checkLocation, vprCheck.conditions, loopInvs)
+
         // TODO: Split apart ANDed checks?
         val check = Check.fromViper(vprCheck.check, irProgram, irMethod)
 
@@ -334,7 +331,7 @@ object Collector {
         } match {
           case Some((_, conditions)) => conditions
           case None =>
-            val conditions = mutable.Set[Logic.Conjunction]()
+            val conditions = mutable.ListBuffer[Option[Condition]]()
             locationChecks += (check -> conditions)
             conditions
         }
@@ -496,13 +493,30 @@ object Collector {
       }
     }
 
+    def normalizeLocation(loc: Location): Location = loc match {
+      // Pre of first op in the method is the same as MethodPre
+      case Pre(op) if (op.getPrev.isEmpty && op.block == irMethod.body) => MethodPre
+
+      // Post is the same as Pre of the next op
+      case Post(op) if (op.getNext.isDefined) => Pre(op.getNext.get)
+
+      // LoopStart is the same as Pre of the first op in the loop
+      case LoopStart(op: While) if op.body.nonEmpty => Pre(op.body.head)
+
+      // LoopEnd is the same as Post of the last op in the loop
+      case LoopEnd(op: While) if op.body.nonEmpty => Post(op.body.last)
+
+      // Otherwise, don't change
+      case loc => loc
+    }
+
     // Converts the stack of branch conditions from the verifier to a logical conjunction
     def branchCondition(
+        location: Location,
         branches: List[ViperBranch],
         loopInvs: List[vpr.Exp]
-    ): Logic.Conjunction = {
-
-      branches.foldRight[Logic.Conjunction](Logic.Conjunction())((b, conj) => {
+    ): Option[Condition] = {
+      branches.foldRight[Option[Condition]](None)((b, when) => {
         val irLoc = locations.getOrElse(
           b.at.uniqueIdentifier,
           throw new WeaverException(
@@ -519,20 +533,28 @@ object Collector {
           case p => p
         }
 
-        val loc = ViperLocation.forIR(irLoc, position)
+        val conditionLocation = normalizeLocation(ViperLocation.forIR(irLoc, position))
+
         val value = CheckExpression.fromViper(b.condition, irMethod)
         val (unwrapped, flag) = value match {
           case CheckExpression.Not(negated) => (negated, false)
           case other                        => (other, true)
         }
-        val nextId = conditions.size
-        val cond = conditions.getOrElseUpdate(
-          (loc, unwrapped),
-          new ConditionTerm(nextId)
-        )
-        cond.conditions += conj
 
-        conj & Logic.Term(cond.id, flag)
+        val cond: Condition =
+          if (conditionLocation == location) {
+            ImmediateCondition(value)
+          } else {
+            val tracked = TrackedCondition(conditionLocation, value, when)
+            trackedConditions += tracked
+            tracked
+          }
+
+        Some(when match {
+          case None => cond
+          case Some(AndCondition(values)) => AndCondition(values :+ cond)
+          case Some(other) => AndCondition(List(other, cond))
+        })
       })
     }
 
@@ -554,82 +576,19 @@ object Collector {
       case Some(tailOp) => hasImplicitReturn(tailOp)
     }
 
-
-    def normalizeLocation(loc: Location): Location = loc match {
-      // Pre of first op in the method is the same as MethodPre
-      case Pre(op) if (op.getPrev.isEmpty && op.block == irMethod.body) => MethodPre
-
-      // Post is the same as Pre of the next op
-      case Post(op) if (op.getNext.isDefined) => Pre(op.getNext.get)
-
-      // LoopStart is the same as Pre of the first op in the loop
-      case LoopStart(op: While) if op.body.nonEmpty => Pre(op.body.head)
-
-      // LoopEnd is the same as Post of the last op in the loop
-      case LoopEnd(op: While) if op.body.nonEmpty => Post(op.body.last)
-
-      // Otherwise, don't change
-      case loc => loc
-    }
-
-    // Collect and simplify all the conditions
-    val usedConditions = mutable.Map[scala.Int, TrackedCondition]()
-    val conditionIndex = conditions.map { case ((loc, value), cond) =>
-      (cond.id, (loc, value, Logic.Disjunction(cond.conditions.toSet)))
-    }
-
-    // Converts a logical conjunction to the actual expression that it represents
-    def convertConjunction(
-        conjunction: Logic.Conjunction
-    ): Option[TrackedConjunction] =
-      if (conjunction.terms.isEmpty) {
-        None
-      } else {
-        Some(
-          TrackedConjunction(
-            conjunction.terms.toSeq.sorted
-              .map(t => (getCondition(t.id), t.value))
-              .toList
-          )
-        )
-      }
-
-    // Converts a logical disjunction to the actual expression that it represents
-    // TODO: pull out common factors?
-    def convertDisjunction(
-        disjunction: Logic.Disjunction
-    ): Option[TrackedDisjunction] = {
-      val conjuncts = disjunction.conjuncts.toSeq.sorted
-        .map(convertConjunction(_))
-        .toList
-      if (conjuncts.exists(_ == None)) {
-        None
-      } else {
-        Some(TrackedDisjunction(conjuncts.map(_.get)))
-      }
-    }
-
-    // Maps the logical ID to the actual condition that it represents.
-    // Creates the actual condition if it does not exist.
-    def getCondition(id: scala.Int): TrackedCondition = {
-      usedConditions.getOrElseUpdate(
-        id, {
-          val (loc, value, when) = conditionIndex(id)
-          val simplified = if (DoSimplification) Logic.simplify(when) else when
-          val condition = convertDisjunction(simplified)
-          TrackedCondition(id, normalizeLocation(loc), value, condition)
-        }
-      )
-    }
-
     // Get all checks (grouped by their location) and simplify their conditions
     val collectedChecks = mutable.ListBuffer[RuntimeCheck]()
     for ((loc, locChecks) <- checks)
       for ((check, conditions) <- locChecks) {
-        val simplified =
-          if (DoSimplification) Logic.simplify(Logic.Disjunction(conditions.toSet))
-          else Logic.Disjunction(conditions.toSet)
-        val condition = convertDisjunction(simplified)
+        val condition =
+          if (conditions.isEmpty || conditions.contains(None)) {
+            None
+          } else if (conditions.size == 1) {
+            conditions.head
+          } else {
+            Some(OrCondition(conditions.map(_.get).toList))
+          }
+
         collectedChecks += RuntimeCheck(loc, check, condition)
       }
 
@@ -693,7 +652,7 @@ object Collector {
     // Wrap up all the results
     new CollectedMethod(
       method = irMethod,
-      conditions = usedConditions.values.toSeq.sortBy(_.id).toList,
+      conditions = trackedConditions.toList,
       checks = collectedChecks.toList,
       returns = exits.toList,
       hasImplicitReturn = implicitReturn,
@@ -764,14 +723,14 @@ object Collector {
           Seq(
             CheckInfo(
               FieldSeparationCheck(field),
-              condition.map(ConditionValue)
+              condition.map(ImmediateCondition)
             )
           )
         case Verification =>
           Seq(
             CheckInfo(
               FieldAccessibilityCheck(field),
-              condition.map(ConditionValue)
+              condition.map(ImmediateCondition)
             )
           )
       }
@@ -786,7 +745,7 @@ object Collector {
                 pred.predicate.name,
                 pred.arguments.map(CheckExpression.irValue)
               ),
-              condition.map(ConditionValue)
+              condition.map(ImmediateCondition)
             )
           )
         case Verification =>
@@ -796,7 +755,7 @@ object Collector {
                 pred.predicate.name,
                 pred.arguments.map(CheckExpression.irValue)
               ),
-              condition.map(ConditionValue)
+              condition.map(ImmediateCondition)
             )
           )
       }

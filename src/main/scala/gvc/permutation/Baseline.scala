@@ -21,7 +21,7 @@ import gvc.transformer.IRGraph.{
   Var
 }
 import gvc.weaver.Checker.{CheckContext, addAllocationTracking, implementChecks}
-import gvc.weaver.Collector.{CheckInfo, ConditionValue, resolveValue}
+import gvc.weaver.Collector.{CheckInfo, ImmediateCondition, resolveValue}
 import gvc.weaver.{
   CheckExpression,
   CheckImplementation,
@@ -212,7 +212,7 @@ object Baseline {
         .map(entry =>
           (
             if (entry._1.isDefined) entry._1.get match {
-              case ConditionValue(value) =>
+              case ImmediateCondition(value) =>
                 Some(
                   value.toIR(
                     context.program,
@@ -379,7 +379,7 @@ object Baseline {
       val node = new CheckNode()
       node.checksAtLevel += CheckInfo(
         FieldAccessibilityCheck(field),
-        condition.map(ConditionValue)
+        condition.map(ImmediateCondition)
       )
       node
     }
@@ -391,7 +391,7 @@ object Baseline {
             pred.predicate.name,
             pred.arguments.map(CheckExpression.irValue)
           ),
-          condition.map(ConditionValue)
+          condition.map(ImmediateCondition)
         )
       node
     }
@@ -399,7 +399,7 @@ object Baseline {
       val node = new CheckNode()
       node.checksAtLevel += CheckInfo(
         CheckExpression.irValue(expr),
-        condition.map(ConditionValue)
+        condition.map(ImmediateCondition)
       )
       node
   }

@@ -81,59 +81,35 @@ object Checker {
         case _ => throw new WeaverException(s"Invalid location '$at'")
       }
 
-    // Define condition variables and create a map from term ID to variables
-    val trackedConditions = mutable.Map[scala.Int, Var]()
     val sortedConditions = mutable.ListBuffer[(Location, Var, Expression)]()
+    var nextConditionalId = 1
     def getTrackedCondition(cond: TrackedCondition) = {
-      trackedConditions.getOrElseUpdate(cond.id, {
-        val flag = method.addVar(BoolType, s"_cond_${cond.id}")
-        sortedConditions += ((cond.location, flag, getTrackedConditionValue(cond)))
-        flag
-      })
+      val when = cond.when.map(getCondition(_))
+      val flag = method.addVar(BoolType, s"_cond_$nextConditionalId")
+      val base = cond.value.toIR(program, checkMethod, None)
+      val value = when match {
+        case None => base
+        case Some(when) => new IRGraph.Binary(IRGraph.BinaryOp.And, when, base)
+      }
+
+      nextConditionalId += 1
+      sortedConditions += ((cond.location, flag, value))
+      flag
     }
 
-    def getConjunction(conj: TrackedConjunction, loc: Location): Option[Expression] =
-      conj.values.foldLeft[Option[Expression]](None) {
-        case (expr, (cond, flag)) =>
-          val flagExpr =
-            if (loc == cond.location) {
-              getTrackedConditionValue(cond)
-            } else {
-              getTrackedCondition(cond)
-            }
+    def foldConditionList(conds: List[Condition], op: IRGraph.BinaryOp): Expression = {
+      conds.foldLeft[Option[Expression]](None) {
+        case (Some(expr), cond) =>
+          Some(new Binary(op, expr, getCondition(cond)))
+        case (None, cond) => Some(getCondition(cond))
+      }.getOrElse(throw new WeaverException("Invalid empty condition list"))
+    }
 
-          val value = if (flag) flagExpr else new Unary(UnaryOp.Not, flagExpr)
-          expr match {
-            case None       => Some(value)
-            case Some(expr) => Some(new Binary(BinaryOp.And, expr, value))
-          }
-      }
-
-    def getDisjunction(disj: TrackedDisjunction, loc: Location): Option[Expression] =
-      disj.cases.foldLeft[Option[Expression]](None) {
-        case (Some(expr), conj) =>
-          getConjunction(conj, loc).map(new Binary(BinaryOp.Or, expr, _))
-        case (None, conj) => getConjunction(conj, loc)
-      }
-
-    def getTrackedConditionValue(cond: TrackedCondition): Expression =
-      cond.when.flatMap(getDisjunction(_, cond.location)) match {
-        case None => cond.value.toIR(program, checkMethod, None)
-        case Some(when) =>
-          new Binary(
-            BinaryOp.And,
-            when,
-            cond.value.toIR(program, checkMethod, None)
-          )
-      }
-
-    def getCondition(cond: Condition, loc: Location): Option[Expression] = cond match {
-      case tracked: TrackedDisjunction => getDisjunction(tracked, loc)
-      case cond: ConditionValue =>
-        cond.value match {
-          case CheckExpression.TrueLit => None
-          case value                   => Some(value.toIR(program, checkMethod, None))
-        }
+    def getCondition(cond: Condition): Expression = cond match {
+      case ImmediateCondition(expr) => expr.toIR(program, checkMethod, None)
+      case cond: TrackedCondition => getTrackedCondition(cond)
+      case AndCondition(values) => foldConditionList(values, IRGraph.BinaryOp.And)
+      case OrCondition(values) => foldConditionList(values, IRGraph.BinaryOp.Or)
     }
 
     val initializeOps = mutable.ListBuffer[Op]()
@@ -192,7 +168,7 @@ object Checker {
     methodData.checks
       .groupBy(c => (c.location, c.when))
       .foreach { case ((loc, when), checks) =>
-        val condition = when.flatMap(getCondition(_, loc))
+        val condition = when.map(getCondition(_))
         insertAt(
           loc,
           implementChecks(

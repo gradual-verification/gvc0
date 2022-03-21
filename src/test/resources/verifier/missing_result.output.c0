@@ -14,17 +14,22 @@ int main()
 {
   int x = 0;
   int* _instanceCounter = NULL;
+  bool _cond_1 = false;
   int _ = 0;
+  int _1 = 0;
+  bool _cond_2 = false;
   struct OwnedFields* _ownedFields = NULL;
   struct OwnedFields* _tempFields = NULL;
   _instanceCounter = alloc(int);
   _ownedFields = initOwnedFields(_instanceCounter);
-  doSomething(0, _instanceCounter);
+  _ = doSomething(0, _instanceCounter);
   _tempFields = initOwnedFields(_instanceCounter);
+  _cond_1 = !(_ == 0);
+  _cond_2 = _ == 0;
   x = random(_tempFields);
   join(_ownedFields, _tempFields);
-  _ = doSomething(x, _instanceCounter);
-  if (!(_ == 0))
+  _1 = doSomething(x, _instanceCounter);
+  if (_cond_1 && !(_1 == 0) || _cond_2 && !(_1 == 0))
   {
     assert(x == 0);
   }
