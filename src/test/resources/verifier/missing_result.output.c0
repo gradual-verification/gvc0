@@ -13,23 +13,23 @@ int doSomething(int x, int* _instanceCounter)
 int main()
 {
   int x = 0;
-  int* _instanceCounter = NULL;
   bool _cond_1 = false;
-  int _ = 0;
-  int _1 = 0;
   bool _cond_2 = false;
+  int* _instanceCounter = NULL;
+  int _ = 0;
   struct OwnedFields* _ownedFields = NULL;
   struct OwnedFields* _tempFields = NULL;
+  int _1 = 0;
   _instanceCounter = alloc(int);
   _ownedFields = initOwnedFields(_instanceCounter);
-  _ = doSomething(0, _instanceCounter);
+  _1 = doSomething(0, _instanceCounter);
   _tempFields = initOwnedFields(_instanceCounter);
-  _cond_1 = !(_ == 0);
-  _cond_2 = _ == 0;
+  _cond_1 = !(_1 == 0);
+  _cond_2 = _1 == 0;
   x = random(_tempFields);
   join(_ownedFields, _tempFields);
-  _1 = doSomething(x, _instanceCounter);
-  if (_cond_1 && !(_1 == 0) || _cond_2 && !(_1 == 0))
+  _ = doSomething(x, _instanceCounter);
+  if (_cond_1 && !(_ == 0) || _cond_2 && !(_ == 0))
   {
     assert(x == 0);
   }

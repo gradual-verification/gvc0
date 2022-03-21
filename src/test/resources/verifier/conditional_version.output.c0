@@ -19,72 +19,22 @@ void test(int x, int y, struct OwnedFields* _ownedFields)
   bool _cond_3 = false;
   bool _cond_4 = false;
   bool _cond_5 = false;
-  bool _cond_6 = false;
-  bool _cond_7 = false;
-  bool _cond_8 = false;
-  bool _cond_9 = false;
-  bool _cond_10 = false;
-  bool _cond_11 = false;
-  bool _cond_12 = false;
-  bool _cond_13 = false;
-  bool _cond_14 = false;
-  bool _cond_15 = false;
-  bool _cond_16 = false;
-  bool _cond_17 = false;
-  bool _cond_18 = false;
-  bool _cond_19 = false;
-  bool _cond_20 = false;
-  bool _cond_21 = false;
-  bool _cond_22 = false;
-  bool _cond_23 = false;
-  bool _cond_24 = false;
-  bool _cond_25 = false;
-  bool _cond_26 = false;
-  bool _cond_27 = false;
-  bool _cond_28 = false;
-  bool _cond_29 = false;
-  bool _cond_30 = false;
   struct OwnedFields* _tempFields = NULL;
   _cond_1 = x > 1;
-  _cond_27 = x > 1;
-  _cond_26 = x > 1;
-  _cond_24 = x > 1;
-  _cond_23 = x > 1;
-  _cond_20 = x > 1;
-  _cond_19 = x > 1;
-  _cond_17 = x > 1;
-  _cond_16 = x > 1;
-  _cond_12 = x > 1;
-  _cond_11 = x > 1;
-  _cond_9 = x > 1;
-  _cond_8 = x > 1;
-  _cond_5 = x > 1;
-  _cond_4 = x > 1;
-  _cond_2 = x > 1;
   if (x > 1)
   {
-    _cond_3 = _cond_2 && x > 2;
-    _cond_6 = _cond_5 && x > 2;
-    _cond_10 = _cond_9 && x > 2;
-    _cond_13 = _cond_12 && x > 2;
-    _cond_18 = _cond_17 && x > 2;
-    _cond_21 = _cond_20 && x > 2;
-    _cond_25 = _cond_24 && x > 2;
-    _cond_28 = _cond_27 && x > 2;
+    _cond_2 = x > 2;
     if (x > 2)
     {
       _tempFields = initOwnedFields(_ownedFields->instanceCounter);
       z = testCall(y, _tempFields);
       join(_ownedFields, _tempFields);
-      _cond_7 = _cond_4 && _cond_6 && !(y == 0);
-      _cond_14 = _cond_11 && _cond_13 && !(y == 0);
-      _cond_15 = _cond_8 && _cond_10 && _cond_14 && z == 0;
-      _cond_22 = _cond_19 && _cond_21 && y == 0;
-      _cond_29 = _cond_26 && _cond_28 && y == 0;
-      _cond_30 = _cond_23 && _cond_25 && _cond_29 && z == 0;
+      _cond_3 = !(y == 0);
+      _cond_4 = z == 0;
+      _cond_5 = y == 0;
       if (z == 0)
       {
-        if (_cond_1 && _cond_3 && _cond_7 && _cond_15 || _cond_16 && _cond_18 && _cond_22 && _cond_30)
+        if (_cond_1 && _cond_2 && _cond_3 && _cond_4 || _cond_1 && _cond_2 && _cond_5 && _cond_4)
         {
           assert(x > 3);
         }

@@ -27,8 +27,7 @@ object Collector {
   case class ImmediateCondition(value: CheckExpression) extends Condition
   case class TrackedCondition(
       location: Location,
-      value: CheckExpression,
-      when: Option[Condition]
+      value: CheckExpression
   ) extends Condition
 
   case class CheckInfo(
@@ -258,7 +257,7 @@ object Collector {
     val allocations = mutable.ListBuffer[Op]()
 
     // The collection of conditions that are used in runtime checks
-    val trackedConditions = mutable.ListBuffer[TrackedCondition]()
+    val trackedConditions = mutable.LinkedHashSet[TrackedCondition]()
 
     // The collection of runtime checks that are required, mapping a runtime check to the list of
     // conjuncts where one conjunct must be true in order for the runtime check to occur.
@@ -545,7 +544,7 @@ object Collector {
           if (conditionLocation == location) {
             ImmediateCondition(value)
           } else {
-            val tracked = TrackedCondition(conditionLocation, value, when)
+            val tracked = TrackedCondition(conditionLocation, value)
             trackedConditions += tracked
             tracked
           }

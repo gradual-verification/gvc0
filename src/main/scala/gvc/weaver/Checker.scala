@@ -81,21 +81,12 @@ object Checker {
         case _ => throw new WeaverException(s"Invalid location '$at'")
       }
 
-    val sortedConditions = mutable.ListBuffer[(Location, Var, Expression)]()
     var nextConditionalId = 1
-    def getTrackedCondition(cond: TrackedCondition) = {
-      val when = cond.when.map(getCondition(_))
+    val conditionVars = methodData.conditions.map { c =>
       val flag = method.addVar(BoolType, s"_cond_$nextConditionalId")
-      val base = cond.value.toIR(program, checkMethod, None)
-      val value = when match {
-        case None => base
-        case Some(when) => new IRGraph.Binary(IRGraph.BinaryOp.And, when, base)
-      }
-
       nextConditionalId += 1
-      sortedConditions += ((cond.location, flag, value))
-      flag
-    }
+      c -> flag
+    }.toMap
 
     def foldConditionList(conds: List[Condition], op: IRGraph.BinaryOp): Expression = {
       conds.foldLeft[Option[Expression]](None) {
@@ -107,7 +98,7 @@ object Checker {
 
     def getCondition(cond: Condition): Expression = cond match {
       case ImmediateCondition(expr) => expr.toIR(program, checkMethod, None)
-      case cond: TrackedCondition => getTrackedCondition(cond)
+      case cond: TrackedCondition => conditionVars(cond)
       case AndCondition(values) => foldConditionList(values, IRGraph.BinaryOp.And)
       case OrCondition(values) => foldConditionList(values, IRGraph.BinaryOp.Or)
     }
@@ -274,11 +265,11 @@ object Checker {
     // Add all conditions that need tracked
     // Group all conditions for a single location and insert in sequence
     // to preserve the correct ordering of conditions.
-    sortedConditions
-      .groupBy { case (loc, _, _) => loc }
+    methodData.conditions
+      .groupBy(_.location)
       .foreach {
         case (loc, conds) => insertAt(loc, retVal => {
-          conds.map { case (_, flag, value) => new Assign(flag, value) }
+          conds.map(c => new Assign(conditionVars(c), c.value.toIR(program, checkMethod, retVal)))
         })
     }
 
