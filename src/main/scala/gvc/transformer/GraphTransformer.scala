@@ -1,7 +1,6 @@
 package gvc.transformer
 import scala.collection.mutable
 import gvc.analyzer._
-import gvc.transformer.IRGraph.MethodDefinition
 
 class TransformerException(message: String) extends Exception(message)
 
@@ -23,12 +22,12 @@ object GraphTransformer {
         definePredicate(predicate)
       for (predicate <- program.predicateDefinitions)
         implementPredicate(predicate)
-
+      for (method <- program.methodDeclarations.filter(_.maskedLibrary))
+        defineLibraryMethod(method)
       for (method <- program.methodDefinitions)
-        defineMethod(method)
+        if (!method.declaration.maskedLibrary) defineMethod(method)
       for (method <- program.methodDefinitions)
         implementMethod(method)
-
       ir
     }
 
@@ -63,7 +62,8 @@ object GraphTransformer {
         with StructItem
     class StructValue(val field: IRGraph.StructField) extends StructItem
 
-    def defineDependency(declaration: ResolvedUseDeclaration): Unit = {}
+    def defineDependency(declaration: ResolvedUseDeclaration): Unit =
+      ir.addDependency(declaration.name, declaration.isLibrary)
 
     def implementStruct(input: ResolvedStructDefinition): Unit = {
       val struct = ir.struct(input.name) match {
@@ -184,6 +184,34 @@ object GraphTransformer {
         case VoidType => throw new TransformerException("Invalid void type")
       }
 
+    def defineLibraryMethod(input: ResolvedMethodDeclaration): Unit = {
+      val method =
+        ir.addMethod(input.name, transformReturnType(input.returnType))
+      method.maskedLibrary = true
+      for (param <- input.arguments) {
+        method.addParameter(transformType(param.valueType), param.name)
+      }
+      method.body += (input.returnType match {
+        case ResolvedStructType(_) =>
+          throw new TransformerException(
+            "Struct return types aren't supported for library methods."
+          )
+        case ResolvedPointer(_) =>
+          new IRGraph.Return(Some(new IRGraph.Null()))
+        case builtinType: BuiltinType =>
+          builtinType match {
+            case IntType => new IRGraph.Return(Some(new IRGraph.Int(1)))
+            case StringType =>
+              throw new TransformerException("Strings are not supported.")
+            case CharType =>
+              new IRGraph.Return(Some(new IRGraph.Char('\u0000')))
+            case BoolType => new IRGraph.Return(Some(new IRGraph.Bool(true)))
+            case NullType => new IRGraph.Return(Some(new IRGraph.Null()))
+            case VoidType => new IRGraph.Return(None)
+          }
+
+      })
+    }
     def defineMethod(input: ResolvedMethodDefinition): Unit = {
       val method = ir.addMethod(
         input.name,
@@ -664,11 +692,7 @@ object GraphTransformer {
 
     def resolveMethod(invoke: ResolvedInvoke): IRGraph.MethodDefinition =
       invoke.method
-        .map(m =>
-          if (m.fromHeader)
-            ir.addMethod(m.name, transformReturnType(m.returnType))
-          else ir.method(m.name)
-        )
+        .map(m => ir.method(m.name))
         .getOrElse(throw new TransformerException("Invalid invoke"))
 
     def resolvePredicate(pred: ResolvedPredicate): IRGraph.Predicate =

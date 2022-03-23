@@ -116,7 +116,6 @@ object GraphPrinter {
           }
         }
       }
-
       p.println("{")
       p.withIndent {
         method.variables.foreach(printVar)
@@ -446,7 +445,7 @@ object GraphPrinter {
 
     printSeparator()
 
-    for (method <- program.methods) {
+    for (method <- program.methods.filter(!_.maskedLibrary)) {
       printMethodHeader(method)
       p.println(";")
       empty = false
@@ -455,7 +454,7 @@ object GraphPrinter {
     printSeparator()
 
     var first = true
-    for (method <- program.methods) {
+    for (method <- program.methods.filter(!_.maskedLibrary)) {
       if (first) first = false
       else p.println()
       printMethod(method)

@@ -60,14 +60,16 @@ object Baseline {
     val implementation =
       new CheckImplementation(program, runtime, structIdFields)
 
-    program.methods.map(method =>
-      insert(
-        program,
-        collectedMethods(method.name),
-        runtime,
-        implementation
+    program.methods
+      .filter(!_.maskedLibrary)
+      .map(method =>
+        insert(
+          program,
+          collectedMethods(method.name),
+          runtime,
+          implementation
+        )
       )
-    )
   }
 
   private def insert(
@@ -242,9 +244,11 @@ object Baseline {
       )
     }
 
-    collected.calls.foreach(call => {
-      call.arguments = call.arguments ++ List(getPrimaryOwnedFields())
-    })
+    collected.calls
+      .filter(!_.callee.asInstanceOf[Method].maskedLibrary)
+      .foreach(call => {
+        call.arguments = call.arguments ++ List(getPrimaryOwnedFields())
+      })
 
     collected.framing.foreach(framing => {
       framing.op.insertBefore(

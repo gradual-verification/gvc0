@@ -17,7 +17,7 @@ object ImplementationValidator {
         expr,
         _ match {
           case invoke: ResolvedInvoke
-              if invoke.method.isDefined && !invoke.method.get.fromHeader && !definedMethods
+              if invoke.method.isDefined && !invoke.method.get.maskedLibrary && !definedMethods
                 .contains(invoke.method.get.name) => {
             errors.error(invoke, s"'${invoke.methodName}' is never implemented")
           }

@@ -10,14 +10,15 @@ case class Config(
     output: Option[String] = None,
     compileBenchmark: Option[String] = None,
     benchmarkPaths: Option[Int] = None,
+    benchmarkStepSize: Option[Int] = Some(1),
+    benchmarkMaxFactor: Option[Int] = Some(100000),
     disableBaseline: Boolean = false,
     enableProfiling: Boolean = false,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
     sourceFile: Option[String] = None,
-    linkedLibraries: List[String] = List.empty,
-    excludeMain: Boolean = false
+    linkedLibraries: List[String] = List.empty
 ) {
   def validate(): Unit = {
     (
@@ -39,6 +40,10 @@ case class Config(
         Some(s"Benchmarking must be enabled to use --disable-baseline.")
       else if (benchmarkPaths.isDefined && compileBenchmark.isEmpty)
         Some(s"Benchmarking must be enabled to use -p or --paths.")
+      else if (benchmarkStepSize.isDefined && compileBenchmark.isEmpty)
+        Some(s"Benchmarking must be enabled to use --step")
+      else if (benchmarkMaxFactor.isDefined && compileBenchmark.isEmpty)
+        Some(s"Benchmarking must be enabled to use --upper.")
       else None
     ).foreach(Config.error)
   }
@@ -61,12 +66,12 @@ object Config {
                |  -b <dir>   --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
                |  -p <n>     --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
                |             --disable-baseline             Speedup benchmark generation by skipping the baseline.
-               |             --profile                      Enable -lprofiler option in clang for gperftools when compiling.
-               |             --ex-main                      Exclude main() from the pipeline to allow use of unsupported, standard C0 features and libraries."""
+               |             --profile                      Enable -lprofiler option in clang for gperftools when compiling."""
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val benchmarkDir = raw"--benchmark=(.+)".r
   private val paths = raw"--paths=(.+)".r
+
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
@@ -111,8 +116,6 @@ object Config {
         )
       case outputArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
-      case "--ex-main" :: tail =>
-        fromCommandLineArgs(tail, current.copy(excludeMain = true))
       case "--disable-baseline" :: tail =>
         fromCommandLineArgs(tail, current.copy(disableBaseline = true))
       case "--profile" :: tail =>

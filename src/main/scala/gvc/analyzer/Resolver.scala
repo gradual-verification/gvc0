@@ -1003,7 +1003,6 @@ object Resolver {
           }
           val dep = resolveUseDeclaration(u, librarySearchPaths, scope)
           if (dep.isDefined) {
-
             try {
               val librarySource = Files.readString(dep.get.filePath)
               val parsedLibrary = Parser.parseProgram(librarySource) match {
@@ -1022,7 +1021,7 @@ object Resolver {
               })
 
               resolvedLibraryProgram.methodDeclarations.foreach(mdc => {
-                mdc.fromHeader = true
+                mdc.maskedLibrary = true
                 methodDeclarations += mdc
                 scope = scope.declareMethod(mdc)
               })
@@ -1038,11 +1037,10 @@ object Resolver {
               })
 
               dependencies ++= resolvedLibraryProgram.dependencies
-
+              dependencies += dep.get
             } catch {
               case _: Throwable => libError()
             }
-
           } else {
             libError()
           }

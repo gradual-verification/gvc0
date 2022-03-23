@@ -8,7 +8,7 @@ case class ResolvedMethodDeclaration(
     arguments: List[ResolvedVariable],
     precondition: Option[ResolvedExpression],
     postcondition: Option[ResolvedExpression],
-    var fromHeader: Boolean = false
+    var maskedLibrary: Boolean = false
 ) extends ResolvedNode
 
 case class ResolvedMethodDefinition(

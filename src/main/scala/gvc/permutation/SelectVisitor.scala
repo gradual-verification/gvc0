@@ -77,9 +77,9 @@ class SelectVisitor(program: IRGraph.Program)
   }
 
   override def collectWhile(whl: IRGraph.While): Unit = {
-    val invariant = this.finishedExpr.remove(0)
+    val invariant = new IRGraph.Imprecise(this.finishedExpr.remove(0))
     val body = this.finishedBlocks.remove(0)
-    this.incompleteBlocks.head += whl.copy(invariant, body.toList)
+    this.incompleteBlocks.head += whl.copy(Some(invariant), body.toList)
   }
 
   override def collectConditional(template: Conditional): Unit = {

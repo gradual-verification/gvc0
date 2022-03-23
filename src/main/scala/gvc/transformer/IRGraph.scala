@@ -94,7 +94,13 @@ object IRGraph {
       newProgram.replacePredicates(predicates)
       newProgram.replaceMethods(methods)
 
-      newProgram._structs = _structs
+      newProgram._structs = _structs.map(str => {
+        val replacement = new Struct(str._1)
+        str._2.fields.foreach(fld => {
+          replacement.addField(fld.name, fld.valueType)
+        })
+        replacement.name -> replacement
+      })
 
       newProgram._dependencies = mutable.ListBuffer()
       _dependencies.foreach(newProgram._dependencies += _)
@@ -138,7 +144,8 @@ object IRGraph {
       val name: scala.Predef.String,
       var returnType: Option[Type],
       var precondition: Option[Expression] = None,
-      var postcondition: Option[Expression] = None
+      var postcondition: Option[Expression] = None,
+      var maskedLibrary: Boolean = false
   ) extends MethodDefinition {
     // Variables/parameters are added to both a list and a map to preserve order and speedup lookup
     // Scope is a map of both parameters and variables
@@ -190,6 +197,7 @@ object IRGraph {
           )
         }
       })
+      copyOf.maskedLibrary = maskedLibrary
       replacementBody.foreach(copyOf.body += _.copy)
       copyOf
     }

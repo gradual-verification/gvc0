@@ -21,6 +21,8 @@ import scala.reflect.io.Directory
 object Bench {
 
   class BenchmarkException(message: String) extends Exception(message)
+  def c0(basename: String): String = basename + ".c0"
+  def out(basename: String): String = basename + ".out"
 
   case class BenchmarkOutputFiles(
       root: Path,
@@ -39,8 +41,8 @@ object Bench {
 
   object Names {
     val _baseline = "baseline.c0"
-    val _top = "top.c0"
-    val _bottom = "bot.c0"
+    val _top = "top"
+    val _bottom = "bot"
     val perms = "perms"
     val verified_perms = "verified_perms"
     val compiled = "compiled"
@@ -55,20 +57,48 @@ object Bench {
     val logs = "logs"
   }
 
+  def compilePermutation(
+      outputDir: Path,
+      input: Path,
+      name: String,
+      config: Config
+  ): List[CompilationOutput] = {
+    List(compile(input, outputDir, name, 100, config))
+    /*
+    val step = config.benchmarkStepSize.getOrElse(100)
+    val upper = config.benchmarkMaxFactor.getOrElse(1000)
+    if (upper < step || upper % step != 0) {
+      throw new BenchmarkException(
+        "The upper bound on the stress factor must be evenly divided by the step size."
+      )
+    } else {
+      val outputBuffer = mutable.ListBuffer[CompilationOutput]()
+      for (i <- 0 until upper by step) {
+        outputBuffer +=
+      }
+      outputBuffer.toList*/
+
+  }
+
   def compile(
-      input: String,
-      output: String,
+      input: Path,
+      outputDir: Path,
+      name: String,
+      scalingFactor: Int,
       config: Config
   ): CompilationOutput = {
+    val dir = outputDir.resolve(scalingFactor.toString)
+    Files.createDirectories(dir)
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
-      output = Some(output),
+      output = Some(dir.resolve(out(name)).toString),
       includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
       compilerArgs =
-        if (config.enableProfiling) List(Names.profilerLinkingFlag) else List()
+        if (config.enableProfiling) List(Names.profilerLinkingFlag) else List(),
+      execArgs = List(s"-stress=$scalingFactor")
     )
-    CC0Wrapper.exec_output(input, cc0Options)
+    CC0Wrapper.exec_output(input.toString, cc0Options)
   }
 
   def resolveOutputFiles(
@@ -136,40 +166,34 @@ object Bench {
       outputFiles: OutputFileCollection,
       librarySearchDirs: List[String]
   ): Unit = {
-    val ir = Main.generateIR(source, librarySearchDirs)
-    val files =
-      resolveOutputFiles(config.compileBenchmark.get, config.disableBaseline)
-    val selector = new SelectVisitor(ir)
-
-    val outputBottom =
-      files.perms.resolve(Names._bottom)
-    Main.writeFile(
-      outputBottom.toString,
-      GraphPrinter.print(
-        selector.visit(mutable.TreeSet.empty[Int]),
-        includeSpecs = true
-      )
-    )
-
-    val outputTop = files.perms.resolve(Names._top)
-    Main.writeFile(
-      outputTop.toString,
-      GraphPrinter.print(ir, includeSpecs = true)
-    )
-
-    val labeller = new LabelVisitor()
-    val labels = labeller.visit(ir)
-
+    var verificationFailures = 0
+    var compilationFailures = 0
     val alreadySampled = mutable.Set[String]()
-    val csv = new CSVPrinter(files, labels)
-    val err = new ErrorPrinter(files)
     var previousID: Option[String] = None
     val maxPaths = config.benchmarkPaths.getOrElse(1)
 
-    var verificationFailures = 0
-    var defaultCompilationFailures = 0
-    var baselineCompilationFailures = 0
+    val ir = Main.generateIR(source, librarySearchDirs)
 
+    val files =
+      resolveOutputFiles(config.compileBenchmark.get, config.disableBaseline)
+    val selector = new SelectVisitor(ir)
+    val labeller = new LabelVisitor()
+    val labels = labeller.visit(ir)
+    val csv = new CSVPrinter(files, labels)
+    val err = new ErrorPrinter(files)
+
+    def printProgress(sampleIndex: Int): Unit = {
+      val allErrors =
+        verificationFailures + compilationFailures
+      val successRate = Math.abs(
+        Math.floor(
+          (alreadySampled.size - allErrors) / alreadySampled.size.toDouble * 10000
+        ) / 100
+      )
+      print(
+        s"\rGenerated ${alreadySampled.size} unique programs, ${sampleIndex}/$maxPaths paths (${labels.length} perms/path) completed. Success: ${successRate}%, Failures: ($verificationFailures verification, ${compilationFailures} cc0)"
+      )
+    }
     def dumpPermutation(
         dir: Path,
         name: String,
@@ -184,30 +208,36 @@ object Bench {
       filePath
     }
 
-    def compilePermutation(
-        dir: Path,
-        name: String,
-        inputPath: Path,
-        config: Config
-    ): CompilationOutput = {
-      val compileDefault =
-        dir.resolve(name).toString
-      compile(inputPath.toString, compileDefault, config)
+    def recordCompilationErrors(outList: List[CompilationOutput]): Unit = {
+      outList.foreach(out => {
+        if (out.exitCode != 0) {
+          compilationFailures += 1
+          err.logCompilationError(out.fileName, out.output)
+        }
+      })
     }
 
-    def printProgress(sampleIndex: Int) = {
-      val allErrors =
-        verificationFailures + baselineCompilationFailures + defaultCompilationFailures
-      val successRate = Math.floor(
-        (alreadySampled.size - allErrors) / alreadySampled.size.toDouble * 10000
-      ) / 100
-      print(
-        s"\rGenerated ${alreadySampled.size} unique programs, ${sampleIndex}/$maxPaths paths (${labels.length} perms/path) completed. Success: ${successRate}%, Failures: ($verificationFailures verification, ${defaultCompilationFailures + baselineCompilationFailures} cc0)"
+    val outputBottom =
+      files.perms.resolve(c0(Names._bottom))
+    Main.writeFile(
+      outputBottom.toString,
+      GraphPrinter.print(ir, includeSpecs = false)
+    )
+    /*
+    recordCompilationErrors(
+      compilePermutation(
+        outputDir = files.compiled,
+        input = outputBottom,
+        out(Names._bottom),
+        config
       )
-    }
+    )*/
 
-    def c0(basename: String): String = basename + ".c0"
-    def out(basename: String): String = basename + ".out"
+    val outputTop = files.perms.resolve(c0(Names._top))
+    Main.writeFile(
+      outputTop.toString,
+      GraphPrinter.print(ir, includeSpecs = false)
+    )
 
     for (sampleIndex <- 0 until maxPaths) {
       val sampleToPermute = LabelTools.sample(labels, SamplingHeuristic.Random)
@@ -241,13 +271,15 @@ object Bench {
               currentPermutation,
               verifiedPermutation.c0Source
             )
-            val defaultExit =
-              compilePermutation(files.compiled, out(id), verifiedPath, config)
-
-            if (defaultExit.exitCode != 0) {
-              defaultCompilationFailures += 1
-              err.logCompilationError(id, defaultExit.output)
-            }
+            /*
+            recordCompilationErrors(
+              compilePermutation(
+                files.compiled,
+                verifiedPath,
+                out(id),
+                config
+              )
+            )*/
 
             if (!config.disableBaseline) {
               val baselinePermutation = selector.visit(permutationIndices)
@@ -260,16 +292,16 @@ object Bench {
                 currentPermutation,
                 baselineSourceText
               )
-              val baselineExit = compilePermutation(
-                files.baselineCompiled.get,
-                out(id),
-                baselinePath,
-                config
-              )
-              if (baselineExit.exitCode != 0) {
-                baselineCompilationFailures += 1
-                err.logBaselineCompilationError(id, baselineExit.output)
-              }
+              /*
+              recordCompilationErrors(
+                compilePermutation(
+                  files.baselineCompiled.get,
+                  baselinePath,
+                  out(id),
+                  config
+                )
+              )*/
+
             }
           } catch {
             case ex: VerificationException =>
@@ -293,16 +325,15 @@ object Bench {
         mutable.TreeSet[ASTLabel]()(LabelOrdering),
         baselineSourceText
       )
-      val exit = compilePermutation(
-        files.baselineCompiled.get,
-        out(Names._baseline),
-        baselinePath,
-        config
-      )
-      if (exit.exitCode != 0) {
-        baselineCompilationFailures += 1
-        err.logBaselineCompilationError(Names._baseline, exit.output)
-      }
+      /*
+      recordCompilationErrors(
+        compilePermutation(
+          files.baselineCompiled.get,
+          baselinePath,
+          out(Names._baseline),
+          config
+        )
+      )*/
     }
     printProgress(maxPaths)
     csv.close()

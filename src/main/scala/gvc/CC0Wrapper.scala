@@ -52,7 +52,7 @@ object CC0Wrapper {
     exitCode
   }
 
-  case class CompilationOutput(exitCode: Int, output: String)
+  case class CompilationOutput(fileName: String, exitCode: Int, output: String)
 
   def exec_output(
       sourceFile: String,
@@ -63,7 +63,7 @@ object CC0Wrapper {
     val exitCode = (command #> os).!
 
     os.close()
-    CompilationOutput(exitCode, os.toString("UTF-8"))
+    CompilationOutput(sourceFile, exitCode, os.toString("UTF-8"))
   }
 
   private def formatCommand(

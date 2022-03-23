@@ -85,14 +85,25 @@ object Checker {
     val trackedConditions = mutable.Map[scala.Int, Var]()
     val sortedConditions = mutable.ListBuffer[(Location, Var, Expression)]()
     def getTrackedCondition(cond: TrackedCondition) = {
-      trackedConditions.getOrElseUpdate(cond.id, {
-        val flag = method.addVar(BoolType, s"_cond_${cond.id}")
-        sortedConditions += ((cond.location, flag, getTrackedConditionValue(cond)))
-        flag
-      })
+      trackedConditions.getOrElseUpdate(
+        cond.id, {
+          val flag = method.addVar(BoolType, s"_cond_${cond.id}")
+          sortedConditions += (
+            (
+              cond.location,
+              flag,
+              getTrackedConditionValue(cond)
+            )
+          )
+          flag
+        }
+      )
     }
 
-    def getConjunction(conj: TrackedConjunction, loc: Location): Option[Expression] =
+    def getConjunction(
+        conj: TrackedConjunction,
+        loc: Location
+    ): Option[Expression] =
       conj.values.foldLeft[Option[Expression]](None) {
         case (expr, (cond, flag)) =>
           val flagExpr =
@@ -109,7 +120,10 @@ object Checker {
           }
       }
 
-    def getDisjunction(disj: TrackedDisjunction, loc: Location): Option[Expression] =
+    def getDisjunction(
+        disj: TrackedDisjunction,
+        loc: Location
+    ): Option[Expression] =
       disj.cases.foldLeft[Option[Expression]](None) {
         case (Some(expr), conj) =>
           getConjunction(conj, loc).map(new Binary(BinaryOp.Or, expr, _))
@@ -127,14 +141,15 @@ object Checker {
           )
       }
 
-    def getCondition(cond: Condition, loc: Location): Option[Expression] = cond match {
-      case tracked: TrackedDisjunction => getDisjunction(tracked, loc)
-      case cond: ConditionValue =>
-        cond.value match {
-          case CheckExpression.TrueLit => None
-          case value                   => Some(value.toIR(program, checkMethod, None))
-        }
-    }
+    def getCondition(cond: Condition, loc: Location): Option[Expression] =
+      cond match {
+        case tracked: TrackedDisjunction => getDisjunction(tracked, loc)
+        case cond: ConditionValue =>
+          cond.value match {
+            case CheckExpression.TrueLit => None
+            case value                   => Some(value.toIR(program, checkMethod, None))
+          }
+      }
 
     val initializeOps = mutable.ListBuffer[Op]()
 
@@ -223,66 +238,71 @@ object Checker {
           throw new WeaverException("Invalid method call")
       }
       val calleeData = programData.methods(callee.name)
+      if (!calleeData.method.maskedLibrary) {
+        calleeData.callStyle match {
+          // No parameters can be added to a main method
+          case MainCallStyle => ()
 
-      calleeData.callStyle match {
-        // No parameters can be added to a main method
-        case MainCallStyle => ()
+          // Imprecise methods always get the primary owned fields instance directly
+          case ImpreciseCallStyle => call.ir.arguments :+= getPrimaryOwnedFields
 
-        // Imprecise methods always get the primary owned fields instance directly
-        case ImpreciseCallStyle => call.ir.arguments :+= getPrimaryOwnedFields
+          case PreciseCallStyle => {
+            // Always pass the instance counter
+            call.ir.arguments :+= instanceCounter
 
-        case PreciseCallStyle => {
-          // Always pass the instance counter
-          call.ir.arguments :+= instanceCounter
-
-          // If we need to track precise permisions, add the code at the call site
-          if (needsToTrackPrecisePerms) {
-            // Convert precondition into calls to removeAcc
-            call.ir.insertBefore(
-              callee.precondition.toSeq.flatMap(
-                implementation.translate(RemoveMode, _, getPrimaryOwnedFields)
+            // If we need to track precise permisions, add the code at the call site
+            if (needsToTrackPrecisePerms) {
+              // Convert precondition into calls to removeAcc
+              call.ir.insertBefore(
+                callee.precondition.toSeq.flatMap(
+                  implementation.translate(RemoveMode, _, getPrimaryOwnedFields)
+                )
               )
+
+              // Convert postcondition into calls to addAcc
+              call.ir.insertAfter(
+                callee.postcondition.toSeq.flatMap(
+                  implementation.translate(AddMode, _, getPrimaryOwnedFields)
+                )
+              )
+            }
+          }
+
+          // For precise-pre/imprecise-post, create a temporary set of permissions, add the
+          // permissions from the precondition, call the method, and add the temporary set to the
+          // primary set
+          case PrecisePreCallStyle => {
+            val tempSet = method.addVar(
+              runtime.ownedFieldsRef,
+              CheckRuntime.Names.temporaryOwnedFields
             )
 
-            // Convert postcondition into calls to addAcc
+            val createTemp = new Invoke(
+              runtime.initOwnedFields,
+              List(instanceCounter),
+              Some(tempSet)
+            )
+            val addPermsToTemp = callee.precondition.toSeq
+              .flatMap(implementation.translate(AddMode, _, tempSet))
+              .toList
+            val removePermsFromPrimary = callee.precondition.toSeq
+              .flatMap(
+                implementation.translate(RemoveMode, _, getPrimaryOwnedFields)
+              )
+              .toList
+
+            call.ir.insertBefore(
+              createTemp :: addPermsToTemp ++ removePermsFromPrimary
+            )
+            call.ir.arguments :+= tempSet
             call.ir.insertAfter(
-              callee.postcondition.toSeq.flatMap(
-                implementation.translate(AddMode, _, getPrimaryOwnedFields)
+              new Invoke(
+                runtime.join,
+                List(getPrimaryOwnedFields, tempSet),
+                None
               )
             )
           }
-        }
-
-        // For precise-pre/imprecise-post, create a temporary set of permissions, add the
-        // permissions from the precondition, call the method, and add the temporary set to the
-        // primary set
-        case PrecisePreCallStyle => {
-          val tempSet = method.addVar(
-            runtime.ownedFieldsRef,
-            CheckRuntime.Names.temporaryOwnedFields
-          )
-
-          val createTemp = new Invoke(
-            runtime.initOwnedFields,
-            List(instanceCounter),
-            Some(tempSet)
-          )
-          val addPermsToTemp = callee.precondition.toSeq
-            .flatMap(implementation.translate(AddMode, _, tempSet))
-            .toList
-          val removePermsFromPrimary = callee.precondition.toSeq
-            .flatMap(
-              implementation.translate(RemoveMode, _, getPrimaryOwnedFields)
-            )
-            .toList
-
-          call.ir.insertBefore(
-            createTemp :: addPermsToTemp ++ removePermsFromPrimary
-          )
-          call.ir.arguments :+= tempSet
-          call.ir.insertAfter(
-            new Invoke(runtime.join, List(getPrimaryOwnedFields, tempSet), None)
-          )
         }
       }
     }
@@ -300,11 +320,14 @@ object Checker {
     // to preserve the correct ordering of conditions.
     sortedConditions
       .groupBy { case (loc, _, _) => loc }
-      .foreach {
-        case (loc, conds) => insertAt(loc, retVal => {
-          conds.map { case (_, flag, value) => new Assign(flag, value) }
-        })
-    }
+      .foreach { case (loc, conds) =>
+        insertAt(
+          loc,
+          retVal => {
+            conds.map { case (_, flag, value) => new Assign(flag, value) }
+          }
+        )
+      }
 
     // Finally, add all the initialization ops to the beginning
     initializeOps ++=: method.body

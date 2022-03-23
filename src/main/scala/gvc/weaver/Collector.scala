@@ -10,7 +10,8 @@ import viper.silicon.state.LoopPosition
 import viper.silicon.state.BranchCond
 
 object Collector {
-  private val DoSimplification = sys.env.get("DISABLE_SIMPLIFICATION") != Some("1")
+  private val DoSimplification =
+    sys.env.get("DISABLE_SIMPLIFICATION") != Some("1")
 
   sealed trait Location
   sealed trait AtOp extends Location { val op: Op }
@@ -166,9 +167,17 @@ object Collector {
         new ViperBranch(invoke, location, condition)
       }
 
-      case BranchCond(condition, position, Some(CheckPosition.GenericNode(unfold: vpr.Unfold))) =>
+      case BranchCond(
+            condition,
+            position,
+            Some(CheckPosition.GenericNode(unfold: vpr.Unfold))
+          ) =>
         new ViperBranch(unfold, ViperLocation.Fold, condition)
-      case BranchCond(condition, position, Some(CheckPosition.GenericNode(unfold: vpr.Fold))) =>
+      case BranchCond(
+            condition,
+            position,
+            Some(CheckPosition.GenericNode(unfold: vpr.Fold))
+          ) =>
         new ViperBranch(unfold, ViperLocation.Unfold, condition)
 
       case BranchCond(
@@ -177,6 +186,7 @@ object Collector {
             Some(CheckPosition.Loop(inv, position))
           ) => {
         // This must be an invariant
+        if (inv.isEmpty) throw new WeaverException("Invalid loop invariant")
         if (inv.tail.nonEmpty)
           throw new WeaverException("Invalid loop invariant")
         new ViperBranch(inv.head, ViperLocation.loop(position), condition)
@@ -311,7 +321,8 @@ object Collector {
                   case _ => Pre(at.op)
                 }
               case ViperLocation.PreLoop | ViperLocation.PreInvoke |
-                ViperLocation.Fold | ViperLocation.Unfold => Pre(at.op)
+                  ViperLocation.Fold | ViperLocation.Unfold =>
+                Pre(at.op)
               case ViperLocation.PostLoop | ViperLocation.PostInvoke =>
                 Post(at.op)
               case ViperLocation.InvariantLoopStart => LoopStart(at.op)
@@ -554,10 +565,10 @@ object Collector {
       case Some(tailOp) => hasImplicitReturn(tailOp)
     }
 
-
     def normalizeLocation(loc: Location): Location = loc match {
       // Pre of first op in the method is the same as MethodPre
-      case Pre(op) if (op.getPrev.isEmpty && op.block == irMethod.body) => MethodPre
+      case Pre(op) if (op.getPrev.isEmpty && op.block == irMethod.body) =>
+        MethodPre
 
       // Post is the same as Pre of the next op
       case Post(op) if (op.getNext.isDefined) => Pre(op.getNext.get)
@@ -627,7 +638,8 @@ object Collector {
     for ((loc, locChecks) <- checks)
       for ((check, conditions) <- locChecks) {
         val simplified =
-          if (DoSimplification) Logic.simplify(Logic.Disjunction(conditions.toSet))
+          if (DoSimplification)
+            Logic.simplify(Logic.Disjunction(conditions.toSet))
           else Logic.Disjunction(conditions.toSet)
         val condition = convertDisjunction(simplified)
         collectedChecks += RuntimeCheck(loc, check, condition)

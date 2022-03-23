@@ -1,4 +1,4 @@
-#use <args>
+#use <stress>
 
 // Tree node
 struct Node
@@ -318,17 +318,13 @@ bool tree_has_right(struct Node *node)
 
 int main()
 {
-  int* stressLevel = alloc(int);
-  args_int("stress", stressLevel);
-  args_parse();
-
-  struct Node *node = create_tree();
-  node = tree_add_left(node);
-  node = tree_add_right(node);
-  node = tree_get_parent(node);
-  node = tree_add_left(node);
-  node = tree_get_parent(node);
-  node = tree_get_parent(node);
-  
-  return 0;
+    int stress = readStress();
+    struct Node *node = create_tree();
+    for(int i = 0; i<stress; i+=1){
+        node = tree_add_left(node);
+        node = tree_get_parent(node);
+        node = tree_add_right(node);
+        node = tree_get_parent(node);
+    }
+    return 0;
 }

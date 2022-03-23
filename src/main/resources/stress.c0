@@ -1,8 +1,11 @@
 #use <args>
+#use <conio>
 
 int readStress() {
   int* arg = alloc(int);
-  args_int("stress", stressLevel);
-  args_parse();
-  *arg;
+  args_int("s", arg);
+  args_t ar = args_parse();
+  printint(*arg);
+  if(ar == NULL) error("Unable to parse arguments.");
+  return *arg;
 }
