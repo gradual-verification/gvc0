@@ -139,8 +139,8 @@ class CheckImplementation(
       }
 
     case conditional: IR.Conditional => {
-      val trueOps = translate(mode, conditional.ifTrue, perms)
-      val falseOps = translate(mode, conditional.ifFalse, perms)
+      val trueOps = translate(mode, conditional.ifTrue, perms, converter)
+      val falseOps = translate(mode, conditional.ifFalse, perms, converter)
       val condition =
         if (converter.isDefined)
           converter.get.convertExpression(conditional.condition)
