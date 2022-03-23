@@ -162,36 +162,36 @@ collect_files(){
 }
 echo "$START Compiling benchmark..."
 java -jar -Xss1g $JAR "$FILE" --benchmark="$ROOT" --paths="$NPATHS" $DISABLE_BASELINE $PROFILE
-echo '\n$SUCCESS Finished compiling benchmark.'
+echo "\n $SUCCESS Finished compiling benchmark."
 rm -rf `find $ROOT -name '*.dSYM'`
 echo "$SUCCESS Metadata stored in $PERM_META and $PERM_LEVELS."
 
 EXEC_PERMS=$(collect_files $COMPILED)
 EXEC_BASELINE=$(collect_files $BASELINE_COMPILED)
 
-echo "$START Benchmarking execution of permutations, logs saved to $LOG_EXEC ..."
-hyperfine -N --runs "$NITER" -i -L files "$EXEC_PERMS" "$COMPILED/{files} >> $LOG_EXEC 2>&1" --export-csv "$CSV_EXEC" >> "$LOG_EXEC" 2>&1
-clean_param_csv "$CSV_EXEC" "files"
-echo "$SUCCESS Finished benchmarking execution of permutations."
+#echo "$START Benchmarking execution of permutations, logs saved to $LOG_EXEC ..."
+#hyperfine -N --runs "$NITER" -i -L files "$EXEC_PERMS" "$COMPILED/{files} >> $LOG_EXEC 2>&1" --export-csv "$CSV_EXEC" >> "$LOG_EXEC" 2>&1
+#clean_param_csv "$CSV_EXEC" "files"
+#echo "$SUCCESS Finished benchmarking execution of permutations."
 
-FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $LOG_EXEC | wc -l)
-FAILS_NOSP=$(echo "$FAILS" | sed 's/ //g')
-if [ "$FAILS_NOSP" != "0" ]
-then
-echo "$ERR There were $FAILS_NOSP permutations that errored during execution."
-fi
+#FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $LOG_EXEC | wc -l)
+#FAILS_NOSP=$(echo "$FAILS" | sed 's/ //g')
+#if [ "$FAILS_NOSP" != "0" ]
+#then
+#echo "$ERR There were $FAILS_NOSP permutations that errored during execution."
+#fi
 
-echo "$START Benchmarking execution of baseline, logs saved to $LOG_EXEC_BASELINE ..."
-hyperfine -N --runs "$NITER" -i -L files "$EXEC_BASELINE" "$BASELINE_COMPILED/{files} >> $LOG_EXEC_BASELINE 2>&1" --export-csv "$CSV_EXEC_BASELINE" >> "$LOG_EXEC_BASELINE" 2>&1
-clean_param_csv "$CSV_EXEC_BASELINE" "files"
-echo "$START Benchmarking execution of baseline."
+#echo "$START Benchmarking execution of baseline, logs saved to $LOG_EXEC_BASELINE ..."
+#hyperfine -N --runs "$NITER" -i -L files "$EXEC_BASELINE" "$BASELINE_COMPILED/{files} >> $LOG_EXEC_BASELINE 2>&1" --export-csv "$CSV_EXEC_BASELINE" >> "$LOG_EXEC_BASELINE" 2>&1
+#clean_param_csv "$CSV_EXEC_BASELINE" "files"
+#echo "$START Benchmarking execution of baseline."
 
-FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $LOG_EXEC_BASELINE | wc -l)
-FAILS_NOSP=$(echo "$FAILS" | sed 's/ //g')
-if [ "$FAILS_NOSP" != "0" ]
-then
-echo "$ERR There were $FAILS_NOSP baselines that errored during execution."
-fi
+#FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $LOG_EXEC_BASELINE | wc -l)
+#FAILS_NOSP=$(echo "$FAILS" | sed 's/ //g')
+#if [ "$FAILS_NOSP" != "0" ]
+#then
+#echo "$ERR There were $FAILS_NOSP baselines that errored during execution."
+#fi
 
 #echo "$SUCCESS Finished benchmarking execution of baseline."
 echo "$SUCCESS Finished."

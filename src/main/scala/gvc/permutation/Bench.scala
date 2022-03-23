@@ -287,7 +287,6 @@ object Bench {
         mutable.TreeSet[ASTLabel]()(LabelOrdering),
         baselineSourceText
       )
-
     }
     if (!config.disableBaseline) {
       Baseline.insert(ir)

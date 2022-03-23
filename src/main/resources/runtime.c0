@@ -2,7 +2,7 @@
 #use <string>
 
 int GROW_CAPACITY (int oldCapacity){
-  return ((oldCapacity) < 8 ? 8 : (oldCapacity) + oldCapacity / 2);
+  return ((oldCapacity) < 128 ? 128 : (oldCapacity) + 128);
 }
 
 int hash(int index, int arrayLength)
@@ -40,7 +40,7 @@ void grow(OwnedFields* fields)
         int _id = fields->contents[i]->_id;
         int newIndex = hash(_id, fields->capacity);
         while(newContents[newIndex] != NULL){
-            newIndex += 1;
+            newIndex = (newIndex + 1) % fields->capacity;
         }
         newContents[newIndex] = fields->contents[i];
     }
@@ -54,7 +54,7 @@ FieldArray* find(OwnedFields* fields, int _id){
     if(!fields->contents[index]->deleted && fields->contents[index]->_id == _id){
         return fields->contents[index];
     }else{
-        index += 1;
+        index = (index + 1) % fields->capacity;
     }
   }
   return NULL;
@@ -67,7 +67,7 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   if(fields->length > (fields->capacity * (5/6))) grow(fields);
 
   int fieldIndex = hash(_id, fields->capacity);
-  while(fields->contents[fieldIndex] != NULL) fieldIndex += 1;
+  while(fields->contents[fieldIndex] != NULL) fieldIndex = (fieldIndex + 1) % fields->capacity;
 
   FieldArray * array = alloc(FieldArray);
   fields->contents[fieldIndex] = array;

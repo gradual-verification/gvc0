@@ -1,7 +1,7 @@
 FILE=""
-UPPER_BOUND=10000
+UPPER_BOUND=1000
 NITER=3
-STEP=100
+STEP=10
 PARAM="stress"
 HELP=0
 for i in "$@"; do
@@ -38,7 +38,7 @@ then
   echo "where OPTIONS is"
   echo "  -u=<n>     --upper=<n>            The upper bound on the stress factor.       (Default: 1000)"
   echo "  -i=<n>     --iter=<n>             The number of iterations to measure over.   (Default: 1)"
-  echo "  -s=<n>     --step=<n>             The step size from 1 to the upper bound.    (Default: 1)"
+  echo "  -s=<n>     --step=<n>             The step size from 1 to the upper bound.    (Default: 10)"
   echo "  -d=<file>  --dest=<file>          The destination .CSV file.                  (Default: SOURCEFILE.csv)"
   exit 0
 fi
@@ -63,7 +63,8 @@ clean_param_csv () {
   done < $1
   echo $REWRITTEN > $1
 }
-hyperfine -w 1 --show-output --parameter-scan "$PARAM" 0 "$UPPER_BOUND" -D "$STEP" --runs "$NITER" "cc0 $FILE -x -a \"s {$PARAM}\" -L ../src/main/resources/" --export-csv "$DEST"
+export C0_MAX_ARRAYSIZE=10000000000000000
+hyperfine -w 1 --show-output --parameter-scan "$PARAM" 0 "$UPPER_BOUND" -D "$STEP" --runs "$NITER" "cc0 $FILE -x -a \"s {$PARAM}\" -L ./src/main/resources/" --export-csv "$DEST"
 clean_param_csv "$DEST" $PARAM
 rm a.out
 rm -rf *.dSYM

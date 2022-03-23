@@ -431,7 +431,12 @@ struct Node *tree_remove(struct Node *root, int x)
 int main()
 {
     int stress = readStress();
-    int mid = (stress + 1)/2;
+    int mid = stress;
+    if(mid % 2 != 0){
+        mid = (mid + 1)/2;
+    }else{
+        mid = mid / 2;
+    }
     int quad = (mid + 1)/2;
     struct Node* t1 = create_tree(mid);
 
