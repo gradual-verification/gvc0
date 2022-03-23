@@ -10,8 +10,6 @@ case class Config(
     output: Option[String] = None,
     compileBenchmark: Option[String] = None,
     benchmarkPaths: Option[Int] = None,
-    benchmarkStepSize: Option[Int] = Some(1),
-    benchmarkMaxFactor: Option[Int] = Some(100000),
     disableBaseline: Boolean = false,
     enableProfiling: Boolean = false,
     saveFiles: Boolean = false,
@@ -40,10 +38,6 @@ case class Config(
         Some(s"Benchmarking must be enabled to use --disable-baseline.")
       else if (benchmarkPaths.isDefined && compileBenchmark.isEmpty)
         Some(s"Benchmarking must be enabled to use -p or --paths.")
-      else if (benchmarkStepSize.isDefined && compileBenchmark.isEmpty)
-        Some(s"Benchmarking must be enabled to use --step")
-      else if (benchmarkMaxFactor.isDefined && compileBenchmark.isEmpty)
-        Some(s"Benchmarking must be enabled to use --upper.")
       else None
     ).foreach(Config.error)
   }
