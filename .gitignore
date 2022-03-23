@@ -74,3 +74,6 @@ sandbox.c0
 
 benchmark
 data
+study/composite
+study/bst
+study/list

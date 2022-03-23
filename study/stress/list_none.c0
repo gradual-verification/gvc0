@@ -1,0 +1,118 @@
+#use <stress>
+struct Node;
+
+struct Node
+{
+  int val;
+  struct Node* next;
+};
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal);
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal);
+struct Node* create_list(int val);
+struct Node* list_insert(struct Node* list, int val);
+int main();
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal)
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+    }
+    else
+    {
+      appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal);
+    }
+  }
+}
+
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal)
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+    }
+    else
+    {
+      appendLemmaLoopBody(a->next, b, c, a->val, cPrev, bVal, cVal);
+    }
+  }
+}
+
+struct Node* create_list(int val)
+{
+  struct Node* n = NULL;
+  n = alloc(struct Node);
+  n->val = val;
+  n->next = NULL;
+  return n;
+}
+
+struct Node* list_insert(struct Node* list, int val)
+{
+  struct Node* n = NULL;
+  struct Node* curr = NULL;
+  struct Node* tmp = NULL;
+  struct Node* prev = NULL;
+  if (list == NULL || val <= list->val)
+  {
+    n = alloc(struct Node);
+    n->val = val;
+    n->next = list;
+    return n;
+  }
+  else
+  {
+    curr = list;
+    while (curr->next != NULL && curr->next->val < val)
+    {
+      prev = curr;
+      curr = prev->next;
+      if (list == prev)
+      {
+      }
+      else
+      {
+        appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val);
+      }
+    }
+    tmp = alloc(struct Node);
+    tmp->val = val;
+    tmp->next = curr->next;
+    curr->next = tmp;
+    if (list == curr)
+    {
+    }
+    else
+    {
+      appendLemmaAfterLoopBody(list->next, curr, NULL, list->val, curr->val, -1);
+    }
+    return list;
+  }
+}
+
+int main()
+{
+  int stressLevel = 0;
+  struct Node* l = NULL;
+  int i = 0;
+  struct Node* l1 = NULL;
+  stressLevel = readStress();
+  l = create_list(3);
+  i = 0;
+  while (i < stressLevel)
+  {
+    l1 = list_insert(l, 1);
+    i = i + 1;
+    l = l1;
+  }
+  return 0;
+}

@@ -208,30 +208,12 @@ object Bench {
       filePath
     }
 
-    def recordCompilationErrors(outList: List[CompilationOutput]): Unit = {
-      outList.foreach(out => {
-        if (out.exitCode != 0) {
-          compilationFailures += 1
-          err.logCompilationError(out.fileName, out.output)
-        }
-      })
-    }
-
     val outputBottom =
       files.perms.resolve(c0(Names._bottom))
     Main.writeFile(
       outputBottom.toString,
       GraphPrinter.print(ir, includeSpecs = false)
     )
-    /*
-    recordCompilationErrors(
-      compilePermutation(
-        outputDir = files.compiled,
-        input = outputBottom,
-        out(Names._bottom),
-        config
-      )
-    )*/
 
     val outputTop = files.perms.resolve(c0(Names._top))
     Main.writeFile(
@@ -271,16 +253,6 @@ object Bench {
               currentPermutation,
               verifiedPermutation.c0Source
             )
-            /*
-            recordCompilationErrors(
-              compilePermutation(
-                files.compiled,
-                verifiedPath,
-                out(id),
-                config
-              )
-            )*/
-
             if (!config.disableBaseline) {
               val baselinePermutation = selector.visit(permutationIndices)
               Baseline.insert(baselinePermutation)
@@ -292,16 +264,6 @@ object Bench {
                 currentPermutation,
                 baselineSourceText
               )
-              /*
-              recordCompilationErrors(
-                compilePermutation(
-                  files.baselineCompiled.get,
-                  baselinePath,
-                  out(id),
-                  config
-                )
-              )*/
-
             }
           } catch {
             case ex: VerificationException =>
@@ -325,15 +287,17 @@ object Bench {
         mutable.TreeSet[ASTLabel]()(LabelOrdering),
         baselineSourceText
       )
-      /*
-      recordCompilationErrors(
-        compilePermutation(
-          files.baselineCompiled.get,
-          baselinePath,
-          out(Names._baseline),
-          config
-        )
-      )*/
+
+    }
+    if (!config.disableBaseline) {
+      Baseline.insert(ir)
+      val baselineSourceText = GraphPrinter.print(ir, includeSpecs = false)
+      val baselinePath = dumpPermutation(
+        files.baselinePerms.get,
+        c0(Names._baseline),
+        mutable.TreeSet[ASTLabel]()(LabelOrdering),
+        baselineSourceText
+      )
     }
     printProgress(maxPaths)
     csv.close()

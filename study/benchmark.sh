@@ -162,7 +162,7 @@ collect_files(){
 }
 echo "$START Compiling benchmark..."
 java -jar -Xss1g $JAR "$FILE" --benchmark="$ROOT" --paths="$NPATHS" $DISABLE_BASELINE $PROFILE
-printf '\n%s Finished compiling benchmark.' "$SUCCESS"
+echo '\n$SUCCESS Finished compiling benchmark.'
 rm -rf `find $ROOT -name '*.dSYM'`
 echo "$SUCCESS Metadata stored in $PERM_META and $PERM_LEVELS."
 

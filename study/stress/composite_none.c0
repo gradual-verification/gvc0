@@ -1,0 +1,279 @@
+#use <stress>
+struct Node;
+
+struct Node
+{
+  int total;
+  struct Node* left;
+  struct Node* right;
+  struct Node* parent;
+};
+
+struct Node* create_tree();
+int fixup_ancestors(struct Node* node, struct Node* parent, int oldTotal, int newTotal);
+int main();
+struct Node* tree_add_left(struct Node* node);
+struct Node* tree_add_right(struct Node* node);
+struct Node* tree_get_left(struct Node* node);
+struct Node* tree_get_parent(struct Node* node);
+struct Node* tree_get_right(struct Node* node);
+int tree_get_total(struct Node* node);
+bool tree_has_left(struct Node* node);
+bool tree_has_parent(struct Node* node);
+bool tree_has_right(struct Node* node);
+
+struct Node* create_tree()
+{
+  struct Node* n = NULL;
+  n = alloc(struct Node);
+  n->left = NULL;
+  n->right = NULL;
+  n->parent = NULL;
+  n->total = 1;
+  return n;
+}
+
+int fixup_ancestors(struct Node* node, struct Node* parent, int oldTotal, int newTotal)
+{
+  struct Node* left = NULL;
+  struct Node* right = NULL;
+  struct Node* grandparent = NULL;
+  int oldparentTotal = 0;
+  int leftTotal = 0;
+  int rightTotal = 0;
+  int parentTotal = 0;
+  if (parent == NULL)
+  {
+  }
+  else
+  {
+    left = parent->left;
+    right = parent->right;
+    grandparent = parent->parent;
+    oldparentTotal = parent->total;
+    leftTotal = 0;
+    rightTotal = 0;
+    if (node == left)
+    {
+      leftTotal = newTotal;
+      if (right != NULL)
+      {
+        rightTotal = right->total;
+      }
+    }
+    else
+    {
+      if (left != NULL)
+      {
+        leftTotal = left->total;
+      }
+      rightTotal = newTotal;
+    }
+    parentTotal = 1 + leftTotal + rightTotal;
+    parent->total = parentTotal;
+    fixup_ancestors(parent, grandparent, oldparentTotal, parentTotal);
+  }
+  return 0;
+}
+
+int main()
+{
+  int stress = 0;
+  struct Node* node = NULL;
+  int i = 0;
+  struct Node* node1 = NULL;
+  struct Node* node11 = NULL;
+  struct Node* node111 = NULL;
+  struct Node* node1111 = NULL;
+  stress = readStress();
+  node = create_tree();
+  i = 0;
+  while (i < stress)
+  {
+    node1 = tree_add_left(node);
+    node11 = tree_get_parent(node1);
+    node111 = tree_add_right(node11);
+    node1111 = tree_get_parent(node111);
+    i = i + 1;
+    node = node1;
+    node1 = node11;
+    node11 = node111;
+    node111 = node1111;
+  }
+  return 0;
+}
+
+struct Node* tree_add_left(struct Node* node)
+{
+  struct Node* n = NULL;
+  struct Node* nodeLeft = NULL;
+  if (node == NULL)
+  {
+    return node;
+  }
+  else
+  {
+    n = alloc(struct Node);
+    n->left = NULL;
+    n->right = NULL;
+    n->parent = node;
+    n->total = 1;
+    nodeLeft = node->left;
+    if (nodeLeft != NULL)
+    {
+      return node;
+    }
+    else
+    {
+      node->left = n;
+      fixup_ancestors(n, node, 0, 1);
+      return n;
+    }
+  }
+}
+
+struct Node* tree_add_right(struct Node* node)
+{
+  struct Node* n = NULL;
+  struct Node* nodeRight = NULL;
+  if (node == NULL)
+  {
+    return node;
+  }
+  else
+  {
+    n = alloc(struct Node);
+    n->left = NULL;
+    n->right = NULL;
+    n->parent = node;
+    n->total = 1;
+    nodeRight = node->right;
+    if (nodeRight != NULL)
+    {
+      return node;
+    }
+    else
+    {
+      node->right = n;
+      fixup_ancestors(n, node, 0, 1);
+      return n;
+    }
+  }
+}
+
+struct Node* tree_get_left(struct Node* node)
+{
+  struct Node* left = NULL;
+  if (node == NULL)
+  {
+    return NULL;
+  }
+  else
+  {
+    left = node->left;
+    if (left != NULL)
+    {
+    }
+    return left;
+  }
+}
+
+struct Node* tree_get_parent(struct Node* node)
+{
+  struct Node* parent = NULL;
+  if (node == NULL)
+  {
+    return NULL;
+  }
+  else
+  {
+    parent = node->parent;
+    if (parent == NULL)
+    {
+      return NULL;
+    }
+    else
+    {
+      return parent;
+    }
+  }
+}
+
+struct Node* tree_get_right(struct Node* node)
+{
+  struct Node* right = NULL;
+  if (node == NULL)
+  {
+    return NULL;
+  }
+  else
+  {
+    right = node->right;
+    if (right != NULL)
+    {
+    }
+    return right;
+  }
+}
+
+int tree_get_total(struct Node* node)
+{
+  int result = 0;
+  result = 0;
+  if (node == NULL)
+  {
+  }
+  else
+  {
+    result = node->total;
+  }
+  return result;
+}
+
+bool tree_has_left(struct Node* node)
+{
+  bool res = false;
+  struct Node* left = NULL;
+  res = false;
+  if (node == NULL)
+  {
+  }
+  else
+  {
+    left = node->left;
+    res = left != NULL;
+  }
+  return res;
+}
+
+bool tree_has_parent(struct Node* node)
+{
+  bool res = false;
+  struct Node* parent = NULL;
+  res = false;
+  if (node == NULL)
+  {
+  }
+  else
+  {
+    parent = node->parent;
+    res = parent != NULL;
+  }
+  return res;
+}
+
+bool tree_has_right(struct Node* node)
+{
+  bool res = false;
+  struct Node* right = NULL;
+  res = false;
+  if (node == NULL)
+  {
+  }
+  else
+  {
+    right = node->right;
+    res = right != NULL;
+  }
+  return res;
+}
