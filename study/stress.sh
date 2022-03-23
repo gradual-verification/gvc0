@@ -3,6 +3,7 @@ UPPER_BOUND=1000
 NITER=3
 STEP=10
 PARAM="stress"
+STAT_COLS="stress,mean,stddev,median,user,system,min,max"
 HELP=0
 for i in "$@"; do
     case $i in
@@ -42,7 +43,9 @@ then
   echo "  -d=<file>  --dest=<file>          The destination .CSV file.                  (Default: SOURCEFILE.csv)"
   exit 0
 fi
-DEST="$FILE.csv"
+if [ "$DEST" == "" ]
+then DEST="$FILE.csv"
+fi
 
 clean_param_csv () {
   REWRITTEN=""
@@ -61,7 +64,7 @@ clean_param_csv () {
         REWRITTEN="$STAT_COLS"
     fi
   done < $1
-  echo $REWRITTEN > $1
+  echo "$STAT_COLS\n$REWRITTEN$" > $1
 }
 export C0_MAX_ARRAYSIZE=10000000000000000
 hyperfine -w 1 --show-output --parameter-scan "$PARAM" 0 "$UPPER_BOUND" -D "$STEP" --runs "$NITER" "cc0 $FILE -x -a \"s {$PARAM}\" -L ./src/main/resources/" --export-csv "$DEST"
