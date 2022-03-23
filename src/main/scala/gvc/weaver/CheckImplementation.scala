@@ -1,8 +1,9 @@
 package gvc.weaver
 
+import gvc.transformer.IRGraph.Expression
+
 import scala.collection.mutable
-import gvc.transformer.{IRGraph => IR}
-import gvc.transformer.Replacer
+import gvc.transformer.{Replacer, IRGraph => IR}
 
 sealed trait CheckMode { def prefix: String }
 case object AddMode extends CheckMode { def prefix = "add_" }
@@ -13,6 +14,52 @@ case object VerifyMode extends CheckMode { def prefix = "" }
 sealed trait CheckType
 case object Separation extends CheckType
 case object Verification extends CheckType
+class ContextConverter(call: IR.Invoke, caller: IR.Method) {
+  val variableMapping =
+    (call.callee.parameters zip call.arguments).toMap
+  val resultExpression: Option[Expression] =
+    if (call.target.isDefined)
+      call.target
+    else
+      call.callee.returnType match {
+        case Some(value) =>
+          call.target = Some(caller.addVar(value))
+          call.target
+        case None => None
+      }
+  def convertExpression(expr: Expression): IR.Expression = {
+    expr match {
+      case value: IR.Var =>
+        value match {
+          case parameter: IR.Parameter => variableMapping(parameter)
+          case _                       => value
+        }
+      case fieldMember: IR.FieldMember =>
+        new IR.FieldMember(
+          convertExpression(fieldMember.root),
+          fieldMember.field
+        )
+      case derefMember: IR.DereferenceMember =>
+        new IR.DereferenceMember(convertExpression(derefMember.root))
+
+      case _: IR.Result => resultExpression.get
+
+      case literal: IR.Literal => literal
+      case binary: IR.Binary =>
+        new IR.Binary(
+          binary.operator,
+          convertExpression(binary.left),
+          convertExpression(binary.right)
+        )
+      case unary: IR.Unary =>
+        new IR.Unary(unary.operator, convertExpression(unary.operand))
+      case _ =>
+        throw new WeaverException(
+          "Invalid expression; cannot convert to new context."
+        )
+    }
+  }
+}
 
 class CheckImplementation(
     program: IR.Program,
@@ -72,44 +119,47 @@ class CheckImplementation(
   def translate(
       mode: CheckMode,
       expr: IR.Expression,
-      perms: IR.Var
+      perms: IR.Var,
+      converter: Option[ContextConverter] = None
   ): Seq[IR.Op] = expr match {
     case acc: IR.Accessibility =>
       acc.member match {
         case member: IR.FieldMember =>
-          translateFieldPermission(mode, member, perms)
+          translateFieldPermission(mode, member, perms, converter)
         case _ =>
           throw new WeaverException("Invalid conjunct in specification.")
       }
-
     case pred: IR.PredicateInstance =>
-      translatePredicateInstance(mode, pred, perms)
+      translatePredicateInstance(mode, pred, perms, converter)
 
     case imp: IR.Imprecise =>
       imp.precise match {
         case None          => Seq.empty
-        case Some(precise) => translate(mode, precise, perms)
+        case Some(precise) => translate(mode, precise, perms, converter)
       }
 
     case conditional: IR.Conditional => {
       val trueOps = translate(mode, conditional.ifTrue, perms)
       val falseOps = translate(mode, conditional.ifFalse, perms)
-
+      val condition =
+        if (converter.isDefined)
+          converter.get.convertExpression(conditional.condition)
+        else conditional.condition
       (trueOps.isEmpty, falseOps.isEmpty) match {
         case (false, false) => {
-          val ifStmt = new IR.If(conditional.condition)
+          val ifStmt = new IR.If(condition)
           ifStmt.ifTrue ++= trueOps
           ifStmt.ifFalse ++= falseOps
           Seq(ifStmt)
         }
         case (false, true) => {
-          val ifStmt = new IR.If(conditional.condition)
+          val ifStmt = new IR.If(condition)
           ifStmt.ifTrue ++= trueOps
           Seq(ifStmt)
         }
         case (true, false) => {
           val ifStmt =
-            new IR.If(new IR.Unary(IR.UnaryOp.Not, conditional.condition))
+            new IR.If(new IR.Unary(IR.UnaryOp.Not, condition))
           ifStmt.ifTrue ++= falseOps
           Seq(ifStmt)
         }
@@ -120,31 +170,46 @@ class CheckImplementation(
     }
 
     case binary: IR.Binary if binary.operator == IR.BinaryOp.And => {
-      translate(mode, binary.left, perms) ++ translate(
+      translate(mode, binary.left, perms, converter) ++ translate(
         mode,
         binary.right,
-        perms
+        perms,
+        converter
       )
     }
 
     case expr =>
       mode match {
         case SeparationMode | AddMode | RemoveMode => Seq.empty
-        case VerifyMode                            => Seq(new IR.Assert(expr, IR.AssertKind.Imperative))
+        case VerifyMode => {
+          val toAssert =
+            if (converter.isDefined) converter.get.convertExpression(expr)
+            else expr
+          Seq(new IR.Assert(toAssert, IR.AssertKind.Imperative))
+        }
       }
   }
 
   def translateFieldPermission(
       mode: CheckMode,
       member: IR.FieldMember,
-      perms: IR.Var
+      perms: IR.Var,
+      contextConverter: Option[ContextConverter] = None
   ): Seq[IR.Op] = {
-    val struct = member.field.struct
-    val instanceId = new IR.FieldMember(member.root, structIdField(struct))
-    val fieldIndex = new IR.Int(struct.fields.indexOf(member.field))
+
+    val convertedMember =
+      if (contextConverter.isDefined)
+        contextConverter.get
+          .convertExpression(member)
+          .asInstanceOf[IR.FieldMember]
+      else member
+    val struct = convertedMember.field.struct
+    val instanceId =
+      new IR.FieldMember(convertedMember.root, structIdField(struct))
+    val fieldIndex = new IR.Int(struct.fields.indexOf(convertedMember.field))
     val numFields = new IR.Int(struct.fields.length)
     //TODO: add support for GraphPrinter.printExpr here
-    val fullName = s"struct ${struct.name}.${member.field.name}"
+    val fullName = s"struct ${struct.name}.${convertedMember.field.name}"
 
     mode match {
       case SeparationMode =>
@@ -191,10 +256,16 @@ class CheckImplementation(
   def translatePredicateInstance(
       mode: CheckMode,
       pred: IR.PredicateInstance,
-      perms: IR.Var
+      perms: IR.Var,
+      converter: Option[ContextConverter] = None
   ): Seq[IR.Op] = {
+    val arguments =
+      if (converter.isDefined)
+        pred.arguments.map(converter.get.convertExpression)
+      else pred.arguments
     resolvePredicateDefinition(mode, pred.predicate)
-      .map(new IR.Invoke(_, pred.arguments :+ perms, None))
+      .map(new IR.Invoke(_, arguments :+ perms, None))
       .toSeq
   }
+
 }

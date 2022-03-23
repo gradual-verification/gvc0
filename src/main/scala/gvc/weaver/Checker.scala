@@ -250,19 +250,32 @@ object Checker {
             // Always pass the instance counter
             call.ir.arguments :+= instanceCounter
 
-            // If we need to track precise permisions, add the code at the call site
+            // If we need to track precise permissons, add the code at the call site
             if (needsToTrackPrecisePerms) {
               // Convert precondition into calls to removeAcc
+
+              val converter = new ContextConverter(call.ir, method)
               call.ir.insertBefore(
                 callee.precondition.toSeq.flatMap(
-                  implementation.translate(RemoveMode, _, getPrimaryOwnedFields)
+                  implementation.translate(
+                    RemoveMode,
+                    _,
+                    getPrimaryOwnedFields,
+                    Some(converter)
+                  )
                 )
               )
 
               // Convert postcondition into calls to addAcc
+
               call.ir.insertAfter(
                 callee.postcondition.toSeq.flatMap(
-                  implementation.translate(AddMode, _, getPrimaryOwnedFields)
+                  implementation.translate(
+                    AddMode,
+                    _,
+                    getPrimaryOwnedFields,
+                    Some(converter)
+                  )
                 )
               )
             }
@@ -282,12 +295,22 @@ object Checker {
               List(instanceCounter),
               Some(tempSet)
             )
+
+            val converter = new ContextConverter(call.ir, method)
+
             val addPermsToTemp = callee.precondition.toSeq
-              .flatMap(implementation.translate(AddMode, _, tempSet))
+              .flatMap(
+                implementation.translate(AddMode, _, tempSet, Some(converter))
+              )
               .toList
             val removePermsFromPrimary = callee.precondition.toSeq
               .flatMap(
-                implementation.translate(RemoveMode, _, getPrimaryOwnedFields)
+                implementation.translate(
+                  RemoveMode,
+                  _,
+                  getPrimaryOwnedFields,
+                  Some(converter)
+                )
               )
               .toList
 
