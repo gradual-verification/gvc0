@@ -1,10 +1,13 @@
+source ./study/shared.sh
+
 FILE=""
 UPPER_BOUND=1000
 NITER=3
 STEP=10
 PARAM="stress"
-STAT_COLS="stress,mean,stddev,median,user,system,min,max"
+STAT_COLS="stress$HYPERFINE_COLS"
 HELP=0
+
 for i in "$@"; do
     case $i in
      -u=*|--upper=*)
@@ -47,27 +50,7 @@ if [ "$DEST" == "" ]
 then DEST="$FILE.csv"
 fi
 
-clean_param_csv () {
-  REWRITTEN=""
-  while read line; do
-    IFS=',' read -ra COLUMNS <<< "$line";
-    ID=$(basename ${COLUMNS[8]} | sed 's/\.[^/]*$//');
-    if [[ "$ID" != "parameter_$2" ]]
-      then
-        LINE=$ID
-        unset 'COLUMNS[${#COLUMNS[@]}-1]'
-        for i in "${COLUMNS[@]:1}"; do
-          LINE="$LINE,$i"
-        done
-        REWRITTEN="$REWRITTEN\n$LINE"
-      else
-        REWRITTEN="$STAT_COLS"
-    fi
-  done < $1
-  echo "$STAT_COLS\n$REWRITTEN$" > $1
-}
-export C0_MAX_ARRAYSIZE=10000000000000000
 hyperfine -w 1 --show-output --parameter-scan "$PARAM" 0 "$UPPER_BOUND" -D "$STEP" --runs "$NITER" "cc0 $FILE -x -a \"s {$PARAM}\" -L ./src/main/resources/" --export-csv "$DEST"
-clean_param_csv "$DEST" $PARAM
+clean_param_csv "$DEST" "$PARAM" "$STAT_COLS"
 rm a.out
 rm -rf *.dSYM
