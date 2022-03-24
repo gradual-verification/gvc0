@@ -1,6 +1,6 @@
 package gvc.weaver
 
-import gvc.transformer.IRGraph.Expression
+import gvc.transformer.IRGraph.{Expression, FieldMember}
 
 import scala.collection.mutable
 import gvc.transformer.{Replacer, IRGraph => IR}
@@ -27,6 +27,13 @@ class ContextConverter(call: IR.Invoke, caller: IR.Method) {
           call.target
         case None => None
       }
+  def convertFieldMember(member: FieldMember): FieldMember = {
+    new IR.FieldMember(
+      convertExpression(member.root),
+      member.field
+    )
+  }
+
   def convertExpression(expr: Expression): IR.Expression = {
     expr match {
       case value: IR.Var =>
@@ -35,10 +42,7 @@ class ContextConverter(call: IR.Invoke, caller: IR.Method) {
           case _                       => value
         }
       case fieldMember: IR.FieldMember =>
-        new IR.FieldMember(
-          convertExpression(fieldMember.root),
-          fieldMember.field
-        )
+        convertFieldMember(fieldMember)
       case derefMember: IR.DereferenceMember =>
         new IR.DereferenceMember(convertExpression(derefMember.root))
 
@@ -59,6 +63,7 @@ class ContextConverter(call: IR.Invoke, caller: IR.Method) {
         )
     }
   }
+
 }
 
 class CheckImplementation(
@@ -196,13 +201,11 @@ class CheckImplementation(
       perms: IR.Var,
       contextConverter: Option[ContextConverter] = None
   ): Seq[IR.Op] = {
-
-    val convertedMember =
-      if (contextConverter.isDefined)
-        contextConverter.get
-          .convertExpression(member)
-          .asInstanceOf[IR.FieldMember]
-      else member
+    val convertedMember = contextConverter match {
+      case Some(converter) =>
+        converter.convertFieldMember(member)
+      case None => member
+    }
     val struct = convertedMember.field.struct
     val instanceId =
       new IR.FieldMember(convertedMember.root, structIdField(struct))
@@ -257,15 +260,14 @@ class CheckImplementation(
       mode: CheckMode,
       pred: IR.PredicateInstance,
       perms: IR.Var,
-      converter: Option[ContextConverter] = None
+      contextConverter: Option[ContextConverter] = None
   ): Seq[IR.Op] = {
-    val arguments =
-      if (converter.isDefined)
-        pred.arguments.map(converter.get.convertExpression)
-      else pred.arguments
+    val arguments = contextConverter match {
+      case Some(converter) => pred.arguments.map(converter.convertExpression)
+      case None            => pred.arguments
+    }
     resolvePredicateDefinition(mode, pred.predicate)
       .map(new IR.Invoke(_, arguments :+ perms, None))
       .toSeq
   }
-
 }
