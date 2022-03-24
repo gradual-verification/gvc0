@@ -248,7 +248,6 @@ object Main extends App {
     } else {
       sys.exit(0)
     }
-
   }
 }
 

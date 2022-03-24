@@ -15,11 +15,15 @@ err () {
   echo "$ERR $1"
 }
 
+filename_noext(){
+  return "$(basename "$1" | sed 's/\.[^/]*$//')";
+}
+
 clean_param_csv () {
   REWRITTEN=""
   while read line; do
     IFS=',' read -ra COLUMNS <<< "$line";
-    ID=$(basename ${COLUMNS[8]} | sed 's/\.[^/]*$//');
+    ID=$(filename_noext "${COLUMNS[8]}")
     if [[ "$ID" != "parameter_$2" ]]
       then
         LINE=$ID
@@ -53,3 +57,4 @@ collect_files(){
  done
  echo $FINAL_LIST
 }
+

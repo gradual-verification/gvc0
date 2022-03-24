@@ -50,6 +50,7 @@ if [ "$DEST" == "" ]
 then DEST="$FILE.csv"
 fi
 
+cat $FILEsed 's/old-text/new-text/g' input.txt
 hyperfine -w 1 --show-output --parameter-scan "$PARAM" 0 "$UPPER_BOUND" -D "$STEP" --runs "$NITER" "cc0 $FILE -x -a \"s {$PARAM}\" -L ./src/main/resources/" --export-csv "$DEST"
 clean_param_csv "$DEST" "$PARAM" "$STAT_COLS"
 rm a.out

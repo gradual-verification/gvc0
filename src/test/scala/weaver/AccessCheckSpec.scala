@@ -12,7 +12,7 @@ import scala.language.postfixOps
 
 class AccessCheckSpec extends AnyFunSuite with BaseFileSpec {
   val dependency = getFile("c0/test.c0")
-  var cc0Path:String = "cc0"
+  var cc0Path: String = "cc0"
   val cmd = cc0Path + " ./test.c0 -L src/main/resources/ -o ./a.out"
 
   override protected def beforeAll(config: ConfigMap): Unit = {
@@ -24,24 +24,37 @@ class AccessCheckSpec extends AnyFunSuite with BaseFileSpec {
       "Add cc0 to $PATH or configure the CC0_EXE variable with the full path to cc0"
     )
     cc0Path = cc0
-    assert(dependency.isDefined,
+    assert(
+      dependency.isDefined,
       "Unable to located c0/test.c0 in test resources directory."
     )
-    Files.writeString(Paths.get("./test.c0"), dependency.get, StandardCharsets.UTF_8)
+    Files.writeString(
+      Paths.get("./test.c0"),
+      dependency.get,
+      StandardCharsets.UTF_8
+    )
   }
 
-  test("Runtime check infrastructure"){
+  test("Runtime check infrastructure") {
 
     val compileExitCode: Int = cmd !
 
-      assert(compileExitCode == 0, "Failed to compile unit tests for runtime check infrastructure.")
+    assert(
+      compileExitCode == 0,
+      "Failed to compile unit tests for runtime check infrastructure."
+    )
 
-
-    assert(Files.exists(Paths.get("./a.out")), "Unable to locate compiled unit tests. (\'./a.out\')")
+    assert(
+      Files.exists(Paths.get("./a.out")),
+      "Unable to locate compiled unit tests. (\'./a.out\')"
+    )
 
     val runExitCode = "./a.out" !
 
-      assert(runExitCode == 0, "Unit tests of runtime check infrastructure failed.")
+    assert(
+      runExitCode == 0,
+      "Unit tests of runtime check infrastructure failed."
+    )
 
   }
 
@@ -51,4 +64,3 @@ class AccessCheckSpec extends AnyFunSuite with BaseFileSpec {
     Files.delete(Paths.get("./test.c0"))
   }
 }
-

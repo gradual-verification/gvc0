@@ -288,16 +288,6 @@ object Bench {
         baselineSourceText
       )
     }
-    if (!config.disableBaseline) {
-      Baseline.insert(ir)
-      val baselineSourceText = GraphPrinter.print(ir, includeSpecs = false)
-      val baselinePath = dumpPermutation(
-        files.baselinePerms.get,
-        c0(Names._baseline),
-        mutable.TreeSet[ASTLabel]()(LabelOrdering),
-        baselineSourceText
-      )
-    }
     printProgress(maxPaths)
     csv.close()
     err.close()
