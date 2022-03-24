@@ -10,6 +10,9 @@ case class Config(
     output: Option[String] = None,
     compileBenchmark: Option[String] = None,
     benchmarkPaths: Option[Int] = None,
+    benchmarkStepSize: Option[Int] = Some(100),
+    benchmarkMaxFactor: Option[Int] = Some(100000),
+    benchmarkIterations: Option[Int] = Some(1),
     disableBaseline: Boolean = false,
     enableProfiling: Boolean = false,
     saveFiles: Boolean = false,
@@ -38,6 +41,10 @@ case class Config(
         Some(s"Benchmarking must be enabled to use --disable-baseline.")
       else if (benchmarkPaths.isDefined && compileBenchmark.isEmpty)
         Some(s"Benchmarking must be enabled to use -p or --paths.")
+      else if (benchmarkStepSize.isDefined && compileBenchmark.isEmpty)
+        Some(s"Benchmarking must be enabled to use --step")
+      else if (benchmarkMaxFactor.isDefined && compileBenchmark.isEmpty)
+        Some(s"Benchmarking must be enabled to use --upper.")
       else None
     ).foreach(Config.error)
   }
@@ -58,13 +65,19 @@ object Config {
                |  -s         --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
                |  -x         --exec                         Execute the compiled file
                |  -b <dir>   --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
+               |             --step=<n>                     Specify the step size of the stress factor from 0 to the upper bound.
+               |             --upper=<n>                    Specify the upper bound on the stress factor.                       
+               |             --iter=<n>                     Specify the number of iterations for execution.
                |  -p <n>     --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
                |             --disable-baseline             Speedup benchmark generation by skipping the baseline.
                |             --profile                      Enable -lprofiler option in clang for gperftools when compiling."""
+
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val benchmarkDir = raw"--benchmark=(.+)".r
   private val paths = raw"--paths=(.+)".r
+  private val stepSize = raw"--step=(.+)".r
+  private val upperBound = raw"--upper=(.+)".r
 
   def error(message: String): Nothing = {
     println(message)
@@ -107,6 +120,16 @@ object Config {
           current.copy(
             compileBenchmark = Some(f)
           )
+        )
+      case stepSize(f) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkStepSize = Some(f.toInt))
+        )
+      case upperBound(f) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkMaxFactor = Some(f.toInt))
         )
       case outputArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))

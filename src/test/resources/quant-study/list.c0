@@ -1,5 +1,3 @@
-#use <stress>
-
 // List node
 struct Node {
   int val;
@@ -268,7 +266,7 @@ struct Node *list_insert(struct Node *list, int val)
 // main
 int main()
 {
-  int stressLevel = readStress();
+  int stress = 0;
   struct Node *l = create_list(3);
   for(int i = 0; i < stressLevel; i+=1){
     l = list_insert(l, 1);

@@ -1,5 +1,3 @@
-#use <stress>
-
 // binary search tree node
 struct Node {
   int val;
@@ -430,7 +428,7 @@ struct Node *tree_remove(struct Node *root, int x)
 
 int main()
 {
-    int stress = readStress();
+    int stress = 100;
     int mid = stress;
     if((mid / 2) * 2 != mid){
         mid = (mid + 1)/2;
