@@ -319,6 +319,7 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
+  int stress = 0;
   struct Node *node = create_tree();
   node = tree_add_left(node);
   node = tree_add_right(node);

@@ -11,6 +11,7 @@ case class Config(
     timeout: Option[Long] = None,
     compileBenchmark: Option[String] = None,
     benchmarkPaths: Option[Int] = None,
+    benchmarkStress: Boolean = false,
     benchmarkStepSize: Option[Int] = None,
     benchmarkMaxFactor: Option[Int] = None,
     benchmarkIterations: Option[Int] = None,

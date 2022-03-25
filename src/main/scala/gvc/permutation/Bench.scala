@@ -20,10 +20,11 @@ import scala.concurrent.TimeoutException
 import scala.reflect.io.Directory
 import sys.process._
 import scala.language.postfixOps
+import scala.util.matching.Regex
 
 object Bench {
-  val assign = "(int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
-  val firstAssign =
+  private val assign: Regex = "(int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
+  private val firstAssign: Regex =
     "(int[ ]+main[ ]*\\([ ]*\\)\\s*\\{\\s*int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
   class BenchmarkException(message: String) extends Exception(message)
 
@@ -305,32 +306,57 @@ object Bench {
     err.close()
   }
 
+  case class StressScaling(stepSize: Int, upperBound: Int)
+
   def markExecution(
       config: Config,
       files: BenchmarkOutputFiles
   ): Unit = {
     val iterations = config.benchmarkIterations.getOrElse(1)
-    val stepSize = config.benchmarkStepSize.getOrElse(10)
-    val upperBound = config.benchmarkMaxFactor.getOrElse(stepSize)
-
     var compilationErrors = 0
     var executionErrors = 0
-    markDirectory(files.verifiedPerms, files.performance)
+
+    val scaling: Option[StressScaling] = config.benchmarkStepSize match {
+      case Some(value) =>
+        Some(StressScaling(value, config.benchmarkMaxFactor.getOrElse(value)))
+      case None =>
+        config.benchmarkMaxFactor match {
+          case Some(value) => Some(StressScaling(1, value))
+          case None        => None
+        }
+    }
+    markDirectory(files.verifiedPerms, files.performance, scaling)
     if (!config.disableBaseline) {
-      markDirectory(files.baselinePerms.get, files.baselinePerformance)
+      markDirectory(files.baselinePerms.get, files.baselinePerformance, scaling)
     }
 
-    def markDirectory(in: Path, out: Path): Unit = {
+    def markDirectory(
+        in: Path,
+        out: Path,
+        scaling: Option[StressScaling]
+    ): Unit = {
       val printer = new PerformancePrinter(out)
       val runlist = in.toFile.listFiles()
+
       runlist.indices.foreach(index => {
-        markFile(
-          printer,
-          runlist(index),
-          runlist(index).getName.replaceFirst("[.][^.]+$", ""),
-          index,
-          config
-        )
+        scaling match {
+          case Some(value) =>
+            markFileScaled(
+              printer,
+              runlist(index),
+              index,
+              config,
+              value
+            )
+          case None =>
+            markFile(
+              printer,
+              runlist(index),
+              index,
+              None,
+              config
+            )
+        }
       })
 
       def printProgress(
@@ -343,70 +369,81 @@ object Bench {
           ) / 100
         )
         print(
-          s"""\rBenchmarking ${sampleIndex + 1}/${runlist.length} — Stress Level $stressLevel/$upperBound — Success: $successRate% — Compilation Errors: $compilationErrors — Execution Errors: $executionErrors"""
+          s"""\rBenchmarking ${sampleIndex + 1}/${runlist.length} — Stress Level $stressLevel — Success: $successRate% — Compilation Errors: $compilationErrors — Execution Errors: $executionErrors"""
         )
       }
 
       def markFile(
           printer: PerformancePrinter,
           file: File,
-          id: String,
           index: Int,
+          stressLevel: Option[Int],
           config: Config
       ): Unit = {
-
+        val id = file.getName.replaceFirst("[.][^.]+$", "")
         val tempC0File = Paths.get(Names.tempC0File)
         val tempBinaryFile = Paths.get(Names.tempBinaryFile)
 
         val errCC0 = new ErrorPrinter(files.compilationLogs)
         val errExec = new ErrorPrinter(files.execLogs)
-
-        val source = Files.readString(file.toPath)
-        val found = firstAssign.findAllMatchIn(source)
-        if (found.toList.size == 1) {
-          try {
-            for (i <- 0 to upperBound by stepSize) {
-              printProgress(index, i)
-              val modifiedSource =
-                source.replaceAll(assign.toString(), s"int stress = $i;")
-              Main.writeFile(
-                tempC0File.toAbsolutePath.toString,
-                modifiedSource
+        var source = Files.readString(file.toPath)
+        source = stressLevel match {
+          case Some(value) =>
+            val found = firstAssign.findAllMatchIn(source)
+            if (found.toList.length != 1) {
+              throw new BenchmarkException(
+                s"The first statement in a benchmarking program must of the form 'int ${Names.stressDeclaration} = ...', and it can only be declared once."
               )
-              val output = compile(
-                tempC0File,
-                tempBinaryFile,
-                config
-              )
-              if (output.exitCode != 0) {
-                throw new CC0CompilationException(output)
-              } else {
-                val exec = exec_timed(tempBinaryFile, iterations)
-                exec.perf match {
-                  case Some(value) => printer.logPerformance(id, i, value)
-                  case None        => throw new ExecutionException(exec)
-                }
-              }
+            } else {
+              source.replaceFirst(assign.toString(), s"int stress = $value;")
             }
-          } catch {
-            case co: CapturedOutputException =>
-              co match {
-                case cc0: CC0CompilationException =>
-                  cc0.logMessage(id, errCC0)
-                  compilationErrors += 1
-                case exec: ExecutionException =>
-                  exec.logMessage(id, errExec)
-                  executionErrors += 1
-              }
-          } finally {
-            if (Files.exists(tempC0File)) Files.delete(tempC0File)
-            if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
-          }
-
-        } else {
-          throw new BenchmarkException(
-            s"The first statement in a benchmarking program must of the form 'int ${Names.stressDeclaration} = ...', and it can only be declared once."
+          case None => source
+        }
+        printProgress(index, 0)
+        try {
+          Main.writeFile(
+            tempC0File.toAbsolutePath.toString,
+            source
           )
+          val output = compile(
+            tempC0File,
+            tempBinaryFile,
+            config
+          )
+          if (output.exitCode != 0) {
+            throw new CC0CompilationException(output)
+          } else {
+            val exec = exec_timed(tempBinaryFile, iterations)
+            exec.perf match {
+              case Some(value) => printer.logPerformance(id, 0, value)
+              case None        => throw new ExecutionException(exec)
+            }
+          }
+        } catch {
+          case co: CapturedOutputException =>
+            co match {
+              case cc0: CC0CompilationException =>
+                cc0.logMessage(id, errCC0)
+                compilationErrors += 1
+              case exec: ExecutionException =>
+                exec.logMessage(id, errExec)
+                executionErrors += 1
+            }
+        } finally {
+          if (Files.exists(tempC0File)) Files.delete(tempC0File)
+          if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
+        }
+      }
+
+      def markFileScaled(
+          printer: PerformancePrinter,
+          file: File,
+          index: Int,
+          config: Config,
+          scaling: StressScaling
+      ): Unit = {
+        for (i <- 0 to scaling.upperBound by scaling.stepSize) {
+          markFile(printer, file, index, Some(i), config)
         }
       }
     }
