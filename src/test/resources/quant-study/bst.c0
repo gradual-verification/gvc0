@@ -427,55 +427,46 @@ struct Node *tree_remove(struct Node *root, int x)
 }
 
 int main()
+  //@ requires true;
+  //@ ensures true;
 {
-    int stress = 100;
-    int mid = stress;
-    if((mid / 2) * 2 != mid){
-        mid = (mid + 1)/2;
-    }else{
-        mid = mid / 2;
-    }
-    int quad = (mid + 1)/2;
-    struct Node* t1 = create_tree(mid);
+  struct Node *t1 = NULL;
+  struct Node *t2 = NULL;
+  struct Node *t3 = NULL;
+  struct Node *t4 = NULL;
+  struct Node *t5 = NULL;
+  bool a = false;
+  bool b = false;
+  bool c = false;
+  bool d = false;
+  bool e = false;
+  bool f = false;
 
-    for(int i = 1; i<quad; i+=1){
-        t1 = tree_add(t1, i);
-        bool test = tree_contains(t1, i);
-        assert(test);
+  t1 = create_tree(3);
 
-        t1 = tree_add(t1, mid-i);
-        test = tree_contains(t1, mid-i);
-        assert(test);
+  b = tree_contains(t1,2);
+  assert(!b);
+  t2 = tree_add(t1,2);
 
-        t1 = tree_add(t1, mid + i);
-        test = tree_contains(t1, mid + i);
-        assert(test);
+  a = tree_contains(t2,2);
+  assert(a);
 
-        t1 = tree_add(t1, stress - i);
-        test = tree_contains(t1, stress - i);
-        assert(test);
-    }
+  c = tree_contains(t2,3);
+  assert(c);
 
-    for(int i = 1; i<quad; i+=1){
-        t1 = tree_remove(t1, i);
-        tree_main_lemma(t1, i);
-        bool test = tree_contains(t1, i);
-        assert(!test);
+  t3 = tree_remove(t2,3);
+  tree_main_lemma(t3, 3);
+  d = tree_contains(t3,3);
+  assert(!d);
 
-        t1 = tree_remove(t1, mid-i);
-        tree_main_lemma(t1, mid-i);
-        test = tree_contains(t1, mid-i);
-        assert(!test);
+  t4 = tree_add(t3,3);
+  e = tree_contains(t4,2);
+  assert(e);
 
-        t1 = tree_remove(t1, mid+i);
-        tree_main_lemma(t1, mid+i);
-        test = tree_contains(t1, mid+i);
-        assert(!test);
+  t5 = tree_remove(t4,3);
+  tree_main_lemma(t5, 3);
+  f = tree_contains(t5,3);
+  assert(!f);
 
-        t1 = tree_remove(t1, stress-i);
-        tree_main_lemma(t1, stress-i);
-        test = tree_contains(t1, stress-i);
-        assert(!test);
-    }
   return 0;
 }

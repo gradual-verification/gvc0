@@ -1,3 +1,4 @@
+
 // Tree node
 struct Node
 {
@@ -315,17 +316,16 @@ bool tree_has_right(struct Node *node)
 }
 
 int main()
+  //@ requires true;
+  //@ ensures true;
 {
-    int stress = 0;
-    struct Node *node = create_tree();
-    struct Node *lastLeft = node;
-    struct Node *lastRight = node;
-
-    for(int i = 0; i<stress; i+=1){
-        node = tree_add_left(node);
-        node = tree_get_parent(node);
-        node = tree_add_right(node);
-        node = tree_get_parent(node);
-    }
-    return 0;
+  struct Node *node = create_tree();
+  node = tree_add_left(node);
+  node = tree_add_right(node);
+  node = tree_get_parent(node);
+  node = tree_add_left(node);
+  node = tree_get_parent(node);
+  node = tree_get_parent(node);
+  
+  return 0;
 }

@@ -265,11 +265,15 @@ struct Node *list_insert(struct Node *list, int val)
 
 // main
 int main()
+  //@ requires true;
+  //@ ensures true;
 {
-  int stress = 0;
   struct Node *l = create_list(3);
-  for(int i = 0; i < stress; i+=1){
-    l = list_insert(l, 1);
-  }
+  l = list_insert(l, 4);
+  l = list_insert(l, -1);
+  l = list_insert(l, 10);
+//  l = list_remove(l, 3);
+//  l = list_remove(l, -1);
+
   return 0;
 }

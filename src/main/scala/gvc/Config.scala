@@ -8,6 +8,7 @@ sealed trait DumpType
 case class Config(
     dump: Option[DumpType] = None,
     output: Option[String] = None,
+    timeout: Option[Long] = None,
     compileBenchmark: Option[String] = None,
     benchmarkPaths: Option[Int] = None,
     benchmarkStepSize: Option[Int] = None,
@@ -58,20 +59,20 @@ object Config {
 
   val help = """Usage: gvc0 [OPTION...] SOURCEFILE
                |where OPTION is
-               |  -h         --help                         Give short usage message and exit
-               |  -d <type>  --dump=<type>                  Print the generated code and exit, where <type> specifies
-               |                                            the type of code to print: ir, silver, c0
-               |  -o <file>  --output=<file>                Place the executable output into <file>
-               |  -v         --only-verify                  Stop after static verification
-               |  -s         --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
-               |  -x         --exec                         Execute the compiled file
-               |  -b <dir>   --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
-               |             --step=<n>                     Specify the step size of the stress factor from 0 to the upper bound.
-               |             --upper=<n>                    Specify the upper bound on the stress factor.                       
-               |             --iter=<n>                     Specify the number of iterations for execution.
-               |  -p <n>     --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
-               |             --disable-baseline             Speedup benchmark generation by skipping the baseline.
-               |             --profile                      Enable -lprofiler option in clang for gperftools when compiling."""
+               |  -h            --help                         Give short usage message and exit
+               |  -d <type>     --dump=<type>                  Print the generated code and exit, where <type> specifies
+               |                                               the type of code to print: ir, silver, c0
+               |  -o <file>     --output=<file>                Place the executable output into <file>
+               |  -v            --only-verify                  Stop after static verification
+               |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
+               |  -x            --exec                         Execute the compiled file
+               |  -b <dir>      --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
+               |                --step=<n>                     Specify the step size of the stress factor from 0 to the upper bound.
+               |                --upper=<n>                    Specify the upper bound on the stress factor.                       
+               |                --iter=<n>                     Specify the number of iterations for execution.
+               |                --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
+               |                --disable-baseline             Speedup benchmark generation by skipping the baseline.
+               |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m)."""
 
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
@@ -79,10 +80,20 @@ object Config {
   private val paths = raw"--paths=(.+)".r
   private val stepSize = raw"--step=(.+)".r
   private val upperBound = raw"--upper=(.+)".r
-
+  private val timeoutArg = raw"--timeout=(.+)".r
+  private val timeoutSec = raw"([0-9]+)s".r
+  private val timeoutMin = raw"([0-9]+)m".r
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
+  }
+
+  private def parseTimeout(t: String): Long = t match {
+    case timeoutSec(t) => t.substring(0, t.length).toLong * 1000
+    case timeoutMin(t) => t.substring(0, t.length).toLong * 60 * 1000
+    case _ => {
+      error(s"Invalid timeout: $t")
+    }
   }
 
   private def parseDumpType(t: String) = t.toLowerCase() match {
@@ -98,6 +109,10 @@ object Config {
       current: Config = Config()
   ): Config =
     args match {
+      case "-t" :: t :: tail =>
+        fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
+      case timeoutArg(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case "-d" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
       case dumpArg(t) :: tail =>
@@ -106,13 +121,6 @@ object Config {
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
       case paths(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(benchmarkPaths = Some(f.toInt)))
-      case "-p" :: f :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(
-            benchmarkPaths = Some(f.toInt)
-          )
-        )
       case benchmarkDir(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(compileBenchmark = Some(f)))
       case "-b" :: f :: tail =>

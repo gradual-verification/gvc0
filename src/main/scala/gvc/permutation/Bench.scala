@@ -16,9 +16,11 @@ import java.math.BigInteger
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.TimeoutException
 import scala.reflect.io.Directory
 import sys.process._
 import scala.language.postfixOps
+
 object Bench {
   val assign = "(int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
   val firstAssign =
@@ -30,6 +32,8 @@ object Bench {
   def out(basename: String): String = basename + ".out"
 
   def csv(basename: String): String = basename + ".csv"
+
+  def log(basename: String): String = basename + ".log"
 
   case class BenchmarkOutputFiles(
       root: Path,
@@ -49,7 +53,7 @@ object Bench {
   )
 
   object Names {
-    val _baseline = "baseline.c0"
+    val _baseline: String = c0("baseline")
     val _top = "top"
     val _bottom = "bot"
     val perms = "perms"
@@ -57,20 +61,20 @@ object Bench {
     val baselinePerms = "baseline_perms"
     val performance = "performance"
     val baselinePerformance = "baselinePerformance"
-    val levels = "levels.csv"
-    val metadata = "metadata.csv"
-    val verifyLogs = "verify.log"
+    val levels: String = csv("levels")
+    val metadata: String = csv("metadata")
+    val verifyLogs: String = log("verify")
 
-    val compilationLogs = "cc0.log"
-    val baselineCompilationLogs = "cc0_baseline.log"
-    val execLogs = "exec.log"
-    val baselineExecLogs = "exec_baseline.log"
+    val compilationLogs: String = log("cc0")
+    val baselineCompilationLogs: String = log("cc0_baseline")
+    val execLogs: String = log("exec")
+    val baselineExecLogs: String = log("exec_baseline")
 
     val logs = "logs"
     val stressDeclaration = "stress"
     val entry = "main"
-    val tempC0File = "temp.c0"
-    val tempBinaryFile = "temp.out"
+    val tempC0File: String = c0("temp")
+    val tempBinaryFile: String = out("temp")
   }
 
   def resolveOutputFiles(
@@ -158,6 +162,7 @@ object Bench {
       librarySearchDirs: List[String]
   ): Unit = {
     var verificationFailures = 0
+    var timeoutFailures = 0
     val alreadySampled = mutable.Set[String]()
     var previousID: Option[String] = None
     val maxPaths = config.benchmarkPaths.getOrElse(1)
@@ -173,11 +178,11 @@ object Bench {
     def printProgress(sampleIndex: Int, pathIndex: Int): Unit = {
       val successRate = Math.abs(
         Math.floor(
-          (alreadySampled.size - verificationFailures) / alreadySampled.size.toDouble * 10000
+          (alreadySampled.size - verificationFailures - timeoutFailures) / alreadySampled.size.toDouble * 10000
         ) / 100
       )
       print(
-        s"\rGenerated ${alreadySampled.size} unique programs — $sampleIndex/$maxPaths paths — Current: $pathIndex/${labels.length} — Remaining: ${labels.length - pathIndex} — Success: $successRate% — Failures: $verificationFailures"
+        s"\rGenerated ${alreadySampled.size} unique programs — $sampleIndex/$maxPaths paths — Current: $pathIndex/${labels.length} — Remaining: ${labels.length - pathIndex} — Success: $successRate% — Failures: $verificationFailures — Timeouts $timeoutFailures"
       )
     }
 
@@ -218,10 +223,6 @@ object Bench {
         permutationIndices += sampleToPermute(labelIndex).exprIndex
         val id = csv.createID(currentPermutation)
 
-        if (previousID.isDefined && previousID.get == id) {
-          println(sampleToPermute(labelIndex).hash)
-          throw new Exception("invalid step in permutation")
-        }
         if (!alreadySampled.contains(id)) {
           val builtPermutation = selector.visit(permutationIndices)
           val sourceText =
@@ -233,30 +234,54 @@ object Bench {
             sourceText
           )
           try {
-            val verifiedPermutation = verify(sourceText, outputFiles, config)
-            dumpPermutation(
-              files.verifiedPerms,
-              c0(id),
-              currentPermutation,
-              verifiedPermutation.c0Source
-            )
-            if (!config.disableBaseline) {
-              val baselinePermutation = selector.visit(permutationIndices)
-              Baseline.insert(baselinePermutation)
-              val baselineSourceText =
-                GraphPrinter.print(baselinePermutation, includeSpecs = false)
-              dumpPermutation(
-                files.baselinePerms.get,
-                c0(id),
-                currentPermutation,
-                baselineSourceText
-              )
+            val verifiedPermutation = config.timeout match {
+              case Some(value) =>
+                Timeout.runWithTimeout(value)(
+                  verify(sourceText, outputFiles, config)
+                )
+              case None => Some(verify(sourceText, outputFiles, config))
+            }
+            verifiedPermutation match {
+              case Some(vPerm) =>
+                dumpPermutation(
+                  files.verifiedPerms,
+                  c0(id),
+                  currentPermutation,
+                  vPerm.c0Source
+                )
+                if (!config.disableBaseline) {
+                  val baselinePermutation = selector.visit(permutationIndices)
+                  Baseline.insert(baselinePermutation)
+                  val baselineSourceText =
+                    GraphPrinter.print(
+                      baselinePermutation,
+                      includeSpecs = false
+                    )
+                  dumpPermutation(
+                    files.baselinePerms.get,
+                    c0(id),
+                    currentPermutation,
+                    baselineSourceText
+                  )
+                }
+              case None =>
             }
           } catch {
             case ex: VerificationException =>
               verificationFailures += 1
               err.log(id, 1, ex.message)
+            case _: TimeoutException =>
+              timeoutFailures += 1
+              val message =
+                s"\n\n ---[Timeout after ${config.timeout.get} ms]---\n"
+              println(message)
+              err.log(
+                id,
+                exitCode = 1,
+                message
+              )
           }
+
           csv.logPermutation(id, currentPermutation)
           alreadySampled += id
         }

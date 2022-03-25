@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.permutation.Bench
+import gvc.permutation.{Bench, Timeout}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -17,6 +17,8 @@ import java.io.IOException
 import sys.process._
 import scala.language.postfixOps
 import viper.silicon.state.BranchCond
+
+import java.util.concurrent.TimeoutException
 
 case class OutputFileCollection(
     baseName: String,
@@ -237,12 +239,11 @@ object Main extends App {
     if (compilerExit != 0) Config.error("Compilation failed")
 
     if (cmdConfig.exec) {
-      var outputCommand = Paths.get(outputExe).toAbsolutePath.toString
+      val outputCommand = Paths.get(outputExe).toAbsolutePath.toString
       sys.exit(Seq(outputCommand) !)
     } else {
       sys.exit(0)
     }
   }
 }
-
 case class VerificationException(message: String) extends Exception(message)
