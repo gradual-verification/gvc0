@@ -14,7 +14,6 @@ case class Config(
     benchmarkMaxFactor: Option[Int] = None,
     benchmarkIterations: Option[Int] = None,
     disableBaseline: Boolean = false,
-    enableProfiling: Boolean = false,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
@@ -137,8 +136,6 @@ object Config {
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
       case "--disable-baseline" :: tail =>
         fromCommandLineArgs(tail, current.copy(disableBaseline = true))
-      case "--profile" :: tail =>
-        fromCommandLineArgs(tail, current.copy(enableProfiling = true))
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>

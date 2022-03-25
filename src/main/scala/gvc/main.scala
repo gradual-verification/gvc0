@@ -221,9 +221,7 @@ object Main extends App {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = List(defaultLibraryDirectory),
-      compilerArgs =
-        if (cmdConfig.enableProfiling) List("-lprofiler") else List()
+      includeDirs = List(defaultLibraryDirectory)
     )
 
     // Always write the intermediate C0 file, but then delete it
@@ -240,10 +238,6 @@ object Main extends App {
 
     if (cmdConfig.exec) {
       var outputCommand = Paths.get(outputExe).toAbsolutePath.toString
-
-      if (cmdConfig.enableProfiling)
-        outputCommand =
-          "CPUPROFILE=" + fileNames.profilingName + " " + outputCommand
       sys.exit(Seq(outputCommand) !)
     } else {
       sys.exit(0)
