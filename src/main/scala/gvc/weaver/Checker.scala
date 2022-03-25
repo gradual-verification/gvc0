@@ -374,7 +374,7 @@ object Checker {
             alloc.insertAfter(
               new Invoke(
                 runtime.addStructAcc,
-                List(ownedFields, new Int(structType.fields.length - 1)),
+                List(ownedFields, new Int(structType.fields.length)),
                 Some(idField)
               )
             )

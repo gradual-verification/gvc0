@@ -10,7 +10,6 @@ import gvc.{
   OutputFileCollection,
   VerificationException
 }
-
 import java.io.{ByteArrayOutputStream, File, FileWriter}
 import java.math.BigInteger
 import java.nio.file.{Files, Path, Paths}
