@@ -8,8 +8,8 @@ HELP=0
 TIMEOUT="15m"
 SIMPLIFY=0
 ROOT="./study/data"
-UPPER_BOUND=1000
-STEP=100
+UPPER_BOUND=10
+STEP=10
 
 for i in "$@"; do
   case $i in
@@ -92,57 +92,8 @@ else
     info "Profiling \033[0;31mdisabled\033[0m."
 fi
 export DISABLE_SIMPLIFICATION=$SIMPLIFY
-
-PERM_META="$ROOT/perms.csv"
-PERM_LEVELS="$ROOT/levels.csv"
-
-STAT_COLS="id$HYPERFINE_COLS"
-
-COMPILED="$ROOT/compiled"
-BASELINE_COMPILED="$ROOT/baseline_compiled"
-
-PROF_EXEC="$ROOT/prof"
-PROF_EXEC_BASELINE="$ROOT/prof_baseline"
-
 rm -rf $ROOT
-if [ "$PROFILE" != "" ]
-then
-  mkdir $PROF_EXEC
-  mkdir $PROF_EXEC_BASELINE
-fi
-
-info "Compiling benchmark..."
-java -jar -Xss1g $JAR "$FILE" --benchmark="$ROOT" --paths="$NPATHS" $DISABLE_BASELINE $PROFILE
-success "\n Finished compiling benchmark."
+info "Running benchmark..."
+java -jar -Xss1g "$JAR" "$FILE" --benchmark="$ROOT" --paths="$NPATHS" --upper="$UPPER_BOUND" --step="$STEP" $DISABLE_BASELINE $PROFILE
+success "\n Finished."
 rm -rf `find $ROOT -name '*.dSYM'`
-success "Metadata stored in $PERM_META and $PERM_LEVELS."
-
-EXEC_PERMS=$(collect_files $COMPILED)
-EXEC_BASELINE=$(collect_files $BASELINE_COMPILED)
-
-#echo "$START Benchmarking execution of permutations, logs saved to $LOG_EXEC ..."
-#hyperfine -N --runs "$NITER" -i -L files "$EXEC_PERMS" "$COMPILED/{files} >> $LOG_EXEC 2>&1" --export-csv "$CSV_EXEC" >> "$LOG_EXEC" 2>&1
-#clean_param_csv "$CSV_EXEC" "files"
-#echo "$SUCCESS Finished benchmarking execution of permutations."
-
-#FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $LOG_EXEC | wc -l)
-#FAILS_NOSP=$(echo "$FAILS" | sed 's/ //g')
-#if [ "$FAILS_NOSP" != "0" ]
-#then
-#echo "$ERR There were $FAILS_NOSP permutations that errored during execution."
-#fi
-
-#echo "$START Benchmarking execution of baseline, logs saved to $LOG_EXEC_BASELINE ..."
-#hyperfine -N --runs "$NITER" -i -L files "$EXEC_BASELINE" "$BASELINE_COMPILED/{files} >> $LOG_EXEC_BASELINE 2>&1" --export-csv "$CSV_EXEC_BASELINE" >> "$LOG_EXEC_BASELINE" 2>&1
-#clean_param_csv "$CSV_EXEC_BASELINE" "files"
-#echo "$START Benchmarking execution of baseline."
-
-#FAILS=$(grep -o 'Warning: Ignoring non-zero exit code.' $LOG_EXEC_BASELINE | wc -l)
-#FAILS_NOSP=$(echo "$FAILS" | sed 's/ //g')
-#if [ "$FAILS_NOSP" != "0" ]
-#then
-#echo "$ERR There were $FAILS_NOSP baselines that errored during execution."
-#fi
-
-#echo "$SUCCESS Finished benchmarking execution of baseline."
-echo "$SUCCESS Finished."

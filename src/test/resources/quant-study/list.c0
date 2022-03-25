@@ -268,7 +268,7 @@ int main()
 {
   int stress = 0;
   struct Node *l = create_list(3);
-  for(int i = 0; i < stressLevel; i+=1){
+  for(int i = 0; i < stress; i+=1){
     l = list_insert(l, 1);
   }
   return 0;

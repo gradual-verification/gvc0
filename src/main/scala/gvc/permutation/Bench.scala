@@ -1,8 +1,7 @@
 package gvc.permutation
 import gvc.CC0Wrapper.{CompilationOutput, ExecutionOutput, Performance}
-import gvc.Main.{generateIR, verify}
-import gvc.transformer.IRGraph.Method
-import gvc.transformer.{GraphPrinter, IRGraph}
+import gvc.Main.verify
+import gvc.transformer.GraphPrinter
 import gvc.{
   CC0Options,
   CC0Wrapper,
@@ -11,7 +10,8 @@ import gvc.{
   OutputFileCollection,
   VerificationException
 }
-import java.io.{ByteArrayOutputStream, FileWriter}
+
+import java.io.{ByteArrayOutputStream, File, FileWriter}
 import java.math.BigInteger
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable
@@ -146,7 +146,7 @@ object Bench {
       librarySearchDirs
     )
     if (!config.onlyVerify)
-      markExecution(config, files, librarySearchDirs)
+      markExecution(config, files)
   }
 
   def markVerification(
@@ -254,7 +254,7 @@ object Bench {
           } catch {
             case ex: VerificationException =>
               verificationFailures += 1
-              err.log(id, ex.message)
+              err.log(id, 1, ex.message)
           }
           csv.logPermutation(id, currentPermutation)
           alreadySampled += id
@@ -281,159 +281,178 @@ object Bench {
 
   def markExecution(
       config: Config,
-      files: BenchmarkOutputFiles,
-      librarySearchDirs: List[String]
+      files: BenchmarkOutputFiles
   ): Unit = {
     var compilationErrors = 0
     var executionErrors = 0
-
-    def markDirectory(in: Path, out: Path): Unit = {
-      val printer = new PerformancePrinter(out)
-      in.toFile
-        .listFiles()
-        .foreach(file => {
-          val source = Files.readString(file.toPath)
-          val ast = generateIR(source, librarySearchDirs)
-          markFile(
-            printer,
-            ast,
-            file.getName.replaceFirst("[.][^.]+$", ""),
-            config
-          )
-        })
-    }
-
-    def markFile(
-        printer: PerformancePrinter,
-        ir: IRGraph.Program,
-        id: String,
-        config: Config
-    ): List[CompilationOutput] = {
-      val tempC0File = Paths.get(Names.tempC0File)
-      val tempBinaryFile = Paths.get(Names.tempBinaryFile)
-      val errCC0 = new ErrorPrinter(files.compilationLogs)
-      val errExec = new ErrorPrinter(files.execLogs)
-
-      val firstOperationOption =
-        ir.method(Names.entry).asInstanceOf[Method].body.headOption
-      val assignment = firstOperationOption match {
-        case Some(value) =>
-          value match {
-            case assign: IRGraph.Assign
-                if assign.target.name.equals(
-                  Names.stressDeclaration
-                ) && assign.target.varType.equals(IRGraph.IntType) =>
-              assign
-            case _ =>
-              throw new BenchmarkException(
-                s"The first statement in a benchmarking program must of the form 'int ${Names.stressDeclaration} = ...'"
-              )
-          }
-        case None =>
-          throw new BenchmarkException(
-            s"The body of '${Names.entry}' is empty."
-          )
-      }
-      val step = config.benchmarkStepSize.getOrElse(100)
-      val upper = config.benchmarkMaxFactor.getOrElse(1000)
-      if (upper < step || upper % step != 0) {
-        throw new BenchmarkException(
-          "The upper bound on the stress factor must be evenly divided by the step size."
-        )
-      } else {
-        val outputBuffer = mutable.ListBuffer[CompilationOutput]()
-        for (i <- 0 until upper by step) {
-          assignment.value = new IRGraph.Int(i)
-          val source = GraphPrinter.print(ir, includeSpecs = false)
-          Main.writeFile(tempC0File.toAbsolutePath.toString, source)
-          val output = compile(
-            tempC0File,
-            tempBinaryFile,
-            config
-          )
-          if (output.exitCode != 0) {
-            errCC0.log(id, output.output)
-            compilationErrors += 1
-          } else {
-            val exec = exec_timed(tempBinaryFile, config)
-            exec.perf match {
-              case Some(value) => printer.logPerformance(id, i, value)
-              case None =>
-                errExec.log(id, exec.output)
-                executionErrors += 1
-            }
-          }
-        }
-
-        if (Files.exists(tempC0File)) Files.delete(tempC0File)
-        if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
-
-        outputBuffer.toList
-      }
-    }
-
-    markDirectory(files.perms, files.performance)
+    markDirectory(files.verifiedPerms, files.performance)
     if (!config.disableBaseline) {
       markDirectory(files.baselinePerms.get, files.baselinePerformance)
     }
-  }
-  def compile(
-      input: Path,
-      output: Path,
-      config: Config
-  ): CompilationOutput = {
-    val cc0Options = CC0Options(
-      compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-      saveIntermediateFiles = config.saveFiles,
-      output = Some(output.toString),
-      includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
-      compilerArgs =
-        if (config.enableProfiling) List(Names.profilerLinkingFlag)
-        else List()
-    )
-    CC0Wrapper.exec_output(input.toString, cc0Options)
-  }
 
-  def exec_timed(binary: Path, config: Config): ExecutionOutput = {
-    val command = binary.toAbsolutePath.toString
-    val timings = mutable.ListBuffer[Long]()
-    val os = new ByteArrayOutputStream()
-    var exitCode = 0
-    for (_ <- 0 until config.benchmarkIterations.get) {
-      val start = System.nanoTime()
-      exitCode = (command #> os) !
-
-      val end = System.nanoTime()
-      timings += end - start
-      if (exitCode != 0) {
-        return ExecutionOutput(
-          exitCode,
-          os.toString("UTF-8"),
-          None
+    def markDirectory(in: Path, out: Path): Unit = {
+      val printer = new PerformancePrinter(out)
+      val runlist = in.toFile.listFiles()
+      runlist.indices.foreach(index => {
+        markFile(
+          printer,
+          runlist(index),
+          runlist(index).getName.replaceFirst("[.][^.]+$", ""),
+          index,
+          config
         )
-      } else {
-        os.reset()
+      })
+
+      def printProgress(
+          sampleIndex: Int,
+          stressLevel: Int
+      ): Unit = {
+        val successRate = Math.abs(
+          Math.floor(
+            (runlist.size - compilationErrors - executionErrors) / runlist.size.toDouble * 10000
+          ) / 100
+        )
+        print(
+          s"""\rBenchmarking ${sampleIndex + 1}/${runlist.length} — Stress Level $stressLevel/${config.benchmarkMaxFactor.get} — Success: $successRate% — Compilation Errors: $compilationErrors — Execution Errors: $executionErrors"""
+        )
+      }
+
+      def markFile(
+          printer: PerformancePrinter,
+          file: File,
+          id: String,
+          index: Int,
+          config: Config
+      ): Unit = {
+
+        val tempC0File = Paths.get(Names.tempC0File)
+        val tempBinaryFile = Paths.get(Names.tempBinaryFile)
+
+        val errCC0 = new ErrorPrinter(files.compilationLogs)
+        val errExec = new ErrorPrinter(files.execLogs)
+
+        val source = Files.readString(file.toPath)
+        val assign =
+          "(int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
+        val found = assign.findAllMatchIn(source)
+
+        if (found.toList.size == 1) {
+          val step = config.benchmarkStepSize.getOrElse(100)
+          val upper = config.benchmarkMaxFactor.getOrElse(1000)
+
+          if (upper < step || upper % step != 0) {
+            throw new BenchmarkException(
+              "The upper bound on the stress factor must be evenly divided by the step size."
+            )
+          } else {
+            try {
+              for (i <- 0 to upper by step) {
+                printProgress(index, i)
+                val modifiedSource =
+                  source.replaceAll(assign.toString(), s"int stress = $i;")
+                Main.writeFile(
+                  tempC0File.toAbsolutePath.toString,
+                  modifiedSource
+                )
+                val output = compile(
+                  tempC0File,
+                  tempBinaryFile,
+                  config
+                )
+                if (output.exitCode != 0) {
+                  throw new CC0CompilationException(output)
+                } else {
+                  val exec = exec_timed(tempBinaryFile, config)
+                  exec.perf match {
+                    case Some(value) => printer.logPerformance(id, i, value)
+                    case None        => throw new ExecutionException(exec)
+                  }
+                }
+              }
+            } catch {
+              case co: CapturedOutputException =>
+                co match {
+                  case cc0: CC0CompilationException =>
+                    cc0.logMessage(id, errCC0)
+                    compilationErrors += 1
+                  case exec: ExecutionException =>
+                    exec.logMessage(id, errExec)
+                    executionErrors += 1
+                }
+            } finally {
+              if (Files.exists(tempC0File)) Files.delete(tempC0File)
+              if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
+            }
+          }
+        } else {
+          throw new BenchmarkException(
+            s"The first statement in a benchmarking program must of the form 'int ${Names.stressDeclaration} = ...', and it can only be declared once."
+          )
+        }
       }
     }
-    val mean = timings.sum / timings.length
-    val max = timings.max
-    val min = timings.min
-    val stdev =
-      Math.sqrt(
-        timings.map(_ - mean).map(m => m * m).sum / (timings.length - 1)
-      )
-    ExecutionOutput(
-      exitCode,
-      os.toString("UTF-8"),
-      Some(new Performance(mean, stdev, min, max))
-    )
-  }
 
+    def compile(
+        input: Path,
+        output: Path,
+        config: Config
+    ): CompilationOutput = {
+      val cc0Options = CC0Options(
+        compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
+        saveIntermediateFiles = config.saveFiles,
+        output = Some(output.toString),
+        includeDirs =
+          List(Paths.get("src/main/resources").toAbsolutePath + "/"),
+        compilerArgs =
+          if (config.enableProfiling) List(Names.profilerLinkingFlag)
+          else List()
+      )
+      CC0Wrapper.exec_output(input.toString, cc0Options)
+    }
+
+    def exec_timed(binary: Path, config: Config): ExecutionOutput = {
+      val command = binary.toAbsolutePath.toString + " 2>&1"
+      val timings = mutable.ListBuffer[Long]()
+      val os = new ByteArrayOutputStream()
+      var exitCode = 0
+      for (_ <- 0 until config.benchmarkIterations.get) {
+        val start = System.nanoTime()
+        exitCode = (command #> os) !
+
+        val end = System.nanoTime()
+        timings += end - start
+        if (exitCode != 0) {
+          return ExecutionOutput(
+            exitCode,
+            os.toString("UTF-8"),
+            None
+          )
+        } else {
+          os.reset()
+        }
+      }
+      val mean = timings.sum / timings.length
+      val max = timings.max
+      val min = timings.min
+      val stdev =
+        if (timings.length > 1)
+          Math.sqrt(
+            timings.map(_ - mean).map(m => m * m).sum / (timings.length - 1)
+          )
+        else 0
+      ExecutionOutput(
+        exitCode,
+        os.toString("UTF-8"),
+        Some(new Performance(mean, stdev, min, max))
+      )
+    }
+  }
   class ErrorPrinter(file: Path) {
     val writer = new FileWriter(file.toString)
-    def formatSection(name: String): String = s"-----[ Error in $name ]-----\n"
-    def log(name: String, err: String): Unit = {
-      writer.write(formatSection(name) + err + "\n")
+    def formatSection(name: String, exitCode: Int): String =
+      s"-----[ Error in $name, Exit: $exitCode ]-----\n"
+    def log(name: String, exitCode: Int, err: String): Unit = {
+      writer.write(formatSection(name, exitCode) + err + "\n")
       writer.flush()
     }
     def close(): Unit = writer.close()
@@ -449,6 +468,8 @@ object Bench {
       val contents =
         (id, new FileWriter(out.resolve(csv(id)).toString))
       currentWriter = Some(contents)
+      contents._2.write(performanceColumnNames)
+      contents._2.flush()
       contents._2
     }
     def logPerformance(
@@ -520,4 +541,15 @@ object Bench {
       mappingWriter.flush()
     }
   }
+
+  class CapturedOutputException(exitCode: Int, stdout: String)
+      extends Exception {
+    def logMessage(name: String, printer: ErrorPrinter): Unit = {
+      printer.log(name, exitCode, stdout)
+    }
+  }
+  class CC0CompilationException(output: CompilationOutput)
+      extends CapturedOutputException(output.exitCode, output.output)
+  class ExecutionException(output: ExecutionOutput)
+      extends CapturedOutputException(output.exitCode, output.output)
 }
