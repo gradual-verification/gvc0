@@ -10,9 +10,9 @@ case class Config(
     output: Option[String] = None,
     compileBenchmark: Option[String] = None,
     benchmarkPaths: Option[Int] = None,
-    benchmarkStepSize: Option[Int] = Some(10),
-    benchmarkMaxFactor: Option[Int] = Some(10),
-    benchmarkIterations: Option[Int] = Some(1),
+    benchmarkStepSize: Option[Int] = None,
+    benchmarkMaxFactor: Option[Int] = None,
+    benchmarkIterations: Option[Int] = None,
     disableBaseline: Boolean = false,
     enableProfiling: Boolean = false,
     saveFiles: Boolean = false,
@@ -45,6 +45,8 @@ case class Config(
         Some(s"Benchmarking must be enabled to use --step")
       else if (benchmarkMaxFactor.isDefined && compileBenchmark.isEmpty)
         Some(s"Benchmarking must be enabled to use --upper.")
+      else if (benchmarkIterations.isDefined && compileBenchmark.isEmpty)
+        Some(s"Benchmarking must be enabled to use -i/--iter.")
       else None
     ).foreach(Config.error)
   }

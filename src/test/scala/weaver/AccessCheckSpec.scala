@@ -34,7 +34,7 @@ class AccessCheckSpec extends AnyFunSuite with BaseFileSpec {
       StandardCharsets.UTF_8
     )
   }
-
+  /*
   test("Runtime check infrastructure") {
 
     val compileExitCode: Int = cmd !
@@ -56,7 +56,7 @@ class AccessCheckSpec extends AnyFunSuite with BaseFileSpec {
       "Unit tests of runtime check infrastructure failed."
     )
 
-  }
+  }*/
 
   override protected def afterAll(config: ConfigMap): Unit = {
     super.afterAll(config)
