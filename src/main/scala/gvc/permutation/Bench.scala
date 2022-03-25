@@ -170,14 +170,14 @@ object Bench {
     val csv = new CSVPrinter(files, labels)
     val err = new ErrorPrinter(files.verifyLogs)
 
-    def printProgress(sampleIndex: Int): Unit = {
+    def printProgress(sampleIndex: Int, pathIndex: Int): Unit = {
       val successRate = Math.abs(
         Math.floor(
           (alreadySampled.size - verificationFailures) / alreadySampled.size.toDouble * 10000
         ) / 100
       )
       print(
-        s"\rGenerated ${alreadySampled.size} unique programs — $sampleIndex/$maxPaths paths (${labels.length} perms/path) — Success: $successRate% — Failures: $verificationFailures"
+        s"\rGenerated ${alreadySampled.size} unique programs — $sampleIndex/$maxPaths paths — Current: $pathIndex/${labels.length} — Remaining: ${labels.length - pathIndex} — Success: $successRate% — Failures: $verificationFailures"
       )
     }
 
@@ -261,7 +261,7 @@ object Bench {
           alreadySampled += id
         }
         csv.logStep(id, sampleIndex + 1, labelIndex + 1)
-        printProgress(sampleIndex)
+        printProgress(sampleIndex, labelIndex)
         previousID = Some(id)
       }
     }
@@ -275,7 +275,7 @@ object Bench {
         baselineSourceText
       )
     }
-    printProgress(maxPaths)
+    printProgress(maxPaths, labels.length)
     csv.close()
     err.close()
   }
