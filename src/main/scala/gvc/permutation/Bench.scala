@@ -20,7 +20,9 @@ import scala.reflect.io.Directory
 import sys.process._
 import scala.language.postfixOps
 object Bench {
-
+  val assign = "(int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
+  val firstAssign =
+    "(int[ ]+main[ ]*\\([ ]*\\)\\s*\\{\\s*int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
   class BenchmarkException(message: String) extends Exception(message)
 
   def c0(basename: String): String = basename + ".c0"
@@ -175,7 +177,7 @@ object Bench {
         ) / 100
       )
       print(
-        s"\rGenerated ${alreadySampled.size} unique programs, $sampleIndex/$maxPaths paths (${labels.length} perms/path) completed. Success: $successRate%, Failures: $verificationFailures)"
+        s"\rGenerated ${alreadySampled.size} unique programs — $sampleIndex/$maxPaths paths (${labels.length} perms/path) — Success: $successRate% — Failures: $verificationFailures"
       )
     }
 
@@ -335,12 +337,8 @@ object Bench {
         val errExec = new ErrorPrinter(files.execLogs)
 
         val source = Files.readString(file.toPath)
-        val assign =
-          "(int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
-        val found = assign.findAllMatchIn(source)
-
+        val found = firstAssign.findAllMatchIn(source)
         if (found.toList.size == 1) {
-
           try {
             for (i <- 0 to upperBound by stepSize) {
               printProgress(index, i)
