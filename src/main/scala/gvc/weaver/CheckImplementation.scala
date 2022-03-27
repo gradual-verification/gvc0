@@ -1,9 +1,7 @@
 package gvc.weaver
 
-import gvc.transformer.IRGraph.{Expression, FieldMember}
-
 import scala.collection.mutable
-import gvc.transformer.{Replacer, IRGraph => IR}
+import gvc.transformer.{IRGraph => IR}
 
 sealed trait CheckMode { def prefix: String }
 case object AddMode extends CheckMode { def prefix = "add_" }
@@ -14,57 +12,6 @@ case object VerifyMode extends CheckMode { def prefix = "" }
 sealed trait CheckType
 case object Separation extends CheckType
 case object Verification extends CheckType
-class ContextConverter(call: IR.Invoke, caller: IR.Method) {
-  val variableMapping =
-    (call.callee.parameters zip call.arguments).toMap
-  val resultExpression: Option[Expression] =
-    if (call.target.isDefined)
-      call.target
-    else
-      call.callee.returnType match {
-        case Some(value) =>
-          call.target = Some(caller.addVar(value))
-          call.target
-        case None => None
-      }
-  def convertFieldMember(member: FieldMember): FieldMember = {
-    new IR.FieldMember(
-      convertExpression(member.root),
-      member.field
-    )
-  }
-
-  def convertExpression(expr: Expression): IR.Expression = {
-    expr match {
-      case value: IR.Var =>
-        value match {
-          case parameter: IR.Parameter => variableMapping(parameter)
-          case _                       => value
-        }
-      case fieldMember: IR.FieldMember =>
-        convertFieldMember(fieldMember)
-      case derefMember: IR.DereferenceMember =>
-        new IR.DereferenceMember(convertExpression(derefMember.root))
-
-      case _: IR.Result => resultExpression.get
-
-      case literal: IR.Literal => literal
-      case binary: IR.Binary =>
-        new IR.Binary(
-          binary.operator,
-          convertExpression(binary.left),
-          convertExpression(binary.right)
-        )
-      case unary: IR.Unary =>
-        new IR.Unary(unary.operator, convertExpression(unary.operand))
-      case _ =>
-        throw new WeaverException(
-          "Invalid expression; cannot convert to new context."
-        )
-    }
-  }
-
-}
 
 class CheckImplementation(
     program: IR.Program,
@@ -103,11 +50,9 @@ class CheckImplementation(
       CheckRuntime.Names.primaryOwnedFields
     )
 
-    // Replace parameters from the predicate definition with parameters
-    // in this predicate instance
-    val body = Replacer.replace(pred.expression, newParams)
+    val context = new PredicateContext(pred, newParams)
+    val ops = translate(mode, pred.expression, perms, context)
 
-    val ops = translate(mode, body, perms)
     if (ops.nonEmpty) {
       defn.body ++= ops
       Some(defn)
@@ -125,31 +70,28 @@ class CheckImplementation(
       mode: CheckMode,
       expr: IR.Expression,
       perms: IR.Var,
-      converter: Option[ContextConverter] = None
+      context: SpecificationContext
   ): Seq[IR.Op] = expr match {
     case acc: IR.Accessibility =>
       acc.member match {
         case member: IR.FieldMember =>
-          translateFieldPermission(mode, member, perms, converter)
+          translateFieldPermission(mode, member, perms, context)
         case _ =>
           throw new WeaverException("Invalid conjunct in specification.")
       }
     case pred: IR.PredicateInstance =>
-      translatePredicateInstance(mode, pred, perms, converter)
+      translatePredicateInstance(mode, pred, perms, context)
 
     case imp: IR.Imprecise =>
       imp.precise match {
         case None          => Seq.empty
-        case Some(precise) => translate(mode, precise, perms, converter)
+        case Some(precise) => translate(mode, precise, perms, context)
       }
 
     case conditional: IR.Conditional => {
-      val trueOps = translate(mode, conditional.ifTrue, perms, converter)
-      val falseOps = translate(mode, conditional.ifFalse, perms, converter)
-      val condition =
-        if (converter.isDefined)
-          converter.get.convertExpression(conditional.condition)
-        else conditional.condition
+      val trueOps = translate(mode, conditional.ifTrue, perms, context)
+      val falseOps = translate(mode, conditional.ifFalse, perms, context)
+      val condition = context.convertExpression(conditional.condition)
       (trueOps.isEmpty, falseOps.isEmpty) match {
         case (false, false) => {
           val ifStmt = new IR.If(condition)
@@ -175,11 +117,11 @@ class CheckImplementation(
     }
 
     case binary: IR.Binary if binary.operator == IR.BinaryOp.And => {
-      translate(mode, binary.left, perms, converter) ++ translate(
+      translate(mode, binary.left, perms, context) ++ translate(
         mode,
         binary.right,
         perms,
-        converter
+        context
       )
     }
 
@@ -187,9 +129,7 @@ class CheckImplementation(
       mode match {
         case SeparationMode | AddMode | RemoveMode => Seq.empty
         case VerifyMode => {
-          val toAssert =
-            if (converter.isDefined) converter.get.convertExpression(expr)
-            else expr
+          val toAssert = context.convertExpression(expr)
           Seq(new IR.Assert(toAssert, IR.AssertKind.Imperative))
         }
       }
@@ -199,13 +139,9 @@ class CheckImplementation(
       mode: CheckMode,
       member: IR.FieldMember,
       perms: IR.Var,
-      contextConverter: Option[ContextConverter] = None
+      context: SpecificationContext
   ): Seq[IR.Op] = {
-    val convertedMember = contextConverter match {
-      case Some(converter) =>
-        converter.convertFieldMember(member)
-      case None => member
-    }
+    val convertedMember = context.convertFieldMember(member)
     val struct = convertedMember.field.struct
     val instanceId =
       new IR.FieldMember(convertedMember.root, structIdField(struct))
@@ -260,12 +196,9 @@ class CheckImplementation(
       mode: CheckMode,
       pred: IR.PredicateInstance,
       perms: IR.Var,
-      contextConverter: Option[ContextConverter] = None
+      context: SpecificationContext
   ): Seq[IR.Op] = {
-    val arguments = contextConverter match {
-      case Some(converter) => pred.arguments.map(converter.convertExpression)
-      case None            => pred.arguments
-    }
+    val arguments = pred.arguments.map(context.convertExpression(_))
     resolvePredicateDefinition(mode, pred.predicate)
       .map(new IR.Invoke(_, arguments :+ perms, None))
       .toSeq

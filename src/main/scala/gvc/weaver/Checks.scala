@@ -7,7 +7,7 @@ sealed trait Check
 
 trait CheckMethod {
   def method: IR.Method
-  def resultVar(name: String): IR.Var
+  def resultVar(name: String): IR.Expression
 }
 
 object Check {

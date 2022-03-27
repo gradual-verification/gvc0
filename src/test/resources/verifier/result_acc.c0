@@ -1,0 +1,21 @@
+
+struct Test {
+  int value;
+};
+
+struct Test *getTest()
+  //@ensures ?;
+{
+  return alloc(struct Test);
+}
+
+struct Test *getTestPrecise()
+  //@ensures acc(\result->value);
+{
+  return getTest();
+}
+
+int main()
+{
+  return 0;
+}

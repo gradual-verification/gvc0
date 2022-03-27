@@ -16,15 +16,14 @@ int main()
   bool _cond_1 = false;
   int* _instanceCounter = NULL;
   int _ = 0;
-  int _1 = 0;
   struct OwnedFields* _ownedFields = NULL;
+  int _1 = 0;
   struct OwnedFields* _tempFields = NULL;
-  int _2 = 0;
   _instanceCounter = alloc(int);
   _ownedFields = initOwnedFields(_instanceCounter);
-  _2 = doSomething(0, _instanceCounter);
+  _1 = doSomething(0, _instanceCounter);
   _tempFields = initOwnedFields(_instanceCounter);
-  _cond_1 = _2 == 0;
+  _cond_1 = _1 == 0;
   x = random(_tempFields);
   join(_ownedFields, _tempFields);
   _ = doSomething(x, _instanceCounter);

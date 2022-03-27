@@ -42,6 +42,7 @@ import gvc.weaver.{
 }
 
 import scala.collection.mutable
+import gvc.weaver.ValueContext
 
 object Baseline {
 
@@ -256,7 +257,8 @@ object Baseline {
           implementation.translateFieldPermission(
             VerifyMode,
             _,
-            getPrimaryOwnedFields()
+            getPrimaryOwnedFields(),
+            ValueContext
           )
         )
       )

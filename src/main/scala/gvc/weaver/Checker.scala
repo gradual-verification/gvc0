@@ -11,9 +11,9 @@ object Checker {
       val method: Method,
       tempVars: Map[SilverVarId, Invoke]
   ) extends CheckMethod {
-    val resultVars = mutable.Map[java.lang.String, Var]()
+    val resultVars = mutable.Map[java.lang.String, Expression]()
 
-    def resultVar(name: java.lang.String): Var = {
+    def resultVar(name: java.lang.String): Expression = {
       resultVars.getOrElseUpdate(
         name, {
           val invoke = tempVars.getOrElse(
@@ -21,15 +21,17 @@ object Checker {
             throw new WeaverException(s"Missing temporary variable '$name'")
           )
 
-          val retType = invoke.method.returnType.getOrElse(
-            throw new WeaverException(
-              s"Invalid temporary variable '$name' for void method"
+          invoke.target.getOrElse {
+            val retType = invoke.method.returnType.getOrElse(
+              throw new WeaverException(
+                s"Invalid temporary variable '$name' for void '${invoke.callee.name}'"
+              )
             )
-          )
-          val tempVar = method.addVar(retType)
-          invoke.target = Some(tempVar)
 
-          tempVar
+            val tempVar = method.addVar(retType)
+            invoke.target = Some(tempVar)
+            tempVar
+          }
         }
       )
     }
@@ -206,28 +208,26 @@ object Checker {
             // If we need to track precise permissons, add the code at the call site
             if (needsToTrackPrecisePerms) {
               // Convert precondition into calls to removeAcc
-
-              val converter = new ContextConverter(call.ir, method)
+              val context = new CallSiteContext(call.ir, method)
               call.ir.insertBefore(
                 callee.precondition.toSeq.flatMap(
                   implementation.translate(
                     RemoveMode,
                     _,
                     getPrimaryOwnedFields,
-                    Some(converter)
+                    context
                   )
                 )
               )
 
               // Convert postcondition into calls to addAcc
-
               call.ir.insertAfter(
                 callee.postcondition.toSeq.flatMap(
                   implementation.translate(
                     AddMode,
                     _,
                     getPrimaryOwnedFields,
-                    Some(converter)
+                    context
                   )
                 )
               )
@@ -249,11 +249,11 @@ object Checker {
               Some(tempSet)
             )
 
-            val converter = new ContextConverter(call.ir, method)
+            val context = new CallSiteContext(call.ir, method)
 
             val addPermsToTemp = callee.precondition.toSeq
               .flatMap(
-                implementation.translate(AddMode, _, tempSet, Some(converter))
+                implementation.translate(AddMode, _, tempSet, context)
               )
               .toList
             val removePermsFromPrimary = callee.precondition.toSeq
@@ -262,7 +262,7 @@ object Checker {
                   RemoveMode,
                   _,
                   getPrimaryOwnedFields,
-                  Some(converter)
+                  context
                 )
               )
               .toList
@@ -350,7 +350,7 @@ object Checker {
       case _: FieldAccessibilityCheck =>
         (VerifyMode, fields.primaryOwnedFields())
     }
-    context.implementation.translateFieldPermission(mode, field, perms)
+    context.implementation.translateFieldPermission(mode, field, perms, ValueContext)
   }
 
   def implementPredicateCheck(
@@ -369,7 +369,7 @@ object Checker {
       case _: PredicateAccessibilityCheck =>
         (VerifyMode, fields.primaryOwnedFields())
     }
-    context.implementation.translatePredicateInstance(mode, instance, perms)
+    context.implementation.translatePredicateInstance(mode, instance, perms, ValueContext)
   }
 
   case class FieldCollection(

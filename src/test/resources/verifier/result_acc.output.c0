@@ -1,0 +1,43 @@
+#use <runtime>
+struct Test;
+
+struct Test
+{
+  int value;
+  int _id;
+};
+
+struct Test* getTest(struct OwnedFields* _ownedFields);
+struct Test* getTestPrecise(int* _instanceCounter);
+int main();
+
+struct Test* getTest(struct OwnedFields* _ownedFields)
+  //@ensures ?;
+{
+  struct Test* _ = NULL;
+  _ = alloc(struct Test);
+  _->_id = addStructAcc(_ownedFields, 2);
+  return _;
+}
+
+struct Test* getTestPrecise(int* _instanceCounter)
+  //@ensures acc(\result->value);
+{
+  struct Test* _ = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  _ownedFields = initOwnedFields(_instanceCounter);
+  _tempFields = initOwnedFields(_instanceCounter);
+  _ = getTest(_tempFields);
+  join(_ownedFields, _tempFields);
+  assert(!(_ == NULL));
+  assertAcc(_ownedFields, _->_id, 0, "Field access runtime check failed for struct Test.value");
+  return _;
+}
+
+int main()
+{
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  return 0;
+}
