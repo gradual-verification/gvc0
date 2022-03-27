@@ -8,6 +8,7 @@ int main()
   cond = true;
   value = 0;
   while (cond)
+    //@loop_invariant ?;
   {
     value = value + 1;
     cond = test(value);

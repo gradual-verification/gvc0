@@ -269,11 +269,9 @@ object Baseline {
     })
 
     collected.whileLoops.foreach(whl => {
-      if (whl.invariant.isDefined) {
-        val check = checkSpec(whl.invariant.get)
-        check ++=: whl.body
-        whl.insertAfter(check.map(_.copy))
-      }
+      val check = checkSpec(whl.invariant)
+      check ++=: whl.body
+      whl.insertAfter(check.map(_.copy))
     })
 
     if (method.precondition.isDefined)

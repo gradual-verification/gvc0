@@ -77,6 +77,7 @@ int main()
   use(d11);
   e = 5;
   while (e < 10)
+    //@loop_invariant ?;
   {
     e1 = echo(e + 1);
     e = e1;
@@ -84,6 +85,7 @@ int main()
   use(e);
   f = 6;
   while (f < 10)
+    //@loop_invariant ?;
   {
     if (test > 0)
     {

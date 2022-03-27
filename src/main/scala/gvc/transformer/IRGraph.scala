@@ -706,7 +706,7 @@ object IRGraph {
 
   class While(
       var condition: Expression,
-      var invariant: Option[Expression]
+      var invariant: Expression
   ) extends Op {
     var body = new ChildBlock(this)
 
@@ -716,7 +716,7 @@ object IRGraph {
       newWhile
     }
     def copy(
-        newInvariant: Option[IRGraph.Expression],
+        newInvariant: IRGraph.Expression,
         newBody: List[IRGraph.Op]
     ) = {
       val newWhile = new While(condition, newInvariant)

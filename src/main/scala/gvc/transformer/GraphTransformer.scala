@@ -355,7 +355,7 @@ object GraphTransformer {
           condScope.ops.foreach(scope += _)
 
           val ir =
-            new IRGraph.While(cond, loop.invariant.map(transformSpec(_, scope)))
+            new IRGraph.While(cond, loop.invariant.map(transformSpec(_, scope)).getOrElse(new IRGraph.Imprecise(None)))
           scope += ir
 
           val bodyScope = new BlockScope(scope.method, ir.body, scope.vars)

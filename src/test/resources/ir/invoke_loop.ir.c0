@@ -8,6 +8,7 @@ int main()
   int _2 = 0;
   _ = something();
   while (_ != 0)
+    //@loop_invariant ?;
   {
     return 1;
     _ = something();
@@ -18,6 +19,7 @@ int main()
     _2 = something();
   }
   while (_1 > 0 && _2 < 2)
+    //@loop_invariant ?;
   {
     return 2;
     _1 = something();

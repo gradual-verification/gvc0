@@ -174,8 +174,7 @@ object BaselineCollector {
             collectBlock(value.ifFalse)
 
           case value: IRGraph.While =>
-            if (value.invariant.isDefined)
-              whileLoops += value
+            whileLoops += value
             collectMembers(value.condition, members)
             collectBlock(value.body)
 

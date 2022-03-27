@@ -144,7 +144,7 @@ object IRGraphSilver {
         Seq(
           vpr.While(
             convertExpr(loop.condition),
-            loop.invariant.map(convertExpr).toList,
+            List(convertExpr(loop.invariant)),
             vpr.Seqn(loop.body.flatMap(convertOp(_, tempVars)).toList, Seq.empty)()
           )()
         )

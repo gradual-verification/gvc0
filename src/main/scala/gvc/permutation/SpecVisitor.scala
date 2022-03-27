@@ -165,7 +165,7 @@ class SpecTraversal[I, O] {
           visitExpression(
             Left(context),
             SpecType.Invariant,
-            whl.invariant,
+            Some(whl.invariant),
             visitor
           )
           visitBlock(context, whl.body, visitor)

@@ -6,6 +6,7 @@ int main()
   int i = 0;
   i = 0;
   while (i < 5)
+    //@loop_invariant ?;
   {
     print(i);
     i = i + 1;

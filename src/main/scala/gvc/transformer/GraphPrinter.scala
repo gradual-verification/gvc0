@@ -274,13 +274,11 @@ object GraphPrinter {
         p.print("while (")
         printExpr(w.condition)
         p.println(")")
-        w.invariant.foreach { inv =>
-          if (includeSpecs) {
-            p.withIndent {
-              p.print("//@loop_invariant ")
-              printExpr(inv)
-              p.println(";")
-            }
+        if (includeSpecs) {
+          p.withIndent {
+            p.print("//@loop_invariant ")
+            printExpr(w.invariant)
+            p.println(";")
           }
         }
         printBlock(w.body)

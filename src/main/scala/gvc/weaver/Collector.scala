@@ -184,9 +184,9 @@ object Collector {
             Some(CheckPosition.Loop(inv, position))
           ) => {
         // This must be an invariant
-        if (inv.isEmpty) throw new WeaverException("Invalid loop invariant")
-        if (inv.tail.nonEmpty)
+        if (inv.isEmpty || inv.tail.isEmpty)
           throw new WeaverException("Invalid loop invariant")
+
         new ViperBranch(inv.head, ViperLocation.loop(position), condition)
       }
 
@@ -636,8 +636,8 @@ object Collector {
                     .toMap
                 )
               )
-            case op: While if op.invariant.isDefined => (op.invariant.get, None)
-            case op: Assert                          => (op.value, None)
+            case op: While  => (op.invariant, None)
+            case op: Assert => (op.value, None)
             case _ =>
               throw new WeaverException(
                 "Could not locate specification for permission checking: " + location

@@ -16,6 +16,7 @@ int test(int x)
     x1 = x1 + 2;
   }
   while (false)
+    //@loop_invariant ?;
   {
     x1 = x1 + 3;
   }

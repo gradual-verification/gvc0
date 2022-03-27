@@ -18,7 +18,7 @@ class IRGraphSpec extends AnyFunSuite {
 
   test("get method from op in while block") {
     val method = new Method("test", None)
-    val whileOp = new While(new Bool(true), None)
+    val whileOp = new While(new Bool(true), new Bool(true))
     val errOp = new Error(new Null())
     whileOp.body += errOp
     method.body += whileOp
