@@ -1,0 +1,24 @@
+struct Test {
+  int a;
+  int b;
+};
+
+struct Test *getTest()
+  //@ensures ?;
+{
+  return alloc(struct Test);
+}
+
+int main()
+{
+  struct Test *test = getTest();
+
+  // The condition produced for test->a == 0 should include a `test != NULL`
+  // check before evaluating the actual condition
+  if (test->a == 0)
+  {
+    test->b = 1;
+  }
+
+  return 0;
+}

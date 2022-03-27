@@ -1,0 +1,46 @@
+#use <runtime>
+struct Test;
+
+struct Test
+{
+  int a;
+  int b;
+  int _id;
+};
+
+struct Test* getTest(struct OwnedFields* _ownedFields);
+int main();
+
+struct Test* getTest(struct OwnedFields* _ownedFields)
+  //@ensures ?;
+{
+  struct Test* _ = NULL;
+  _ = alloc(struct Test);
+  _->_id = addStructAcc(_ownedFields, 3);
+  return _;
+}
+
+int main()
+{
+  struct Test* test = NULL;
+  bool _cond_1 = false;
+  int* _instanceCounter = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  _tempFields = initOwnedFields(_instanceCounter);
+  test = getTest(_tempFields);
+  join(_ownedFields, _tempFields);
+  assertAcc(_ownedFields, test->_id, 0, "Field access runtime check failed for struct Test.a");
+  _cond_1 = !(test == NULL) && test->a == 0;
+  if (test->a == 0)
+  {
+    if (_cond_1)
+    {
+      assertAcc(_ownedFields, test->_id, 1, "Field access runtime check failed for struct Test.b");
+    }
+    test->b = 1;
+  }
+  return 0;
+}

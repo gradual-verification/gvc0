@@ -79,10 +79,24 @@ sealed trait CheckExpression extends Check {
       m: CheckMethod,
       returnValue: Option[IR.Expression]
   ): IR.Expression
+
+  def guard: Option[CheckExpression]
+
+  def guarded: CheckExpression = CheckExpression.and(guard, this)
 }
 
 object CheckExpression {
   type Expr = CheckExpression
+
+  private def and(a: Option[CheckExpression], b: CheckExpression): CheckExpression = a match {
+    case None => b
+    case Some(a) => CheckExpression.And(a, b)
+  }
+
+  private def and(a: Option[CheckExpression], b: Option[CheckExpression]): Option[CheckExpression] = b match {
+    case None => a
+    case Some(b) => Some(and(a, b))
+  }
 
   sealed trait Binary extends Expr {
     val left: CheckExpression
@@ -94,6 +108,8 @@ object CheckExpression {
         r: Option[IR.Expression]
     ): IR.Binary =
       new IR.Binary(op, left.toIR(p, m, r), right.toIR(p, m, r))
+
+    def guard = and(left.guard, right.guard)
   }
 
   case class And(left: Expr, right: Expr) extends Binary {
@@ -101,6 +117,10 @@ object CheckExpression {
   }
   case class Or(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Or
+
+    // The left guard must always be satisfied
+    // The right guard only needs satisfied if the left condition is false
+    override def guard = and(left.guard, right.guard.map(g => Or(left, g)))
   }
   case class Add(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Add
@@ -139,6 +159,7 @@ object CheckExpression {
         r: Option[IR.Expression]
     ): IR.Unary =
       new IR.Unary(op, operand.toIR(p, m, r))
+    def guard = operand.guard
   }
   case class Not(operand: Expr) extends Unary {
     def op = IR.UnaryOp.Not
@@ -151,12 +172,14 @@ object CheckExpression {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) = {
       m.method.variable(name)
     }
+    def guard = None
   }
 
   case class ResultVar(name: String) extends Expr {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) = {
       m.resultVar(name)
     }
+    def guard = None
   }
 
   case class Field(root: Expr, structName: String, fieldName: String)
@@ -171,14 +194,20 @@ object CheckExpression {
 
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.FieldMember(root.toIR(p, m, r), getIRField(p))
+    
+    def guard = Some(and(root.guard, Not(Eq(root, NullLit))))
   }
 
   case class Deref(operand: Expr) extends Expr {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.DereferenceMember(operand.toIR(p, m, r))
+    def guard = Some(and(operand.guard, Not(Eq(operand, NullLit))))
   }
 
-  sealed trait Literal extends Expr
+  sealed trait Literal extends Expr {
+    def guard = None
+  }
+
   case class IntLit(value: Int) extends Literal {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.Int(value)
@@ -195,7 +224,7 @@ object CheckExpression {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.Null()
   }
-  sealed trait BoolLit extends Expr {
+  sealed trait BoolLit extends Literal {
     def value: Boolean
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.Bool(value)
@@ -217,6 +246,22 @@ object CheckExpression {
         ifTrue.toIR(p, m, r),
         ifFalse.toIR(p, m, r)
       )
+    
+    def guard = and(cond.guard, (ifTrue.guard, ifFalse.guard) match {
+      case (None, None) => None
+
+      // Have a guard for both paths
+      // Use a ternary to switch on the actual condition
+      case (Some(tg), Some(fg)) => Some(Cond(cond, tg, fg))
+
+      // Only have a guard for the true path
+      // Either the false path is taken, or the true guard must be satisfied
+      case (Some(tg), None) => Some(Or(Not(cond), tg))
+
+      // Only have a guard for the false path
+      // Either the true path is taken, or the false guard is satisifed
+      case (None, Some(fg)) => Some(Or(cond, fg))
+    })
   }
 
   case object Result extends Expr {
@@ -228,6 +273,7 @@ object CheckExpression {
       returnValue.getOrElse(
         throw new WeaverException("Invalid \\result expression")
       )
+    def guard = None
   }
 
   def irValue(value: IR.Expression): Expr = {
