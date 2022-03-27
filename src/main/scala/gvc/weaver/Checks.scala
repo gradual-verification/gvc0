@@ -80,28 +80,23 @@ sealed trait CheckExpression extends Check {
       returnValue: Option[IR.Expression]
   ): IR.Expression
 
-  def guarded: GuardExpression
-}
+  def guard: Option[CheckExpression]
 
-case class GuardExpression(value: CheckExpression, guard: Option[CheckExpression]) {
-  def combine: CheckExpression = guard match {
-    case None => value
-    case Some(guard) => CheckExpression.And(guard, value)
-  }
-
-  def addGuard(nextGuard: CheckExpression): Option[CheckExpression] = guard match {
-    case None => Some(nextGuard)
-    case Some(prev) => Some(CheckExpression.And(prev, nextGuard))
-  }
-
-  def addGuard(nextGuard: Option[CheckExpression]): Option[CheckExpression] = nextGuard match {
-    case None => guard
-    case Some(next) => addGuard(next)
-  }
+  def guarded: CheckExpression = CheckExpression.and(guard, this)
 }
 
 object CheckExpression {
   type Expr = CheckExpression
+
+  private def and(a: Option[CheckExpression], b: CheckExpression): CheckExpression = a match {
+    case None => b
+    case Some(a) => CheckExpression.And(a, b)
+  }
+
+  private def and(a: Option[CheckExpression], b: Option[CheckExpression]): Option[CheckExpression] = b match {
+    case None => a
+    case Some(b) => Some(and(a, b))
+  }
 
   sealed trait Binary extends Expr {
     val left: CheckExpression
@@ -114,57 +109,45 @@ object CheckExpression {
     ): IR.Binary =
       new IR.Binary(op, left.toIR(p, m, r), right.toIR(p, m, r))
 
-    def guardBinary(reduce: (Expr, Expr) => Expr): GuardExpression = {
-      val (l, r) = (left.guarded, right.guarded)
-      GuardExpression(reduce(l.value, r.value), l.addGuard(r.guard))
-    }
+    def guard = and(left.guard, right.guard)
   }
 
   case class And(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.And
-
-    def guarded: GuardExpression = GuardExpression(And(left.guarded.combine, right.guarded.combine), None)
   }
   case class Or(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Or
 
-    def guarded: GuardExpression = GuardExpression(Or(left.guarded.combine, right.guarded.combine), None)
+    // The left guard must always be satisfied
+    // The right guard only needs satisfied if the left condition is false
+    override def guard = and(left.guard, right.guard.map(g => Or(left, g)))
   }
   case class Add(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Add
-    def guarded: GuardExpression = guardBinary(Add)
   }
   case class Sub(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Subtract
-    def guarded: GuardExpression = guardBinary(Sub)
   }
   case class Mul(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Multiply
-    def guarded: GuardExpression = guardBinary(Mul)
   }
   case class Div(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Divide
-    def guarded: GuardExpression = guardBinary(Div)
   }
   case class Eq(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Equal
-    def guarded = guardBinary(Eq)
   }
   case class Lt(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Less
-    def guarded: GuardExpression = guardBinary(Lt)
   }
   case class LtEq(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.LessOrEqual
-    def guarded = guardBinary(LtEq)
   }
   case class Gt(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.Greater
-    def guarded = guardBinary(Gt)
   }
   case class GtEq(left: Expr, right: Expr) extends Binary {
     def op = IR.BinaryOp.GreaterOrEqual
-    def guarded = guardBinary(GtEq)
   }
 
   sealed trait Unary extends CheckExpression {
@@ -176,34 +159,27 @@ object CheckExpression {
         r: Option[IR.Expression]
     ): IR.Unary =
       new IR.Unary(op, operand.toIR(p, m, r))
+    def guard = operand.guard
   }
   case class Not(operand: Expr) extends Unary {
     def op = IR.UnaryOp.Not
-    def guarded: GuardExpression = {
-      val sub = operand.guarded
-      GuardExpression(Not(sub.value), sub.guard)
-    }
   }
   case class Neg(operand: Expr) extends Unary {
     def op = IR.UnaryOp.Negate
-    def guarded: GuardExpression = {
-      val sub = operand.guarded
-      GuardExpression(Neg(sub.value), sub.guard)
-    }
   }
 
   case class Var(name: String) extends Expr {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) = {
       m.method.variable(name)
     }
-    def guarded = GuardExpression(this, None)
+    def guard = None
   }
 
   case class ResultVar(name: String) extends Expr {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) = {
       m.resultVar(name)
     }
-    def guarded = GuardExpression(this, None)
+    def guard = None
   }
 
   case class Field(root: Expr, structName: String, fieldName: String)
@@ -219,28 +195,17 @@ object CheckExpression {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.FieldMember(root.toIR(p, m, r), getIRField(p))
     
-    def guarded: GuardExpression = {
-      val r = root.guarded
-      GuardExpression(
-        Field(r.value, structName, fieldName),
-        r.addGuard(Not(Eq(r.value, NullLit))))
-    }
+    def guard = Some(and(root.guard, Not(Eq(root, NullLit))))
   }
 
   case class Deref(operand: Expr) extends Expr {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
       new IR.DereferenceMember(operand.toIR(p, m, r))
-    def guarded: GuardExpression = {
-      val r = operand.guarded
-      GuardExpression(
-        Deref(r.value),
-        r.addGuard(Not(Eq(r.value, NullLit)))
-      )
-    }
+    def guard = Some(and(operand.guard, Not(Eq(operand, NullLit))))
   }
 
   sealed trait Literal extends Expr {
-    def guarded = GuardExpression(this, None)
+    def guard = None
   }
 
   case class IntLit(value: Int) extends Literal {
@@ -282,18 +247,21 @@ object CheckExpression {
         ifFalse.toIR(p, m, r)
       )
     
-    def guarded = {
-      val (c, t, f) = (cond.guarded, ifTrue.guarded, ifFalse.guarded)
-      GuardExpression(
-        Cond(c.value, t.value, f.value),
-        c.addGuard((t.guard, f.guard) match {
-          case (None, None) => None
-          case (Some(tg), Some(fg)) => Some(Cond(c.value, tg, fg))
-          case (Some(tg), None) => Some(Or(Not(c.value), tg))
-          case (None, Some(fg)) => Some(Or(c.value, fg))
-        })
-      )
-    }
+    def guard = and(cond.guard, (ifTrue.guard, ifFalse.guard) match {
+      case (None, None) => None
+
+      // Have a guard for both paths
+      // Use a ternary to switch on the actual condition
+      case (Some(tg), Some(fg)) => Some(Cond(cond, tg, fg))
+
+      // Only have a guard for the true path
+      // Either the false path is taken, or the true guard must be satisfied
+      case (Some(tg), None) => Some(Or(Not(cond), tg))
+
+      // Only have a guard for the false path
+      // Either the true path is taken, or the false guard is satisifed
+      case (None, Some(fg)) => Some(Or(cond, fg))
+    })
   }
 
   case object Result extends Expr {
@@ -305,7 +273,7 @@ object CheckExpression {
       returnValue.getOrElse(
         throw new WeaverException("Invalid \\result expression")
       )
-    def guarded = GuardExpression(this, None)
+    def guard = None
   }
 
   def irValue(value: IR.Expression): Expr = {

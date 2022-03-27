@@ -549,10 +549,10 @@ object Collector {
         val (expr, flag) = unwrap(CheckExpression.fromViper(b.condition, irMethod))
 
         val unwrappedCondition: Condition =
-          if (conditionLocation == location) {
+          if (conditionLocation == normalizeLocation(location)) {
             ImmediateCondition(expr)
           } else {
-            val tracked = TrackedCondition(conditionLocation, expr)
+            val tracked = TrackedCondition(conditionLocation, expr.guarded)
             trackedConditions += tracked
             tracked
           }
