@@ -184,7 +184,7 @@ object Collector {
             Some(CheckPosition.Loop(inv, position))
           ) => {
         // This must be an invariant
-        if (inv.isEmpty || inv.tail.isEmpty)
+        if (inv.isEmpty || !inv.tail.isEmpty)
           throw new WeaverException("Invalid loop invariant")
 
         new ViperBranch(inv.head, ViperLocation.loop(position), condition)
