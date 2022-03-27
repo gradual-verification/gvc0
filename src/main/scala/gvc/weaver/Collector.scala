@@ -383,7 +383,8 @@ object Collector {
 
           check(loop, loc, None, loopInvs)
           checkAll(loop.cond, loc, None, loopInvs)
-          loop.invs.foreach { i => checkAll(i, loc, None, loopInvs) }
+
+          // Invariants are checked after loop body
         }
 
         case n => {
@@ -413,6 +414,10 @@ object Collector {
             val newInvs =
               vprWhile.invs.headOption.map(_ :: loopInvs).getOrElse(loopInvs)
             visitBlock(irWhile.body, vprWhile.body, newInvs)
+            
+            // Check invariants after loop body since they may depend on conditions from body
+            vprWhile.invs.foreach { i => checkAll(i, Pre(irWhile), None, loopInvs) }
+
             vprRest
           }
           case (irInvoke: Invoke, (vprInvoke: vpr.MethodCall) :: vprRest) => {
