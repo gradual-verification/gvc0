@@ -18,7 +18,6 @@ void test(int x, int y, struct OwnedFields* _ownedFields)
   bool _cond_2 = false;
   bool _cond_3 = false;
   bool _cond_4 = false;
-  bool _cond_5 = false;
   struct OwnedFields* _tempFields = NULL;
   _cond_1 = x > 1;
   if (x > 1)
@@ -29,12 +28,11 @@ void test(int x, int y, struct OwnedFields* _ownedFields)
       _tempFields = initOwnedFields(_ownedFields->instanceCounter);
       z = testCall(y, _tempFields);
       join(_ownedFields, _tempFields);
-      _cond_3 = !(y == 0);
+      _cond_3 = y == 0;
       _cond_4 = z == 0;
-      _cond_5 = y == 0;
       if (z == 0)
       {
-        if (_cond_1 && _cond_2 && _cond_3 && _cond_4 || _cond_1 && _cond_2 && _cond_5 && _cond_4)
+        if (_cond_1 && _cond_2 && !_cond_3 && _cond_4 || _cond_1 && _cond_2 && _cond_3 && _cond_4)
         {
           assert(x > 3);
         }

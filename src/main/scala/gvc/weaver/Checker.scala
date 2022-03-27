@@ -99,6 +99,7 @@ object Checker {
     def getCondition(cond: Condition): Expression = cond match {
       case ImmediateCondition(expr) => expr.toIR(program, checkMethod, None)
       case cond: TrackedCondition => conditionVars(cond)
+      case NotCondition(value) => new Unary(UnaryOp.Not, getCondition(value))
       case AndCondition(values) => foldConditionList(values, IRGraph.BinaryOp.And)
       case OrCondition(values) => foldConditionList(values, IRGraph.BinaryOp.Or)
     }

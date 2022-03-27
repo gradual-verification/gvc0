@@ -14,7 +14,6 @@ int main()
 {
   int x = 0;
   bool _cond_1 = false;
-  bool _cond_2 = false;
   int* _instanceCounter = NULL;
   int _ = 0;
   struct OwnedFields* _ownedFields = NULL;
@@ -24,12 +23,11 @@ int main()
   _ownedFields = initOwnedFields(_instanceCounter);
   _1 = doSomething(0, _instanceCounter);
   _tempFields = initOwnedFields(_instanceCounter);
-  _cond_1 = !(_1 == 0);
-  _cond_2 = _1 == 0;
+  _cond_1 = _1 == 0;
   x = random(_tempFields);
   join(_ownedFields, _tempFields);
   _ = doSomething(x, _instanceCounter);
-  if (_cond_1 && !(_ == 0) || _cond_2 && !(_ == 0))
+  if (!_cond_1 && !(_ == 0) || _cond_1 && !(_ == 0))
   {
     assert(x == 0);
   }

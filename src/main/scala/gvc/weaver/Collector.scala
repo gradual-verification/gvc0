@@ -22,6 +22,7 @@ object Collector {
   case object MethodPost extends Location
 
   sealed trait Condition
+  case class NotCondition(value: Condition) extends Condition
   case class AndCondition(values: List[Condition]) extends Condition
   case class OrCondition(values: List[Condition]) extends Condition
   case class ImmediateCondition(value: CheckExpression) extends Condition
@@ -237,6 +238,13 @@ object Collector {
 
   private def isContained(node: vpr.Node, containers: Seq[vpr.Node]): Boolean =
     containers.exists(isContained(node, _))
+
+  private def unwrap(expr: CheckExpression, value: Boolean = true): (CheckExpression, Boolean) = {
+    expr match {
+      case CheckExpression.Not(operand) => unwrap(operand, !value)
+      case e => (e, value)
+    }
+  }
 
   private def collect(
       irProgram: Program,
@@ -538,21 +546,18 @@ object Collector {
         }
 
         val conditionLocation = normalizeLocation(ViperLocation.forIR(irLoc, position))
+        val (expr, flag) = unwrap(CheckExpression.fromViper(b.condition, irMethod))
 
-        val value = CheckExpression.fromViper(b.condition, irMethod)
-        val (unwrapped, flag) = value match {
-          case CheckExpression.Not(negated) => (negated, false)
-          case other                        => (other, true)
-        }
-
-        val cond: Condition =
+        val unwrappedCondition: Condition =
           if (conditionLocation == location) {
-            ImmediateCondition(value)
+            ImmediateCondition(expr)
           } else {
-            val tracked = TrackedCondition(conditionLocation, value)
+            val tracked = TrackedCondition(conditionLocation, expr)
             trackedConditions += tracked
             tracked
           }
+
+        val cond = if (flag) unwrappedCondition else NotCondition(unwrappedCondition)
 
         Some(when match {
           case None => cond
