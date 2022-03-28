@@ -4,7 +4,8 @@ import gvc.weaver._
 
 object BaselineChecker {
   def check(program: IR.Program): Unit = {
-    val structIds = program.structs.map(s => (s.name, s.addField("_id", IR.IntType))).toMap
+    val structIds =
+      program.structs.map(s => (s.name, s.addField("_id", IR.IntType))).toMap
     val runtime = CheckRuntime.addToIR(program)
     val checks = new CheckImplementation(program, runtime, structIds)
 
@@ -12,23 +13,26 @@ object BaselineChecker {
   }
 
   def checkMethod(
-    method: IR.Method,
-    checks: CheckImplementation
+      method: IR.Method,
+      checks: CheckImplementation
   ): Unit = {
     val perms = method.name match {
       case "main" =>
         method.addVar(
           checks.runtime.ownedFieldsRef,
-          CheckRuntime.Names.primaryOwnedFields)
+          CheckRuntime.Names.primaryOwnedFields
+        )
       case _ =>
         method.addParameter(
           checks.runtime.ownedFieldsRef,
-          CheckRuntime.Names.primaryOwnedFields)
+          CheckRuntime.Names.primaryOwnedFields
+        )
     }
 
     val tempPerms = method.addVar(
       checks.runtime.ownedFieldsRef,
-      CheckRuntime.Names.temporaryOwnedFields)
+      CheckRuntime.Names.temporaryOwnedFields
+    )
 
     checkBlock(method.body, checks, perms, tempPerms)
 
@@ -38,14 +42,16 @@ object BaselineChecker {
 
     if (Collector.hasImplicitReturn(method)) {
       method.body ++= method.postcondition.toSeq.flatMap(
-        validateSpec(_, perms, tempPerms, checks))
+        validateSpec(_, perms, tempPerms, checks)
+      )
     }
 
     // Add the initialization to main
     if (method.name == "main") {
       val instanceCounter = method.addVar(
         new IR.PointerType(IR.IntType),
-        CheckRuntime.Names.instanceCounter)
+        CheckRuntime.Names.instanceCounter
+      )
 
       Seq(
         new IR.AllocValue(IR.IntType, instanceCounter),
@@ -72,22 +78,32 @@ object BaselineChecker {
   }
 
   def validateAccess(
-    expr: IR.Expression,
-    perms: IR.Var,
-    checks: CheckImplementation,
-    context: SpecificationContext = ValueContext,
-    inSpec: Boolean = false,
-    fieldAccs: List[IR.Member] = Nil,
+      expr: IR.Expression,
+      perms: IR.Var,
+      checks: CheckImplementation,
+      context: SpecificationContext = ValueContext,
+      inSpec: Boolean = false,
+      fieldAccs: List[IR.Member] = Nil
   ): (Seq[IR.Op], List[IR.Member]) = expr match {
     case acc: IR.Accessibility =>
       // Check framing
-      val (ops, fields) = validateAccess(acc.member.root, perms, checks, context, inSpec, fieldAccs)
+      val (ops, fields) = validateAccess(
+        acc.member.root,
+        perms,
+        checks,
+        context,
+        inSpec,
+        fieldAccs
+      )
       (ops, acc.member :: fields)
-    
+
     case cond: IR.Conditional => {
-      val (initial, fields) = validateAccess(cond.condition, perms, checks, context, false, fieldAccs)
-      val (ifTrue, _) = validateAccess(cond.ifTrue, perms, checks, context, inSpec, fieldAccs)
-      val (ifFalse, _) = validateAccess(cond.ifFalse, perms, checks, context, inSpec, fieldAccs)
+      val (initial, fields) =
+        validateAccess(cond.condition, perms, checks, context, false, fieldAccs)
+      val (ifTrue, _) =
+        validateAccess(cond.ifTrue, perms, checks, context, inSpec, fieldAccs)
+      val (ifFalse, _) =
+        validateAccess(cond.ifFalse, perms, checks, context, inSpec, fieldAccs)
 
       if (ifTrue.isEmpty && ifFalse.isEmpty) {
         (initial, fields)
@@ -109,8 +125,10 @@ object BaselineChecker {
 
     case b: IR.Binary => {
       val subSpec = inSpec && b.operator == IR.BinaryOp.And
-      val (left, leftFields) = validateAccess(b.left, perms, checks, context, subSpec, fieldAccs)
-      val (right, rightFields) = validateAccess(b.right, perms, checks, context, subSpec, leftFields)
+      val (left, leftFields) =
+        validateAccess(b.left, perms, checks, context, subSpec, fieldAccs)
+      val (right, rightFields) =
+        validateAccess(b.right, perms, checks, context, subSpec, leftFields)
 
       if (right.isEmpty) {
         (left, leftFields)
@@ -137,30 +155,34 @@ object BaselineChecker {
         }
       }
     }
-      
+
     case u: IR.Unary =>
       validateAccess(u.operand, perms, checks, context, false, fieldAccs)
     case imp: IR.Imprecise =>
       imp.precise match {
         case None => (Seq.empty, fieldAccs)
-        case Some(precise) => validateAccess(precise, perms, checks, context, inSpec, fieldAccs)
+        case Some(precise) =>
+          validateAccess(precise, perms, checks, context, inSpec, fieldAccs)
       }
     case _: IR.Literal | _: IR.Result | _: IR.Var =>
       (Seq.empty, fieldAccs)
 
     case field: IR.FieldMember =>
-      val (rootOps, fields) = validateAccess(field.root, perms, checks, context, inSpec, fieldAccs)
+      val (rootOps, fields) =
+        validateAccess(field.root, perms, checks, context, inSpec, fieldAccs)
       if (fields.exists(equivalentFields(_, field))) {
         (rootOps, fields)
       } else {
-        val acc = checks.translateFieldPermission(VerifyMode, field, perms, context)
+        val acc =
+          checks.translateFieldPermission(VerifyMode, field, perms, context)
         (rootOps ++ acc, field :: fields)
       }
 
     case pred: IR.PredicateInstance =>
       var fields = fieldAccs
       val arguments = pred.arguments.flatMap(arg => {
-        val (argOps, argFields) = validateAccess(arg, perms, checks, context, false, fields)
+        val (argOps, argFields) =
+          validateAccess(arg, perms, checks, context, false, fields)
         fields = argFields
         argOps
       })
@@ -171,42 +193,52 @@ object BaselineChecker {
   }
 
   def validateSpec(
-    expr: IR.Expression,
-    primaryPerms: IR.Var,
-    tempPerms: IR.Var,
-    checks: CheckImplementation,
-    context: SpecificationContext = ValueContext
+      expr: IR.Expression,
+      primaryPerms: IR.Var,
+      tempPerms: IR.Var,
+      checks: CheckImplementation,
+      context: SpecificationContext = ValueContext
   ): Seq[IR.Op] = {
-    val (access, _) = validateAccess(expr, primaryPerms, checks, context, true, Nil)
+    val (access, _) =
+      validateAccess(expr, primaryPerms, checks, context, true, Nil)
     val verify = checks.translate(VerifyMode, expr, primaryPerms, context)
 
     if (verify.isEmpty) {
       // If there are no checks in the specification, there will be no separation checks
       access
     } else {
-      val separation = checks.translate(SeparationMode, expr, tempPerms, context)
+      val separation =
+        checks.translate(SeparationMode, expr, tempPerms, context)
       if (separation.isEmpty) {
         access ++ verify
       } else {
         Seq.concat(
           access,
           verify,
-          Seq(new IR.Invoke(
-            checks.runtime.initOwnedFields,
-            List(new IR.FieldMember(primaryPerms, checks.runtime.ownedFieldInstanceCounter)),
-            Some(tempPerms)
-          )),
-          separation)
+          Seq(
+            new IR.Invoke(
+              checks.runtime.initOwnedFields,
+              List(
+                new IR.FieldMember(
+                  primaryPerms,
+                  checks.runtime.ownedFieldInstanceCounter
+                )
+              ),
+              Some(tempPerms)
+            )
+          ),
+          separation
+        )
       }
     }
 
   }
 
   def checkBlock(
-    block: IR.Block,
-    checks: CheckImplementation,
-    perms: IR.Var,
-    tempPerms: IR.Var,
+      block: IR.Block,
+      checks: CheckImplementation,
+      perms: IR.Var,
+      tempPerms: IR.Var
   ): Unit = {
     for (op <- block) op match {
       case _: IR.AllocValue | _: IR.AllocArray =>
@@ -215,30 +247,46 @@ object BaselineChecker {
       case alloc: IR.AllocStruct =>
         checks.trackAllocation(alloc, perms)
 
-      case assert: IR.Assert => assert.kind match {
-        case IR.AssertKind.Imperative =>
-          val (access, _) = validateAccess(assert.value, perms, checks)
-          assert.insertBefore(access)
-        case IR.AssertKind.Specification =>
-          assert.insertAfter(validateSpec(assert.value, perms, tempPerms, checks))
-      }
+      case assert: IR.Assert =>
+        assert.kind match {
+          case IR.AssertKind.Imperative =>
+            val (access, _) = validateAccess(assert.value, perms, checks)
+            assert.insertBefore(access)
+          case IR.AssertKind.Specification =>
+            assert.insertAfter(
+              validateSpec(assert.value, perms, tempPerms, checks)
+            )
+        }
 
       case assign: IR.Assign => {
         val (access, _) = validateAccess(assign.value, perms, checks)
         assign.insertBefore(access)
       }
 
-      case assign: IR.AssignMember => assign.member match {
-        case field: IR.FieldMember =>
-          val (valueAccess, valueFields) = validateAccess(assign.value, perms, checks)
-          val (rootAccess, rootFields) = validateAccess(assign.member.root, perms, checks, fieldAccs = valueFields)
-          assign.insertBefore(
-            valueAccess ++
-            rootAccess ++
-            checks.translateFieldPermission(VerifyMode, field, perms, ValueContext))
-        case _: IR.DereferenceMember | _: IR.ArrayMember =>
-          throw new WeaverException("Invalid member")
-      }
+      case assign: IR.AssignMember =>
+        assign.member match {
+          case field: IR.FieldMember =>
+            val (valueAccess, valueFields) =
+              validateAccess(assign.value, perms, checks)
+            val (rootAccess, rootFields) = validateAccess(
+              assign.member.root,
+              perms,
+              checks,
+              fieldAccs = valueFields
+            )
+            assign.insertBefore(
+              valueAccess ++
+                rootAccess ++
+                checks.translateFieldPermission(
+                  VerifyMode,
+                  field,
+                  perms,
+                  ValueContext
+                )
+            )
+          case _: IR.DereferenceMember | _: IR.ArrayMember =>
+            throw new WeaverException("Invalid member")
+        }
 
       case err: IR.Error => {
         val (access, _) = validateAccess(err.value, perms, checks)
@@ -250,50 +298,53 @@ object BaselineChecker {
         iff.insertBefore(condAccess)
         checkBlock(iff.ifTrue, checks, perms, tempPerms)
         checkBlock(iff.ifFalse, checks, perms, tempPerms)
-      
+
       case ret: IR.Return =>
         val context = ret.value match {
-          case None => ValueContext
+          case None        => ValueContext
           case Some(value) => new ReturnContext(value)
         }
 
-        val valueAccess = ret.value.toSeq.flatMap(
-          validateAccess(_, perms, checks) match {
+        val valueAccess =
+          ret.value.toSeq.flatMap(validateAccess(_, perms, checks) match {
             case (ops, _) => ops
           })
 
         ret.insertBefore(
           valueAccess ++
-          block.method.postcondition.toSeq.flatMap(
-            validateSpec(_, perms, tempPerms, checks, context=context))
+            block.method.postcondition.toSeq.flatMap(
+              validateSpec(_, perms, tempPerms, checks, context = context)
+            )
         )
-      
+
       case loop: IR.While =>
         loop.insertBefore(
           validateAccess(loop.condition, perms, checks)._1 ++
-          validateSpec(loop.invariant, perms, tempPerms, checks))
-        
+            validateSpec(loop.invariant, perms, tempPerms, checks)
+        )
+
         checkBlock(loop.body, checks, perms, tempPerms)
 
-        loop.body ++= (
-          validateAccess(loop.condition, perms, checks)._1 ++ 
+        loop.body ++= (validateAccess(loop.condition, perms, checks)._1 ++
           validateSpec(loop.invariant, perms, tempPerms, checks))
-      
+
       case invoke: IR.Invoke =>
         // Pre-conditions are handled inside callee
         var fields: List[IR.Member] = Nil
         val argAccess = invoke.arguments.flatMap(arg => {
-          val (argOps, argFields) = validateAccess(arg, perms, checks, fieldAccs=fields)
+          val (argOps, argFields) =
+            validateAccess(arg, perms, checks, fieldAccs = fields)
           fields = argFields
           argOps
         })
-        val targetAccess = invoke.target
-          .toSeq.flatMap(t => validateAccess(t, perms, checks, fieldAccs=fields)._1)
+        val targetAccess = invoke.target.toSeq.flatMap(t =>
+          validateAccess(t, perms, checks, fieldAccs = fields)._1
+        )
         invoke.insertBefore(argAccess ++ targetAccess)
-        
+
         invoke.arguments = invoke.arguments :+ perms
 
-      case fold: IR.Fold =>
+      case fold: IR.Fold     =>
       case unfold: IR.Unfold =>
     }
   }
