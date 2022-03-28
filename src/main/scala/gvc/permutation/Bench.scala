@@ -1,6 +1,7 @@
 package gvc.permutation
 import gvc.CC0Wrapper.{CompilationOutput, ExecutionOutput, Performance}
 import gvc.Main.verify
+import gvc.permutation.Output.blue
 import gvc.transformer.GraphPrinter
 import gvc.{
   CC0Options,
@@ -10,6 +11,7 @@ import gvc.{
   OutputFileCollection,
   VerificationException
 }
+
 import java.io.ByteArrayOutputStream
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable
@@ -139,8 +141,38 @@ object Bench {
       outputFiles: OutputFileCollection,
       librarySearchDirs: List[String]
   ): Unit = {
+
+    val paths = config.benchmarkPaths.getOrElse(1)
+    val pathDesc =
+      s"${Output.blue(paths.toString)} path" +
+        (if (paths > 1) "s" else "")
+
+    val iterations = config.benchmarkIterations.getOrElse(1)
+    val iterDesc =
+      if (config.onlyVerify) ""
+      else
+        s"${Output.blue(iterations.toString)} iteration" +
+          (if (iterations > 1) "s" else "") + " per permutation"
+    val file = c0(outputFiles.baseName)
     val files =
       resolveOutputFiles(config.compileBenchmark.get, config.disableBaseline)
+    val timeout = config.timeout match {
+      case Some(value) => value.toString + "s"
+      case None        => "infinite"
+    }
+    Output.info(
+      s"Benchmarking $pathDesc with $iterDesc for ${blue(
+        file
+      )}, timeout ${blue(timeout)}, output to ${blue(files.root.toString)}"
+    )
+
+    def booleanToStatus(a: Boolean): String =
+      if (a) Output.green("enabled") else Output.red("disabled")
+
+    Output.info(
+      s"Baseline ${booleanToStatus(!config.disableBaseline)}, execution ${booleanToStatus(!config.onlyVerify)}"
+    )
+
     markVerification(
       source,
       config,
@@ -148,8 +180,18 @@ object Bench {
       files,
       librarySearchDirs
     )
-    if (!config.onlyVerify)
+    println(s"\n\n${Output.formatSuccess("Verification completed.")}\n")
+
+    if (!config.onlyVerify) {
       markExecution(config, files)
+      print(
+        s"\n\n${Output.formatSuccess("Compilation & Execution completed.")}\n"
+      )
+    } else {
+      print(
+        s"\n${Output.formatSuccess("Benchmarking completed.")}\n"
+      )
+    }
   }
 
   def markVerification(
@@ -198,13 +240,14 @@ object Bench {
       GraphPrinter.print(ir, includeSpecs = false)
     )
 
-    val progress = new VerificationTracker(labels.length - 1, maxPaths)
+    val progress = new VerificationTracker(labels.length, maxPaths)
     for (sampleIndex <- 0 until maxPaths) {
       val sampleToPermute = LabelTools.sample(labels, SamplingHeuristic.Random)
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
       val permutationIndices = mutable.TreeSet[Int]()
 
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
+
         currentPermutation += sampleToPermute(labelIndex)
         permutationIndices += sampleToPermute(labelIndex).exprIndex
         val id = csv.createID(currentPermutation)
@@ -253,7 +296,6 @@ object Bench {
                 }
               case None =>
             }
-            progress.increment()
           } catch {
             case ex: VerificationException =>
               progress.error()
@@ -270,11 +312,10 @@ object Bench {
               )
           }
           alreadySampled += id
-        } else {
-          progress.increment()
         }
         csv.logStep(id, sampleIndex + 1, labelIndex + 1)
         previousID = Some(id)
+        progress.increment()
       }
     }
     if (!config.disableBaseline) {
@@ -312,9 +353,11 @@ object Bench {
       files.verifiedPerms,
       files.performance,
       scaling,
-      VerificationType.Dynamic
+      VerificationType.Gradual
     )
+
     if (!config.disableBaseline) {
+      println("\n")
       markDirectory(
         files.baselinePerms.get,
         files.baselinePerformance,
@@ -393,7 +436,6 @@ object Bench {
               case None        => throw new ExecutionException(exec)
             }
           }
-          progress.increment()
         } catch {
           case co: CapturedOutputException =>
             co match {
@@ -408,6 +450,7 @@ object Bench {
           if (Files.exists(tempC0File)) Files.delete(tempC0File)
           if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
         }
+        progress.increment()
       }
 
       def markFileScaled(
