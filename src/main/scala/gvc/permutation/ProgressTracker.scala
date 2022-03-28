@@ -65,13 +65,18 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
     ).foldLeft("")(_ + " — " + _)
   }
 }
-sealed trait VerificationType { val name: String }
-object VerificationType {
-  case object Gradual extends VerificationType { val name = "Gradual" }
-  case object Dynamic extends VerificationType { val name = "Dynamic" }
+sealed trait ExecutionType { val name: String }
+object ExecutionType {
+  case object Gradual extends ExecutionType {
+    val name = "Gradual Verification"
+  }
+  case object Dynamic extends ExecutionType {
+    val name = "Dynamic Verification"
+  }
+  case object Unverified extends ExecutionType { val name = "Unverified" }
 }
 
-class ExecutionTracker(maxPrograms: Int, verType: VerificationType)
+class ExecutionTracker(maxPrograms: Int, execType: ExecutionType)
     extends ProgressTracker("Compiling & Executing") {
   private var progress = 0
   private var cc0Failures = 0
@@ -101,7 +106,7 @@ class ExecutionTracker(maxPrograms: Int, verType: VerificationType)
       else Output.yellow(successValue)
 
     super.toString() + List(
-      s"[ ${Output.purple(s"${verType.name} Verification")} ]",
+      s"[ ${Output.purple(s"${execType.name}")} ]",
       s"Program: ${Output.blue(s"$progress/$maxPrograms")}",
       s"Success: ${success}",
       s"CC0 Failures: ${cc0FailureColor(cc0Failures.toString)}",

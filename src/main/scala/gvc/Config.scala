@@ -4,12 +4,15 @@ import java.io.File
 import scala.annotation.tailrec
 
 sealed trait DumpType
+sealed trait Mode
 
 case class Config(
     dump: Option[DumpType] = None,
     output: Option[String] = None,
     timeout: Option[Long] = None,
     compileBenchmark: Option[String] = None,
+    compileStressTest: Option[String] = None,
+    mode: Mode = Config.DefaultMode,
     benchmarkPaths: Option[Int] = None,
     benchmarkStress: Boolean = false,
     benchmarkStepSize: Option[Int] = None,
@@ -39,15 +42,33 @@ case class Config(
       else if (!Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
       else if (disableBaseline && compileBenchmark.isEmpty)
-        Some(s"Benchmarking must be enabled to use --disable-baseline.")
-      else if (benchmarkPaths.isDefined && compileBenchmark.isEmpty)
-        Some(s"Benchmarking must be enabled to use -p or --paths.")
-      else if (benchmarkStepSize.isDefined && compileBenchmark.isEmpty)
-        Some(s"Benchmarking must be enabled to use --step")
-      else if (benchmarkMaxFactor.isDefined && compileBenchmark.isEmpty)
-        Some(s"Benchmarking must be enabled to use --upper.")
-      else if (benchmarkIterations.isDefined && compileBenchmark.isEmpty)
-        Some(s"Benchmarking must be enabled to use -i/--iter.")
+        Some(
+          s"Benchmarking (--benchmark) must be enabled to use --disable-baseline."
+        )
+      else if (
+        benchmarkPaths.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
+      )
+        Some(
+          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -p or --paths."
+        )
+      else if (
+        benchmarkStepSize.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
+      )
+        Some(
+          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --step"
+        )
+      else if (
+        benchmarkMaxFactor.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
+      )
+        Some(
+          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --upper."
+        )
+      else if (
+        benchmarkIterations.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
+      )
+        Some(
+          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -i/--iter."
+        )
       else None
     ).foreach(Config.error)
   }
@@ -57,6 +78,9 @@ object Config {
   case object DumpIR extends DumpType
   case object DumpSilver extends DumpType
   case object DumpC0 extends DumpType
+  case object StressMode extends Mode
+  case object BenchmarkMode extends Mode
+  case object DefaultMode extends Mode
 
   val help = """Usage: gvc0 [OPTION...] SOURCEFILE
                |where OPTION is
@@ -68,6 +92,7 @@ object Config {
                |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
                |  -x            --exec                         Execute the compiled file
                |  -b <dir>      --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
+               |                --stress=<dir>                 Perform a stress test of full dynamic verification, comparing performance against the unverified source program.
                |                --step=<n>                     Specify the step size of the stress factor from 0 to the upper bound.
                |                --upper=<n>                    Specify the upper bound on the stress factor.                       
                |                --iter=<n>                     Specify the number of iterations for execution.
@@ -82,8 +107,10 @@ object Config {
   private val stepSize = raw"--step=(.+)".r
   private val upperBound = raw"--upper=(.+)".r
   private val timeoutArg = raw"--timeout=(.+)".r
+  private val stressArg = raw"--stress=(.+)".r
   private val timeoutSec = raw"([0-9]+)s".r
   private val timeoutMin = raw"([0-9]+)m".r
+
   def error(message: String): Nothing = {
     println(message)
     sys.exit(1)
@@ -92,9 +119,7 @@ object Config {
   private def parseTimeout(t: String): Long = t match {
     case timeoutSec(t) => t.substring(0, t.length).toLong * 1000
     case timeoutMin(t) => t.substring(0, t.length).toLong * 60 * 1000
-    case _ => {
-      error(s"Invalid timeout: $t")
-    }
+    case _             => error(s"Invalid timeout: $t")
   }
 
   private def parseDumpType(t: String) = t.toLowerCase() match {
@@ -110,6 +135,11 @@ object Config {
       current: Config = Config()
   ): Config =
     args match {
+      case stressArg(t) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(compileStressTest = Some(t), mode = StressMode)
+        )
       case "-t" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case timeoutArg(t) :: tail =>
@@ -123,12 +153,16 @@ object Config {
       case paths(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(benchmarkPaths = Some(f.toInt)))
       case benchmarkDir(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(compileBenchmark = Some(f)))
+        fromCommandLineArgs(
+          tail,
+          current.copy(compileBenchmark = Some(f), mode = BenchmarkMode)
+        )
       case "-b" :: f :: tail =>
         fromCommandLineArgs(
           tail,
           current.copy(
-            compileBenchmark = Some(f)
+            compileBenchmark = Some(f),
+            mode = BenchmarkMode
           )
         )
       case stepSize(f) :: tail =>

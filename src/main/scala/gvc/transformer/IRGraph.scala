@@ -71,6 +71,14 @@ object IRGraph {
         throw new IRException(s"Method '$name' not found")
       )
 
+    def methodBody(name: scala.Predef.String): Option[MethodBlock] =
+      _methods.values
+        .collect { case (m: Method) => m }
+        .find(_.name.equals(name)) match {
+        case Some(value) => Some(value.body)
+        case None        => None
+      }
+
     def predicate(name: scala.Predef.String): Predicate = _predicates.getOrElse(
       name,
       throw new IRException(s"Predicate '$name' not found")

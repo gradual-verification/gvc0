@@ -42,6 +42,7 @@ object CC0Wrapper {
   class CC0Exception(val message: String) extends RuntimeException {
     override def getMessage: String = message
   }
+
   def exec(sourceFile: String, options: CC0Options): Int = {
     val os = new ByteArrayOutputStream
     val command = formatCommand(sourceFile, options)
@@ -51,16 +52,19 @@ object CC0Wrapper {
   }
 
   case class CompilationOutput(exitCode: Int, output: String)
+
   case class ExecutionOutput(
       exitCode: Int,
       output: String,
       perf: Option[Performance]
   )
+
   class Performance(mean: Long, stdev: Double, min: Long, max: Long) {
     def toString(id: Int): String = {
       List(id.toString, mean, stdev, min, max).foldRight("")(_ + "," + _)
     }
   }
+
   def exec_output(
       sourceFile: String,
       options: CC0Options
