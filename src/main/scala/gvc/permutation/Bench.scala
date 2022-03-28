@@ -251,7 +251,7 @@ object Bench {
                 )
                 if (!config.disableBaseline) {
                   val baselinePermutation = selector.visit(permutationIndices)
-                  Baseline.insert(baselinePermutation)
+                  BaselineChecker.check(baselinePermutation)
                   val baselineSourceText =
                     GraphPrinter.print(
                       baselinePermutation,
@@ -291,7 +291,7 @@ object Bench {
       }
     }
     if (!config.disableBaseline) {
-      Baseline.insert(ir)
+      BaselineChecker.check(ir)
       val baselineSourceText = GraphPrinter.print(ir, includeSpecs = false)
       dumpPermutation(
         files.baselinePerms.get,

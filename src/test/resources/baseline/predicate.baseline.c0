@@ -1,0 +1,77 @@
+#use <runtime>
+struct Node;
+
+struct Node
+{
+  int value;
+  struct Node* next;
+  int _id;
+};
+
+struct Node* emptyList(struct OwnedFields* _ownedFields);
+void list(struct Node* node, struct OwnedFields* _ownedFields);
+int main();
+struct Node* prependList(int value, struct Node* node, struct OwnedFields* _ownedFields);
+void sep_list(struct Node* node, struct OwnedFields* _ownedFields);
+
+struct Node* emptyList(struct OwnedFields* _ownedFields)
+{
+  struct Node* nullList = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  nullList = NULL;
+  list(nullList, _ownedFields);
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  sep_list(nullList, _tempFields);
+  return nullList;
+}
+
+void list(struct Node* node, struct OwnedFields* _ownedFields)
+{
+  if (node == NULL)
+  {
+    assert(true);
+  }
+  else
+  {
+    assertAcc(_ownedFields, node->_id, 0, "Field access runtime check failed for struct Node.value");
+    list(node->next, _ownedFields);
+  }
+}
+
+int main()
+{
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  return 0;
+}
+
+struct Node* prependList(int value, struct Node* node, struct OwnedFields* _ownedFields)
+{
+  struct Node* newNode = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  list(node, _ownedFields);
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  sep_list(node, _tempFields);
+  newNode = alloc(struct Node);
+  newNode->_id = addStructAcc(_ownedFields, 3);
+  assertAcc(_ownedFields, newNode->_id, 1, "Field access runtime check failed for struct Node.next");
+  newNode->next = node;
+  assertAcc(_ownedFields, newNode->_id, 0, "Field access runtime check failed for struct Node.value");
+  newNode->value = value;
+  list(newNode, _ownedFields);
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  sep_list(newNode, _tempFields);
+  return newNode;
+}
+
+void sep_list(struct Node* node, struct OwnedFields* _ownedFields)
+{
+  if (!(node == NULL))
+  {
+    addAccEnsureSeparate(_ownedFields, node->_id, 0, 3, "Overlapping field permissions for struct Node.value");
+    sep_list(node->next, _ownedFields);
+  }
+}

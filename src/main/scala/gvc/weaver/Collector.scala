@@ -591,10 +591,7 @@ object Collector {
 
     // Check if execution can fall-through to the end of the method
     // It is valid to only check the last operation since we don't allow early returns
-    val implicitReturn: Boolean = irMethod.body.lastOption match {
-      case None         => true
-      case Some(tailOp) => hasImplicitReturn(tailOp)
-    }
+    val implicitReturn: Boolean = hasImplicitReturn(irMethod)
 
     // Get all checks (grouped by their location) and simplify their conditions
     val collectedChecks = mutable.ListBuffer[RuntimeCheck]()
@@ -786,6 +783,13 @@ object Collector {
       Seq.empty
     }
   }
+
+  def hasImplicitReturn(method: Method): Boolean =
+    method.body.lastOption match {
+      case None         => true
+      case Some(tailOp) => hasImplicitReturn(tailOp)
+    }
+
   // Checks if execution can fall-through a given Op
   def hasImplicitReturn(tailOp: Op): Boolean = tailOp match {
     case r: Return => false

@@ -1,0 +1,34 @@
+struct Node {
+  int value;
+  struct Node *next;
+};
+
+/*@
+  predicate list(struct Node *node) =
+    node == NULL ? true : acc(node->value) && list(node->next);
+@*/
+
+struct Node* emptyList()
+  //@ensures list(\result);
+{
+  struct Node *nullList = NULL;
+  //@fold list(nullList);
+  return nullList;
+}
+
+struct Node *prependList(int value, struct Node *node)
+  //@requires list(node);
+  //@ensures list(\result);
+{
+  struct Node *newNode = alloc(struct Node);
+  newNode->next = node;
+  newNode->value = value;
+
+  //@fold list(newNode);
+  return newNode;
+}
+
+int main()
+{
+  return 0;
+}

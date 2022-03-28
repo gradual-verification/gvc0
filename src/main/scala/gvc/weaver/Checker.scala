@@ -316,18 +316,7 @@ object Checker {
       for (alloc <- allocations) {
         alloc match {
           case alloc: AllocStruct => {
-            val structType = alloc.struct
-            val idField = new FieldMember(
-              alloc.target,
-              implementation.structIdField(alloc.struct)
-            )
-            alloc.insertAfter(
-              new Invoke(
-                runtime.addStructAcc,
-                List(ownedFields, new Int(structType.fields.length)),
-                Some(idField)
-              )
-            )
+            implementation.trackAllocation(alloc, ownedFields)
           }
           case _ =>
             throw new WeaverException(

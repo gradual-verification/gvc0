@@ -1,0 +1,20 @@
+struct Test {
+  int value;
+};
+
+struct Test *createTest()
+  //@ensures acc(\result->value);
+{
+  return alloc(struct Test);
+}
+
+int getValue(struct Test *test)
+  //@requires acc(test->value);
+{
+  return test->value;
+}
+
+int main()
+{
+  return getValue(createTest());
+}

@@ -1,0 +1,20 @@
+#use <runtime>
+int main();
+void test(int x, struct OwnedFields* _ownedFields);
+
+int main()
+{
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  test(2, _ownedFields);
+  return 0;
+}
+
+void test(int x, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  assert(x > 1);
+}

@@ -1,0 +1,102 @@
+#use <runtime>
+struct Inner;
+struct Outer;
+
+struct Inner
+{
+  int value;
+  int _id;
+};
+
+struct Outer
+{
+  struct Inner* inner;
+  int _id;
+};
+
+struct Outer* createOuter(struct OwnedFields* _ownedFields);
+int getValue(struct Outer* outer, struct OwnedFields* _ownedFields);
+int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields);
+int getValueStatic(struct Outer* outer, struct OwnedFields* _ownedFields);
+int main();
+
+struct Outer* createOuter(struct OwnedFields* _ownedFields)
+{
+  struct Inner* inner = NULL;
+  struct Outer* outer = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  inner = alloc(struct Inner);
+  inner->_id = addStructAcc(_ownedFields, 2);
+  outer = alloc(struct Outer);
+  outer->_id = addStructAcc(_ownedFields, 2);
+  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+  outer->inner = inner;
+  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  addAccEnsureSeparate(_tempFields, outer->inner->_id, 0, 2, "Overlapping field permissions for struct Inner.value");
+  return outer;
+}
+
+int getValue(struct Outer* outer, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  addAccEnsureSeparate(_tempFields, outer->inner->_id, 0, 2, "Overlapping field permissions for struct Inner.value");
+  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  return outer->inner->value;
+}
+
+int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (outer != NULL)
+  {
+    assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+  }
+  if (outer != NULL && outer->inner != NULL)
+  {
+    assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+    assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+    return outer->inner->value;
+  }
+  else
+  {
+    return 0;
+  }
+}
+
+int getValueStatic(struct Outer* outer, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  addAccEnsureSeparate(_tempFields, outer->_id, 0, 2, "Overlapping field permissions for struct Outer.inner");
+  addAccEnsureSeparate(_tempFields, outer->inner->_id, 0, 2, "Overlapping field permissions for struct Inner.value");
+  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  addAccEnsureSeparate(_tempFields, outer->_id, 0, 2, "Overlapping field permissions for struct Outer.inner");
+  addAccEnsureSeparate(_tempFields, outer->inner->_id, 0, 2, "Overlapping field permissions for struct Inner.value");
+  return outer->inner->value;
+}
+
+int main()
+{
+  struct Outer* _ = NULL;
+  int _1 = 0;
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  _ = createOuter(_ownedFields);
+  _1 = getValue(_, _ownedFields);
+  return _1;
+}

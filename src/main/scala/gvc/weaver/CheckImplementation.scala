@@ -15,7 +15,7 @@ case object Verification extends CheckType
 
 class CheckImplementation(
     program: IR.Program,
-    runtime: CheckRuntime,
+    val runtime: CheckRuntime,
     structIds: Map[String, IR.StructField]
 ) {
   private val predicateImplementations =
@@ -202,5 +202,21 @@ class CheckImplementation(
     resolvePredicateDefinition(mode, pred.predicate)
       .map(new IR.Invoke(_, arguments :+ perms, None))
       .toSeq
+  }
+
+  def trackAllocation(alloc: IR.AllocStruct, perms: IR.Var): Unit = {
+    val structType = alloc.struct
+    val idField = new IR.FieldMember(
+      alloc.target,
+      structIdField(alloc.struct)
+    )
+
+    alloc.insertAfter(
+      new IR.Invoke(
+        runtime.addStructAcc,
+        List(perms, new IR.Int(structType.fields.length)),
+        Some(idField)
+      )
+    )
   }
 }

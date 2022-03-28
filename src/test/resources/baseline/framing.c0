@@ -1,0 +1,45 @@
+struct Outer {
+  struct Inner *inner;
+};
+
+struct Inner {
+  int value;
+};
+
+struct Outer* createOuter()
+  //@ensures ? && acc(\result->inner->value);
+{
+  struct Inner *inner = alloc(struct Inner);
+  struct Outer *outer = alloc(struct Outer);
+  outer->inner = inner;
+  return outer;
+}
+
+int getValue(struct Outer* outer)
+  //@requires ? && acc(outer->inner->value);
+  //@ensures ?;
+{
+  return outer->inner->value;
+}
+
+int getValueStatic(struct Outer *outer)
+  //@requires acc(outer->inner) && acc(outer->inner->value);
+  //@ensures acc(outer->inner) && acc(outer->inner->value);
+{
+  return outer->inner->value;
+}
+
+int getValueSafe(struct Outer* outer)
+  //@requires ?;
+  //@ensures ?;
+{
+  if (outer != NULL && outer->inner != NULL)
+    return outer->inner->value;
+  else
+    return 0;
+}
+
+int main()
+{
+  return getValue(createOuter());
+}

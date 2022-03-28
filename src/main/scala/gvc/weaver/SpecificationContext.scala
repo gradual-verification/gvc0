@@ -71,6 +71,14 @@ class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Var]) extends 
     )
 }
 
+class ReturnContext(returnValue: IR.Expression) extends SpecificationContext {
+  def convertVar(source: IRGraph.Var): IRGraph.Expression =
+    source
+  
+  def convertResult: IRGraph.Expression =
+    returnValue
+}
+
 // A context implementation that maps parameters to their actual values using
 // the arguments specified at a given call site
 class CallSiteContext(call: IR.Invoke, caller: IR.Method) extends SpecificationContext {
