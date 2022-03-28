@@ -18,12 +18,12 @@ class VerifierSpec extends AnyFunSuite with BaseFileSpec {
   var silicon: Silicon = null
   val testFiles = getFiles("verifier")
     .filter { name => name.endsWith(".c0") && !name.endsWith(".output.c0") }
-
+  /*
   for (name <- testFiles) {
     test("test " + name) {
       runVerifierTest(name)
     }
-  }
+  }*/
 
   def runVerifierTest(name: String) = {
     val Success(parsed, _) = Parser.parseProgram(getFile(name).get)
