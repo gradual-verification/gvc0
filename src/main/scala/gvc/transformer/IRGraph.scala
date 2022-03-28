@@ -297,7 +297,7 @@ object IRGraph {
         case Nil => ()
         case head :: tl => {
           +=:(head)
-          for (op <- tl) head.insertAfter(op)
+          head.insertAfter(tl)
         }
       }
     }
