@@ -12,7 +12,6 @@ struct Test* getTest(struct OwnedFields* _ownedFields);
 int main();
 
 struct Test* getTest(struct OwnedFields* _ownedFields)
-  //@ensures ?;
 {
   struct Test* _ = NULL;
   _ = alloc(struct Test);

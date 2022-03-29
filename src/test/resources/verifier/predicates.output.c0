@@ -8,10 +8,6 @@ struct Node
   int _id;
 };
 
-//@predicate wrappedAcc(struct Node* node);
-
-//@predicate wrappedAcc(struct Node* node) = acc(node->value) && acc(node->next);
-
 void add_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields);
 int fullyImprecise(struct Node* a, struct OwnedFields* _ownedFields);
 int fullyPrecise(struct Node* a, int* _instanceCounter);
@@ -29,16 +25,12 @@ void add_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
 }
 
 int fullyImprecise(struct Node* a, struct OwnedFields* _ownedFields)
-  //@requires ?;
-  //@ensures ?;
 {
   assertAcc(_ownedFields, a->_id, 0, "Field access runtime check failed for struct Node.value");
   return a->value;
 }
 
 int fullyPrecise(struct Node* a, int* _instanceCounter)
-  //@requires wrappedAcc(a);
-  //@ensures wrappedAcc(a);
 {
   int _ = 0;
   struct OwnedFields* _ownedFields = NULL;
@@ -57,16 +49,11 @@ int fullyPrecise(struct Node* a, int* _instanceCounter)
 }
 
 int imprecisePostcondition(struct Node* a, struct OwnedFields* _ownedFields)
-  //@requires wrappedAcc(a);
-  //@ensures ?;
 {
-  //@unfold wrappedAcc(a);
   return a->value;
 }
 
 int imprecisePrecondition(struct Node* a, struct OwnedFields* _ownedFields)
-  //@requires ?;
-  //@ensures ?;
 {
   assertAcc(_ownedFields, a->_id, 0, "Field access runtime check failed for struct Node.value");
   return a->value;
@@ -80,8 +67,6 @@ int main()
   _instanceCounter = alloc(int);
   a = alloc(struct Node);
   a->next = NULL;
-  //@assert acc(a->value) && acc(a->next);
-  //@fold wrappedAcc(a);
   _ = fullyPrecise(a, _instanceCounter);
   return _;
 }

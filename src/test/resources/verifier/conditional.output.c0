@@ -10,7 +10,6 @@ int main()
 }
 
 void test(int x, int y, struct OwnedFields* _ownedFields)
-  //@requires ?;
 {
   bool _cond_1 = false;
   bool _cond_2 = false;
@@ -24,7 +23,6 @@ void test(int x, int y, struct OwnedFields* _ownedFields)
       {
         assert(y == 0);
       }
-      //@assert y == 0;
     }
   }
 }
