@@ -9,10 +9,8 @@ abstract class ProgressTracker(activity: String) {
   def update(): Unit = {
     print(s"\r${Output.formatInfo(this.toString)}")
   }
-  def percentage(top: Int, bot: Int): String = {
-    if (bot == 0) "100%"
-    else Math.ceil((top / bot.toDouble) * 100).toInt.toString + "%"
-  }
+  def percentage(top: Double, bot: Double): Double =
+    Math.ceil(top / bot * 100)
 }
 
 class VerificationTracker(perPath: Int, maxPaths: Int)
@@ -20,10 +18,8 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
   private var timeouts = 0
   private var failures = 0
   private var currentPath = 0
-  private var currentPerm = 1
+  private var currentPerm = 0
   private var allPerms = 0
-
-  update()
 
   override def increment(): Unit = {
     currentPerm += 1
@@ -50,10 +46,10 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
       if (failures > 0) Output.red else Output.green
 
     val successValue =
-      super.percentage(allPerms - (failures + timeouts), perPath)
+      super.percentage(allPerms - (failures + timeouts), perPath * maxPaths)
     val success: String =
-      if (successValue == "100%") Output.green(successValue)
-      else Output.yellow(successValue)
+      if (successValue.toInt == 100) Output.green(s"$successValue%")
+      else Output.yellow(s"$successValue%")
 
     super.toString() + List(
       s"Path: ${Output.blue(s"$currentPath/$maxPaths")}",
@@ -98,13 +94,12 @@ class ExecutionTracker(maxPrograms: Int, execType: ExecutionType)
     val execFailureColor: (String) => String =
       if (execFailures > 0) Output.red else Output.green
     val cc0FailureColor: (String) => String =
-      if (execFailures > 0) Output.red else Output.green
+      if (cc0Failures > 0) Output.red else Output.green
     val successValue =
       super.percentage(progress - (cc0Failures + execFailures), progress)
     val success: String =
-      if (successValue == "100%") Output.green(successValue)
-      else Output.yellow(successValue)
-
+      if (successValue.toInt == 100) Output.green(s"$successValue%")
+      else Output.yellow(s"$successValue%")
     super.toString() + List(
       s"[ ${Output.purple(s"${execType.name}")} ]",
       s"Program: ${Output.blue(s"$progress/$maxPrograms")}",

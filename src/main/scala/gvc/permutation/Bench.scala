@@ -235,7 +235,7 @@ object Bench {
       GraphPrinter.print(ir, includeSpecs = false)
     )
 
-    val progress = new VerificationTracker(labels.length, maxPaths)
+    val progress = new VerificationTracker(labels.length - 1, maxPaths)
     for (sampleIndex <- 0 until maxPaths) {
       val sampleToPermute = LabelTools.sample(labels, SamplingHeuristic.Random)
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
