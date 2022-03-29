@@ -1,3 +1,5 @@
+#use <stress>
+
 // binary search tree node
 struct Node {
   int val;
@@ -430,44 +432,35 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
-  int stress = 0;
-  struct Node *t1 = NULL;
-  struct Node *t2 = NULL;
-  struct Node *t3 = NULL;
-  struct Node *t4 = NULL;
-  struct Node *t5 = NULL;
-  bool a = false;
-  bool b = false;
-  bool c = false;
-  bool d = false;
-  bool e = false;
-  bool f = false;
+    int stress = 0;
 
-  t1 = create_tree(3);
+    if((stress / 2) * 2 != stress){
+        stress += 1;
+    }
 
-  b = tree_contains(t1,2);
-  assert(!b);
-  t2 = tree_add(t1,2);
+    struct Node* t1 = create_tree(stress);
 
-  a = tree_contains(t2,2);
-  assert(a);
+    int i = 0;
+    while(i < stress)
+    //@loop_invariant 0 <= i && i <= stress;
+    {
+        int toAdd = random(stress);
+        t1 = tree_add(t1, toAdd);
+        bool test = tree_contains(t1, toAdd);
+        assert(test);
+        i += 1;
+    }
 
-  c = tree_contains(t2,3);
-  assert(c);
-
-  t3 = tree_remove(t2,3);
-  tree_main_lemma(t3, 3);
-  d = tree_contains(t3,3);
-  assert(!d);
-
-  t4 = tree_add(t3,3);
-  e = tree_contains(t4,2);
-  assert(e);
-
-  t5 = tree_remove(t4,3);
-  tree_main_lemma(t5, 3);
-  f = tree_contains(t5,3);
-  assert(!f);
-
+    int j = 0;
+    while(j < stress)
+    //@loop_invariant 0 <= j && j <= stress;
+    {
+        int toRemove = random(stress);
+        t1 = tree_remove(t1, toRemove);
+        tree_main_lemma(t1, toRemove);
+        bool test = tree_contains(t1, toRemove);
+        assert(!test);
+        j += 1;
+    }
   return 0;
 }
