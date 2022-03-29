@@ -1,1 +1,1 @@
-int readStress();
+int random(int stress);

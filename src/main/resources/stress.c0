@@ -1,11 +1,8 @@
 #use <args>
-#use <conio>
+#use <rand>
 
-int readStress() {
-  int* arg = alloc(int);
-  args_int("s", arg);
-  args_t ar = args_parse();
-  printint(*arg);
-  if(ar == NULL) error("Unable to parse arguments.");
-  return *arg;
+int random(int stress) {
+    rant_t base = init_rand(stress);
+    int unbounded = rand(base);
+    return rand % (2 * stress);
 }
