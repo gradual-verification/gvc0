@@ -2,7 +2,7 @@
 #use <rand>
 
 int random(int stress) {
-    rant_t base = init_rand(stress);
+    rand_t base = init_rand(stress);
     int unbounded = rand(base);
-    return rand % (2 * stress);
+    return unbounded % (2 * stress);
 }
