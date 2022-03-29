@@ -1,23 +1,17 @@
 package gvc.permutation
-import gvc.CC0Wrapper.{CompilationOutput, ExecutionOutput, Performance}
 import gvc.Main.verify
+import gvc.permutation.CapturedExecution.{
+  CC0CompilationException,
+  CapturedOutputException,
+  ExecutionException
+}
 import gvc.permutation.Output.blue
 import gvc.transformer.GraphPrinter
-import gvc.{
-  CC0Options,
-  CC0Wrapper,
-  Config,
-  Main,
-  OutputFileCollection,
-  VerificationException
-}
-
-import java.io.ByteArrayOutputStream
+import gvc.{Config, Main, OutputFileCollection, VerificationException}
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.reflect.io.Directory
-import sys.process._
 import scala.language.postfixOps
 import scala.util.matching.Regex
 
@@ -25,6 +19,7 @@ object Bench {
   private val assign: Regex = "(int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
   private val firstAssign: Regex =
     "(int[ ]+main[ ]*\\([ ]*\\)\\s*\\{\\s*int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
+
   class BenchmarkException(message: String) extends Exception(message)
 
   def c0(basename: String): String = basename + ".c0"
@@ -353,7 +348,7 @@ object Bench {
       files.verifiedPerms,
       files.performance,
       scaling,
-      VerificationType.Gradual
+      ExecutionType.Gradual
     )
 
     if (!config.disableBaseline) {
@@ -362,7 +357,7 @@ object Bench {
         files.baselinePerms.get,
         files.baselinePerformance,
         scaling,
-        VerificationType.Dynamic
+        ExecutionType.Dynamic
       )
     }
 
@@ -370,10 +365,9 @@ object Bench {
         in: Path,
         out: Path,
         scaling: Option[StressScaling],
-        verificationType: VerificationType
+        verificationType: ExecutionType
     ): Unit = {
       val printer = new PerformanceCSVPrinter(out)
-
       val runlist = in.toFile.listFiles()
       val progress = new ExecutionTracker(runlist.length, verificationType)
 
@@ -422,20 +416,13 @@ object Bench {
             tempC0File.toAbsolutePath.toString,
             source
           )
-          val output = compile(
+          val perf = CapturedExecution.compile_and_exec(
             tempC0File,
             tempBinaryFile,
+            iterations,
             config
           )
-          if (output.exitCode != 0) {
-            throw new CC0CompilationException(output)
-          } else {
-            val exec = exec_timed(tempBinaryFile, iterations)
-            exec.perf match {
-              case Some(value) => printer.logPerformance(id, 0, value)
-              case None        => throw new ExecutionException(exec)
-            }
-          }
+          printer.logID(id, stressLevel.getOrElse(0), perf)
         } catch {
           case co: CapturedOutputException =>
             co match {
@@ -463,68 +450,4 @@ object Bench {
       }
     }
   }
-
-  def compile(
-      input: Path,
-      output: Path,
-      config: Config
-  ): CompilationOutput = {
-    val cc0Options = CC0Options(
-      compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
-      saveIntermediateFiles = config.saveFiles,
-      output = Some(output.toString),
-      includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/")
-    )
-    CC0Wrapper.exec_output(input.toString, cc0Options)
-  }
-  def exec_timed(
-      binary: Path,
-      iterations: Int
-  ): ExecutionOutput = {
-    val command = binary.toAbsolutePath.toString + " 2>&1"
-    val timings = mutable.ListBuffer[Long]()
-    val os = new ByteArrayOutputStream()
-    var exitCode = 0
-    for (_ <- 0 until iterations) {
-      val start = System.nanoTime()
-      exitCode = (command #> os) !
-
-      val end = System.nanoTime()
-      timings += end - start
-      if (exitCode != 0) {
-        return ExecutionOutput(
-          exitCode,
-          os.toString("UTF-8"),
-          None
-        )
-      } else {
-        os.reset()
-      }
-    }
-    val mean = timings.sum / timings.length
-    val max = timings.max
-    val min = timings.min
-    val stdev =
-      if (timings.length > 1)
-        Math.sqrt(
-          timings.map(_ - mean).map(m => m * m).sum / (timings.length - 1)
-        )
-      else 0
-    ExecutionOutput(
-      exitCode,
-      os.toString("UTF-8"),
-      Some(new Performance(mean, stdev, min, max))
-    )
-  }
-
-  class CapturedOutputException(exitCode: Int, stdout: String)
-      extends Exception {
-    def logMessage(name: String, printer: ErrorCSVPrinter): Unit = {
-      printer.log(name, exitCode, stdout)
-    }
-  }
-  class CC0CompilationException(output: CompilationOutput)
-      extends CapturedOutputException(output.exitCode, output.output)
-  class ExecutionException(output: ExecutionOutput)
-      extends CapturedOutputException(output.exitCode, output.output)
 }

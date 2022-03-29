@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.permutation.{Bench, Timeout}
+import gvc.permutation.{Bench, Stress}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -17,8 +17,6 @@ import java.io.IOException
 import sys.process._
 import scala.language.postfixOps
 import viper.silicon.state.BranchCond
-
-import java.util.concurrent.TimeoutException
 
 case class OutputFileCollection(
     baseName: String,
@@ -56,16 +54,21 @@ object Main extends App {
       )
 
     val inputSource = readFile(config.sourceFile.get)
-    if (config.compileBenchmark.isDefined)
-      Bench.mark(
-        inputSource,
-        config,
-        fileNames,
-        config.linkedLibraries ++ List(defaultLibraryDirectory)
-      )
-    else {
-      val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
-      execute(verifiedOutput.c0Source, fileNames)
+    val linkedLibraries =
+      config.linkedLibraries ++ List(defaultLibraryDirectory)
+    config.mode match {
+      case Config.StressMode =>
+        Stress.test(inputSource, config, fileNames, linkedLibraries)
+      case Config.BenchmarkMode =>
+        Bench.mark(
+          inputSource,
+          config,
+          fileNames,
+          linkedLibraries
+        )
+      case Config.DefaultMode =>
+        val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+        execute(verifiedOutput.c0Source, fileNames)
     }
   }
 

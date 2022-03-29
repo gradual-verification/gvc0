@@ -9,6 +9,13 @@ import java.nio.file.Path
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
+object Columns {
+  val performanceColumnNames: List[String] =
+    List("stress", "mean", "stdev", "min", "max")
+  val mappingColumnNames: List[String] =
+    List("id", "path_id", "level_id")
+}
+
 class ErrorCSVPrinter(file: Path) {
   val writer = new FileWriter(file.toString)
   def formatSection(name: String, exitCode: Int): String =
@@ -21,20 +28,23 @@ class ErrorCSVPrinter(file: Path) {
 }
 
 class PerformanceCSVPrinter(out: Path) {
-  var currentWriter: Option[(String, FileWriter)] = None
-  val performanceColumnNames: String =
-    List("stress", "mean", "stdev", "min", "max").foldRight("")(
-      _ + "," + _
-    ) + '\n'
+  var currentWriter: Option[(Option[String], FileWriter)] = None
+
   private def replaceWriter(id: String): FileWriter = {
     val contents =
-      (id, new FileWriter(out.resolve(csv(id)).toString))
+      (Some(id), new FileWriter(out.resolve(csv(id)).toString))
+    if (currentWriter.isDefined) currentWriter.get._2.close()
     currentWriter = Some(contents)
-    contents._2.write(performanceColumnNames)
+    contents._2.write(
+      Columns.performanceColumnNames.foldRight("")(
+        _ + "," + _
+      ) + '\n'
+    )
     contents._2.flush()
     contents._2
   }
-  def logPerformance(
+
+  def logID(
       id: String,
       stress: Int,
       perf: Performance
@@ -54,6 +64,7 @@ class PerformanceCSVPrinter(out: Path) {
     writer.flush()
   }
 }
+
 class CSVPrinter(files: BenchmarkOutputFiles, template: List[ASTLabel]) {
   val metaWriter = new FileWriter(files.metadata.toString)
   val mappingWriter = new FileWriter(files.levels.toString)
@@ -62,9 +73,9 @@ class CSVPrinter(files: BenchmarkOutputFiles, template: List[ASTLabel]) {
     (List("id") ++ template.map(_.hash)).foldRight("")(_ + "," + _) + '\n'
   metaWriter.write(metadataColumnNames)
 
-  val mappingColumnNames: String =
-    List("id", "path_id", "level_id").foldRight("")(_ + "," + _) + '\n'
-  mappingWriter.write(mappingColumnNames)
+  mappingWriter.write(
+    Columns.mappingColumnNames.foldRight("")(_ + "," + _) + '\n'
+  )
 
   def close(): Unit = {
     metaWriter.close()
