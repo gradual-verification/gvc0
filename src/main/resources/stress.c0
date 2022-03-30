@@ -1,8 +1,0 @@
-#use <args>
-#use <rand>
-
-int random(int stress) {
-    rand_t base = init_rand(stress);
-    int unbounded = rand(base);
-    return unbounded % (2 * stress);
-}
