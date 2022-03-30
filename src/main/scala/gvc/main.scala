@@ -11,7 +11,7 @@ import viper.silicon.state.{profilingInfo, runtimeChecks}
 import viper.silver.ast.Program
 import viper.silver.verifier
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{FileSystems, Files, Paths}
 import java.nio.charset.StandardCharsets
 import java.io.IOException
 import sys.process._
@@ -37,7 +37,10 @@ object Main extends App {
     val sourceFile = config.sourceFile.get
     val baseName =
       if (sourceFile.toLowerCase().endsWith(".c0"))
-        sourceFile.slice(0, sourceFile.length() - 3)
+        sourceFile.slice(
+          sourceFile.lastIndexOf(FileSystems.getDefault().getSeparator()) + 1,
+          sourceFile.length() - 3
+        )
       else sourceFile
     val irFileName = baseName + ".ir.c0"
     val silverFileName = baseName + ".vpr"
