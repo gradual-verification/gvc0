@@ -17,7 +17,7 @@ object Columns {
 }
 
 class ErrorCSVPrinter(file: Path) {
-  val writer = new FileWriter(file.toString)
+  val writer = new FileWriter(file.toString, true)
   def formatSection(name: String, exitCode: Int): String =
     s"-----[ Error in $name, Exit: $exitCode ]-----\n"
   def log(name: String, exitCode: Int, err: String): Unit = {
@@ -32,7 +32,7 @@ class PerformanceCSVPrinter(out: Path) {
 
   private def replaceWriter(id: String): FileWriter = {
     val contents =
-      (Some(id), new FileWriter(out.resolve(csv(id)).toString))
+      (Some(id), new FileWriter(out.resolve(csv(id)).toString, true))
     if (currentWriter.isDefined) currentWriter.get._2.close()
     currentWriter = Some(contents)
     contents._2.write(
@@ -66,8 +66,8 @@ class PerformanceCSVPrinter(out: Path) {
 }
 
 class CSVPrinter(files: BenchmarkOutputFiles, template: List[ASTLabel]) {
-  val metaWriter = new FileWriter(files.metadata.toString)
-  val mappingWriter = new FileWriter(files.levels.toString)
+  val metaWriter = new FileWriter(files.metadata.toString, true)
+  val mappingWriter = new FileWriter(files.levels.toString, true)
 
   val metadataColumnNames: String =
     (List("id") ++ template.map(_.hash)).foldRight("")(_ + "," + _) + '\n'

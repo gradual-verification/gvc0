@@ -1,1 +1,4 @@
-int mod(int r, int l);
+int mod(int r, int l)
+//@requires r >= 0;
+//@ensures \result >= 0 && \result < l;
+;

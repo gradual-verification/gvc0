@@ -1,4 +1,4 @@
-
+#use <mod>
 // binary search tree node
 struct Node {
   int val;
@@ -429,19 +429,13 @@ struct Node *tree_remove(struct Node *root, int x)
 
 int random(int stress)
 //@requires stress >= 0 && stress <= (2147483647 / 2);
-//@ensures \result >= 0 && \result <= 2 * stress;
+//@ensures \result >= 0 && \result < 2 * stress;
 {
     if(stress == 0){
         return 0;
     }else{
        int unbounded = stress * 1664525 + 1013904223;
-       int factor = unbounded / (2 * stress);
-       if(factor == 0 && unbounded < 2 * stress){
-           return unbounded;
-       }else{
-           int retVal = unbounded - (2*stress*factor);
-           return retVal;
-       }
+       return mod(unbounded, 2);
     }
 }
 

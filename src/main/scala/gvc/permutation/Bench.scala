@@ -16,9 +16,7 @@ import scala.language.postfixOps
 import scala.util.matching.Regex
 
 object Bench {
-  private val assign: Regex = "(int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
-  private val firstAssign: Regex =
-    "(int[ ]+main[ ]*\\([ ]*\\)\\s*\\{\\s*int[ ]+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
+  private val assign: Regex = "(\\s+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
 
   class BenchmarkException(message: String) extends Exception(message)
 
@@ -76,7 +74,7 @@ object Bench {
       dir: String,
       disableBaseline: Boolean = false
   ): BenchmarkOutputFiles = {
-    new Directory(Paths.get(dir).toFile).deleteRecursively()
+    //new Directory(Paths.get(dir).toFile).deleteRecursively()
     val root = Paths.get(dir)
     Files.createDirectories(root)
 
@@ -401,21 +399,22 @@ object Bench {
         val errCC0 = new ErrorCSVPrinter(files.compilationLogs)
         val errExec = new ErrorCSVPrinter(files.execLogs)
         val source = Files.readString(file.toPath)
-        val found = firstAssign.findAllMatchIn(source)
+        val firstAssign: Regex =
+          "int[ ]+main\\(\\s*\\)\\s\\{.|\n*\n\\s*(stress\\s*=\\s*[0-9]+;)".r
 
         val stressLevel = stressLevelOption.getOrElse(10)
-        if (found.toList.length != 1) {
+        val unmodified = source;
+        val modified =
+          source.replaceAll(firstAssign.toString(), s"\nstress = $stressLevel;")
+        if (unmodified.equals(modified)) {
           throw new BenchmarkException(
-            s"The first statement in a benchmarking program must of the form 'int ${Names.stressDeclaration} = ...', and it can only be declared once."
+            "Missing assignment of 'stress' variable in main."
           )
-        } else {
-          source.replaceFirst(assign.toString(), s"int stress = $stressLevel;")
         }
-
         try {
           Main.writeFile(
             tempC0File.toAbsolutePath.toString,
-            source
+            modified
           )
           val perf = CapturedExecution.compile_and_exec(
             tempC0File,

@@ -1,3 +1,4 @@
-int mod(int r, int l) {
+int mod(int r, int l)
+{
     return r % l;
 }

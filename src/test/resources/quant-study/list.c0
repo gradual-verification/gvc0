@@ -279,8 +279,3 @@ int main()
   }
   return 0;
 }
-
-/*
-      acc(node->left) && acc(node->right) && acc(node->parent) && acc(node->total) &&
-      context(node, node->parent, node->total) && subtreeHelper(node->left, node->right, node, node->total)
-*/
