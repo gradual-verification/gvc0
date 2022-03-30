@@ -341,9 +341,12 @@ object BaselineChecker {
           validateAccess(t, perms, checks, fieldAccs = fields)._1
         )
         invoke.insertBefore(argAccess ++ targetAccess)
-
-        invoke.arguments = invoke.arguments :+ perms
-
+        invoke.callee match {
+          case method: IR.Method =>
+            if (!method.maskedLibrary)
+              invoke.arguments = invoke.arguments :+ perms
+          case method: IR.DependencyMethod =>
+        }
       case fold: IR.Fold     =>
       case unfold: IR.Unfold =>
     }

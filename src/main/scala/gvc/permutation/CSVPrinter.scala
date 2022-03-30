@@ -72,10 +72,12 @@ class CSVPrinter(files: BenchmarkOutputFiles, template: List[ASTLabel]) {
   val metadataColumnNames: String =
     (List("id") ++ template.map(_.hash)).foldRight("")(_ + "," + _) + '\n'
   metaWriter.write(metadataColumnNames)
+  metaWriter.flush()
 
   mappingWriter.write(
     Columns.mappingColumnNames.foldRight("")(_ + "," + _) + '\n'
   )
+  mappingWriter.flush()
 
   def close(): Unit = {
     metaWriter.close()

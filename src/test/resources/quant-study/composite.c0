@@ -1,4 +1,4 @@
-
+#use <mod>
 // Tree node
 struct Node
 {
@@ -202,7 +202,7 @@ struct Node *tree_add_right(struct Node *node)
       node->right = n;
       //@ fold context(n, node, 0);
       fixup_ancestors(n, node, 0, 1);
-    
+
       //@ fold tree(n);
       return n;
     }
@@ -315,18 +315,50 @@ bool tree_has_right(struct Node *node)
   return res;
 }
 
+bool random(int stress)
+//@requires stress >= 0 && stress <= (2147483647);
+//@ensures true;
+{
+  int unbounded = stress * 1664525 + 1013904223;
+  return mod(unbounded, 2) == 0;
+}
+
 int main()
   //@ requires true;
   //@ ensures true;
 {
   int stress = 0;
   struct Node *node = create_tree();
-  node = tree_add_left(node);
-  node = tree_add_right(node);
-  node = tree_get_parent(node);
-  node = tree_add_left(node);
-  node = tree_get_parent(node);
-  node = tree_get_parent(node);
-  
+  struct Node *r = create_tree();
+  struct Node *l = create_tree();
+  //@unfold tree(node);
+  if(node != NULL){
+    node->left = l;
+    node->right = r;
+
+    int i = 0;
+    while(i < 0)
+    //@loop_invariant 0 <= i && i <= stress && tree(l) && tree(r);
+    {
+        if(random(stress)){
+            l = tree_add_left(l);
+        }else{
+            l = tree_add_right(l);
+        }
+        if(random(stress)){
+            l = tree_get_parent(l);
+        }
+        if(random(stress)){
+            r = tree_add_left(r);
+        }else{
+            r = tree_add_right(r);
+        }
+        if(random(stress)){
+            r = tree_get_parent(r);
+        }
+        i += 1;
+    }
+  }
   return 0;
+
 }

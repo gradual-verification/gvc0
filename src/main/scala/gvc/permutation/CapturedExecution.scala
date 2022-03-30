@@ -49,20 +49,25 @@ object CapturedExecution {
       binary: Path,
       iterations: Int
   ): ExecutionOutput = {
-    val command = binary.toAbsolutePath.toString + " 2>&1"
+    var capture = ""
+    val logger = ProcessLogger(
+      (o: String) => capture += o,
+      (e: String) => capture += e
+    )
+    val command = binary.toAbsolutePath.toString
     val timings = mutable.ListBuffer[Long]()
     val os = new ByteArrayOutputStream()
     var exitCode = 0
     for (_ <- 0 until iterations) {
       val start = System.nanoTime()
-      exitCode = (command #> os) !
+      exitCode = (command ! logger)
 
       val end = System.nanoTime()
       timings += end - start
       if (exitCode != 0) {
         return ExecutionOutput(
           exitCode,
-          os.toString("UTF-8"),
+          capture,
           None
         )
       } else {

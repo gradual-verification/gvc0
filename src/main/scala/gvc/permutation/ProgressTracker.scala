@@ -20,15 +20,22 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
   private var currentPath = 0
   private var currentPerm = 0
   private var allPerms = 0
-
+  private var unique = 0
   override def increment(): Unit = {
     currentPerm += 1
     allPerms += 1
-    if (currentPerm > perPath) {
+    if (currentPerm == perPath) {
       currentPath += 1
+    }
+    if (currentPerm > perPath) {
       currentPerm %= perPath
     }
     update()
+  }
+
+  def incrementUnique(): Unit = {
+    increment()
+    unique += 1
   }
 
   def error(): Unit = {
@@ -55,6 +62,7 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
       s"Path: ${Output.blue(s"$currentPath/$maxPaths")}",
       s"Step: ${Output.blue(s"$currentPerm/$perPath")}",
       s"Remaining Steps: ${Output.blue((perPath - currentPerm).toString)}",
+      s"Unique Programs: ${Output.blue(s"$unique")}",
       s"Success Overall: $success",
       s"Failures: ${failureColor(failures.toString)}",
       s"Timeouts: ${timeoutColor(timeouts.toString)}"

@@ -207,6 +207,8 @@ object Bench {
     val labels = labeller.visit(ir)
     val csv = new CSVPrinter(files, labels)
     val err = new ErrorCSVPrinter(files.verifyLogs)
+    val sampler = new Sampler()
+    val progress = new VerificationTracker(labels.length - 1, maxPaths)
 
     def dumpPermutation(
         dir: Path,
@@ -235,9 +237,8 @@ object Bench {
       GraphPrinter.print(ir, includeSpecs = false)
     )
 
-    val progress = new VerificationTracker(labels.length - 1, maxPaths)
     for (sampleIndex <- 0 until maxPaths) {
-      val sampleToPermute = LabelTools.sample(labels, SamplingHeuristic.Random)
+      val sampleToPermute = sampler.sample(labels, SamplingHeuristic.Random)
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
       val permutationIndices = mutable.TreeSet[Int]()
 
@@ -307,10 +308,12 @@ object Bench {
               )
           }
           alreadySampled += id
+          progress.incrementUnique()
+        } else {
+          progress.increment()
         }
         csv.logStep(id, sampleIndex + 1, labelIndex + 1)
         previousID = Some(id)
-        progress.increment()
       }
     }
     if (!config.disableBaseline) {
@@ -388,7 +391,7 @@ object Bench {
 
       def markFile(
           index: Int,
-          stressLevel: Option[Int]
+          stressLevelOption: Option[Int]
       ): Unit = {
         val file = runlist(index)
         val id = file.getName.replaceFirst("[.][^.]+$", "")
@@ -397,18 +400,16 @@ object Bench {
 
         val errCC0 = new ErrorCSVPrinter(files.compilationLogs)
         val errExec = new ErrorCSVPrinter(files.execLogs)
-        var source = Files.readString(file.toPath)
-        source = stressLevel match {
-          case Some(value) =>
-            val found = firstAssign.findAllMatchIn(source)
-            if (found.toList.length != 1) {
-              throw new BenchmarkException(
-                s"The first statement in a benchmarking program must of the form 'int ${Names.stressDeclaration} = ...', and it can only be declared once."
-              )
-            } else {
-              source.replaceFirst(assign.toString(), s"int stress = $value;")
-            }
-          case None => source
+        val source = Files.readString(file.toPath)
+        val found = firstAssign.findAllMatchIn(source)
+
+        val stressLevel = stressLevelOption.getOrElse(10)
+        if (found.toList.length != 1) {
+          throw new BenchmarkException(
+            s"The first statement in a benchmarking program must of the form 'int ${Names.stressDeclaration} = ...', and it can only be declared once."
+          )
+        } else {
+          source.replaceFirst(assign.toString(), s"int stress = $stressLevel;")
         }
 
         try {
@@ -422,7 +423,7 @@ object Bench {
             iterations,
             config
           )
-          printer.logID(id, stressLevel.getOrElse(0), perf)
+          printer.logID(id, stressLevel, perf)
         } catch {
           case co: CapturedOutputException =>
             co match {
@@ -438,6 +439,8 @@ object Bench {
           if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
         }
         progress.increment()
+        errCC0.close()
+        errExec.close()
       }
 
       def markFileScaled(
