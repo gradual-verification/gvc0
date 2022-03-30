@@ -134,12 +134,10 @@ object Bench {
       outputFiles: OutputFileCollection,
       librarySearchDirs: List[String]
   ): Unit = {
-
     val paths = config.benchmarkPaths.getOrElse(1)
     val pathDesc =
       s"${Output.blue(paths.toString)} path" +
         (if (paths > 1) "s" else "")
-
     val iterations = config.benchmarkIterations.getOrElse(1)
     val iterDesc =
       if (config.onlyVerify) ""

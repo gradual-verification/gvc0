@@ -21,7 +21,7 @@ class ErrorCSVPrinter(file: Path) {
   def formatSection(name: String, exitCode: Int): String =
     s"-----[ Error in $name, Exit: $exitCode ]-----\n"
   def log(name: String, exitCode: Int, err: String): Unit = {
-    writer.write(formatSection(name, exitCode) + err + "\n")
+    writer.write(formatSection(name, exitCode) + err + "\n\n\n")
     writer.flush()
   }
   def close(): Unit = writer.close()

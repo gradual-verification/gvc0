@@ -427,16 +427,12 @@ struct Node *tree_remove(struct Node *root, int x)
   return res;
 }
 
-int random(int stress)
+int random(int seed, int stress)
 //@requires true;
 //@ensures true;
 {
-    if(stress == 0){
-        return 0;
-    }else{
-       int unbounded = stress * 1664525 + 1013904223;
-       return mod(unbounded, 2);
-    }
+   int unbounded = seed * 1664525 + 1013904223;
+   return mod(unbounded, 2 * stress);
 }
 
 int main()
@@ -455,7 +451,7 @@ int main()
     while(i < stress)
     //@loop_invariant 0 <= i && i <= stress;
     {
-        int toAdd = random(stress);
+        int toAdd = random(i, stress);
         t1 = tree_add(t1, toAdd);
         bool test = tree_contains(t1, toAdd);
         assert(test);
@@ -466,7 +462,7 @@ int main()
     while(j < stress)
     //@loop_invariant 0 <= j && j <= stress;
     {
-        int toRemove = random(stress);
+        int toRemove = random(i, stress);
         t1 = tree_remove(t1, toRemove);
         tree_main_lemma(t1, toRemove);
         bool test = tree_contains(t1, toRemove);

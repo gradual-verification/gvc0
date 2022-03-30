@@ -1,4 +1,5 @@
+#use <util>
 int mod(int r, int l)
 {
-    return r % l;
+    return abs(r % l);
 }
