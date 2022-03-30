@@ -79,9 +79,11 @@ object CapturedExecution {
     val min = timings.min
     val stdev =
       if (timings.length > 1)
-        Math.sqrt(
-          timings.map(_ - mean).map(m => m * m).sum / (timings.length - 1)
-        )
+        Math
+          .sqrt(
+            timings.map(_ - mean).map(m => m * m).sum / (timings.length - 1)
+          )
+          .toLong
       else 0
     ExecutionOutput(
       exitCode,

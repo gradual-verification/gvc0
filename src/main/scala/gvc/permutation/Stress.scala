@@ -80,7 +80,10 @@ object Stress {
 
     val progress = new ExecutionTracker(upper / step + 1, executionType)
 
-    val performanceOutput = new FileWriter(csvOutput.toFile)
+    if (Files.exists(csvOutput)) {
+      Files.delete(csvOutput)
+    }
+    val performanceOutput = new FileWriter(csvOutput.toFile, true)
     performanceOutput.write(
       Columns.performanceColumnNames.foldRight("")(
         _ + "," + _

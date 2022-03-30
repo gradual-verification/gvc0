@@ -106,6 +106,7 @@ object Config {
   private val paths = raw"--paths=(.+)".r
   private val stepSize = raw"--step=(.+)".r
   private val upperBound = raw"--upper=(.+)".r
+  private val iterationArg = raw"--iter=(.+)".r
   private val timeoutArg = raw"--timeout=(.+)".r
   private val stressArg = raw"--stress=(.+)".r
   private val timeoutSec = raw"([0-9]+)s".r
@@ -135,6 +136,16 @@ object Config {
       current: Config = Config()
   ): Config =
     args match {
+      case "-i" :: t :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkIterations = Some(t.toInt))
+        )
+      case iterationArg(t) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkIterations = Some(t.toInt))
+        )
       case stressArg(t) :: tail =>
         fromCommandLineArgs(
           tail,

@@ -59,7 +59,7 @@ object CC0Wrapper {
       perf: Option[Performance]
   )
 
-  class Performance(mean: Long, stdev: Double, min: Long, max: Long) {
+  class Performance(mean: Long, stdev: Long, min: Long, max: Long) {
     def toString(id: Int): String = {
       List(id.toString, mean, stdev, min, max).foldRight("")(_ + "," + _)
     }
