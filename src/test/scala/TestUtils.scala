@@ -10,8 +10,8 @@ import gvc.transformer._
 import gvc.weaver.Weaver
 
 case class TestProgram(
-  ir: IRGraph.Program,
-  silverProgram: SilverProgram,
+    ir: IRGraph.Program,
+    silverProgram: SilverProgram
 ) {
   def weave = Weaver.weave(ir, silverProgram)
 
@@ -63,12 +63,18 @@ object TestUtils {
 
   def getAllFiles(dir: Path): List[Path] = {
     val files = ListBuffer[Path]()
-    Files.walkFileTree(dir.toAbsolutePath(), new SimpleFileVisitor[Path] {
-      override def visitFile(file: Path, attrs: attribute.BasicFileAttributes): FileVisitResult = {
-        files += file.toAbsolutePath()
-        FileVisitResult.CONTINUE
+    Files.walkFileTree(
+      dir.toAbsolutePath(),
+      new SimpleFileVisitor[Path] {
+        override def visitFile(
+            file: Path,
+            attrs: attribute.BasicFileAttributes
+        ): FileVisitResult = {
+          files += file.toAbsolutePath()
+          FileVisitResult.CONTINUE
+        }
       }
-    })
+    )
     files.toList
   }
 
@@ -81,47 +87,59 @@ object TestUtils {
 
   // Groups files by their basename (see notes on modified basename)
   def groupFiles(files: List[Path]): List[FileCollection] =
-    files.groupBy(basename(_))
+    files
+      .groupBy(basename(_))
       .map { case (base, _) => new FileCollection(base) }
       .toList
 
   def groupResources(directory: String): List[FileCollection] = {
     groupFiles(
       getAllFiles(resourcesRoot.resolve(directory))
-        .map(f => resourcesRoot.relativize(f)))
+        .map(f => resourcesRoot.relativize(f))
+    )
   }
 
   def deleteDirectory(dir: Path): Unit = {
-    Files.walkFileTree(dir, new SimpleFileVisitor[Path] {
-      override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
-        Files.delete(dir)
-        FileVisitResult.CONTINUE
+    Files.walkFileTree(
+      dir,
+      new SimpleFileVisitor[Path] {
+        override def postVisitDirectory(
+            dir: Path,
+            exc: IOException
+        ): FileVisitResult = {
+          Files.delete(dir)
+          FileVisitResult.CONTINUE
+        }
+        override def visitFile(
+            file: Path,
+            attrs: attribute.BasicFileAttributes
+        ): FileVisitResult = {
+          Files.delete(file)
+          FileVisitResult.CONTINUE
+        }
       }
-      override def visitFile(file: Path, attrs: attribute.BasicFileAttributes): FileVisitResult = {
-        Files.delete(file)
-        FileVisitResult.CONTINUE
-      }
-    })
+    )
   }
 
   // Utility for parsing and generating a complete program, both IR and Silver
   def program(source: String): TestProgram = {
     val parsed = Parser.parseProgram(source) match {
-      case fail: Parsed.Failure => throw new ParserException(fail.trace().longMsg)
+      case fail: Parsed.Failure =>
+        throw new ParserException(fail.trace().longMsg)
       case Parsed.Success(p, _) => p
     }
 
     val sink = new ErrorSink()
     def getErrors = sink.errors.map(_.message).mkString("\n")
 
-    val result = Resolver.resolveProgram(parsed, List(), sink)
+    val result =
+      Resolver.resolveProgram(parsed, List("./src/main/resources/"), sink)
     if (!sink.errors.isEmpty)
       throw new ResolverException(getErrors)
-    
+
     TypeChecker.check(result, sink)
     if (!sink.errors.isEmpty)
       throw new TypeCheckerException(getErrors)
-
 
     AssignmentValidator.validate(result, sink)
     ReturnValidator.validate(result, sink)
