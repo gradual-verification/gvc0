@@ -1,50 +1,39 @@
 package gvc.specs
 
-import scala.io.Source
-import java.io.{File, PrintWriter}
 import org.scalatest.funsuite.AnyFunSuite
-import org.scalatest.BeforeAndAfterAllConfigMap
-import org.scalatest.ConfigMap
+import org.scalatest._
+
+object BaseFileSpec {
+  private var UPDATE: Option[Boolean] = None
+  private var CLASSPATH: Option[String] = None
+
+  private def init(config: ConfigMap): Unit = {
+    if (UPDATE == None)
+      UPDATE = Some(config.contains("update_files"))
+    if (CLASSPATH == None)
+      CLASSPATH = Some(config("classpath").toString())
+  }
+}
 
 trait BaseFileSpec extends BeforeAndAfterAllConfigMap {
   this: AnyFunSuite =>
-  var UPDATE = false
   
   override protected def beforeAll(configMap: ConfigMap): Unit = {
-    UPDATE = configMap.contains("update_files")
+    BaseFileSpec.init(configMap)
   }
 
-  def getFiles(dir: String):List[String] = {
-    val base =  new File(getClass().getResource("/" + dir).getFile())
-    val contents = base.listFiles()
-    if(contents != null) {
-      contents.map(f => dir + "/" + f.getName()).toList
-    }else{
-      List()
+  def getClasspath = BaseFileSpec.CLASSPATH.get
+
+  def assertFile(resource: TestResource, actual: String): Unit = {
+    if (BaseFileSpec.UPDATE.get) {
+      if (actual != resource.read())
+        resource.update(actual)
+    } else {
+      assert(actual == resource.read())
     }
   }
 
-  def getFile(name: String): Option[String] = getClass().getResource("/" + name) match {
-    case null => None
-    case url => Some(Source.fromURL(url).mkString)
-  }
-
-  def assertFile(name: String, actual: String): Unit = {
-    getFile(name).foreach { expected =>
-      if (UPDATE) {
-        if (actual != expected)
-          writeFile(name, actual)
-      } else {
-        assert(actual == expected)
-      }
-    }
-  }
-
-  def writeFile(name: String, value: String): Unit = {
-    val path = "src/test/resources/" + name
-    new PrintWriter(new File(path)) {
-      write(value)
-      close()
-    }
+  def assertFile(resource: Option[TestResource], actual: String): Unit = {
+    resource.foreach(assertFile(_, actual))
   }
 }

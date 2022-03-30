@@ -1,13 +1,8 @@
-package gvc.integration
+package gvc.specs.integration
 
-import gvc.parser._
 import org.scalatest.funsuite._
-import scala.util.{Try, Success, Failure}
-import fastparse.Parsed
-import gvc.weaver.Weaver
-import gvc.analyzer._
 import gvc.transformer._
-import gvc.specs.BaseFileSpec
+import gvc.specs._
 
 class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
   val testDirs = List(
@@ -69,84 +64,30 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
   )
 
   val testFiles = testDirs
-    .flatMap(getFiles)
-    .filterNot { name =>
-      exclusions.contains(name) || name.endsWith(".ir.c0") || name.endsWith(
-        ".vpr"
-      )
-    }
+    .flatMap(TestUtils.groupResources(_))
+    .filterNot(f => exclusions.contains(f.name + ".c0"))
 
-  for (name <- testFiles) {
-    test("test " + name) {
-      val src = getFile(name).get
-      val result = runIntegrationTest(src, name)
-
+  testFiles.foreach { input =>
+    test("test " + input.name) {
+      val src = input(".c0").read
       if (src.startsWith("//test error")) {
-        assert(result.isInstanceOf[ParseError])
+        assertThrows[ParserException](TestUtils.program(src))
       } else if (src.startsWith("//test resolve_error")) {
-        assert(result.isInstanceOf[ResolverError])
+        assertThrows[ResolverException](TestUtils.program(src))
       } else if (src.startsWith("//test type_error")) {
-        assert(result.isInstanceOf[TypeError])
+        assertThrows[TypeCheckerException](TestUtils.program(src))
       } else if (src.startsWith("//test validation_error")) {
-        assert(result.isInstanceOf[ValidationError])
+        assertThrows[ValidatorException](TestUtils.program(src))
       } else if (src.startsWith("//test unsupported")) {
-        assert(result.isInstanceOf[UnsupportedError])
+        assertThrows[TransformerException](TestUtils.program(src))
       } else {
-        assert(result == ValidProgram)
+        val program = TestUtils.program(src)
+        assertFile(input.get(".ir.c0"), program.irSource)
+        assertFile(input.get(".vpr"), program.silverSource)
+
+        // Ensure that all successfully parsed program can also be woven
+        program.weave
       }
     }
   }
-
-  def runIntegrationTest(source: String, name: String): IntegrationResult = {
-    viper.silicon.state.runtimeChecks.getChecks.clear()
-
-    Parser.parseProgram(source) match {
-      case fail: Parsed.Failure => ParseError(fail.trace().longMsg)
-      case Parsed.Success(parsed, _) => {
-        val sink = new ErrorSink()
-        val result = Resolver.resolveProgram(parsed, List(), sink)
-        if (!sink.errors.isEmpty) {
-          ResolverError(sink.errors.map(_.message))
-        } else {
-          TypeChecker.check(result, sink)
-          if (!sink.errors.isEmpty) {
-            TypeError(sink.errors.map(_.message))
-          } else {
-            AssignmentValidator.validate(result, sink)
-            ReturnValidator.validate(result, sink)
-            SpecificationValidator.validate(result, sink)
-            ImplementationValidator.validate(result, sink)
-            if (!sink.errors.isEmpty) {
-              ValidationError(sink.errors.map(_.message))
-            } else {
-              Try(GraphTransformer.transform(result)) match {
-                case Failure(ex) => UnsupportedError(ex.getMessage())
-                case Success(ir) => {
-                  val irSrc = GraphPrinter.print(ir, true)
-                  val silver = IRGraphSilver.toSilver(ir)
-
-                  assertFile(name.replace(".c0", ".ir.c0"), irSrc)
-                  assertFile(
-                    name.replace(".c0", ".vpr"),
-                    silver.program.toString()
-                  )
-
-                  Weaver.weave(ir, silver)
-                  ValidProgram
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  sealed trait IntegrationResult
-  case class ParseError(message: String) extends IntegrationResult
-  case class ResolverError(messages: List[String]) extends IntegrationResult
-  case class TypeError(messages: List[String]) extends IntegrationResult
-  case class ValidationError(messages: List[String]) extends IntegrationResult
-  case class UnsupportedError(message: String) extends IntegrationResult
-  case object ValidProgram extends IntegrationResult
 }

@@ -173,7 +173,7 @@ object Main extends App {
     val reporter = viper.silver.reporter.StdIOReporter()
     val z3Exe = Config.resolveToolPath("z3", "Z3_EXE")
     val silicon = Silicon.fromPartialCommandLineArguments(
-      Seq("--z3Exe", z3Exe),
+      Seq("--z3Exe", z3Exe, "--checkTimeout", "0"),
       reporter,
       Seq()
     )

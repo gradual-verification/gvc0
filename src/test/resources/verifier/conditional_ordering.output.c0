@@ -12,8 +12,6 @@ void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, in
 int main();
 
 void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields)
-  //@requires ? && (b == c ? true : b->val == bVal) && acc(c->val);
-  //@ensures ? && true;
 {
   bool _cond_1 = false;
   bool _cond_2 = false;
@@ -42,8 +40,6 @@ void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, in
 }
 
 int main()
-  //@requires ? && true;
-  //@ensures ?;
 {
   struct Node* l = NULL;
   struct Node* l1 = NULL;

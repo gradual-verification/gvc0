@@ -19,14 +19,11 @@ int main()
 }
 
 void setValue(struct Test* t, int* _instanceCounter)
-  //@requires acc(t->value);
-  //@ensures acc(t->value);
 {
   t->value = 1;
 }
 
 void test(struct Test* t, struct OwnedFields* _ownedFields)
-  //@requires ?;
 {
   assert(!(t == NULL));
   assertAcc(_ownedFields, t->_id, 0, "Field access runtime check failed for struct Test.value");

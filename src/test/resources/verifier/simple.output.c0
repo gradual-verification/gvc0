@@ -10,8 +10,6 @@ int main()
 }
 
 int test(int value, struct OwnedFields* _ownedFields)
-  //@requires ?;
-  //@ensures \result == 0;
 {
   assert(value == 0);
   return value;

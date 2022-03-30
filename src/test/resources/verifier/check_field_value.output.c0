@@ -18,9 +18,6 @@ int main()
 }
 
 void test(struct Test* value, struct OwnedFields* _ownedFields)
-  //@requires ? && acc(value->value);
-  //@ensures ?;
 {
   assert(value->value == 0);
-  //@assert value->value == 0;
 }
