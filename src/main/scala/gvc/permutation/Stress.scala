@@ -10,7 +10,7 @@ import gvc.transformer.{GraphPrinter, IRGraph}
 import gvc.{Config, Main, OutputFileCollection}
 
 import java.io.FileWriter
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{FileSystems, Files, Path, Paths}
 
 object Stress {
 
@@ -36,9 +36,12 @@ object Stress {
   ): StressTestOutputFiles = {
     val root = Paths.get(config.compileStressTest.get)
     Files.createDirectories(root)
-
-    val all = root.resolve(files.baseName + Names.allEnding)
-    val none = root.resolve(files.baseName + Names.noneEnding)
+    val base = files.baseName.slice(
+      files.baseName.lastIndexOf(FileSystems.getDefault().getSeparator()) + 1,
+      files.baseName.length()
+    )
+    val all = root.resolve(base + Names.allEnding)
+    val none = root.resolve(base + Names.noneEnding)
 
     StressTestOutputFiles(root, all, none)
   }
@@ -128,7 +131,7 @@ object Stress {
       stress: Int,
       performance: Performance
   ): Unit = {
-    writer.write(performance.toString(stress) + '\n')
+    writer.write(stress + "," + performance.toString() + '\n')
     writer.flush()
   }
 }

@@ -92,13 +92,16 @@ object Config {
                |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
                |  -x            --exec                         Execute the compiled file
                |  -b <dir>      --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
-               |                --stress=<dir>                 Perform a stress test of full dynamic verification, comparing performance against the unverified source program.
-               |                --step=<n>                     Specify the step size of the stress factor from 0 to the upper bound.
-               |                --upper=<n>                    Specify the upper bound on the stress factor.                       
-               |                --iter=<n>                     Specify the number of iterations for execution.
+               |                --stress-level=<n>             Set a constant stress level for each benchmark.
                |                --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
                |                --disable-baseline             Speedup benchmark generation by skipping the baseline.
-               |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m)."""
+               |                
+               |                --iter=<n>                     Specify the number of iterations for execution.
+               |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
+               |  
+               |                --stress=<dir>                 Perform a stress test of full dynamic verification, comparing performance against the unverified source program.
+               |                --step=<n>                     Specify the step size of the stress factor from 0 to the upper bound.
+               |                --upper=<n>                    Specify the upper bound on the stress factor."""
 
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r

@@ -8,15 +8,16 @@ import gvc.permutation.CapturedExecution.{
 import gvc.permutation.Output.blue
 import gvc.transformer.GraphPrinter
 import gvc.{Config, Main, OutputFileCollection, VerificationException}
+
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.reflect.io.Directory
-import scala.language.postfixOps
 import scala.util.matching.Regex
 
 object Bench {
-  private val assign: Regex = "(\\s+stress[ ]*=[ ]*[0-9]+[ ]*;)".r
+  val firstAssign: Regex =
+    "int[ ]+main\\(\\s*\\)\\s\\{.|\n*\n\\s*(stress\\s*=\\s*[0-9]+;)".r
 
   class BenchmarkException(message: String) extends Exception(message)
 
@@ -42,7 +43,8 @@ object Bench {
       performance: Path,
       baselinePerformance: Path,
       levels: Path,
-      metadata: Path
+      metadata: Path,
+      bottom: Path
   )
 
   object Names {
@@ -52,8 +54,8 @@ object Bench {
     val perms = "perms"
     val verified_perms = "verified_perms"
     val baselinePerms = "baseline_perms"
-    val performance = "performance"
-    val baselinePerformance = "baselinePerformance"
+    val performance: String = csv("perf")
+    val baselinePerformance: String = csv("baseline_perf")
     val levels: String = csv("levels")
     val metadata: String = csv("metadata")
     val verifyLogs: String = log("verify")
@@ -74,7 +76,7 @@ object Bench {
       dir: String,
       disableBaseline: Boolean = false
   ): BenchmarkOutputFiles = {
-    //new Directory(Paths.get(dir).toFile).deleteRecursively()
+    new Directory(Paths.get(dir).toFile).deleteRecursively()
     val root = Paths.get(dir)
     Files.createDirectories(root)
 
@@ -93,12 +95,10 @@ object Bench {
     }
 
     val performance = root.resolve(Names.performance)
-    Files.createDirectories(performance)
     val baselinePerformance = root.resolve(Names.baselinePerformance)
-    Files.createDirectories(baselinePerformance)
-
     val levels = root.resolve(Names.levels)
     val metadata = root.resolve(Names.metadata)
+    val bottom = root.resolve(c0(Names._bottom))
 
     val logs = root.resolve(Names.logs)
     Files.createDirectories(logs)
@@ -124,7 +124,8 @@ object Bench {
       performance = performance,
       baselinePerformance = baselinePerformance,
       levels = levels,
-      metadata = metadata
+      metadata = metadata,
+      bottom = bottom
     )
   }
 
@@ -219,31 +220,38 @@ object Bench {
       )
       filePath
     }
-
-    val outputBottom =
-      files.perms.resolve(c0(Names._bottom))
+    val outputBottom = files.verifiedPerms.resolve(c0(Names._bottom))
     val outputBottomText = GraphPrinter.print(ir, includeSpecs = false)
     Main.writeFile(
       outputBottom.toString,
       outputBottomText
     )
-    val outputTop = files.perms.resolve(c0(Names._top))
+    csv.logPermutation(
+      Names._bottom,
+      Set.empty
+    )
+
+    val outputTop = files.verifiedPerms.resolve(c0(Names._top))
     Main.writeFile(
       outputTop.toString,
       GraphPrinter.print(ir, includeSpecs = false)
     )
+    csv.logPermutation(Names._top, labels.toSet)
 
     for (sampleIndex <- 0 until maxPaths) {
       val sampleToPermute = sampler.sample(labels, SamplingHeuristic.Random)
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
       val permutationIndices = mutable.TreeSet[Int]()
 
+      csv.logStep(Names._top, sampleIndex + 1, sampleToPermute.length)
+      csv.logStep(Names._bottom, sampleIndex + 1, 0)
+
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
 
         currentPermutation += sampleToPermute(labelIndex)
         permutationIndices += sampleToPermute(labelIndex).exprIndex
         val id = csv.createID(currentPermutation)
-        csv.logPermutation(id, currentPermutation)
+        csv.logPermutation(id, currentPermutation.toSet)
 
         if (!alreadySampled.contains(id)) {
           val builtPermutation = selector.visit(permutationIndices)
@@ -317,7 +325,7 @@ object Bench {
       val baselineSourceText = GraphPrinter.print(ir, includeSpecs = false)
       dumpPermutation(
         files.baselinePerms.get,
-        c0(Names._baseline),
+        c0(Names._top),
         mutable.TreeSet[ASTLabel]()(LabelOrdering),
         baselineSourceText
       )
@@ -326,23 +334,29 @@ object Bench {
     err.close()
   }
 
-  case class StressScaling(stepSize: Int, upperBound: Int)
+  case class StressScaling(stepSize: Int, upperBound: Int, iterations: Int)
 
   def markExecution(
       config: Config,
       files: BenchmarkOutputFiles
   ): Unit = {
     val iterations = config.benchmarkIterations.getOrElse(1)
-
     val scaling: Option[StressScaling] = config.benchmarkStepSize match {
       case Some(value) =>
-        Some(StressScaling(value, config.benchmarkMaxFactor.getOrElse(value)))
+        Some(
+          StressScaling(
+            value,
+            config.benchmarkMaxFactor.getOrElse(value),
+            iterations
+          )
+        )
       case None =>
         config.benchmarkMaxFactor match {
-          case Some(value) => Some(StressScaling(1, value))
+          case Some(value) => Some(StressScaling(1, value, iterations))
           case None        => None
         }
     }
+
     markDirectory(
       files.verifiedPerms,
       files.performance,
@@ -351,7 +365,6 @@ object Bench {
     )
 
     if (!config.disableBaseline) {
-      println("\n")
       markDirectory(
         files.baselinePerms.get,
         files.baselinePerformance,
@@ -382,6 +395,7 @@ object Bench {
               index,
               None
             )
+            progress.increment()
         }
       })
 
@@ -397,11 +411,9 @@ object Bench {
         val errCC0 = new ErrorCSVPrinter(files.compilationLogs)
         val errExec = new ErrorCSVPrinter(files.execLogs)
         val source = Files.readString(file.toPath)
-        val firstAssign: Regex =
-          "int[ ]+main\\(\\s*\\)\\s\\{.|\n*\n\\s*(stress\\s*=\\s*[0-9]+;)".r
 
         val stressLevel = stressLevelOption.getOrElse(10)
-        val unmodified = source;
+        val unmodified = source
         val modified =
           source.replaceAll(firstAssign.toString(), s"\nstress = $stressLevel;")
         if (unmodified.equals(modified)) {
@@ -435,7 +447,6 @@ object Bench {
           if (Files.exists(tempC0File)) Files.delete(tempC0File)
           if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
         }
-        progress.increment()
         errCC0.close()
         errExec.close()
       }
@@ -447,6 +458,7 @@ object Bench {
         for (i <- 0 to scaling.upperBound by scaling.stepSize) {
           markFile(index, Some(i))
         }
+        progress.increment()
       }
     }
   }

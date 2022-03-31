@@ -60,8 +60,8 @@ object CC0Wrapper {
   )
 
   class Performance(mean: Long, stdev: Long, min: Long, max: Long) {
-    def toString(id: Int): String = {
-      List(id.toString, mean, stdev, min, max).foldRight("")(_ + "," + _)
+    override def toString: String = {
+      List(mean, stdev, min, max).foldRight("")(_ + "," + _)
     }
   }
 

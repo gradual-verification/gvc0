@@ -3,7 +3,6 @@ package gvc.permutation
 import gvc.CC0Wrapper.{CompilationOutput, ExecutionOutput, Performance}
 import gvc.{CC0Options, CC0Wrapper, Config}
 import sys.process._
-import scala.language.postfixOps
 import java.io.ByteArrayOutputStream
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable

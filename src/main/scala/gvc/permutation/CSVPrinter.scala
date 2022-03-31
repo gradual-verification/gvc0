@@ -5,18 +5,20 @@ import gvc.permutation.Bench.{BenchmarkOutputFiles, csv}
 
 import java.io.FileWriter
 import java.math.BigInteger
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 object Columns {
   val performanceColumnNames: List[String] =
-    List("stress", "mean", "stdev", "min", "max")
+    List("id", "stress", "mean", "stdev", "min", "max")
   val mappingColumnNames: List[String] =
     List("id", "path_id", "level_id")
 }
 
 class ErrorCSVPrinter(file: Path) {
+  if (Files.exists(file)) Files.delete(file)
+
   val writer = new FileWriter(file.toString, true)
   def formatSection(name: String, exitCode: Int): String =
     s"-----[ Error in $name, Exit: $exitCode ]-----\n"
@@ -28,45 +30,32 @@ class ErrorCSVPrinter(file: Path) {
 }
 
 class PerformanceCSVPrinter(out: Path) {
-  var currentWriter: Option[(Option[String], FileWriter)] = None
+  if (Files.exists(out)) Files.delete(out)
+  var writer = new FileWriter(out.toString, true)
+  writer.write(
+    Columns.performanceColumnNames.foldRight("")(_ + "," + _) + '\n'
+  )
+  writer.flush()
 
-  private def replaceWriter(id: String): FileWriter = {
-    val contents =
-      (Some(id), new FileWriter(out.resolve(csv(id)).toString, true))
-    if (currentWriter.isDefined) currentWriter.get._2.close()
-    currentWriter = Some(contents)
-    contents._2.write(
-      Columns.performanceColumnNames.foldRight("")(
-        _ + "," + _
-      ) + '\n'
-    )
-    contents._2.flush()
-    contents._2
-  }
+  def close(): Unit = writer.close()
 
   def logID(
       id: String,
       stress: Int,
       perf: Performance
   ): Unit = {
-    val writer: FileWriter = currentWriter match {
-      case Some(value) =>
-        if (value._1.equals(id)) {
-          value._2
-        } else {
-          value._2.close()
-          replaceWriter(id)
-        }
-      case None => replaceWriter(id)
-
-    }
-    writer.write(perf.toString(stress) + '\n')
+    writer.write(
+      List(id, stress.toString).foldRight("")(_ + ',' + _) + perf
+        .toString() + '\n'
+    )
     writer.flush()
   }
 }
 
 class CSVPrinter(files: BenchmarkOutputFiles, template: List[ASTLabel]) {
+  if (Files.exists(files.metadata)) Files.delete(files.metadata)
   val metaWriter = new FileWriter(files.metadata.toString, true)
+  if (Files.exists(files.levels)) Files.delete(files.levels)
   val mappingWriter = new FileWriter(files.levels.toString, true)
 
   val metadataColumnNames: String =
@@ -97,7 +86,7 @@ class CSVPrinter(files: BenchmarkOutputFiles, template: List[ASTLabel]) {
 
   def logPermutation(
       id: String,
-      permutation: mutable.TreeSet[ASTLabel]
+      permutation: Set[ASTLabel]
   ): String = {
     val entry = ListBuffer[String](id)
     template.foreach(label => {
