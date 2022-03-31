@@ -13,18 +13,18 @@ predicate subtreeHelper(struct Node *l, struct Node *r, struct Node *parent, int
   (l == NULL) ?
     (
       (r == NULL) ?
-        total == 1 
+        total == 1
         :
         acc(r->left) && acc(r->right) && acc(r->parent) && acc(r->total) &&
         r->parent == parent && subtreeHelper(r->left, r->right, r, r->total) &&
         total == 1 + r->total
-    ) 
+    )
     :
     (
       (r == NULL) ?
         acc(l->left) && acc(l->right) && acc(l->parent) && acc(l->total) &&
         l->parent == parent && subtreeHelper(l->left, l->right, l, l->total) &&
-        total == 1 + l->total 
+        total == 1 + l->total
         :
         acc(r->left) && acc(r->right) && acc(r->parent) && acc(r->total) &&
         r->parent == parent && subtreeHelper(r->left, r->right, r, r->total) &&
@@ -35,7 +35,7 @@ predicate subtreeHelper(struct Node *l, struct Node *r, struct Node *parent, int
 @*/
 
 /*@
-// TODO: pickup debugging --- subtreeHelper in the context def is the issue causing the error, in both places it is used, works in backend: ie. ran as a silver program translated from this in the console and was fine    
+// TODO: pickup debugging --- subtreeHelper in the context def is the issue causing the error, in both places it is used, works in backend: ie. ran as a silver program translated from this in the console and was fine
 predicate context(struct Node *node, struct Node *parent, int total) =
   (parent == NULL) ?
     ( true )
@@ -51,7 +51,7 @@ predicate context(struct Node *node, struct Node *parent, int total) =
             (
               acc(parent->right->left) && acc(parent->right->right) && acc(parent->right->parent) && acc(parent->right->total) &&
               parent->right->parent == parent && subtreeHelper(parent->right->left, parent->right->right, parent->right, parent->right->total) &&
-              parent->total == 1 + total + parent->right->total 
+              parent->total == 1 + total + parent->right->total
             )
         )
         :
@@ -78,7 +78,7 @@ predicate tree(struct Node *node) =
     :
     (
       acc(node->left) && acc(node->right) && acc(node->parent) && acc(node->total) &&
-      context(node, node->parent, node->total) && subtreeHelper(node->left, node->right, node, node->total) 
+      context(node, node->parent, node->total) && subtreeHelper(node->left, node->right, node, node->total)
     ) ;
 @*/
 
@@ -136,7 +136,7 @@ int fixup_ancestors(struct Node *node, struct Node *parent, int oldTotal, int ne
       }
       rightTotal = newTotal;
     }
-    
+
     int parentTotal = 1 + leftTotal + rightTotal;
     parent->total = parentTotal;
     fixup_ancestors(parent, grandparent, oldparentTotal, parentTotal);
@@ -160,7 +160,7 @@ struct Node *tree_add_left(struct Node *node)
     n->parent = node;
     n->total = 1;
     //@ fold subtreeHelper(n->left, n->right, n, n->total);
-    
+
     struct Node *nodeLeft = node->left;
     if (nodeLeft != NULL) {
       //@ fold tree(node);
@@ -170,7 +170,7 @@ struct Node *tree_add_left(struct Node *node)
       node->left = n;
       //@ fold context(n, node, 0);
       fixup_ancestors(n, node, 0, 1);
-    
+
       //@ fold tree(n);
       return n;
     }
@@ -192,7 +192,7 @@ struct Node *tree_add_right(struct Node *node)
     n->parent = node;
     n->total = 1;
     //@ fold subtreeHelper(n->left, n->right, n, n->total);
-    
+
     struct Node *nodeRight = node->right;
     if (nodeRight != NULL) {
       //@ fold tree(node);
@@ -315,50 +315,54 @@ bool tree_has_right(struct Node *node)
   return res;
 }
 
-bool random(int stress)
-//@requires stress >= 0 && stress <= (2147483647);
-//@ensures true;
-{
-  int unbounded = stress * 1664525 + 1013904223;
-  return mod(unbounded, 2) == 0;
-}
 
 int main()
   //@ requires true;
   //@ ensures true;
 {
   int stress = 0;
+  int seed = 1;
   struct Node *node = create_tree();
-  struct Node *r = create_tree();
-  struct Node *l = create_tree();
-  //@unfold tree(node);
-  if(node != NULL){
-    node->left = l;
-    node->right = r;
-
-    int i = 0;
-    while(i < 0)
-    //@loop_invariant 0 <= i && i <= stress && tree(l) && tree(r);
+  int i = 0;
+  stress = stress + ((stress / 2)*2);
+  while(i < stress)
+  //@loop_invariant 0 <= i && i <= stress && tree(node);
+  {
+    struct Node* current = node;
+    while(tree_has_left(current) && tree_has_right(current))
+    //@loop_invariant tree(current);
     {
-        if(random(stress)){
-            l = tree_add_left(l);
+        int r = rand(seed);
+        seed = r;
+        bool rand_bool = mod(seed, stress) <= stress / 2;
+        if(rand_bool){
+            current = tree_get_left(current);
         }else{
-            l = tree_add_right(l);
+            current = tree_get_right(current);
         }
-        if(random(stress)){
-            l = tree_get_parent(l);
-        }
-        if(random(stress)){
-            r = tree_add_left(r);
-        }else{
-            r = tree_add_right(r);
-        }
-        if(random(stress)){
-            r = tree_get_parent(r);
-        }
-        i += 1;
     }
+    if(tree_has_left(current)){
+        current = tree_add_right(current);
+    }else if(tree_has_right(current)){
+        current = tree_add_left(current);
+    }else{
+        int r = rand(seed);
+        seed = r;
+        bool rand_bool = mod(seed, stress) <= stress / 2;
+        if(rand_bool){
+          current = tree_add_right(current);
+        }else{
+          current = tree_add_left(current);
+        }
+    }
+    while(tree_has_parent(current))
+    //@loop_invariant tree(current);
+    {
+        current = tree_get_parent(current);
+    }
+    node = current;
+    i += 1;
   }
-  return 0;
 
+  return 0;
 }

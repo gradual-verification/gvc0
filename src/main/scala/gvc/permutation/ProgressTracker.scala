@@ -10,7 +10,9 @@ abstract class ProgressTracker(activity: String) {
     print(s"\r${Output.formatInfo(this.toString)}")
   }
   def percentage(top: Double, bot: Double): Double =
-    Math.ceil(top / bot * 100)
+    if (top == 0)
+      top
+    else { Math.ceil(top / bot * 100) }
 }
 
 class VerificationTracker(perPath: Int, maxPaths: Int)

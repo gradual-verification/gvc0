@@ -3,3 +3,8 @@ int mod(int r, int l)
 {
     return abs(r % l);
 }
+
+int rand(int prev){
+    int unbounded = (1103515245*prev + 12345);
+    return mod(unbounded, 2147483648);
+}

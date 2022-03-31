@@ -10,6 +10,7 @@ import gvc.transformer.GraphPrinter
 import gvc.{Config, Main, OutputFileCollection, VerificationException}
 
 import java.nio.file.{Files, Path, Paths}
+import java.util.Calendar
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.reflect.io.Directory
@@ -135,6 +136,7 @@ object Bench {
       outputFiles: OutputFileCollection,
       librarySearchDirs: List[String]
   ): Unit = {
+
     val paths = config.benchmarkPaths.getOrElse(1)
     val pathDesc =
       s"${Output.blue(paths.toString)} path" +

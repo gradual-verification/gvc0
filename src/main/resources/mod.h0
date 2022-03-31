@@ -2,3 +2,8 @@ int mod(int r, int l)
 //@requires true;
 //@ensures true;
 ;
+
+int rand(int prev)
+//@requires true;
+//@ensures true;
+;

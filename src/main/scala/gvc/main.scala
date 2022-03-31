@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.permutation.{Bench, Stress}
+import gvc.permutation.{Bench, Output, Stress, Timeout}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -17,6 +17,8 @@ import java.io.IOException
 import sys.process._
 import scala.language.postfixOps
 import viper.silicon.state.BranchCond
+
+import java.util.Calendar
 
 case class OutputFileCollection(
     baseName: String,
@@ -58,14 +60,26 @@ object Main extends App {
       config.linkedLibraries ++ List(defaultLibraryDirectory)
     config.mode match {
       case Config.StressMode =>
+        val startTime = Calendar.getInstance().getTime()
+        Output.info(startTime.toString)
         Stress.test(inputSource, config, fileNames, linkedLibraries)
+        val stopTime = Calendar.getInstance().getTime()
+        val difference = stopTime.getTime - startTime.getTime
+        Output.info(stopTime.toString)
+        Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(difference)}")
       case Config.BenchmarkMode =>
+        val startTime = Calendar.getInstance().getTime()
+        Output.info(startTime.toString)
         Bench.mark(
           inputSource,
           config,
           fileNames,
           linkedLibraries
         )
+        val stopTime = Calendar.getInstance().getTime()
+        val difference = stopTime.getTime - startTime.getTime
+        Output.info(stopTime.toString)
+        Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(difference)}")
       case Config.DefaultMode =>
         val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
         execute(verifiedOutput.c0Source, fileNames)
