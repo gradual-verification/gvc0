@@ -33,7 +33,7 @@ class PerformanceCSVPrinter(out: Path) {
   if (Files.exists(out)) Files.delete(out)
   var writer = new FileWriter(out.toString, true)
   writer.write(
-    Columns.performanceColumnNames.foldRight("")(_ + "," + _) + '\n'
+    Columns.performanceColumnNames.mkString(",") + '\n'
   )
   writer.flush()
 
@@ -45,7 +45,7 @@ class PerformanceCSVPrinter(out: Path) {
       perf: Performance
   ): Unit = {
     writer.write(
-      List(id, stress.toString).foldRight("")(_ + ',' + _) + perf
+      List(id, stress.toString).mkString(",") + perf
         .toString() + '\n'
     )
     writer.flush()
@@ -59,12 +59,12 @@ class CSVPrinter(files: BenchmarkOutputFiles, template: List[ASTLabel]) {
   val mappingWriter = new FileWriter(files.levels.toString, true)
 
   val metadataColumnNames: String =
-    (List("id") ++ template.map(_.hash)).foldRight("")(_ + "," + _) + '\n'
+    (List("id") ++ template.map(_.hash)).mkString(",") + '\n'
   metaWriter.write(metadataColumnNames)
   metaWriter.flush()
 
   mappingWriter.write(
-    Columns.mappingColumnNames.foldRight("")(_ + "," + _) + '\n'
+    Columns.mappingColumnNames.mkString(",") + '\n'
   )
   mappingWriter.flush()
 
@@ -93,14 +93,14 @@ class CSVPrinter(files: BenchmarkOutputFiles, template: List[ASTLabel]) {
       val toAppend = (if (permutation.contains(label)) 1 else 0).toString
       entry += toAppend
     })
-    metaWriter.write(entry.foldRight("")(_ + "," + _) + '\n')
+    metaWriter.write(entry.mkString(",") + '\n')
     metaWriter.flush()
     id
   }
 
   def logStep(id: String, pathIndex: Int, levelIndex: Int): Unit = {
     mappingWriter.write(
-      List(id, pathIndex, levelIndex).foldRight("")(_ + "," + _) + '\n'
+      List(id, pathIndex, levelIndex).mkString(",") + '\n'
     )
     mappingWriter.flush()
   }
