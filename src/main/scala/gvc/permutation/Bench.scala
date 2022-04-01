@@ -10,7 +10,6 @@ import gvc.transformer.GraphPrinter
 import gvc.{Config, Main, OutputFileCollection, VerificationException}
 
 import java.nio.file.{Files, Path, Paths}
-import java.util.Calendar
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.reflect.io.Directory
@@ -343,17 +342,17 @@ object Bench {
       files: BenchmarkOutputFiles
   ): Unit = {
     val iterations = config.benchmarkIterations.getOrElse(1)
-    val scaling: Option[StressScaling] = config.benchmarkStepSize match {
+    val scaling: Option[StressScaling] = config.benchmarkWStep match {
       case Some(value) =>
         Some(
           StressScaling(
             value,
-            config.benchmarkMaxFactor.getOrElse(value),
+            config.benchmarkWUpper.getOrElse(value),
             iterations
           )
         )
       case None =>
-        config.benchmarkMaxFactor match {
+        config.benchmarkWUpper match {
           case Some(value) => Some(StressScaling(1, value, iterations))
           case None        => None
         }

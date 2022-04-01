@@ -15,9 +15,10 @@ case class Config(
     mode: Mode = Config.DefaultMode,
     benchmarkPaths: Option[Int] = None,
     benchmarkStress: Boolean = false,
-    benchmarkStepSize: Option[Int] = None,
-    benchmarkMaxFactor: Option[Int] = None,
+    benchmarkWStep: Option[Int] = None,
+    benchmarkWUpper: Option[Int] = None,
     benchmarkIterations: Option[Int] = None,
+    benchmarkWList: Option[List[Int]] = None,
     disableBaseline: Boolean = false,
     saveFiles: Boolean = false,
     exec: Boolean = false,
@@ -52,13 +53,13 @@ case class Config(
           s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -p or --paths."
         )
       else if (
-        benchmarkStepSize.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
+        benchmarkWStep.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
       )
         Some(
           s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --step"
         )
       else if (
-        benchmarkMaxFactor.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
+        benchmarkWUpper.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
       )
         Some(
           s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --upper."
@@ -68,6 +69,12 @@ case class Config(
       )
         Some(
           s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -i/--iter."
+        )
+      else if (
+        benchmarkWStep.isDefined || benchmarkWUpper.isDefined && benchmarkWList.isDefined
+      )
+        Some(
+          s"Either provide a list of specific stress levels (--w-list), or set a step size (--w-step) and/or upper bound (--w-upper)."
         )
       else None
     ).foreach(Config.error)
@@ -92,23 +99,25 @@ object Config {
                |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
                |  -x            --exec                         Execute the compiled file
                |  -b <dir>      --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
-               |                --stress-level=<n>             Set a constant stress level for each benchmark.
                |                --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
                |                --disable-baseline             Speedup benchmark generation by skipping the baseline.
-               |                
+               |                 
                |                --iter=<n>                     Specify the number of iterations for execution.
                |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
                |  
                |                --stress=<dir>                 Perform a stress test of full dynamic verification, comparing performance against the unverified source program.
-               |                --step=<n>                     Specify the step size of the stress factor from 0 to the upper bound.
-               |                --upper=<n>                    Specify the upper bound on the stress factor."""
+               |
+               |                --w-step=<n>                   Specify the step size of the stress factor from 0 to the upper bound.
+               |                --w-upper=<n>                  Specify the upper bound on the stress factor.
+               |                --w-list=<n,...>            Specify a list of stress levels to execute."""
 
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val benchmarkDir = raw"--benchmark=(.+)".r
   private val paths = raw"--paths=(.+)".r
-  private val stepSize = raw"--step=(.+)".r
-  private val upperBound = raw"--upper=(.+)".r
+  private val stepSize = raw"--w-step=(.+)".r
+  private val upperBound = raw"--w-upper=(.+)".r
+  private val specifyIncrements = raw"--w-list=(\d+)(,\s*\d+)*".r
   private val iterationArg = raw"--iter=(.+)".r
   private val timeoutArg = raw"--timeout=(.+)".r
   private val stressArg = raw"--stress=(.+)".r
@@ -133,12 +142,21 @@ object Config {
     case _        => error(s"Invalid dump output type: $t")
   }
 
+  private def parseIntList(t: String): List[Int] = {
+    t.split(',').map(s => s.toInt).toList
+  }
+
   @tailrec
   def fromCommandLineArgs(
       args: List[String],
       current: Config = Config()
   ): Config =
     args match {
+      case specifyIncrements(t) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkWList = Some(parseIntList(t)))
+        )
       case "-i" :: t :: tail =>
         fromCommandLineArgs(
           tail,
@@ -182,12 +200,12 @@ object Config {
       case stepSize(f) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(benchmarkStepSize = Some(f.toInt))
+          current.copy(benchmarkWStep = Some(f.toInt))
         )
       case upperBound(f) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(benchmarkMaxFactor = Some(f.toInt))
+          current.copy(benchmarkWUpper = Some(f.toInt))
         )
       case outputArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))

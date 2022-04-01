@@ -1,7 +1,7 @@
 package gvc.permutation
 
 import gvc.CC0Wrapper.Performance
-import gvc.permutation.Bench.{BenchmarkOutputFiles, csv}
+import gvc.permutation.Bench.BenchmarkOutputFiles
 
 import java.io.FileWriter
 import java.math.BigInteger

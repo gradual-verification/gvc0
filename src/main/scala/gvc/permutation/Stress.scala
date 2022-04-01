@@ -77,8 +77,8 @@ object Stress {
     val tempC0 = Paths.get(Names.tempC0)
     val tempExec = Paths.get(Names.tempExec)
 
-    val upper = config.benchmarkMaxFactor.getOrElse(1000)
-    val step = config.benchmarkStepSize.getOrElse(10)
+    val upper = config.benchmarkWUpper.getOrElse(1000)
+    val step = config.benchmarkWStep.getOrElse(10)
     val iter = config.benchmarkIterations.getOrElse(1)
 
     val progress = new ExecutionTracker(upper / step + 1, executionType)
