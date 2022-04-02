@@ -19,6 +19,7 @@ case class Config(
     benchmarkWUpper: Option[Int] = None,
     benchmarkIterations: Option[Int] = None,
     benchmarkWList: Option[List[Int]] = None,
+    bencmarkSkipVerification: Boolean = false,
     disableBaseline: Boolean = false,
     saveFiles: Boolean = false,
     exec: Boolean = false,
@@ -101,7 +102,7 @@ object Config {
                |  -b <dir>      --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
                |                --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
                |                --disable-baseline             Speedup benchmark generation by skipping the baseline.
-               |                 
+               |                --only-exec                    For benchmark directories that already exist, skip verification entirely and execute the programs that are present. 
                |                --iter=<n>                     Specify the number of iterations for execution.
                |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
                |  
@@ -158,6 +159,11 @@ object Config {
       current: Config = Config()
   ): Config =
     args match {
+      case "--only-exec" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(bencmarkSkipVerification = true)
+        )
       case specifyIncrements(t) :: tail =>
         fromCommandLineArgs(
           tail,

@@ -1,7 +1,7 @@
 package gvc.permutation
 
 import gvc.CC0Wrapper.Performance
-import gvc.permutation.Bench.BenchmarkOutputFiles
+import gvc.permutation.Bench.{BenchmarkException, BenchmarkOutputFiles}
 
 import java.io.FileWriter
 import java.math.BigInteger
@@ -42,14 +42,46 @@ class ErrorCSVPrinter(file: Path) {
 }
 
 class PerformanceCSVPrinter(out: Path) {
-  if (Files.exists(out)) Files.delete(out)
+  var table =
+    if (Files.exists(out)) generateTable(Files.readString(out))
+    else mutable.Map[String, Set[Int]]()
   var writer = new FileWriter(out.toString, true)
+
   writer.write(
     Columns.performanceColumnNames.mkString(",") + '\n'
   )
   writer.flush()
 
+  private def generateTable(contents: String): mutable.Map[String, Set[Int]] = {
+    val lines: List[String] = contents.split('\n').toList
+    val entries = lines.map(_.split('.').toList.map(_.trim))
+    if (
+      entries.isEmpty || !entries.head.equals(Columns.performanceColumnNames)
+    ) {
+      throw new BenchmarkException(
+        s"The existing performance output at ${out.toString} is incorrectly formatted."
+      )
+    } else {
+      val mapping = mutable.Map[String, Set[Int]]()
+      entries
+        .slice(1, entries.length)
+        .foreach(entry => {
+          if (mapping.contains(entry.head)) {
+            mapping(entry.head) += entry(1)
+          }
+          mapping += (entry.head -> mutable.Set[Int](entry(1).toInt))
+        })
+      mapping
+    }
+  }
+
   def close(): Unit = writer.close()
+
+  def exists(
+      id: String,
+      stress: Int
+  ): Boolean =
+    table.contains(id) && table(id).contains(stress)
 
   def logID(
       id: String,

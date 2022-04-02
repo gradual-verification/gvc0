@@ -68,9 +68,11 @@ object Bench {
   }
 
   def resolveOutputFiles(
-      dir: String,
-      disableBaseline: Boolean = false
+      config: Config
   ): BenchmarkOutputFiles = {
+    val dir = config.compileBenchmark.get
+    val disableBaseline = config.disableBaseline
+
     new Directory(Paths.get(dir).toFile).deleteRecursively()
     val root = Paths.get(dir)
     Files.createDirectories(root)
@@ -134,46 +136,47 @@ object Bench {
       outputFiles: OutputFileCollection,
       librarySearchDirs: List[String]
   ): Unit = {
-
-    val paths = config.benchmarkPaths.getOrElse(1)
-    val pathDesc =
-      s"${Output.blue(paths.toString)} path" +
-        (if (paths > 1) "s" else "")
-    val iterations = config.benchmarkIterations.getOrElse(1)
-    val iterDesc =
-      if (config.onlyVerify) ""
-      else
-        s"${Output.blue(iterations.toString)} iteration" +
-          (if (iterations > 1) "s" else "") + " per permutation"
     val file = c0(outputFiles.baseName)
     val files =
-      resolveOutputFiles(config.compileBenchmark.get, config.disableBaseline)
-    val timeout = config.timeout match {
-      case Some(value) => value.toString + "s"
-      case None        => "infinite"
+      resolveOutputFiles(config)
+
+    if (!config.bencmarkSkipVerification) {
+      val timeout = config.timeout match {
+        case Some(value) => value.toString + "s"
+        case None        => "infinite"
+      }
+      val paths = config.benchmarkPaths.getOrElse(1)
+      val pathDesc =
+        s"${Output.blue(paths.toString)} path" +
+          (if (paths > 1) "s" else "")
+      val iterations = config.benchmarkIterations.getOrElse(1)
+      val iterDesc =
+        if (config.onlyVerify) ""
+        else
+          s"${Output.blue(iterations.toString)} iteration" +
+            (if (iterations > 1) "s" else "") + " per permutation"
+      Output.info(
+        s"Benchmarking $pathDesc with $iterDesc for ${blue(
+          file
+        )}, timeout ${blue(timeout)}, output to ${blue(files.root.toString)}"
+      )
+
+      def booleanToStatus(a: Boolean): String =
+        if (a) Output.green("enabled") else Output.red("disabled")
+
+      Output.info(
+        s"Baseline ${booleanToStatus(!config.disableBaseline)}, execution ${booleanToStatus(!config.onlyVerify)}"
+      )
+
+      markVerification(
+        source,
+        config,
+        outputFiles,
+        files,
+        librarySearchDirs
+      )
+      println(s"\n\n${Output.formatSuccess("Verification completed.")}\n")
     }
-    Output.info(
-      s"Benchmarking $pathDesc with $iterDesc for ${blue(
-        file
-      )}, timeout ${blue(timeout)}, output to ${blue(files.root.toString)}"
-    )
-
-    def booleanToStatus(a: Boolean): String =
-      if (a) Output.green("enabled") else Output.red("disabled")
-
-    Output.info(
-      s"Baseline ${booleanToStatus(!config.disableBaseline)}, execution ${booleanToStatus(!config.onlyVerify)}"
-    )
-
-    markVerification(
-      source,
-      config,
-      outputFiles,
-      files,
-      librarySearchDirs
-    )
-    println(s"\n\n${Output.formatSuccess("Verification completed.")}\n")
-
     if (!config.onlyVerify) {
       markExecution(config, files)
       print(
