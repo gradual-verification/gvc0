@@ -5,6 +5,7 @@ import gvc.permutation.CapturedExecution.{
   CapturedOutputException,
   ExecutionException
 }
+import gvc.permutation.Extensions.{c0, csv, log, out, txt}
 import gvc.permutation.Output.blue
 import gvc.transformer.GraphPrinter
 import gvc.{Config, Main, OutputFileCollection, VerificationException}
@@ -21,18 +22,11 @@ object Bench {
 
   class BenchmarkException(message: String) extends Exception(message)
 
-  def c0(basename: String): String = basename + ".c0"
-
-  def out(basename: String): String = basename + ".out"
-
-  def csv(basename: String): String = basename + ".csv"
-
-  def log(basename: String): String = basename + ".log"
-
   case class BenchmarkOutputFiles(
       root: Path,
       perms: Path,
       verifiedPerms: Path,
+      pathDescriptions: Path,
       baselinePerms: Option[Path],
       logs: Path,
       verifyLogs: Path,
@@ -54,6 +48,7 @@ object Bench {
     val perms = "perms"
     val verified_perms = "verified_perms"
     val baselinePerms = "baseline_perms"
+    val pathDesc = "path_desc"
     val performance: String = csv("perf")
     val baselinePerformance: String = csv("baseline_perf")
     val levels: String = csv("levels")
@@ -82,6 +77,9 @@ object Bench {
 
     val perms = root.resolve(Names.perms)
     Files.createDirectories(perms)
+
+    val pathDescriptions = root.resolve(Names.pathDesc)
+    Files.createDirectories(pathDescriptions)
 
     val verifiedPerms = root.resolve(Names.verified_perms)
     Files.createDirectories(verifiedPerms)
@@ -125,7 +123,8 @@ object Bench {
       baselinePerformance = baselinePerformance,
       levels = levels,
       metadata = metadata,
-      bottom = bottom
+      bottom = bottom,
+      pathDescriptions = pathDescriptions
     )
   }
 
@@ -241,6 +240,11 @@ object Bench {
 
     for (sampleIndex <- 0 until maxPaths) {
       val sampleToPermute = sampler.sample(labels, SamplingHeuristic.Random)
+      val summary = LabelTools.appendPathComment("", sampleToPermute)
+      val summaryDestination =
+        files.pathDescriptions.resolve(txt((sampleIndex + 1).toString))
+      Files.writeString(summaryDestination, summary)
+
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
       val permutationIndices = mutable.TreeSet[Int]()
 
@@ -334,27 +338,31 @@ object Bench {
     csv.close()
     err.close()
   }
-
-  case class StressScaling(stepSize: Int, upperBound: Int, iterations: Int)
+  sealed trait Stress
+  case class StressList(levels: List[Int]) extends Stress
+  case class StressScaling(stepSize: Int, upperBound: Int) extends Stress
 
   def markExecution(
       config: Config,
       files: BenchmarkOutputFiles
   ): Unit = {
     val iterations = config.benchmarkIterations.getOrElse(1)
-    val scaling: Option[StressScaling] = config.benchmarkWStep match {
+    val scaling: Option[Stress] = config.benchmarkWStep match {
       case Some(value) =>
         Some(
           StressScaling(
             value,
-            config.benchmarkWUpper.getOrElse(value),
-            iterations
+            config.benchmarkWUpper.getOrElse(value)
           )
         )
       case None =>
         config.benchmarkWUpper match {
-          case Some(value) => Some(StressScaling(1, value, iterations))
-          case None        => None
+          case Some(value) => Some(StressScaling(1, value))
+          case None =>
+            config.benchmarkWList match {
+              case Some(value) => Some(StressList(value))
+              case None        => Some(StressList(List(16)))
+            }
         }
     }
 
@@ -377,7 +385,7 @@ object Bench {
     def markDirectory(
         in: Path,
         out: Path,
-        scaling: Option[StressScaling],
+        scaling: Option[Stress],
         verificationType: ExecutionType
     ): Unit = {
       val printer = new PerformanceCSVPrinter(out)
@@ -387,10 +395,12 @@ object Bench {
       runlist.indices.foreach(index => {
         scaling match {
           case Some(value) =>
-            markFileScaled(
-              index,
-              value
-            )
+            value match {
+              case StressList(levels) =>
+                markFileList(index, levels)
+              case StressScaling(stepSize, upperBound) =>
+                markFileScaled(index, stepSize, upperBound)
+            }
           case None =>
             markFile(
               index,
@@ -454,11 +464,19 @@ object Bench {
 
       def markFileScaled(
           index: Int,
-          scaling: StressScaling
+          stepSize: Int,
+          upperBound: Int
       ): Unit = {
-        for (i <- 0 to scaling.upperBound by scaling.stepSize) {
+        for (i <- 0 to upperBound by stepSize) {
           markFile(index, Some(i))
         }
+        progress.increment()
+      }
+
+      def markFileList(index: Int, scaling: List[Int]): Unit = {
+        scaling.foreach(i => {
+          markFile(index, Some(i))
+        })
         progress.increment()
       }
     }

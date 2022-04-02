@@ -73,22 +73,38 @@ object CapturedExecution {
         os.reset()
       }
     }
+    val med = median(timings.toList)
     val mean = timings.sum / timings.length
     val max = timings.max
     val min = timings.min
-    val stdev =
-      if (timings.length > 1)
-        Math
-          .sqrt(
-            timings.map(_ - mean).map(m => m * m).sum / (timings.length - 1)
-          )
-          .toLong
-      else 0
+    val std = stdev(timings.toList, mean)
+
     ExecutionOutput(
       exitCode,
       os.toString("UTF-8"),
-      Some(new Performance(mean, stdev, min, max))
+      Some(new Performance(med, mean, std, min, max))
     )
+  }
+
+  def median(values: List[Long]): Long = {
+    val lst = values.sorted
+    if (lst.length % 2 == 0) {
+      val l = lst(lst.length / 2)
+      val r = lst(lst.length / 2 - 1)
+      (l + r) / 2
+    } else {
+      lst(lst.length / 2)
+    }
+  }
+
+  def stdev(values: List[Long], mean: Long): Long = {
+    if (values.length > 1)
+      Math
+        .sqrt(
+          values.map(_ - mean).map(m => m * m).sum / (values.length - 1)
+        )
+        .toLong
+    else 0
   }
 
   class CapturedOutputException(exitCode: Int, stdout: String)

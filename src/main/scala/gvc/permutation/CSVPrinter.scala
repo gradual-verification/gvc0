@@ -9,9 +9,21 @@ import java.nio.file.{Files, Path}
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
+object Extensions {
+  def c0(basename: String): String = basename + ".c0"
+
+  def out(basename: String): String = basename + ".out"
+
+  def csv(basename: String): String = basename + ".csv"
+
+  def log(basename: String): String = basename + ".log"
+
+  def txt(basename: String): String = basename + ".txt"
+}
+
 object Columns {
   val performanceColumnNames: List[String] =
-    List("id", "stress", "mean", "stdev", "min", "max")
+    List("id", "stress", "median", "mean", "stdev", "min", "max")
   val mappingColumnNames: List[String] =
     List("id", "path_id", "level_id")
 }

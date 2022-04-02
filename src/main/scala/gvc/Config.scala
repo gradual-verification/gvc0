@@ -71,7 +71,7 @@ case class Config(
           s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -i/--iter."
         )
       else if (
-        benchmarkWStep.isDefined || benchmarkWUpper.isDefined && benchmarkWList.isDefined
+        (benchmarkWStep.isDefined || benchmarkWUpper.isDefined) && benchmarkWList.isDefined
       )
         Some(
           s"Either provide a list of specific stress levels (--w-list), or set a step size (--w-step) and/or upper bound (--w-upper)."
@@ -117,7 +117,7 @@ object Config {
   private val paths = raw"--paths=(.+)".r
   private val stepSize = raw"--w-step=(.+)".r
   private val upperBound = raw"--w-upper=(.+)".r
-  private val specifyIncrements = raw"--w-list=(\d+)(,\s*\d+)*".r
+  private val specifyIncrements = raw"--w-list=(.+)".r
   private val iterationArg = raw"--iter=(.+)".r
   private val timeoutArg = raw"--timeout=(.+)".r
   private val stressArg = raw"--stress=(.+)".r
@@ -143,7 +143,13 @@ object Config {
   }
 
   private def parseIntList(t: String): List[Int] = {
-    t.split(',').map(s => s.toInt).toList
+    if (t.matches("[0-9]+(,[0-9]+)+")) {
+      t.split(',').map(s => s.trim.toInt).toList
+    } else {
+      error(
+        s"Invalid input for --w-list; expected a comma-separated list of integers"
+      )
+    }
   }
 
   @tailrec

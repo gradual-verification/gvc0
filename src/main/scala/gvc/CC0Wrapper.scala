@@ -59,9 +59,15 @@ object CC0Wrapper {
       perf: Option[Performance]
   )
 
-  class Performance(mean: Long, stdev: Long, min: Long, max: Long) {
+  class Performance(
+      median: Long,
+      mean: Long,
+      stdev: Long,
+      min: Long,
+      max: Long
+  ) {
     override def toString: String = {
-      List(mean, stdev, min, max).foldRight("")(_ + "," + _)
+      List(median, mean, stdev, min, max).foldRight("")(_ + "," + _)
     }
   }
 
