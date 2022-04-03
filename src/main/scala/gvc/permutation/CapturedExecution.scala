@@ -2,6 +2,7 @@ package gvc.permutation
 
 import gvc.CC0Wrapper.{CompilationOutput, ExecutionOutput, Performance}
 import gvc.{CC0Options, CC0Wrapper, Config}
+
 import sys.process._
 import java.io.ByteArrayOutputStream
 import java.nio.file.{Path, Paths}
@@ -59,7 +60,7 @@ object CapturedExecution {
     var exitCode = 0
     for (_ <- 0 until iterations) {
       val start = System.nanoTime()
-      exitCode = (command ! logger)
+      exitCode = command ! logger
 
       val end = System.nanoTime()
       timings += end - start

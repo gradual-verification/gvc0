@@ -37,7 +37,7 @@ object Stress {
     val root = Paths.get(config.compileStressTest.get)
     Files.createDirectories(root)
     val base = files.baseName.slice(
-      files.baseName.lastIndexOf(FileSystems.getDefault().getSeparator()) + 1,
+      files.baseName.lastIndexOf(FileSystems.getDefault.getSeparator) + 1,
       files.baseName.length()
     )
     val all = root.resolve(base + Names.allEnding)
@@ -55,6 +55,7 @@ object Stress {
     val output = resolveOutputFiles(config, outputFiles)
     val ir = Main.generateIR(source, librarySearchDirs)
     val assignmentHook = resolveAssignment(ir)
+
     assignmentHook match {
       case Some(assign) =>
         testExecution(ir, config, output.none, assign, ExecutionType.Unverified)
@@ -76,6 +77,13 @@ object Stress {
   ): Unit = {
     val tempC0 = Paths.get(Names.tempC0)
     val tempExec = Paths.get(Names.tempExec)
+    val performanceOutput = new FileWriter(csvOutput.toFile, true)
+    val stressSet = generateStressSet(csvOutput)
+
+    if (stressSet.isEmpty)
+      performanceOutput.write(
+        Columns.performanceColumnNames.mkString(",") + '\n'
+      )
 
     val upper = config.benchmarkWUpper.getOrElse(1000)
     val step = config.benchmarkWStep.getOrElse(10)
@@ -83,29 +91,34 @@ object Stress {
 
     val progress = new ExecutionTracker(upper / step + 1, executionType)
 
-    if (Files.exists(csvOutput)) {
-      Files.delete(csvOutput)
-    }
-    val performanceOutput = new FileWriter(csvOutput.toFile, true)
-    performanceOutput.write(
-      Columns.performanceColumnNames.foldRight("")(
-        _ + "," + _
-      ) + '\n'
-    )
     for (i <- 0 to upper by step) {
-      assign.value = new IRGraph.Int(i)
-      val printedSource = GraphPrinter.print(ir, includeSpecs = false)
-      Files.writeString(tempC0, printedSource)
-      try {
-        val perf = compile_and_exec(tempC0, tempExec, iter, config)
-        logPerformance(performanceOutput, i, perf)
-      } catch {
-        case _: CC0CompilationException => progress.cc0Error()
-        case _: ExecutionException      => progress.execError()
+      if (!stressSet.contains(i)) {
+        assign.value = new IRGraph.Int(i)
+        val printedSource = GraphPrinter.print(ir, includeSpecs = false)
+        Files.writeString(tempC0, printedSource)
+        try {
+          val perf = compile_and_exec(
+            tempC0,
+            tempExec,
+            config.benchmarkIterations.getOrElse(1),
+            config
+          )
+          logPerformance(performanceOutput, i, perf)
+        } catch {
+          case _: CC0CompilationException => progress.cc0Error()
+          case _: ExecutionException      => progress.execError()
+        }
       }
       progress.increment()
     }
     performanceOutput.close()
+  }
+
+  def generateStressSet(
+      input: Path
+  ): Set[Int] = {
+    val entries = CSVIO.readEntries(input, Columns.performanceColumnNames)
+    entries.map(_.head.toInt).toSet
   }
 
   def resolveAssignment(ir: IRGraph.Program): Option[IRGraph.Assign] = {

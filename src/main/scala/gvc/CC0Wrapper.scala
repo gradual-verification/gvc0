@@ -67,7 +67,7 @@ object CC0Wrapper {
       max: Long
   ) {
     override def toString: String = {
-      List(median, mean, stdev, min, max).foldRight("")(_ + "," + _)
+      s"$median,$mean,$stdev,$min,$max"
     }
   }
 
