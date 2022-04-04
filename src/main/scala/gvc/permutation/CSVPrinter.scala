@@ -103,7 +103,7 @@ class PerformanceCSVPrinter(out: Path, iterations: Int) {
       perf: Performance
   ): Unit = {
     writer.write(
-      List(id, stress.toString, iterations.toString).mkString(",") + perf
+      List(id, stress.toString, iterations.toString).mkString(",") + "," + perf
         .toString() + '\n'
     )
     writer.flush()

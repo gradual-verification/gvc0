@@ -41,7 +41,7 @@ object CapturedExecution {
       saveIntermediateFiles = config.saveFiles,
       output = Some(output.toString),
       includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
-      compilerArgs = List()
+      compilerArgs = List("-fbracket-depth=1024")
     )
     CC0Wrapper.exec_output(input.toString, cc0Options)
   }
