@@ -75,7 +75,26 @@ sandbox.c0
 benchmark
 data
 study/composite
-study/bst
+
+study/bst/baseline_perms
+study/bst/logs
+study/bst/path_desc
+study/bst/perms
+study/bst/verified_perms
+
+study/composite/baseline_perms
+study/composite/logs
+study/composite/path_desc
+study/composite/perms
+study/composite/verified_perms
+
+study/list/baseline_perms
+study/list/logs
+study/list/path_desc
+study/list/perms
+study/list/verified_perms
+
+
 study/list
 
 temp.c0
