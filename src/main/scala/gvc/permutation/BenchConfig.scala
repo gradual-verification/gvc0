@@ -310,9 +310,7 @@ object BenchConfig {
     val existingSource = root.resolve(Names.source)
 
     if (Files.exists(existingSource)) {
-      if (
-        Files.mismatch(existingSource, Paths.get(config.sourceFile.get)) != -1L
-      )
+      if (!Files.readString(existingSource).equals(inputSource))
         Config.error(
           s"The existing permutation directory ${existingSource.getParent.toAbsolutePath} was created for a different source file than the one provided"
         )
