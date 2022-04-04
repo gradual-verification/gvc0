@@ -77,13 +77,15 @@ object Stress {
   ): Unit = {
     val tempC0 = Paths.get(Names.tempC0)
     val tempExec = Paths.get(Names.tempExec)
-    val performanceOutput = new FileWriter(csvOutput.toFile, true)
-    val stressSet = generateStressSet(csvOutput)
 
-    if (stressSet.isEmpty)
-      performanceOutput.write(
-        Columns.performanceColumnNames.mkString(",") + '\n'
-      )
+    val entries = CSVIO.readEntries(csvOutput, Columns.performanceColumnNames)
+    val validEntries =
+      entries.filter(_.head.matches("[0-9]+"))
+    CSVIO.writeEntries(csvOutput, validEntries, Columns.performanceColumnNames)
+
+    val performanceOutput = new FileWriter(csvOutput.toFile, true)
+
+    val stressSet = validEntries.map(_.head.toInt)
 
     val upper = config.benchmarkWUpper.getOrElse(1000)
     val step = config.benchmarkWStep.getOrElse(10)
@@ -103,7 +105,7 @@ object Stress {
             config.benchmarkIterations.getOrElse(1),
             config
           )
-          logPerformance(performanceOutput, i, perf)
+          logPerformance(performanceOutput, i, iter, perf)
         } catch {
           case _: CC0CompilationException => progress.cc0Error()
           case _: ExecutionException      => progress.execError()
@@ -112,13 +114,6 @@ object Stress {
       progress.increment()
     }
     performanceOutput.close()
-  }
-
-  def generateStressSet(
-      input: Path
-  ): Set[Int] = {
-    val entries = CSVIO.readEntries(input, Columns.performanceColumnNames)
-    entries.map(_.head.toInt).toSet
   }
 
   def resolveAssignment(ir: IRGraph.Program): Option[IRGraph.Assign] = {
@@ -142,9 +137,11 @@ object Stress {
   def logPerformance(
       writer: FileWriter,
       stress: Int,
+      iterations: Int,
       performance: Performance
   ): Unit = {
-    writer.write(stress + "," + performance.toString() + '\n')
+    val entry = stress + "," + iterations + ',' + performance.toString() + '\n'
+    writer.write(entry)
     writer.flush()
   }
 }
