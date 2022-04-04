@@ -33,6 +33,7 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
       currentPerm %= perPath
     }
     update()
+    if (currentPath == maxPaths) println("\n")
   }
 
   def incrementUnique(): Unit = {
@@ -115,7 +116,8 @@ class ExecutionTracker(maxPrograms: Int, execType: ExecutionType)
       s"Program: ${Output.blue(s"$progress/$maxPrograms")}",
       s"Success: ${success}",
       s"CC0 Failures: ${cc0FailureColor(cc0Failures.toString)}",
-      s"Execution Failures: ${execFailureColor(execFailures.toString)}"
+      s"Execution Failures: ${execFailureColor(execFailures.toString)}",
+      if (progress == maxPrograms) "\n" else ""
     ).foldLeft("")(_ + " — " + _)
   }
 }

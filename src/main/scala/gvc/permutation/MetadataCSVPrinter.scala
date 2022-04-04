@@ -1,7 +1,6 @@
 package gvc.permutation
 
 import gvc.CC0Wrapper.Performance
-import gvc.permutation.Bench.Names
 import gvc.permutation.BenchConfig.BenchmarkOutputFiles
 
 import java.io.FileWriter
@@ -12,7 +11,7 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 object Extensions {
-  def c0(basename: String): String = basename + ".c0"
+  def c0(basename: Object): String = basename.toString + ".c0"
 
   def out(basename: String): String = basename + ".out"
 
@@ -27,12 +26,15 @@ object Extensions {
 
 object Columns {
   val performanceColumnNames: List[String] =
-    List("stress", "median", "mean", "stdev", "min", "max")
+    List("stress", "iter", "median", "mean", "stdev", "min", "max")
   val mappingColumnNames: List[String] =
     List("id", "path_id", "level_id")
-  def metadataColumnNames(template: List[ASTLabel]): List[String] =
-    (List("id") ++ template.map(_.hash))
 
+  val pathColumnNames: List[String] =
+    List("id", "path_hash")
+
+  def metadataColumnNames(template: List[ASTLabel]): List[String] =
+    List("id") ++ template.map(_.hash)
 }
 
 class ErrorCSVPrinter(file: Path) {
@@ -46,7 +48,7 @@ class ErrorCSVPrinter(file: Path) {
   def close(): Unit = writer.close()
 }
 
-class PerformanceCSVPrinter(out: Path) {
+class PerformanceCSVPrinter(out: Path, iterations: Int) {
   var table: PerformanceTable =
     generatePerformanceTable(
       out
@@ -60,8 +62,6 @@ class PerformanceCSVPrinter(out: Path) {
   def close(): Unit = writer.close()
 
   case class PerformanceTable(
-      top: Set[Int],
-      bottom: Set[Int],
       other: mutable.Map[BigInteger, mutable.Set[Int]]
   )
 
@@ -69,49 +69,32 @@ class PerformanceCSVPrinter(out: Path) {
       path: Path
   ): PerformanceTable = {
     val mapping = mutable.Map[BigInteger, mutable.Set[Int]]()
-    val entries =
+    val entries: List[List[String]] =
       CSVIO.readEntries(path, List("id") ++ Columns.performanceColumnNames)
-    val top = mutable.Set[Int]()
-    val bottom = mutable.Set[Int]()
-    entries.foreach(entry => {
-      try {
-        entry.head match {
-          case Names._top => {
-            top += entry(1).toInt
-          }
-          case Names._bottom => {
-            bottom += entry(1).toInt
-          }
-          case _ => {
-            val bigID = new BigInteger(entry.head, 16)
-            if (mapping.contains(bigID)) {
-              mapping(bigID) += entry(1).toInt
-            } else {
-              mapping += bigID -> mutable.Set(entry(1).toInt)
-            }
-          }
-        }
 
-      } catch {
-        case _: NumberFormatException =>
+    def update(bigID: BigInteger, stress: Int): Unit = {
+      if (mapping.contains(bigID)) {
+        mapping(bigID) += stress
+      } else {
+        mapping += bigID -> mutable.Set(stress)
       }
-    })
-    PerformanceTable(top.toSet, bottom.toSet, mapping)
+    }
+    entries
+      .map(entry => (LabelTools.parseID(entry.head), entry(1)))
+      .filter(pair => pair._1.isDefined && pair._2.matches("[0-9]+"))
+      .foreach(pair => update(pair._1.get, pair._2.toInt))
+    PerformanceTable(mapping)
   }
 
   def exists(
       id: String,
       stress: Int
   ): Boolean = {
-    id match {
-      case Names._top    => { table.top.contains(stress) }
-      case Names._bottom => { table.bottom.contains(stress) }
-      case _ => {
-        val bigID = new BigInteger(id, 16)
-        table.other.contains(bigID) && table.other(bigID).contains(stress)
-      }
+    LabelTools.parseID(id) match {
+      case Some(value) =>
+        table.other.contains(value) && table.other(value).contains(stress)
+      case None => false
     }
-
   }
 
   def logID(
@@ -120,7 +103,7 @@ class PerformanceCSVPrinter(out: Path) {
       perf: Performance
   ): Unit = {
     writer.write(
-      List(id, stress.toString).mkString(",") + perf
+      List(id, stress.toString, iterations.toString).mkString(",") + perf
         .toString() + '\n'
     )
     writer.flush()
@@ -146,20 +129,17 @@ object CSVIO {
     var entries = readEntries(input)
     if (entries.isEmpty)
       Output.info(
-        s"No preexisting performance output at ${input.toString}."
+        s"No preexisting output at ${input.toString}."
       )
     else if (!entries.head.equals(columnNames)) {
       Output.info(
-        s"The preexisting performance output at ${input.toString} is missing or incorrectly formatted."
+        s"The preexisting output at ${input.toString} is missing or incorrectly formatted."
       )
       entries = List()
     } else {
       entries = entries
         .slice(1, entries.length)
         .filter(_.length == columnNames.length)
-      Output.info(
-        s"Found ${entries.length} pre-existing performance entries in ${input.toString} to skip."
-      )
     }
     entries
   }
@@ -171,6 +151,7 @@ object CSVIO {
     val header = columns.mkString(",")
     val lines = entries.map(_.mkString(",")).mkString("\n")
     val contents = header + '\n' + lines
+    Files.deleteIfExists(output)
     Files.writeString(output, contents)
   }
 
@@ -194,25 +175,41 @@ class MetadataCSVPrinter(
 ) {
   val metaWriter = new FileWriter(files.metadata.toString, true)
   val mappingWriter = new FileWriter(files.levels.toString, true)
-
+  val permWriter = new FileWriter(files.permMap.toString, true)
   val metadataColumnNames: String =
     Columns.metadataColumnNames(template).mkString(",") + '\n'
 
-  def writeMappingHeader: Unit = {
+  def writeMappingHeader(): Unit = {
     mappingWriter.write(
       Columns.mappingColumnNames.mkString(",") + '\n'
     )
     mappingWriter.flush()
   }
 
-  def writeMetadataHeader: Unit = {
+  def writeMetadataHeader(): Unit = {
     metaWriter.write(metadataColumnNames)
     metaWriter.flush()
+  }
+
+  def writePermHeader(): Unit = {
+    permWriter.write(Columns.pathColumnNames.mkString(",") + '\n')
+    permWriter.flush()
   }
 
   def close(): Unit = {
     metaWriter.close()
     mappingWriter.close()
+    permWriter.close()
+  }
+
+  def logPath(
+      index: Int,
+      template: List[ASTLabel],
+      permutation: List[ASTLabel]
+  ): Unit = {
+    val permID = LabelTools.hashPath(template, permutation)
+    permWriter.write(index.toString + "," + permID.toString(16) + '\n')
+    permWriter.flush()
   }
 
   def logPermutation(

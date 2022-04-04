@@ -25,8 +25,6 @@ object Bench {
 
   object Names {
     val _baseline: String = c0("baseline")
-    val _top = "top"
-    val _bottom = "bot"
     val perms = "perms"
     val verified_perms = "verified_perms"
     val baselinePerms = "baseline_perms"
@@ -36,7 +34,6 @@ object Bench {
     val levels: String = csv("levels")
     val metadata: String = csv("metadata")
     val verifyLogs: String = log("verify")
-
     val compilationLogs: String = log("cc0")
     val baselineCompilationLogs: String = log("cc0_baseline")
     val execLogs: String = log("exec")
@@ -58,7 +55,12 @@ object Bench {
     val file = c0(outputFiles.baseName)
     val benchConfig =
       BenchConfig.resolveBenchmarkConfig(source, librarySearchDirs, config)
-
+    Output.info(
+      s"Saved ${benchConfig.prior.visitedPermutations.size} permutations from previous runs."
+    )
+    Output.info(
+      s"Saved ${benchConfig.prior.visitedPaths.size} paths from previous runs."
+    )
     if (!config.benchmarkSkipVerification) {
       val timeout = config.timeout match {
         case Some(value) => value.toString + "s"
@@ -72,10 +74,10 @@ object Bench {
       val iterDesc =
         if (config.onlyVerify) ""
         else
-          s"${Output.blue(iterations.toString)} iteration" +
+          s" with ${Output.blue(iterations.toString)} iteration" +
             (if (iterations > 1) "s" else "") + " per permutation"
       Output.info(
-        s"Benchmarking $pathDesc with $iterDesc for ${blue(
+        s"Benchmarking $pathDesc$iterDesc for ${blue(
           file
         )}, timeout ${blue(timeout)}, output to ${blue(benchConfig.files.root.toString)}"
       )
@@ -92,7 +94,7 @@ object Bench {
         outputFiles,
         benchConfig
       )
-      println(s"\n\n${Output.formatSuccess("Verification completed.")}\n")
+      println(s"${Output.formatSuccess("Verification completed.")}")
     }
     if (!config.onlyVerify) {
       markExecution(config, benchConfig)
@@ -111,10 +113,8 @@ object Bench {
       outputFiles: OutputFileCollection,
       benchmarkConfig: BenchmarkConfig
   ): Unit = {
-
     val alreadySampled: mutable.Set[BigInteger] =
-      mutable.Set[BigInteger]().union(benchmarkConfig.prior.visitedPermutations)
-
+      mutable.Set[BigInteger]()
     var previousID: Option[String] = None
     val maxPaths = config.benchmarkPaths.getOrElse(1)
 
@@ -140,42 +140,49 @@ object Bench {
       )
       filePath
     }
+    val bottomID =
+      LabelTools.createID(benchmarkConfig.labels, Set.empty).toString(16)
     val outputBottom =
-      benchmarkConfig.files.root.resolve(c0(Names._bottom))
+      benchmarkConfig.files.verifiedPerms.resolve(c0(bottomID))
     val outputBottomText =
       GraphPrinter.print(benchmarkConfig.ir, includeSpecs = false)
     Main.writeFile(
       outputBottom.toString,
       outputBottomText
     )
-
     csv.logPermutation(
-      Names._bottom,
+      bottomID,
       Set.empty
     )
 
-    val outputTop = benchmarkConfig.files.root.resolve(c0(Names._top))
+    val topID =
+      LabelTools
+        .createID(benchmarkConfig.labels, benchmarkConfig.labels.toSet)
+        .toString(16)
+    val outputTop =
+      benchmarkConfig.files.verifiedPerms.resolve(c0(topID))
     Main.writeFile(
       outputTop.toString,
       GraphPrinter.print(benchmarkConfig.ir, includeSpecs = false)
     )
-    csv.logPermutation(Names._top, benchmarkConfig.labels.toSet)
-
-    for (sampleIndex <- 0 until maxPaths) {
+    csv.logPermutation(topID, benchmarkConfig.labels.toSet)
+    val offset = benchmarkConfig.prior.visitedPaths.size
+    for (sampleIndex <- offset until maxPaths + offset) {
       val sampleToPermute =
         sampler.sample(SamplingHeuristic.Random)
+      csv.logPath(sampleIndex, benchmarkConfig.labels, sampleToPermute)
       val summary = LabelTools.appendPathComment("", sampleToPermute)
       val summaryDestination =
         benchmarkConfig.files.pathDescriptions.resolve(
-          txt((sampleIndex + 1).toString)
+          txt(sampleIndex.toString)
         )
       Files.writeString(summaryDestination, summary)
 
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
       val permutationIndices = mutable.TreeSet[Int]()
 
-      csv.logStep(Names._top, sampleIndex + 1, sampleToPermute.length)
-      csv.logStep(Names._bottom, sampleIndex + 1, 0)
+      csv.logStep(topID, sampleIndex, sampleToPermute.length)
+      csv.logStep(bottomID, sampleIndex, 0)
 
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
 
@@ -249,7 +256,7 @@ object Bench {
         } else {
           progress.increment()
         }
-        csv.logStep(idString, sampleIndex + 1, labelIndex + 1)
+        csv.logStep(idString, sampleIndex, labelIndex + 1)
         previousID = Some(idString)
       }
     }
@@ -259,7 +266,7 @@ object Bench {
         GraphPrinter.print(benchmarkConfig.ir, includeSpecs = false)
       dumpPermutation(
         benchmarkConfig.files.baselinePerms.get,
-        c0(Names._top),
+        c0(topID),
         mutable.TreeSet[ASTLabel]()(LabelOrdering),
         baselineSourceText
       )
@@ -276,7 +283,10 @@ object Bench {
       benchmarkConfig: BenchmarkConfig
   ): Unit = {
 
-    val printer = new PerformanceCSVPrinter(benchmarkConfig.files.performance)
+    val printer = new PerformanceCSVPrinter(
+      benchmarkConfig.files.performance,
+      benchmarkConfig.workload.iterations
+    )
 
     markDirectory(
       benchmarkConfig.files.verifiedPerms,
@@ -287,7 +297,8 @@ object Bench {
 
     if (!config.disableBaseline) {
       val baselinePrinter = new PerformanceCSVPrinter(
-        benchmarkConfig.files.baselinePerformance
+        benchmarkConfig.files.baselinePerformance,
+        benchmarkConfig.workload.iterations
       )
       markDirectory(
         benchmarkConfig.files.baselinePerms.get,
@@ -303,11 +314,11 @@ object Bench {
       stressLevel: Int,
       benchmarkConfig: BenchmarkConfig,
       printer: PerformanceCSVPrinter,
-      progressTracker: Option[ProgressTracker] = None
-  ): Unit = {
+      progressTracker: Option[ExecutionTracker] = None
+  ): Boolean = {
     val id = Extensions.remove(file.getFileName.toString)
 
-    if (printer.exists(id, stressLevel)) return
+    if (printer.exists(id, stressLevel)) return true
 
     val tempC0File = Paths.get(Names.tempC0File)
     val tempBinaryFile = Paths.get(Names.tempBinaryFile)
@@ -342,40 +353,64 @@ object Bench {
           case cc0: CC0CompilationException =>
             cc0.logMessage(id, errCC0)
             progressTracker match {
-              case Some(value) => value.increment()
+              case Some(value) => value.cc0Error()
               case None        =>
             }
+            return false
           case exec: ExecutionException =>
             exec.logMessage(id, errExec)
             progressTracker match {
-              case Some(value) => value.increment()
+              case Some(value) => value.execError()
               case None        =>
             }
+            return false
         }
     } finally {
       if (Files.exists(tempC0File)) Files.delete(tempC0File)
       if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
+
     }
     errCC0.close()
     errExec.close()
+    true
   }
 
   def markFile(
       in: Path,
       printer: PerformanceCSVPrinter,
       benchConfig: BenchmarkConfig,
-      progressTracker: Option[ProgressTracker] = None
+      progressTracker: Option[ExecutionTracker] = None
   ): Unit = {
     if (benchConfig.workload.wList.isEmpty) {
       for (
         i <- 0 to benchConfig.workload.wUpper by benchConfig.workload.wStep
       ) {
-        benchmarkFile(in, i, benchConfig, printer, progressTracker)
+        val success =
+          benchmarkFile(in, i, benchConfig, printer, progressTracker)
+        if (!success) {
+          progressTracker match {
+            case Some(value) => value.increment()
+            case None        =>
+          }
+          return
+        }
       }
     } else {
       benchConfig.workload.wList.foreach(i => {
-        benchmarkFile(in, i, benchConfig, printer, progressTracker)
+        val success =
+          benchmarkFile(in, i, benchConfig, printer, progressTracker)
+        if (!success) {
+          progressTracker match {
+            case Some(value) => value.increment()
+            case None        =>
+          }
+          return
+        }
       })
+    }
+    progressTracker match {
+      case Some(value) => value.increment()
+      case None        =>
     }
   }
 
@@ -387,19 +422,13 @@ object Bench {
   ): Unit = {
     val runlist = in.toFile
       .listFiles()
-    val progress = new ExecutionTracker(runlist.length, verificationType)
-    runlist.foreach(file => {
-      if (benchConfig.workload.wList.isEmpty) {
-        for (
-          i <- 0 to benchConfig.workload.wUpper by benchConfig.workload.wStep
-        ) {
-          benchmarkFile(file.toPath, i, benchConfig, printer, Some(progress))
-        }
-      } else {
-        benchConfig.workload.wList.foreach(i => {
-          benchmarkFile(file.toPath, i, benchConfig, printer, Some(progress))
-        })
-      }
-    })
+    if (runlist.nonEmpty) {
+      val progress = new ExecutionTracker(runlist.length, verificationType)
+      runlist.foreach(file => {
+        markFile(file.toPath, printer, benchConfig, Some(progress))
+      })
+    } else {
+      Output.error(s"No permutations to run in ${in.toString}.")
+    }
   }
 }

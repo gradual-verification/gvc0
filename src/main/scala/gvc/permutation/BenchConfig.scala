@@ -2,7 +2,7 @@ package gvc.permutation
 
 import gvc.{Config, Main}
 import gvc.permutation.Bench.{BenchmarkException, Names}
-import gvc.permutation.Extensions.c0
+import gvc.permutation.Extensions.{c0, csv}
 import gvc.transformer.IRGraph
 
 import java.math.BigInteger
@@ -49,14 +49,15 @@ object BenchConfig {
       baselinePerformance: Path,
       levels: Path,
       metadata: Path,
-      bottom: Path,
-      source: Path
+      source: Path,
+      permMap: Path
   )
 
   case class TaggedPath(hash: BigInteger, source: Path)
 
   private def resolveCompletedPermutations(
-      files: BenchmarkOutputFiles
+      files: BenchmarkOutputFiles,
+      template: List[ASTLabel]
   ): Set[TaggedPath] = {
     val permSet = mutable.Set[String]()
     Files
@@ -82,7 +83,6 @@ object BenchConfig {
           )
       case None =>
     }
-    if (files.baselinePerms.isDefined) {}
     val incomplete = permSet.diff(verifiedPermSet)
     incomplete.foreach(name => {
       Files.deleteIfExists(files.perms.resolve(c0(name)))
@@ -92,17 +92,22 @@ object BenchConfig {
         case None        =>
       }
     })
+    permSet += LabelTools
+      .createID(template, template.toSet)
+      .toString(16)
+    permSet += LabelTools.createID(template, Set.empty).toString(16)
     verifiedPermSet
       .intersect(permSet)
-      .map(id =>
-        TaggedPath(new BigInteger(id, 16), files.perms.resolve(c0(id)))
-      )
+      .map(LabelTools.parseID)
+      .filter(_.isDefined)
+      .map(id => TaggedPath(id.get, files.perms.resolve(c0(id.get))))
       .toSet
   }
 
-  private def resolveCompletedPaths(
+  private def resolveCompletedPathsDescriptions(
       pathDir: Path,
-      template: List[ASTLabel]
+      template: List[ASTLabel],
+      completedHashes: Set[BigInteger]
   ): mutable.Map[Int, TaggedPath] = {
     val mapping = mutable.Map[Int, TaggedPath]()
     if (Files.exists(pathDir)) {
@@ -110,7 +115,6 @@ object BenchConfig {
         .listFiles()
         .filter(_.isFile)
         .toList
-
       contents.foreach(file => {
         val pathID = Extensions.remove(file.getName)
         if (pathID.matches("[0-9]+")) {
@@ -127,16 +131,20 @@ object BenchConfig {
             val contentsMatched = contentsFiltered
               .map(hash => template.find(label => label.hash.equals(hash)))
               .filter(_.isDefined)
-            if (contentsFiltered.length != contentsMatched.length) {
+            val pathHash = LabelTools
+              .hashPath(template, contentsMatched.map(_.get).toList)
+            if (
+              contentsFiltered.length == contentsMatched.length && completedHashes
+                .contains(pathHash)
+            ) {
+              mapping += (pathID.toInt -> TaggedPath(
+                pathHash,
+                file.toPath
+              ))
+            } else if (contentsFiltered.length != contentsMatched.length) {
               throw new BenchmarkException(
                 s"The path description ${file.toPath.toString} doesn't match the source provided."
               )
-            } else {
-              mapping += (pathID.toInt -> TaggedPath(
-                LabelTools
-                  .hashPermutation(template, contentsMatched.map(_.get).toList),
-                file.toPath
-              ))
             }
           } else {
             throw new BenchmarkException(
@@ -175,11 +183,30 @@ object BenchConfig {
       files: BenchmarkOutputFiles,
       libraryDirs: List[String]
   ): BenchmarkPrior = {
-    val potentiallyCompletedPaths = resolveCompletedPaths(
-      files.pathDescriptions,
-      labels
+
+    val hashEntries =
+      CSVIO.readEntries(files.permMap, Columns.pathColumnNames)
+
+    val validHashEntryPairs = hashEntries
+      .map(entry => (LabelTools.parseID(entry(1)), entry))
+      .filter(_._1.isDefined)
+
+    val completedHashes = validHashEntryPairs.map(_._1.get).toSet
+    val completedEntries = validHashEntryPairs.map(_._2)
+
+    CSVIO.writeEntries(
+      files.permMap,
+      completedEntries,
+      Columns.pathColumnNames
     )
-    val completedPermutations = resolveCompletedPermutations(files)
+
+    val potentiallyCompletedPaths = resolveCompletedPathsDescriptions(
+      files.pathDescriptions,
+      labels,
+      completedHashes
+    )
+
+    val completedPermutations = resolveCompletedPermutations(files, labels)
 
     val pathIndex = Columns.mappingColumnNames.indexOf("path_id")
     val stepIndex = Columns.mappingColumnNames.indexOf("level_id")
@@ -191,14 +218,14 @@ object BenchConfig {
     val groups =
       entries
         .filter(entry =>
-          entry(pathIndex).matches(integerRegex) && completedPermutations
+          entry.head.matches(LabelTools.hexRegex) && entry(pathIndex)
+            .matches(integerRegex) && completedPermutations
             .map(_.hash)
             .contains(new BigInteger(entry.head, 16))
         )
         .groupBy(_(pathIndex))
 
     //find the number of steps per path, filtering out paths with corrupted step indices
-    //TODO: add explicit filtering for top and bottom, which can be easily recreated if missing
     val max =
       if (entries.nonEmpty)
         entries
@@ -218,20 +245,30 @@ object BenchConfig {
         .toList
 
     CSVIO.writeEntries(files.levels, validEntries, Columns.mappingColumnNames)
-    val validPerms = validPathGroups.values
-      .flatMap(_.map(lst => new BigInteger(lst.head, 16)))
-      .toSet
+    val validPerms =
+      validPathGroups.values.flatten.toList
+        .map(lst => LabelTools.parseID(lst.head))
+        .filter(_.isDefined)
+        .map(_.get)
+        .toSet
 
     val metadataColumns = Columns.metadataColumnNames(labels)
     val metadataEntries =
       CSVIO.readEntries(files.metadata, Columns.metadataColumnNames(labels))
-    val validMetadataEntries = metadataEntries
-      .filter(entry => {
-        validPerms.contains(new BigInteger(entry.head, 16))
+
+    val validMetadataPairs: List[(BigInteger, List[String])] = metadataEntries
+      .map(entry => {
+        LabelTools.parseID(entry.head) match {
+          case Some(value) if validPerms.contains(value) =>
+            Some(value, entry)
+          case _ => None
+        }
       })
-    val validMetadataPermIDs = validMetadataEntries
-      .map(lst => new BigInteger(lst.head, 16))
-      .toSet
+      .filter(_.isDefined)
+      .map(_.get)
+    val validMetadataPermIDs = validMetadataPairs.map(_._1).toSet
+    val validMetadataEntries = validMetadataPairs.map(_._2)
+
     val missingMetadataIDs = validPerms.diff(validMetadataPermIDs)
     val recreationPaths =
       completedPermutations.filter(tag => missingMetadataIDs.contains(tag.hash))
@@ -273,7 +310,9 @@ object BenchConfig {
     val existingSource = root.resolve(Names.source)
 
     if (Files.exists(existingSource)) {
-      if (Files.mismatch(existingSource, Paths.get(config.sourceFile.get)) != 0)
+      if (
+        Files.mismatch(existingSource, Paths.get(config.sourceFile.get)) != -1L
+      )
         Config.error(
           s"The existing permutation directory ${existingSource.getParent.toAbsolutePath} was created for a different source file than the one provided"
         )
@@ -302,8 +341,7 @@ object BenchConfig {
     val baselinePerformance = root.resolve(Names.baselinePerformance)
     val levels = root.resolve(Names.levels)
     val metadata = root.resolve(Names.metadata)
-    val bottom = root.resolve(c0(Names._bottom))
-
+    val permMap = root.resolve(csv(Names.perms))
     val logs = root.resolve(Names.logs)
     Files.createDirectories(logs)
 
@@ -329,9 +367,9 @@ object BenchConfig {
       baselinePerformance = baselinePerformance,
       levels = levels,
       metadata = metadata,
-      bottom = bottom,
       pathDescriptions = pathDescriptions,
-      source = existingSource
+      source = existingSource,
+      permMap = permMap
     )
   }
 

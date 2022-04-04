@@ -210,7 +210,7 @@ object Main extends App {
     }
 
     silicon.stop()
-    if (config.onlyVerify) sys.exit(0)
+    if (config.onlyVerify && config.compileBenchmark.isEmpty) sys.exit(0)
 
     Weaver.weave(ir, silver)
 

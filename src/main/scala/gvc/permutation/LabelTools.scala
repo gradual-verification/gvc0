@@ -21,10 +21,10 @@ class Sampler(benchConfig: BenchmarkConfig) {
     heuristic match {
       case SamplingHeuristic.Random =>
         var sampled = sampleRandom(benchConfig.labels)
-        var hashCode = LabelTools.hashPermutation(benchConfig.labels, sampled)
+        var hashCode = LabelTools.hashPath(benchConfig.labels, sampled)
         while (prevSamples.contains(hashCode)) {
           sampled = sampleRandom(benchConfig.labels)
-          hashCode = LabelTools.hashPermutation(benchConfig.labels, sampled)
+          hashCode = LabelTools.hashPath(benchConfig.labels, sampled)
         }
         prevSamples += hashCode
         sampled
@@ -40,8 +40,9 @@ class Sampler(benchConfig: BenchmarkConfig) {
 }
 
 object LabelTools {
+  val hexRegex = "[0-9A-Fa-f]+"
 
-  def hashPermutation(
+  def hashPath(
       template: List[ASTLabel],
       labels: List[ASTLabel]
   ): BigInteger = {
@@ -62,6 +63,14 @@ object LabelTools {
         .foldRight("")(_ + _),
       2
     )
+  }
+
+  def parseID(input: String): Option[BigInteger] = {
+    if (input.matches("[0-9A-Fa-f]+")) {
+      Some(new BigInteger(input, 16))
+    } else {
+      None
+    }
   }
 
   def appendPathComment(
