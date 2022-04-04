@@ -1003,44 +1003,42 @@ object Resolver {
           }
           val dep = resolveUseDeclaration(u, librarySearchPaths, scope)
           if (dep.isDefined) {
-            try {
-              val librarySource = Files.readString(dep.get.filePath)
-              val parsedLibrary = Parser.parseProgram(librarySource) match {
-                case fail: Failure =>
-                  Config.error(
-                    s"Parse error:\n${fail.trace().longAggregateMsg}"
-                  )
-                case Success(value, _) => value
-              }
-              val resolvedLibraryProgram =
-                resolveProgram(parsedLibrary, librarySearchPaths, errors)
 
-              resolvedLibraryProgram.types.foreach(t => {
-                types += t
-                scope = scope.defineType(t)
-              })
-
-              resolvedLibraryProgram.methodDeclarations.foreach(mdc => {
-                mdc.maskedLibrary = true
-                methodDeclarations += mdc
-                scope = scope.declareMethod(mdc)
-              })
-
-              resolvedLibraryProgram.structDefinitions.foreach(sd => {
-                structDefinitions += sd
-                scope = scope.defineStruct(sd)
-              })
-
-              resolvedLibraryProgram.predicateDeclarations.foreach(pd => {
-                predicateDeclarations += pd
-                scope = scope.declarePredicate(pd)
-              })
-
-              dependencies ++= resolvedLibraryProgram.dependencies
-              dependencies += dep.get
-            } catch {
-              case _: Throwable => libError()
+            val librarySource = Files.readString(dep.get.filePath)
+            val parsedLibrary = Parser.parseProgram(librarySource) match {
+              case fail: Failure =>
+                Config.error(
+                  s"Parse error:\n${fail.trace().longAggregateMsg}"
+                )
+              case Success(value, _) => value
             }
+            val resolvedLibraryProgram =
+              resolveProgram(parsedLibrary, librarySearchPaths, errors)
+
+            resolvedLibraryProgram.types.foreach(t => {
+              types += t
+              scope = scope.defineType(t)
+            })
+
+            resolvedLibraryProgram.methodDeclarations.foreach(mdc => {
+              mdc.maskedLibrary = true
+              methodDeclarations += mdc
+              scope = scope.declareMethod(mdc)
+            })
+
+            resolvedLibraryProgram.structDefinitions.foreach(sd => {
+              structDefinitions += sd
+              scope = scope.defineStruct(sd)
+            })
+
+            resolvedLibraryProgram.predicateDeclarations.foreach(pd => {
+              predicateDeclarations += pd
+              scope = scope.declarePredicate(pd)
+            })
+
+            dependencies ++= resolvedLibraryProgram.dependencies
+            dependencies += dep.get
+
           } else {
             libError()
           }

@@ -94,7 +94,9 @@ object BenchConfig {
     })
     verifiedPermSet
       .intersect(permSet)
-      .map(id => TaggedPath(new BigInteger(id), files.perms.resolve(c0(id))))
+      .map(id =>
+        TaggedPath(new BigInteger(id, 16), files.perms.resolve(c0(id)))
+      )
       .toSet
   }
 
@@ -191,7 +193,7 @@ object BenchConfig {
         .filter(entry =>
           entry(pathIndex).matches(integerRegex) && completedPermutations
             .map(_.hash)
-            .contains(new BigInteger(entry.head))
+            .contains(new BigInteger(entry.head, 16))
         )
         .groupBy(_(pathIndex))
 
@@ -217,7 +219,7 @@ object BenchConfig {
 
     CSVIO.writeEntries(files.levels, validEntries, Columns.mappingColumnNames)
     val validPerms = validPathGroups.values
-      .flatMap(_.map(lst => new BigInteger(lst.head)))
+      .flatMap(_.map(lst => new BigInteger(lst.head, 16)))
       .toSet
 
     val metadataColumns = Columns.metadataColumnNames(labels)
@@ -225,10 +227,10 @@ object BenchConfig {
       CSVIO.readEntries(files.metadata, Columns.metadataColumnNames(labels))
     val validMetadataEntries = metadataEntries
       .filter(entry => {
-        validPerms.contains(new BigInteger(entry.head))
+        validPerms.contains(new BigInteger(entry.head, 16))
       })
     val validMetadataPermIDs = validMetadataEntries
-      .map(lst => new BigInteger(lst.head))
+      .map(lst => new BigInteger(lst.head, 16))
       .toSet
     val missingMetadataIDs = validPerms.diff(validMetadataPermIDs)
     val recreationPaths =
@@ -271,9 +273,9 @@ object BenchConfig {
     val existingSource = root.resolve(Names.source)
 
     if (Files.exists(existingSource)) {
-      if (!Files.readString(existingSource).equals(inputSource))
+      if (Files.mismatch(existingSource, Paths.get(config.sourceFile.get)) != 0)
         Config.error(
-          "The existing permutation directory was created for a different source file than the one provided"
+          s"The existing permutation directory ${existingSource.getParent.toAbsolutePath} was created for a different source file than the one provided"
         )
     } else {
       Main.writeFile(existingSource.toString, inputSource)

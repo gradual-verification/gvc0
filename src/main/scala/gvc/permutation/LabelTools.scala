@@ -47,7 +47,7 @@ object LabelTools {
   ): BigInteger = {
     val hash =
       labels.map(template.indexOf(_).toHexString).foldLeft("")(_ + _)
-    new BigInteger(hash)
+    new BigInteger(hash, 16)
   }
 
   def createID(
