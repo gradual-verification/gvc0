@@ -6,6 +6,7 @@ not_all_na <- function(x) any(!is.na(x))
 
 compile <- function(frame, status) {
     frame['mean'] <- frame['mean']/10 ** 9
+    frame['median'] <- frame['median']/10 ** 9
     frame['Dynamic Verification'] <- status
     return(frame %>% select(where(not_all_na)) %>% drop_na())
 }
@@ -27,13 +28,23 @@ bst_none <- compile(bst_none, 'Disabled')
 
 composite_none <- read_csv("./stress/composite_none.csv")
 composite_none <- compile(composite_none, 'Disabled')
-bst_none
-list <- bind_rows(list_none, list_all)
-list['Example'] = 'List'
-bst <- bind_rows(bst_none, bst_all)
-bst['Example'] = 'Binary Search Tree'
-composite <- bind_rows(composite_none, composite_all)
-composite['Example'] = 'Composite'
+
+
+bind_modes <- function(none, all, ex) {
+    frame <- bind_rows(none, all)
+    frame['Example'] = ex
+    colnames(frame) <- c("Workload (ω)", "iter", "Median Time Elapsed (sec)", "Mean Time Elapsed (sec)", "stdev", "min", "max", "Dynamic Verification", "Example")
+    return(frame)
+}
+
+list <- bind_modes(list_none, list_all, "List")
+list %>% write.csv("./stress/stress_list.csv", row.names = FALSE)
+
+bst <- bind_modes(bst_none, bst_all, "BST")
+bst %>% write.csv("./stress/stress_bst.csv", row.names = FALSE)
+
+composite <- bind_modes(composite_none, composite_all, "Composite")
+composite %>% write.csv("./stress/stress_composite.csv", row.names = FALSE)
 
 fit_data <- function(frame) {
     df <- data.frame(x=frame['stress'],y=frame['mean'])
@@ -50,5 +61,4 @@ print("-----[BST]-----")
 fit_data(bst_all)
 
 all <- bind_rows(bst, list, composite)
-colnames(all) <- c("Workload (ω)", "iter", "Median Time Elapsed (sec)", "Mean Time Elapsed (sec)", "stdev", "min", "max", "Dynamic Verification", "Example")
 all %>% write.csv("./stress/stress.csv", row.names = FALSE)
