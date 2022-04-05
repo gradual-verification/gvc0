@@ -1,0 +1,33 @@
+{
+  "title": {
+    "text": "Performance of Gradual and Dynamic Verification at Multiple Workloads – BST",
+    "anchor": "center",
+    "fontSize": 16
+  },
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "data": {
+    "url": "https://gist.githubusercontent.com/icmccorm/d0be1b9a20d40c6c776bb028847c357b/raw/2ee64ed43d7ef71aa858b5656b149f292978c51a/bst_best_worst_median.csv"
+  },
+  "mark": "line",
+  "encoding": {
+    "x": {
+      "field": "Specification Increment",
+      "type": "quantitative"
+    },
+    "y": {
+      "field": "Median Time Elapsed (ms)",
+      "type": "quantitative"
+    },
+    "color": {
+      "field": "Verification Type"
+    },
+    "row": {
+      "field": "Workload",
+      "type": "ordinal",
+      "sort": "ascending"
+    },
+    "column": {
+      "field": "Path Performance Type"
+    }
+  }
+}
