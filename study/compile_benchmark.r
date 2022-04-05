@@ -2,9 +2,9 @@ library(dplyr)
 library(readr)
 library(ggplot2)
 library(tidyr)
+
 compile <- function(frame, status) {
-    frame['Mean Time Elapsed (sec)'] <- frame['mean']/1000000000
-    frame['Workload'] <- frame['stress']
+    frame['verification'] <- status
     # remove columns with all NA (extra comma), and then drop incomplete rows.
     return(frame %>% select(where(not_all_na)) %>% drop_na())
 }
@@ -15,20 +15,53 @@ if(length(args) != 1){
 }
 
 levels_path <- file.path(args[1], "levels.csv")
-levels <- read_csv(levels_path) %>% select(where(not_all_na))
+levels <- read_csv(levels_path, show_col_types = FALSE) %>% select(where(not_all_na))
 
 meta_path <- file.path(args[1], "metadata.csv")
-meta <- read_csv(meta_path) %>% select(where(not_all_na))
+meta <- read_csv(meta_path, show_col_types = FALSE) %>% select(where(not_all_na))
 
 perf_path <- file.path(args[1], "perf.csv")
-perf <- read_csv(perf_path) %>% compile("gradual")
+perf <- read_csv(perf_path, show_col_types = FALSE) %>% compile("Gradual")
+perf_lattice <- inner_join(levels, perf, by=c("id")) %>% select(path_id, level_id, stress, median, verification)
 
 base_perf_path <- file.path(args[1], "baseline_perf.csv")
-base_perf <- read_csv(base_perf_path) %>% compile("dynamic")
+base_perf <- read_csv(base_perf_path, show_col_types = FALSE) %>% compile("Dynamic")
+base_perf_lattice <- inner_join(levels, base_perf, by=c("id")) %>% select(path_id, level_id, stress, median, verification)
 
-perf_lattice <- inner_join(levels, perf, by=c("id"))
-max_perf_lattice <- perf_lattice %>% slice_max(stress)
-max_perf_lattice %>% write.csv(file.path(args[1],"max_perf_lattice.csv"), row.names = FALSE)
+path_characteristics <- perf_lattice %>%
+    arrange(level_id) %>%
+    group_by(path_id, stress) %>%
+    mutate(diff_time_elapsed = median - lag(median)) %>%
+    filter(level_id > 0) %>%
+    group_by(path_id, stress) %>%
+    summarize(
+        time_elapsed = mean(median),
+        diff_time_elapsed = mean(abs(diff_time_elapsed)),
+        highest_positive_spike = max(diff_time_elapsed),
+        highest_negative_spike = min(diff_time_elapsed),
+        .groups="keep"
+    ) %>% arrange(time_elapsed)
 
-base_perf_lattice <- inner_join(levels, base_perf, by=c("id"))
+best <- path_characteristics %>% group_by(stress) %>% summarize(path_id = head(path_id, 1), classification = "Best")
+worst <- path_characteristics %>% group_by(stress) %>% summarize(path_id = tail(path_id, 1), classification = "Worst")
+median <- path_characteristics %>% group_by(stress) %>% filter(row_number()==ceiling(n()/2)) %>% summarize(path_id = head(path_id, 1), classification = "Median")
+
+path_classifications <- bind_rows(best, worst, median) %>% arrange(stress)
+
+perf_joined <- inner_join(perf_lattice, path_classifications, by=c("stress", "path_id"))
+base_perf_joined <- inner_join(base_perf_lattice, path_classifications, by=c("stress", "path_id"))
+all <- bind_rows(perf_joined, base_perf_joined) %>% filter(stress %in% c(16, 24, 32))
+all$median <- all$median / 10 ** 6
+
+
+colnames(all) <- c("path_id", "Specification Increment", "Workload", "Median Time Elapsed (ms)", "Verification Type", "Path Performance Type")
+all['Example'] = basename(args[1])
+
+
+
+all %>% write.csv(file.path(args[1],paste(basename(args[1]), "_best_worst_median.csv", sep="")), row.names = FALSE)
+
+
+#max_perf_lattice <- perf_lattice %>% slice_max(stress)
+#base_perf_lattice <- inner_join(levels, base_perf, by=c("id"))
 
