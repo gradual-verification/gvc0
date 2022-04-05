@@ -5,7 +5,7 @@ library(tidyr)
 not_all_na <- function(x) any(!is.na(x))
 
 compile <- function(frame, status) {
-    frame['mean'] <- frame['mean']/1000000000
+    frame['mean'] <- frame['mean']/10 ** 9
     frame['Dynamic Verification'] <- status
     return(frame %>% select(where(not_all_na)) %>% drop_na())
 }
@@ -27,13 +27,13 @@ bst_none <- compile(bst_none, 'Disabled')
 
 composite_none <- read_csv("./stress/composite_none.csv")
 composite_none <- compile(composite_none, 'Disabled')
-
-list <- bind_rows(list_none, list_all) %>% select('Workload', 'Mean Time Elapsed (sec)', 'Dynamic Verification')
-list['example'] = 'List'
-bst <- bind_rows(bst_none, bst_all) %>% select('Workload', 'Mean Time Elapsed (sec)', 'Dynamic Verification')
-bst['example'] = 'Binary Search Tree'
-composite <- bind_rows(composite_none, composite_all) %>% select('Workload', 'Mean Time Elapsed (sec)', 'Dynamic Verification')
-composite['example'] = 'Composite'
+bst_none
+list <- bind_rows(list_none, list_all)
+list['Example'] = 'List'
+bst <- bind_rows(bst_none, bst_all)
+bst['Example'] = 'Binary Search Tree'
+composite <- bind_rows(composite_none, composite_all)
+composite['Example'] = 'Composite'
 
 fit_data <- function(frame) {
     df <- data.frame(x=frame['stress'],y=frame['mean'])
@@ -50,6 +50,5 @@ print("-----[BST]-----")
 fit_data(bst_all)
 
 all <- bind_rows(bst, list, composite)
-names(all)[names(all) == 'stress'] <- "Workload (ω)"
-names(all)[names(all) == 'mean'] <- "Mean Time Elapsed (sec)"
+colnames(all) <- c("Workload (ω)", "iter", "Median Time Elapsed (sec)", "Mean Time Elapsed (sec)", "stdev", "min", "max", "Dynamic Verification", "Example")
 all %>% write.csv("./stress/stress.csv", row.names = FALSE)
