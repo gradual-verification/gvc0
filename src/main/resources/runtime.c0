@@ -64,10 +64,10 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   //@requires fields != NULL && _id >= 0 && numFields > 0;
   //@ensures fields != NULL && fields->capacity > fields->length;
 {
-  if(fields->length > (fields->capacity * (5/6))) grow(fields);
+  if(fields->length > (fields->capacity * (4/5))) grow(fields);
 
   int fieldIndex = hash(_id, fields->capacity);
-  while(fields->contents[fieldIndex] != NULL) fieldIndex = (fieldIndex + 1) % fields->capacity;
+  while(fields->contents[fieldIndex] != NULL && !fields->contents[fieldIndex]->deleted) fieldIndex = (fieldIndex + 1) % fields->capacity;
 
   FieldArray * array = alloc(FieldArray);
   fields->contents[fieldIndex] = array;
@@ -112,31 +112,6 @@ void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage
     }
 }
 
-/*
-void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
-    FieldArray* toCheck = find(fields, _id);
-    if(toCheck != NULL){
-        if(fieldIndex >= toCheck->length){
-            error("[INTERNAL] Field index exceeds maximum for the given struct.\n");
-        }else if(toCheck->contents[fieldIndex]){
-            if(disjoint != NULL){
-                FieldArray* disjointCheck = find(disjoint, _id);
-                if(disjointCheck != NULL){
-                    if(fieldIndex >= disjointCheck -> length){
-                        error("[INTERNAL] Field index exceeds maximum for the given struct.\n");
-                    }else{
-                        if(toCheck->contents[fieldIndex]){
-                            error(string_join(errorMessage, "\n - Separation Unsatisfied"));
-                        }
-                    }
-                }
-            }
-        }
-    }else{
-       error(errorMessage);
-    }
-}*/
-
 void addAccEnsureSeparate(OwnedFields* fields, int _id, int fieldIndex, int numFields, string errorMessage){
     FieldArray* toCheck = find(fields, _id);
     if (toCheck == NULL) {
@@ -146,19 +121,6 @@ void addAccEnsureSeparate(OwnedFields* fields, int _id, int fieldIndex, int numF
     }
     toCheck->contents[fieldIndex] = true;
     toCheck->numAccessible += 1;
-}
-
-void join(OwnedFields* target, OwnedFields* source){
-    if(source != NULL && target != NULL){
-        for(int i = 0; i<source->capacity; i += 1){
-            FieldArray* currFields = source->contents[i];
-            if(currFields != NULL){
-                for(int j = 0; j< currFields->length; j += 1){
-                    addAcc(target, currFields->_id, currFields->length, j);
-                }
-            }
-        }
-    }
 }
 
 void loseAcc(OwnedFields* fields, int _id, int fieldIndex){
@@ -171,5 +133,18 @@ void loseAcc(OwnedFields* fields, int _id, int fieldIndex){
             toLose->numAccessible -= 1;
         }
         if(toLose->numAccessible == 0) toLose->deleted = true;
+    }
+}
+
+void join(OwnedFields* target, OwnedFields* source){
+    if(source != NULL && target != NULL){
+        for(int i = 0; i<source->capacity; i += 1){
+            FieldArray* currFields = source->contents[i];
+            if(currFields != NULL){
+                for(int j = 0; j< currFields->length; j += 1){
+                    addAcc(target, currFields->_id, currFields->length, j);
+                }
+            }
+        }
     }
 }
