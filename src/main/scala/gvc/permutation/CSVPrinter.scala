@@ -49,7 +49,7 @@ class ErrorCSVPrinter(file: Path) {
 }
 
 class PerformanceCSVPrinter(out: Path, iterations: Int) {
-  var table: PerformanceTable =
+  var table: mutable.Map[String, mutable.Set[Int]] =
     generatePerformanceTable(
       out
     )
@@ -61,40 +61,34 @@ class PerformanceCSVPrinter(out: Path, iterations: Int) {
 
   def close(): Unit = writer.close()
 
-  case class PerformanceTable(
-      other: mutable.Map[BigInteger, mutable.Set[Int]]
-  )
+
 
   private def generatePerformanceTable(
       path: Path
-  ): PerformanceTable = {
-    val mapping = mutable.Map[BigInteger, mutable.Set[Int]]()
+  ): mutable.Map[String, mutable.Set[Int]] = {
+    val mapping = mutable.Map[String, mutable.Set[Int]]()
     val entries: List[List[String]] =
       CSVIO.readEntries(path, List("id") ++ Columns.performanceColumnNames)
 
-    def update(bigID: BigInteger, stress: Int): Unit = {
-      if (mapping.contains(bigID)) {
-        mapping(bigID) += stress
+    def update(id: String, stress: Int): Unit = {
+      if (mapping.contains(id)) {
+        mapping(id) += stress
       } else {
-        mapping += bigID -> mutable.Set(stress)
+        mapping += id -> mutable.Set(stress)
       }
     }
     entries
       .map(entry => (LabelTools.parseID(entry.head), entry(1)))
       .filter(pair => pair._1.isDefined && pair._2.matches("[0-9]+"))
-      .foreach(pair => update(pair._1.get, pair._2.toInt))
-    PerformanceTable(mapping)
+      .foreach(pair => update(pair._1.get.toString(16), pair._2.toInt))
+    mapping
   }
 
   def exists(
       id: String,
       stress: Int
   ): Boolean = {
-    LabelTools.parseID(id) match {
-      case Some(value) =>
-        table.other.contains(value) && table.other(value).contains(stress)
-      case None => false
-    }
+      table.contains(id) && table(id).contains(stress)
   }
 
   def logID(

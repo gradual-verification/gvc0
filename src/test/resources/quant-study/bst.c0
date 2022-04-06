@@ -1,4 +1,4 @@
-#use <mod>
+#use <stress>
 // binary search tree node
 struct Node {
   int val;
@@ -434,19 +434,20 @@ int main()
     int stress = 0;
     int seed = 1;
 
-    if((stress / 2) * 2 != stress){
-        stress += 1;
+    int stressCaptured = stress;
+    if((stressCaptured / 2) * 2 != stressCaptured){
+        stressCaptured += 1;
     }
 
-    struct Node* t1 = create_tree(stress);
+    struct Node* t1 = create_tree(stressCaptured);
 
     int i = 0;
-    while(i < stress)
-    //@loop_invariant 0 <= i && i <= stress;
+    while(i < stressCaptured)
+    //@loop_invariant 0 <= i && i <= stressCaptured;
     {
         int r = rand(seed);
         seed = r;
-        int toAdd = mod(r, 2 * stress);
+        int toAdd = mod(r, 2 * stressCaptured);
         t1 = tree_add(t1, toAdd);
         bool test = tree_contains(t1, toAdd);
         assert(test);
@@ -454,8 +455,8 @@ int main()
     }
 
     int j = 0;
-    while(j < stress)
-    //@loop_invariant 0 <= j && j <= stress;
+    while(j < stressCaptured)
+    //@loop_invariant 0 <= j && j <= stressCaptured;
     {
         int r = rand(seed);
         seed = r;

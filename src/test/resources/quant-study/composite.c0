@@ -1,4 +1,4 @@
-#use <mod>
+#use <stress>
 // Tree node
 struct Node
 {
@@ -321,12 +321,14 @@ int main()
   //@ ensures true;
 {
   int stress = 0;
+
+  int stressCaptured = stress;
   int seed = 1;
   struct Node *node = create_tree();
   int i = 0;
-  stress = stress + ((stress / 2)*2);
-  while(i < stress)
-  //@loop_invariant 0 <= i && i <= stress && tree(node);
+  stressCaptured = stressCaptured + ((stressCaptured / 2)*2);
+  while(i < stressCaptured)
+  //@loop_invariant 0 <= i && i <= stressCaptured && tree(node);
   {
     struct Node* current = node;
     while(tree_has_left(current) && tree_has_right(current))
@@ -334,7 +336,7 @@ int main()
     {
         int r = rand(seed);
         seed = r;
-        bool rand_bool = mod(seed, stress) <= stress / 2;
+        bool rand_bool = mod(seed, stressCaptured) <= stressCaptured / 2;
         if(rand_bool){
             current = tree_get_left(current);
         }else{
@@ -348,7 +350,7 @@ int main()
     }else{
         int r = rand(seed);
         seed = r;
-        bool rand_bool = mod(seed, stress) <= stress / 2;
+        bool rand_bool = mod(seed, stressCaptured) <= stressCaptured / 2;
         if(rand_bool){
           current = tree_add_right(current);
         }else{

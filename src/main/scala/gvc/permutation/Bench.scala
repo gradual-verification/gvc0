@@ -1,11 +1,7 @@
 package gvc.permutation
 import gvc.Main.verify
 import gvc.permutation.BenchConfig.BenchmarkConfig
-import gvc.permutation.CapturedExecution.{
-  CC0CompilationException,
-  CapturedOutputException,
-  ExecutionException
-}
+import gvc.permutation.CapturedExecution.{CC0CompilationException, CapturedOutputException, ExecutionException}
 import gvc.permutation.Extensions.{c0, csv, log, out, txt}
 import gvc.permutation.Output.blue
 import gvc.transformer.GraphPrinter
@@ -18,11 +14,11 @@ import scala.concurrent.TimeoutException
 import scala.util.matching.Regex
 
 object Bench {
-  val firstAssign: Regex =
+  val stressDeclaration: Regex = "int[ ]+main\\(\\s*\\)\\s\\{.|\n*\n\\s*(int stress = [0-9]+;)".r
+  val stressAssignment: Regex =
     "int[ ]+main\\(\\s*\\)\\s\\{.|\n*\n\\s*(stress\\s*=\\s*[0-9]+;)".r
-
   class BenchmarkException(message: String) extends Exception(message)
-
+  val readStress = "int readStress() {int* value = alloc(int); args_int(\"--stress\", value); args_t input = args_parse(); printint(*value); return *value;}\n"
   object Names {
     val _baseline: String = c0("baseline")
     val perms = "perms"
@@ -277,7 +273,7 @@ object Bench {
   sealed trait Stress
   case class StressList(levels: List[Int]) extends Stress
   case class StressScaling(stepSize: Int, upperBound: Int) extends Stress
-
+  case class ErrorLogging(cc0: ErrorCSVPrinter, exec: ErrorCSVPrinter)
   def markExecution(
       config: Config,
       benchmarkConfig: BenchmarkConfig
@@ -287,12 +283,15 @@ object Bench {
       benchmarkConfig.files.performance,
       benchmarkConfig.workload.iterations
     )
+    val errCC0 = new ErrorCSVPrinter(benchmarkConfig.files.compilationLogs)
+    val errExec = new ErrorCSVPrinter(benchmarkConfig.files.execLogs)
 
     markDirectory(
       benchmarkConfig.files.verifiedPerms,
       printer,
       benchmarkConfig,
-      ExecutionType.Gradual
+      ExecutionType.Gradual,
+      ErrorLogging(errCC0, errExec)
     )
 
     if (!config.disableBaseline) {
@@ -304,131 +303,98 @@ object Bench {
         benchmarkConfig.files.baselinePerms.get,
         baselinePrinter,
         benchmarkConfig,
-        ExecutionType.Dynamic
+        ExecutionType.Dynamic,
+        ErrorLogging(errCC0, errExec)
       )
     }
   }
 
-  def benchmarkFile(
-      file: Path,
-      stressLevel: Int,
-      benchmarkConfig: BenchmarkConfig,
-      printer: PerformanceCSVPrinter,
-      progressTracker: Option[ExecutionTracker] = None
-  ): Boolean = {
-    val id = Extensions.remove(file.getFileName.toString)
-
-    if (printer.exists(id, stressLevel)) return true
-
-    val tempC0File = Paths.get(Names.tempC0File)
-    val tempBinaryFile = Paths.get(Names.tempBinaryFile)
-
-    val errCC0 = new ErrorCSVPrinter(benchmarkConfig.files.compilationLogs)
-    val errExec = new ErrorCSVPrinter(benchmarkConfig.files.execLogs)
-    val source = Files.readString(file)
-
-    val unmodified = source
-    val modified =
-      source.replaceAll(firstAssign.toString(), s"\nstress = $stressLevel;")
-    if (unmodified.equals(modified)) {
-      Config.error(
-        "Missing assignment of 'stress' variable in main."
-      )
-    }
-    try {
-      Main.writeFile(
-        tempC0File.toAbsolutePath.toString,
-        modified
-      )
-      val perf = CapturedExecution.compile_and_exec(
-        tempC0File,
-        tempBinaryFile,
-        benchmarkConfig.workload.iterations,
-        benchmarkConfig.rootConfig
-      )
-      printer.logID(id, stressLevel, perf)
-    } catch {
-      case co: CapturedOutputException =>
-        co match {
-          case cc0: CC0CompilationException =>
-            cc0.logMessage(id, errCC0)
-            progressTracker match {
-              case Some(value) => value.cc0Error()
-              case None        =>
-            }
-            return false
-          case exec: ExecutionException =>
-            exec.logMessage(id, errExec)
-            progressTracker match {
-              case Some(value) => value.execError()
-              case None        =>
-            }
-            return false
-        }
-    } finally {
-      if (Files.exists(tempC0File)) Files.delete(tempC0File)
-      if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
-
-    }
-    errCC0.close()
-    errExec.close()
-    true
-  }
 
   def markFile(
       in: Path,
       printer: PerformanceCSVPrinter,
       benchConfig: BenchmarkConfig,
-      progressTracker: Option[ExecutionTracker] = None
+      progressTracker: Option[ExecutionTracker] = None,
+      logging: ErrorLogging
   ): Unit = {
-    if (benchConfig.workload.wList.isEmpty) {
-      for (
-        i <- 0 to benchConfig.workload.wUpper by benchConfig.workload.wStep
-      ) {
-        val success =
-          benchmarkFile(in, i, benchConfig, printer, progressTracker)
-        if (!success) {
-          progressTracker match {
-            case Some(value) => value.increment()
-            case None        =>
-          }
-          return
+    val id = Extensions.remove(in.getFileName.toString)
+    val sourceString = Files.readString(in)
+
+    if(!isInjectable(sourceString)){
+      throw new BenchmarkException(s"The file ${in.getFileName} doesn't include an assignment of the form 'int stress = ...'.")
+    }
+    val source = injectStress(sourceString)
+
+    val tempC0File = Paths.get(Names.tempC0File)
+    val tempBinaryFile = Paths.get(Names.tempBinaryFile)
+    Main.writeFile(
+      tempC0File.toAbsolutePath.toString,
+      source
+    )
+    try {
+      CapturedExecution.compile(tempC0File, tempBinaryFile, benchConfig.rootConfig)
+      if (benchConfig.workload.wList.isEmpty) {
+        for (i <- 0 to benchConfig.workload.wUpper by benchConfig.workload.wStep) {
+          val perf = CapturedExecution.exec_timed(tempBinaryFile, benchConfig.workload.iterations, List(s"--stress $i"))
+          printer.logID(id, i, perf)
+        }
+      } else {
+        for(i <- benchConfig.workload.wList)  {
+          val perf = CapturedExecution.exec_timed(tempBinaryFile, benchConfig.workload.iterations, List(s"--stress $i"))
+          printer.logID(id, i, perf)
         }
       }
-    } else {
-      benchConfig.workload.wList.foreach(i => {
-        val success =
-          benchmarkFile(in, i, benchConfig, printer, progressTracker)
-        if (!success) {
-          progressTracker match {
-            case Some(value) => value.increment()
-            case None        =>
-          }
-          return
+    }catch {
+      case c0: CapturedOutputException =>
+        c0 match {
+          case cc0: CC0CompilationException =>
+            cc0.logMessage(id, logging.cc0)
+            progressTracker match {
+              case Some(value) => value.cc0Error()
+              case None =>
+            }
+          case exec: ExecutionException =>
+            exec.logMessage(id, logging.exec)
+            progressTracker match {
+              case Some(value) => value.execError()
+              case None =>
+            }
         }
-      })
     }
     progressTracker match {
       case Some(value) => value.increment()
       case None        =>
     }
+    if (Files.exists(tempC0File)) Files.delete(tempC0File)
+    if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
   }
 
   def markDirectory(
       in: Path,
       printer: PerformanceCSVPrinter,
       benchConfig: BenchmarkConfig,
-      verificationType: ExecutionType
+      verificationType: ExecutionType,
+      logging: ErrorLogging
   ): Unit = {
     val runlist = in.toFile
       .listFiles()
     if (runlist.nonEmpty) {
       val progress = new ExecutionTracker(runlist.length, verificationType)
       runlist.foreach(file => {
-        markFile(file.toPath, printer, benchConfig, Some(progress))
+        markFile(file.toPath, printer, benchConfig, Some(progress), logging)
       })
     } else {
       Output.error(s"No permutations to run in ${in.toString}.")
     }
+  }
+
+  def injectStress(source: String): String = {
+    val withoutDeclarations = stressAssignment.replaceAllIn(source, "")
+    val withStressDeclaration = stressDeclaration.replaceAllIn(withoutDeclarations, "int stress = readStress();")
+    "#use <conio>\n#use <args>\n" + withStressDeclaration + readStress
+  }
+
+  def isInjectable(source: String): Boolean = {
+    stressAssignment.findAllMatchIn(source).nonEmpty && stressDeclaration.findAllMatchIn(source).nonEmpty
   }
 }

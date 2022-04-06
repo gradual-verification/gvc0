@@ -7,3 +7,8 @@ int rand(int prev)
 //@requires true;
 //@ensures true;
 ;
+
+int readStress()
+//@requires true;
+//@ensures true;
+;

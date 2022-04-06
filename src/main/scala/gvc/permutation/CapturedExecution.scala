@@ -1,6 +1,6 @@
 package gvc.permutation
 
-import gvc.CC0Wrapper.{CompilationOutput, ExecutionOutput, Performance}
+import gvc.CC0Wrapper.{CommandOutput, Performance}
 import gvc.{CC0Options, CC0Wrapper, Config}
 
 import sys.process._
@@ -10,53 +10,42 @@ import scala.collection.mutable
 
 object CapturedExecution {
 
-  def compile_and_exec(
-      input: Path,
-      binary: Path,
-      iterations: Int,
-      config: Config
-  ): Performance = {
-    val output = compile(
-      input,
-      binary,
-      config
-    )
-    if (output.exitCode != 0) {
-      throw new CC0CompilationException(output)
-    } else {
-      val exec = exec_timed(binary, iterations)
-      exec.perf match {
-        case Some(value) => value
-        case None        => throw new ExecutionException(exec)
-      }
-    }
-  }
-  def compile(
-      input: Path,
-      output: Path,
-      config: Config
-  ): CompilationOutput = {
+  def compile(input: Path,
+                    binary: Path,
+                    config: Config
+             ): CommandOutput = {
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
-      output = Some(output.toString),
+      output = Some(binary.toString),
       includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
       compilerArgs = List()
     )
-    CC0Wrapper.exec_output(input.toString, cc0Options)
+    val compileOutput = CC0Wrapper.exec_output(input.toString, cc0Options)
+    if (compileOutput.exitCode != 0) {
+      throw new CC0CompilationException(compileOutput)
+    }else {
+      compileOutput
+    }
   }
+
+  def compile_and_exec(input: Path, output: Path, iterations: Int, args: List[String], config: Config): Performance = {
+    compile(input, output, config)
+    exec_timed(output, iterations, args)
+  }
+
   def exec_timed(
       binary: Path,
-      iterations: Int
-  ): ExecutionOutput = {
+      iterations: Int,
+      args: List[String]
+  ): Performance = {
     var capture = ""
     val logger = ProcessLogger(
       (o: String) => capture += o,
       (e: String) => capture += e
     )
-    val command = binary.toAbsolutePath.toString
+    val command = (List(binary.toAbsolutePath.toString) ++ args).mkString(" ")
     val timings = mutable.ListBuffer[Long]()
-    val os = new ByteArrayOutputStream()
     var exitCode = 0
     for (_ <- 0 until iterations) {
       val start = System.nanoTime()
@@ -65,13 +54,7 @@ object CapturedExecution {
       val end = System.nanoTime()
       timings += end - start
       if (exitCode != 0) {
-        return ExecutionOutput(
-          exitCode,
-          capture,
-          None
-        )
-      } else {
-        os.reset()
+        throw new ExecutionException(CommandOutput(exitCode, capture))
       }
     }
     val med = median(timings.toList)
@@ -79,12 +62,7 @@ object CapturedExecution {
     val max = timings.max
     val min = timings.min
     val std = stdev(timings.toList, mean)
-
-    ExecutionOutput(
-      exitCode,
-      os.toString("UTF-8"),
-      Some(new Performance(med, mean, std, min, max))
-    )
+    new Performance(med, mean, std, min, max)
   }
 
   def median(values: List[Long]): Long = {
@@ -108,14 +86,15 @@ object CapturedExecution {
     else 0
   }
 
-  class CapturedOutputException(exitCode: Int, stdout: String)
+  class CapturedOutputException(output: CommandOutput)
       extends Exception {
     def logMessage(name: String, printer: ErrorCSVPrinter): Unit = {
-      printer.log(name, exitCode, stdout)
+      printer.log(name, output.exitCode, output.output)
     }
   }
-  class CC0CompilationException(output: CompilationOutput)
-      extends CapturedOutputException(output.exitCode, output.output)
-  class ExecutionException(output: ExecutionOutput)
-      extends CapturedOutputException(output.exitCode, output.output)
+  class CC0CompilationException(output: CommandOutput)
+      extends CapturedOutputException(output)
+
+  class ExecutionException(output: CommandOutput)
+      extends CapturedOutputException(output)
 }

@@ -51,7 +51,7 @@ object CC0Wrapper {
     exitCode
   }
 
-  case class CompilationOutput(exitCode: Int, output: String)
+  case class CommandOutput(exitCode: Int, output: String)
 
   case class ExecutionOutput(
       exitCode: Int,
@@ -74,13 +74,13 @@ object CC0Wrapper {
   def exec_output(
       sourceFile: String,
       options: CC0Options
-  ): CompilationOutput = {
+  ): CommandOutput = {
     val os = new ByteArrayOutputStream
     val command = formatCommand(sourceFile, options)
     val exitCode = (command #> os).!
 
     os.close()
-    CompilationOutput(exitCode, os.toString("UTF-8"))
+    CommandOutput(exitCode, os.toString("UTF-8"))
   }
 
   private def formatCommand(

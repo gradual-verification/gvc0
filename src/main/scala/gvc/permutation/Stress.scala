@@ -103,6 +103,7 @@ object Stress {
             tempC0,
             tempExec,
             config.benchmarkIterations.getOrElse(1),
+            List(),
             config
           )
           logPerformance(performanceOutput, i, iter, perf)

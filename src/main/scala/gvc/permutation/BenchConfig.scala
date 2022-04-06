@@ -400,5 +400,4 @@ object BenchConfig {
       rootConfig = config
     )
   }
-
 }
