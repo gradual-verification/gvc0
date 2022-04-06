@@ -50,7 +50,8 @@ object BenchConfig {
       levels: Path,
       metadata: Path,
       source: Path,
-      permMap: Path
+      permMap: Path,
+      conjunctMap: Path
   )
 
   case class TaggedPath(hash: BigInteger, source: Path)
@@ -187,23 +188,38 @@ object BenchConfig {
     val hashEntries =
       CSVIO.readEntries(files.permMap, Columns.pathColumnNames)
 
+    val conjunctEntries =
+      CSVIO.readEntries(files.conjunctMap, Columns.conjunctColumnNames)
+
     val validHashEntryPairs = hashEntries
       .map(entry => (LabelTools.parseID(entry(1)), entry))
       .filter(_._1.isDefined)
 
-    val completedHashes = validHashEntryPairs.map(_._1.get).toSet
-    val completedEntries = validHashEntryPairs.map(_._2)
+    val validConjunctEntryPairs = conjunctEntries
+      .map(entry => (LabelTools.parseID(entry(1)), entry))
+      .filter(pair => pair._1.isDefined && pair._2(1).matches("[0-9]+") && pair._2(2).matches("[0-9]+"))
+
+    val completedMapHashes = validHashEntryPairs.map(_._1.get).toSet
+    val completedConjunctHashes = validConjunctEntryPairs.map(_._1.get).toSet
+
+    val validHashes = completedMapHashes.intersect(completedConjunctHashes)
+
+    val completedHashEntries = validHashEntryPairs.filter(pair => validHashes.contains(pair._1.get)).map(_._2)
+    val completedConjunctHashEntries = validConjunctEntryPairs.filter(pair => validHashes.contains(pair._1.get)).map(_._2)
+
 
     CSVIO.writeEntries(
       files.permMap,
-      completedEntries,
+      completedHashEntries,
       Columns.pathColumnNames
     )
+
+    CSVIO.writeEntries(files.conjunctMap, completedConjunctHashEntries, Columns.conjunctColumnNames)
 
     val potentiallyCompletedPaths = resolveCompletedPathsDescriptions(
       files.pathDescriptions,
       labels,
-      completedHashes
+      validHashes
     )
 
     val completedPermutations = resolveCompletedPermutations(files, labels)
@@ -268,7 +284,6 @@ object BenchConfig {
       .map(_.get)
     val validMetadataPermIDs = validMetadataPairs.map(_._1).toSet
     val validMetadataEntries = validMetadataPairs.map(_._2)
-
     val missingMetadataIDs = validPerms.diff(validMetadataPermIDs)
     val recreationPaths =
       completedPermutations.filter(tag => missingMetadataIDs.contains(tag.hash))
@@ -340,6 +355,7 @@ object BenchConfig {
     val levels = root.resolve(Names.levels)
     val metadata = root.resolve(Names.metadata)
     val permMap = root.resolve(csv(Names.perms))
+    val conjunctMap = root.resolve(Names.conjuncts)
     val logs = root.resolve(Names.logs)
     Files.createDirectories(logs)
 
@@ -367,7 +383,8 @@ object BenchConfig {
       metadata = metadata,
       pathDescriptions = pathDescriptions,
       source = existingSource,
-      permMap = permMap
+      permMap = permMap,
+      conjunctMap = conjunctMap
     )
   }
 

@@ -6,7 +6,6 @@ import gvc.permutation.Extensions.{c0, csv, log, out, txt}
 import gvc.permutation.Output.blue
 import gvc.transformer.GraphPrinter
 import gvc.{Config, Main, OutputFileCollection, VerificationException}
-
 import java.math.BigInteger
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable
@@ -22,6 +21,7 @@ object Bench {
   object Names {
     val _baseline: String = c0("baseline")
     val perms = "perms"
+    val conjuncts = csv("conjuncts")
     val verified_perms = "verified_perms"
     val baselinePerms = "baseline_perms"
     val pathDesc = "path_desc"
@@ -148,7 +148,7 @@ object Bench {
     )
     csv.logPermutation(
       bottomID,
-      Set.empty
+      Set.empty,
     )
 
     val topID =
@@ -161,7 +161,7 @@ object Bench {
       outputTop.toString,
       GraphPrinter.print(benchmarkConfig.ir, includeSpecs = false)
     )
-    csv.logPermutation(topID, benchmarkConfig.labels.toSet)
+
     val offset = benchmarkConfig.prior.visitedPaths.size
     for (sampleIndex <- offset until maxPaths + offset) {
       val sampleToPermute =
@@ -177,19 +177,20 @@ object Bench {
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
       val permutationIndices = mutable.TreeSet[Int]()
 
-      csv.logStep(topID, sampleIndex, sampleToPermute.length)
-      csv.logStep(bottomID, sampleIndex, 0)
+      csv.logStep(topID, sampleIndex, sampleToPermute.length, Some(sampleToPermute.last))
+      csv.logStep(bottomID, sampleIndex, 0, None)
 
-      for (labelIndex <- 0 to sampleToPermute.length - 2) {
+      for (labelIndex <- sampleToPermute.indices) {
 
         currentPermutation += sampleToPermute(labelIndex)
         permutationIndices += sampleToPermute(labelIndex).exprIndex
         val id =
           LabelTools.createID(benchmarkConfig.labels, currentPermutation.toSet)
         val idString = id.toString(16)
-        csv.logPermutation(idString, currentPermutation.toSet)
 
         if (!alreadySampled.contains(id)) {
+          csv.logPermutation(idString, currentPermutation.toSet)
+
           val builtPermutation = selector.visit(permutationIndices)
           val sourceText =
             GraphPrinter.print(builtPermutation, includeSpecs = true)
@@ -215,6 +216,7 @@ object Bench {
                   currentPermutation,
                   vPerm.c0Source
                 )
+                csv.logConjuncts(idString, vPerm.profiling)
                 if (!config.disableBaseline) {
                   val baselinePermutation = selector.visit(permutationIndices)
                   BaselineChecker.check(baselinePermutation)
@@ -231,6 +233,7 @@ object Bench {
                   )
                 }
               case None =>
+
             }
           } catch {
             case ex: VerificationException =>
@@ -252,7 +255,7 @@ object Bench {
         } else {
           progress.increment()
         }
-        csv.logStep(idString, sampleIndex, labelIndex + 1)
+        csv.logStep(idString, sampleIndex, labelIndex + 1, Some(sampleToPermute(labelIndex)))
         previousID = Some(idString)
       }
     }

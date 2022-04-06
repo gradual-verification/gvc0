@@ -1,10 +1,9 @@
 package gvc.permutation
 
 import gvc.CC0Wrapper.Performance
+import gvc.Main.ProfilingInfo
 import gvc.permutation.BenchConfig.BenchmarkOutputFiles
-
 import java.io.FileWriter
-import java.math.BigInteger
 import java.nio.file.{Files, Path}
 import java.util.Date
 import scala.collection.mutable
@@ -28,11 +27,11 @@ object Columns {
   val performanceColumnNames: List[String] =
     List("stress", "iter", "median", "mean", "stdev", "min", "max")
   val mappingColumnNames: List[String] =
-    List("id", "path_id", "level_id")
-
+    List("id", "path_id", "level_id", "component_added")
   val pathColumnNames: List[String] =
     List("id", "path_hash")
-
+  val conjunctColumnNames:List[String] =
+    List("id", "conjuncts_total", "conjuncts_elim")
   def metadataColumnNames(template: List[ASTLabel]): List[String] =
     List("id") ++ template.map(_.hash)
 }
@@ -170,30 +169,15 @@ class MetadataCSVPrinter(
   val metaWriter = new FileWriter(files.metadata.toString, true)
   val mappingWriter = new FileWriter(files.levels.toString, true)
   val permWriter = new FileWriter(files.permMap.toString, true)
+  val conjunctWriter = new FileWriter(files.conjunctMap.toString, true)
   val metadataColumnNames: String =
     Columns.metadataColumnNames(template).mkString(",") + '\n'
-
-  def writeMappingHeader(): Unit = {
-    mappingWriter.write(
-      Columns.mappingColumnNames.mkString(",") + '\n'
-    )
-    mappingWriter.flush()
-  }
-
-  def writeMetadataHeader(): Unit = {
-    metaWriter.write(metadataColumnNames)
-    metaWriter.flush()
-  }
-
-  def writePermHeader(): Unit = {
-    permWriter.write(Columns.pathColumnNames.mkString(",") + '\n')
-    permWriter.flush()
-  }
 
   def close(): Unit = {
     metaWriter.close()
     mappingWriter.close()
     permWriter.close()
+    conjunctWriter.close()
   }
 
   def logPath(
@@ -208,7 +192,7 @@ class MetadataCSVPrinter(
 
   def logPermutation(
       id: String,
-      permutation: Set[ASTLabel]
+      permutation: Set[ASTLabel],
   ): Unit = {
     val entry =
       CSVIO.generateMetadataColumnEntry(
@@ -220,10 +204,20 @@ class MetadataCSVPrinter(
     metaWriter.flush()
   }
 
-  def logStep(id: String, pathIndex: Int, levelIndex: Int): Unit = {
+  def logStep(id: String, pathIndex: Int, levelIndex: Int, componentAdded: Option[ASTLabel]): Unit = {
+    val labelText = componentAdded match {
+      case Some(value) => value.hash
+      case None => "NA"
+    }
     mappingWriter.write(
-      List(id, pathIndex, levelIndex).mkString(",") + '\n'
+      List(id, pathIndex, levelIndex, labelText).mkString(",") + '\n'
     )
     mappingWriter.flush()
+  }
+
+  def logConjuncts(id: String, perf: ProfilingInfo): Unit = {
+    val conjunctEntry = List(id, perf.nConjuncts.toString, perf.nConjunctsEliminated.toString).mkString(",") + '\n'
+    conjunctWriter.write(conjunctEntry)
+    conjunctWriter.flush()
   }
 }
