@@ -1,7 +1,11 @@
 package gvc.permutation
 import gvc.Main.verify
 import gvc.permutation.BenchConfig.BenchmarkConfig
-import gvc.permutation.CapturedExecution.{CC0CompilationException, CapturedOutputException, ExecutionException}
+import gvc.permutation.CapturedExecution.{
+  CC0CompilationException,
+  CapturedOutputException,
+  ExecutionException
+}
 import gvc.permutation.Extensions.{c0, csv, log, out, txt}
 import gvc.permutation.Output.blue
 import gvc.transformer.GraphPrinter
@@ -13,11 +17,11 @@ import scala.concurrent.TimeoutException
 import scala.util.matching.Regex
 
 object Bench {
-  val stressDeclaration: Regex = "int[ ]+main\\(\\s*\\)\\s\\{.|\n*\n\\s*(int stress = [0-9]+;)".r
-  val stressAssignment: Regex =
-    "int[ ]+main\\(\\s*\\)\\s\\{.|\n*\n\\s*(stress\\s*=\\s*[0-9]+;)".r
+  val stressDeclaration: Regex =
+    "(int[ ]+main\\(\\s*\\)\\s\\{[\\s\\S]*\n\\s*int stress = [0-9]+;)".r
   class BenchmarkException(message: String) extends Exception(message)
-  val readStress = "int readStress() {int* value = alloc(int); args_int(\"--stress\", value); args_t input = args_parse(); printint(*value); return *value;}\n"
+  val readStress =
+    "int readStress() {int* value = alloc(int); args_int(\"--stress\", value); args_t input = args_parse(); printint(*value); return *value;}\n"
   object Names {
     val _baseline: String = c0("baseline")
     val perms = "perms"
@@ -113,9 +117,7 @@ object Bench {
       mutable.Set[BigInteger]()
     var previousID: Option[String] = None
     val maxPaths = config.benchmarkPaths.getOrElse(1)
-
     val selector = new SelectVisitor(benchmarkConfig.ir)
-
     val csv =
       new MetadataCSVPrinter(benchmarkConfig.files, benchmarkConfig.labels)
     val err = new ErrorCSVPrinter(benchmarkConfig.files.verifyLogs)
@@ -148,7 +150,7 @@ object Bench {
     )
     csv.logPermutation(
       bottomID,
-      Set.empty,
+      Set.empty
     )
 
     val topID =
@@ -177,7 +179,12 @@ object Bench {
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
       val permutationIndices = mutable.TreeSet[Int]()
 
-      csv.logStep(topID, sampleIndex, sampleToPermute.length, Some(sampleToPermute.last))
+      csv.logStep(
+        topID,
+        sampleIndex,
+        sampleToPermute.length,
+        Some(sampleToPermute.last)
+      )
       csv.logStep(bottomID, sampleIndex, 0, None)
 
       for (labelIndex <- sampleToPermute.indices) {
@@ -255,7 +262,12 @@ object Bench {
         } else {
           progress.increment()
         }
-        csv.logStep(idString, sampleIndex, labelIndex + 1, Some(sampleToPermute(labelIndex)))
+        csv.logStep(
+          idString,
+          sampleIndex,
+          labelIndex + 1,
+          Some(sampleToPermute(labelIndex))
+        )
         previousID = Some(idString)
       }
     }
@@ -312,7 +324,6 @@ object Bench {
     }
   }
 
-
   def markFile(
       in: Path,
       printer: PerformanceCSVPrinter,
@@ -323,8 +334,10 @@ object Bench {
     val id = Extensions.remove(in.getFileName.toString)
     val sourceString = Files.readString(in)
 
-    if(!isInjectable(sourceString)){
-      throw new BenchmarkException(s"The file ${in.getFileName} doesn't include an assignment of the form 'int stress = ...'.")
+    if (!isInjectable(sourceString)) {
+      throw new BenchmarkException(
+        s"The file ${in.getFileName} doesn't include an assignment of the form 'int stress = ...'."
+      )
     }
     val source = injectStress(sourceString)
 
@@ -335,32 +348,46 @@ object Bench {
       source
     )
     try {
-      CapturedExecution.compile(tempC0File, tempBinaryFile, benchConfig.rootConfig)
+      CapturedExecution.compile(
+        tempC0File,
+        tempBinaryFile,
+        benchConfig.rootConfig
+      )
       if (benchConfig.workload.wList.isEmpty) {
-        for (i <- 0 to benchConfig.workload.wUpper by benchConfig.workload.wStep) {
-          val perf = CapturedExecution.exec_timed(tempBinaryFile, benchConfig.workload.iterations, List(s"--stress $i"))
+        for (
+          i <- 0 to benchConfig.workload.wUpper by benchConfig.workload.wStep
+        ) {
+          val perf = CapturedExecution.exec_timed(
+            tempBinaryFile,
+            benchConfig.workload.iterations,
+            List(s"--stress $i")
+          )
           printer.logID(id, i, perf)
         }
       } else {
-        for(i <- benchConfig.workload.wList)  {
-          val perf = CapturedExecution.exec_timed(tempBinaryFile, benchConfig.workload.iterations, List(s"--stress $i"))
+        for (i <- benchConfig.workload.wList) {
+          val perf = CapturedExecution.exec_timed(
+            tempBinaryFile,
+            benchConfig.workload.iterations,
+            List(s"--stress $i")
+          )
           printer.logID(id, i, perf)
         }
       }
-    }catch {
+    } catch {
       case c0: CapturedOutputException =>
         c0 match {
           case cc0: CC0CompilationException =>
             cc0.logMessage(id, logging.cc0)
             progressTracker match {
               case Some(value) => value.cc0Error()
-              case None =>
+              case None        =>
             }
           case exec: ExecutionException =>
             exec.logMessage(id, logging.exec)
             progressTracker match {
               case Some(value) => value.execError()
-              case None =>
+              case None        =>
             }
         }
     }
@@ -392,12 +419,15 @@ object Bench {
   }
 
   def injectStress(source: String): String = {
-    val withoutDeclarations = stressAssignment.replaceAllIn(source, "")
-    val withStressDeclaration = stressDeclaration.replaceAllIn(withoutDeclarations, "int stress = readStress();")
-    "#use <conio>\n#use <args>\n" + withStressDeclaration + readStress
+    val withStressDeclaration = stressDeclaration.replaceFirstIn(
+      source,
+      readStress + "int main()\n{\nint stress = readStress();\n"
+    )
+    "#use <conio>\n#use <args>\n" + withStressDeclaration
   }
-
   def isInjectable(source: String): Boolean = {
-    stressAssignment.findAllMatchIn(source).nonEmpty && stressDeclaration.findAllMatchIn(source).nonEmpty
+    stressDeclaration
+      .findAllMatchIn(source)
+      .nonEmpty
   }
 }
