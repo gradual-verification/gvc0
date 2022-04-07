@@ -1,5 +1,26 @@
 #use <runtime>
 
+bool NassertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
+    FieldArray* toCheck = find(fields, _id);
+    if(toCheck == NULL || !toCheck->contents[fieldIndex]){
+        return false;
+    }else{
+        return true;
+    }
+}
+
+bool NaddAccEnsureSeparate(OwnedFields* fields, int _id, int fieldIndex, int numFields, string errorMessage){
+    FieldArray* toCheck = find(fields, _id);
+    if (toCheck == NULL) {
+        toCheck = newFieldArray(fields, _id, numFields, false);
+    } else if (toCheck->contents[fieldIndex]) {
+        return false;
+    }
+    toCheck->contents[fieldIndex] = true;
+    toCheck->numAccessible += 1;
+    return true;
+}
+
 void debugOwnedFields(OwnedFields* fields, string name) {
     print("---[ ");
     print(name);
@@ -126,6 +147,62 @@ bool testFieldMerging(string header){
     return true;
 }
 
+
+/*
+bool testFieldLoss(string header) {
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+    OwnedFields* source = initOwnedFields(_id_counter);
+
+    int num_fields = 10;
+    int _id_node = addStructAcc(source, num_fields);
+
+}
+*/
+
+bool testNegativeAccessibility(string header) {
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+    OwnedFields* source = initOwnedFields(_id_counter);
+
+    int num_fields = 10;
+    int _id_node = addStructAcc(source, num_fields);
+
+    bool found = NassertAcc(source, _id_node+1, num_fields, "");
+    if(found) error("ACK discovered.");
+
+    return true;
+}
+
+bool testEnsureSeparate(string header) {
+    int * _id_counter = alloc(int);
+    *(_id_counter) = 0;
+    OwnedFields* source = initOwnedFields(_id_counter);
+
+    int num_fields = 10;
+    int _id_node = addStructAcc(source, num_fields);
+
+    for(int i = 0; i<num_fields; i+=1){
+       bool shouldFail = NaddAccEnsureSeparate(source, _id_node, i, num_fields, "");
+       if(shouldFail) error("Failed to ensure separation.");
+    }
+
+    for(int i = 0; i<num_fields; i+=1){
+       bool shouldSucceed = NaddAccEnsureSeparate(source, 200, i, num_fields, "");
+       if(!shouldSucceed) error("Failed to add separated fields.");
+    }
+
+    for (int i = 0; i<64; i+=1){
+       addStructAcc(source, num_fields);
+    }
+
+    for(int i = 0; i<num_fields; i+=1){
+       bool shouldFail = NaddAccEnsureSeparate(source, 200, i, num_fields, "");
+       if(shouldFail) error("Failed to add separated fields after rehashing.");
+    }
+    return true;
+}
+
 int runTests() {
     int * _id_counter = alloc(int);
     *(_id_counter) = 0;
@@ -157,6 +234,28 @@ int runTests() {
         println("FAIL: Join");
         return 1;
     }
+/*
+    if(testFieldLoss("loseAcc")){
+        println("PASS: loseAck");
+    }else{
+        println("FAIL: loseAck");
+        return 1;
+    }
+*/
+    if(testNegativeAccessibility("Nacc")){
+        println("PASS: Nacc");
+    }else{
+        println("FAIL: Nacc");
+        return 1;
+    }
+
+    if(testEnsureSeparate("addAccEnsureSeparate")){
+        println("PASS: addAccEnsureSeparate");
+    }else{
+        println("FAIL: addAccEnsureSeparate");
+        return 1;
+    }
+
     return 0;
 }
 
