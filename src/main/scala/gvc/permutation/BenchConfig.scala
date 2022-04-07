@@ -3,7 +3,7 @@ package gvc.permutation
 import gvc.{Config, Main}
 import gvc.permutation.Bench.{BenchmarkException, Names}
 import gvc.permutation.Extensions.{c0, csv}
-import gvc.transformer.IRGraph
+import gvc.transformer.{GraphPrinter, IRGraph}
 
 import java.math.BigInteger
 import java.nio.file.{Files, Path, Paths}
@@ -38,15 +38,23 @@ object BenchConfig {
       perms: Path,
       verifiedPerms: Path,
       pathDescriptions: Path,
-      baselinePerms: Option[Path],
+      dynamicPerms: Option[Path],
+      framingPerms: Option[Path],
       logs: Path,
       verifyLogs: Path,
-      baselineCompilationLogs: Path,
-      execLogs: Path,
-      baselineExecLogs: Path,
+      //
       compilationLogs: Path,
+      dynamicCompilationLogs: Path,
+      framingCompilationLogs: Path,
+      //
+      execLogs: Path,
+      dynamicExecLogs: Path,
+      framingExecLogs: Path,
+      //
       performance: Path,
-      baselinePerformance: Path,
+      dynamicPerformance: Path,
+      framingPerformance: Path,
+      //
       levels: Path,
       metadata: Path,
       source: Path,
@@ -58,7 +66,8 @@ object BenchConfig {
 
   private def resolveCompletedPermutations(
       files: BenchmarkOutputFiles,
-      template: List[ASTLabel]
+      template: List[ASTLabel],
+      libraryPaths: List[String]
   ): Set[TaggedPath] = {
     val permSet = mutable.Set[String]()
     Files
@@ -68,35 +77,74 @@ object BenchConfig {
         permSet.add(Extensions.remove(path.getFileName.toString))
       )
     val verifiedPermSet = mutable.Set[String]()
+    val dynamicPermSet = mutable.Set[String]()
+    val framingPermSet = mutable.Set[String]()
     Files
       .list(files.verifiedPerms)
       .filter(path => !Files.isDirectory(path))
       .forEach(path =>
         verifiedPermSet.add(Extensions.remove(path.getFileName.toString))
       )
-    files.baselinePerms match {
+
+    files.dynamicPerms match {
       case Some(value) =>
         Files
           .list(value)
           .filter(path => !Files.isDirectory(path))
           .forEach(path =>
-            verifiedPermSet.add(Extensions.remove(path.getFileName.toString))
+            dynamicPermSet.add(Extensions.remove(path.getFileName.toString))
           )
       case None =>
     }
+
+    files.framingPerms match {
+      case Some(value) =>
+        Files
+          .list(value)
+          .filter(path => !Files.isDirectory(path))
+          .forEach(path =>
+            framingPermSet.add(Extensions.remove(path.getFileName.toString))
+          )
+      case None =>
+    }
+
     val incomplete = permSet.diff(verifiedPermSet)
     incomplete.foreach(name => {
       Files.deleteIfExists(files.perms.resolve(c0(name)))
       Files.deleteIfExists(files.verifiedPerms.resolve(c0(name)))
-      files.baselinePerms match {
+      files.dynamicPerms match {
         case Some(value) => Files.deleteIfExists(value.resolve(c0(name)))
         case None        =>
       }
     })
-    permSet += LabelTools
-      .createID(template, template.toSet)
-      .toString(16)
-    permSet += LabelTools.createID(template, Set.empty).toString(16)
+
+    files.dynamicPerms match {
+      case Some(destPath) =>
+        val reconstructDynamicBaseline = verifiedPermSet.diff(dynamicPermSet)
+        if (reconstructDynamicBaseline.nonEmpty)
+          reconstructBaselines(
+            reconstructDynamicBaseline,
+            files.perms,
+            destPath,
+            libraryPaths
+          )
+      case None =>
+    }
+
+    files.framingPerms match {
+      case Some(destPath) =>
+        val reconstructFramingBaseline = verifiedPermSet.diff(framingPermSet)
+        if (reconstructFramingBaseline.nonEmpty)
+          reconstructBaselines(
+            reconstructFramingBaseline,
+            files.perms,
+            destPath,
+            libraryPaths,
+            onlyFraming = true
+          )
+      case None =>
+    }
+
     verifiedPermSet
       .intersect(permSet)
       .map(LabelTools.parseID)
@@ -158,6 +206,39 @@ object BenchConfig {
     mapping
   }
 
+  private def reconstructBaselines(
+      ids: mutable.Set[String],
+      sourceDirectory: Path,
+      targetDirectory: Path,
+      includeDirs: List[String],
+      onlyFraming: Boolean = false
+  ): Unit = {
+    var completedCount = 0
+    val mode = if (onlyFraming) "only framing checks" else "all dynamic checks."
+    print(
+      "\r" + Output.formatInfo(
+        s"Regenerated $completedCount/${ids.size} baseline permutations, Mode: $mode"
+      )
+    )
+    ids.foreach(id => {
+      val contents = Files.readString(sourceDirectory.resolve(c0(id)))
+      val ir = Main.generateIR(contents, includeDirs)
+      BaselineChecker.check(ir, onlyFraming)
+      val destination = targetDirectory.resolve(c0(id))
+      Files.writeString(
+        destination,
+        GraphPrinter.print(ir, includeSpecs = false)
+      )
+      completedCount += 1
+      print(
+        "\r" + Output.formatInfo(
+          s"Regenerated $completedCount/${ids.size} baseline permutations, Mode: $mode"
+        )
+      )
+    })
+    print("\n")
+  }
+
   private def reconstructMetadataEntries(
       template: List[ASTLabel],
       tags: Set[TaggedPath],
@@ -197,16 +278,23 @@ object BenchConfig {
 
     val validConjunctEntryPairs = conjunctEntries
       .map(entry => (LabelTools.parseID(entry(1)), entry))
-      .filter(pair => pair._1.isDefined && pair._2(1).matches("[0-9]+") && pair._2(2).matches("[0-9]+"))
+      .filter(pair =>
+        pair._1.isDefined && pair._2(1).matches("[0-9]+") && pair
+          ._2(2)
+          .matches("[0-9]+")
+      )
 
     val completedMapHashes = validHashEntryPairs.map(_._1.get).toSet
     val completedConjunctHashes = validConjunctEntryPairs.map(_._1.get).toSet
 
     val validHashes = completedMapHashes.intersect(completedConjunctHashes)
 
-    val completedHashEntries = validHashEntryPairs.filter(pair => validHashes.contains(pair._1.get)).map(_._2)
-    val completedConjunctHashEntries = validConjunctEntryPairs.filter(pair => validHashes.contains(pair._1.get)).map(_._2)
-
+    val completedHashEntries = validHashEntryPairs
+      .filter(pair => validHashes.contains(pair._1.get))
+      .map(_._2)
+    val completedConjunctHashEntries = validConjunctEntryPairs
+      .filter(pair => validHashes.contains(pair._1.get))
+      .map(_._2)
 
     CSVIO.writeEntries(
       files.permMap,
@@ -214,7 +302,11 @@ object BenchConfig {
       Columns.pathColumnNames
     )
 
-    CSVIO.writeEntries(files.conjunctMap, completedConjunctHashEntries, Columns.conjunctColumnNames)
+    CSVIO.writeEntries(
+      files.conjunctMap,
+      completedConjunctHashEntries,
+      Columns.conjunctColumnNames
+    )
 
     val potentiallyCompletedPaths = resolveCompletedPathsDescriptions(
       files.pathDescriptions,
@@ -222,7 +314,8 @@ object BenchConfig {
       validHashes
     )
 
-    val completedPermutations = resolveCompletedPermutations(files, labels)
+    val completedPermutations =
+      resolveCompletedPermutations(files, labels, libraryDirs)
 
     val pathIndex = Columns.mappingColumnNames.indexOf("path_id")
     val stepIndex = Columns.mappingColumnNames.indexOf("level_id")
@@ -336,55 +429,71 @@ object BenchConfig {
     val perms = root.resolve(Names.perms)
     Files.createDirectories(perms)
 
-    val pathDescriptions = root.resolve(Names.pathDesc)
-    Files.createDirectories(pathDescriptions)
-
-    val verifiedPerms = root.resolve(Names.verified_perms)
+    val verifiedPerms = root.resolve(Names.verifiedPerms)
     Files.createDirectories(verifiedPerms)
 
-    val baselinePerms: Option[Path] = if (!disableBaseline) {
-      val dir = root.resolve(Names.baselinePerms)
+    val dynamicPerms: Option[Path] = if (!disableBaseline) {
+      val dir = root.resolve(Names.dynamicPerms)
       Files.createDirectories(dir)
       Some(dir)
     } else {
       None
     }
 
+    val framingPerms: Option[Path] = if (!disableBaseline) {
+      val dir = root.resolve(Names.framingPerms)
+      Files.createDirectories(dir)
+      Some(dir)
+    } else {
+      None
+    }
+
+    val pathDescriptions = root.resolve(Names.pathDesc)
+    Files.createDirectories(pathDescriptions)
+
     val performance = root.resolve(Names.performance)
-    val baselinePerformance = root.resolve(Names.baselinePerformance)
+    val dynamicPerformance = root.resolve(Names.dynamicPerformance)
+    val framingPerformance = root.resolve(Names.framingPerformance)
+
+    val logs = root.resolve(Names.logs)
+    Files.createDirectories(logs)
+    val verifyLog = logs.resolve(Names.verifyLogs)
+    val compileLog = logs.resolve(Names.compilationLogs)
+    val dynamicCompileLog = logs.resolve(Names.dynamicCompilationLogs)
+    val framingCompileLog = logs.resolve(Names.framingCompilationLogs)
+
     val levels = root.resolve(Names.levels)
     val metadata = root.resolve(Names.metadata)
     val permMap = root.resolve(csv(Names.perms))
     val conjunctMap = root.resolve(Names.conjuncts)
-    val logs = root.resolve(Names.logs)
-    Files.createDirectories(logs)
-
-    val verifyLog = logs.resolve(Names.verifyLogs)
-    val compileLog = logs.resolve(Names.compilationLogs)
-    val baselineCompileLog = logs.resolve(Names.baselineCompilationLogs)
 
     val exec = logs.resolve(Names.execLogs)
-    val baselineExec = logs.resolve(Names.baselineExecLogs)
+    val dynamicExec = logs.resolve(Names.dynamicExecLogs)
+    val framingExec = logs.resolve(Names.framingExecLogs)
 
     BenchmarkOutputFiles(
       root = root,
       perms = perms,
       verifiedPerms = verifiedPerms,
-      baselinePerms = baselinePerms,
+      dynamicPerms = dynamicPerms,
       logs = logs,
       verifyLogs = verifyLog,
       compilationLogs = compileLog,
-      baselineCompilationLogs = baselineCompileLog,
+      dynamicCompilationLogs = dynamicCompileLog,
       execLogs = exec,
-      baselineExecLogs = baselineExec,
+      dynamicExecLogs = dynamicExec,
       performance = performance,
-      baselinePerformance = baselinePerformance,
+      dynamicPerformance = dynamicPerformance,
       levels = levels,
       metadata = metadata,
       pathDescriptions = pathDescriptions,
       source = existingSource,
       permMap = permMap,
-      conjunctMap = conjunctMap
+      conjunctMap = conjunctMap,
+      framingExecLogs = framingExec,
+      framingCompilationLogs = framingCompileLog,
+      framingPerms = framingPerms,
+      framingPerformance = framingPerformance
     )
   }
 

@@ -1,20 +1,24 @@
 package gvc.permutation
 import gvc.transformer.{IRGraph => IR}
 import gvc.weaver._
-
 object BaselineChecker {
-  def check(program: IR.Program): Unit = {
+
+  def check(program: IR.Program, onlyFraming: Boolean = false): Unit = {
     val structIds =
       program.structs.map(s => (s.name, s.addField("_id", IR.IntType))).toMap
     val runtime = CheckRuntime.addToIR(program)
     val checks = new CheckImplementation(program, runtime, structIds)
 
-    program.methods.foreach(checkMethod(_, checks))
+    program.methods.foreach(checkMethod(_, checks, onlyFraming))
   }
 
-  def checkMethod(
+  def checkFraming(program: IR.Program): Unit =
+    check(program, onlyFraming = true)
+
+  private def checkMethod(
       method: IR.Method,
-      checks: CheckImplementation
+      checks: CheckImplementation,
+      onlyFraming: Boolean
   ): Unit = {
     val perms = method.name match {
       case "main" =>
@@ -34,18 +38,19 @@ object BaselineChecker {
       CheckRuntime.Names.temporaryOwnedFields
     )
 
-    checkBlock(method.body, checks, perms, tempPerms)
+    checkBlock(method.body, checks, perms, tempPerms, onlyFraming)
 
-    method.precondition.toSeq.flatMap(
-      validateSpec(_, perms, tempPerms, checks)
-    ) ++=: method.body
-
-    if (Collector.hasImplicitReturn(method)) {
-      method.body ++= method.postcondition.toSeq.flatMap(
+    if (!onlyFraming) {
+      method.precondition.toSeq.flatMap(
         validateSpec(_, perms, tempPerms, checks)
-      )
-    }
+      ) ++=: method.body
 
+      if (Collector.hasImplicitReturn(method)) {
+        method.body ++= method.postcondition.toSeq.flatMap(
+          validateSpec(_, perms, tempPerms, checks)
+        )
+      }
+    }
     // Add the initialization to main
     if (method.name == "main") {
       val instanceCounter = method.addVar(
@@ -64,7 +69,7 @@ object BaselineChecker {
     }
   }
 
-  def equivalentFields(x: IR.Member, y: IR.Member): Boolean = {
+  private def equivalentFields(x: IR.Member, y: IR.Member): Boolean = {
     (x, y) match {
       case (xf: IR.FieldMember, yf: IR.FieldMember) =>
         xf.field == yf.field && ((xf.root, yf.root) match {
@@ -77,7 +82,7 @@ object BaselineChecker {
     }
   }
 
-  def validateAccess(
+  private def validateAccess(
       expr: IR.Expression,
       perms: IR.Var,
       checks: CheckImplementation,
@@ -192,7 +197,7 @@ object BaselineChecker {
       throw new WeaverException("Invalid member")
   }
 
-  def validateSpec(
+  private def validateSpec(
       expr: IR.Expression,
       primaryPerms: IR.Var,
       tempPerms: IR.Var,
@@ -234,11 +239,12 @@ object BaselineChecker {
 
   }
 
-  def checkBlock(
+  private def checkBlock(
       block: IR.Block,
       checks: CheckImplementation,
       perms: IR.Var,
-      tempPerms: IR.Var
+      tempPerms: IR.Var,
+      onlyFraming: Boolean
   ): Unit = {
     for (op <- block) op match {
       case _: IR.AllocValue | _: IR.AllocArray =>
@@ -252,10 +258,11 @@ object BaselineChecker {
           case IR.AssertKind.Imperative =>
             val (access, _) = validateAccess(assert.value, perms, checks)
             assert.insertBefore(access)
-          case IR.AssertKind.Specification =>
+          case IR.AssertKind.Specification if !onlyFraming =>
             assert.insertAfter(
               validateSpec(assert.value, perms, tempPerms, checks)
             )
+          case _ =>
         }
 
       case assign: IR.Assign => {
@@ -296,8 +303,8 @@ object BaselineChecker {
       case iff: IR.If =>
         val (condAccess, _) = validateAccess(iff.condition, perms, checks)
         iff.insertBefore(condAccess)
-        checkBlock(iff.ifTrue, checks, perms, tempPerms)
-        checkBlock(iff.ifFalse, checks, perms, tempPerms)
+        checkBlock(iff.ifTrue, checks, perms, tempPerms, onlyFraming)
+        checkBlock(iff.ifFalse, checks, perms, tempPerms, onlyFraming)
 
       case ret: IR.Return =>
         val context = ret.value match {
@@ -311,22 +318,41 @@ object BaselineChecker {
           })
 
         ret.insertBefore(
-          valueAccess ++
-            block.method.postcondition.toSeq.flatMap(
-              validateSpec(_, perms, tempPerms, checks, context = context)
-            )
+          valueAccess ++ (if (!onlyFraming)
+                            block.method.postcondition.toSeq.flatMap(
+                              validateSpec(
+                                _,
+                                perms,
+                                tempPerms,
+                                checks,
+                                context = context
+                              )
+                            )
+                          else Seq.empty)
         )
 
       case loop: IR.While =>
+        val preAccessibility = validateAccess(
+          loop.condition,
+          perms,
+          checks
+        )._1 ++ (if (!onlyFraming)
+                   validateSpec(loop.invariant, perms, tempPerms, checks)
+                 else Seq.empty)
         loop.insertBefore(
-          validateAccess(loop.condition, perms, checks)._1 ++
-            validateSpec(loop.invariant, perms, tempPerms, checks)
+          preAccessibility
         )
 
-        checkBlock(loop.body, checks, perms, tempPerms)
+        checkBlock(loop.body, checks, perms, tempPerms, onlyFraming)
 
-        loop.body ++= (validateAccess(loop.condition, perms, checks)._1 ++
-          validateSpec(loop.invariant, perms, tempPerms, checks))
+        val postAccessibility = validateAccess(
+          loop.condition,
+          perms,
+          checks
+        )._1 ++ (if (!onlyFraming)
+                   validateSpec(loop.invariant, perms, tempPerms, checks)
+                 else Seq.empty)
+        loop.body ++= postAccessibility
 
       case invoke: IR.Invoke =>
         // Pre-conditions are handled inside callee
@@ -349,6 +375,7 @@ object BaselineChecker {
         }
       case fold: IR.Fold     =>
       case unfold: IR.Unfold =>
+      case _                 =>
     }
   }
 }

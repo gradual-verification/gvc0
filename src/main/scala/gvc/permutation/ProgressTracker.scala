@@ -54,13 +54,11 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
       if (timeouts > 0) Output.red else Output.green
     val failureColor: (String) => String =
       if (failures > 0) Output.red else Output.green
-
     val successValue =
       super.percentage(allPerms - (failures + timeouts), perPath * maxPaths)
     val success: String =
       if (successValue.toInt == 100) Output.green(s"$successValue%")
       else Output.yellow(s"$successValue%")
-
     super.toString() + List(
       s"Path: ${Output.blue(s"$currentPath/$maxPaths")}",
       s"Step: ${Output.blue(s"$currentPerm/$perPath")}",
@@ -77,10 +75,15 @@ object ExecutionType {
   case object Gradual extends ExecutionType {
     val name = "Gradual Verification"
   }
-  case object Dynamic extends ExecutionType {
-    val name = "Dynamic Verification"
+  case object FullDynamic extends ExecutionType {
+    val name = "Full Dynamic Verification"
   }
-  case object Unverified extends ExecutionType { val name = "Unverified" }
+  case object FramingOnly extends ExecutionType {
+    val name = "Only Framing Checks"
+  }
+  case object Unverified extends ExecutionType {
+    val name = "Unverified"
+  }
 }
 
 class ExecutionTracker(maxPrograms: Int, execType: ExecutionType)

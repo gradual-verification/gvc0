@@ -8,7 +8,7 @@ import gvc.permutation.CapturedExecution.{
 }
 import gvc.permutation.Extensions.{c0, csv, log, out, txt}
 import gvc.permutation.Output.blue
-import gvc.transformer.GraphPrinter
+import gvc.transformer.{GraphPrinter, IRGraph}
 import gvc.{Config, Main, OutputFileCollection, VerificationException}
 import java.math.BigInteger
 import java.nio.file.{Files, Path, Paths}
@@ -23,21 +23,31 @@ object Bench {
   val readStress =
     "int readStress() {int* value = alloc(int); args_int(\"--stress\", value); args_t input = args_parse(); printint(*value); return *value;}\n"
   object Names {
-    val _baseline: String = c0("baseline")
+    val conjuncts: String = csv("conjuncts")
+    //
     val perms = "perms"
-    val conjuncts = csv("conjuncts")
-    val verified_perms = "verified_perms"
-    val baselinePerms = "baseline_perms"
+    val verifiedPerms = "perms_verified"
+    val dynamicPerms = "perms_full_dynamic"
+    val framingPerms = "perms_only_framing"
+    //
     val pathDesc = "path_desc"
+
     val performance: String = csv("perf")
-    val baselinePerformance: String = csv("baseline_perf")
+    val dynamicPerformance: String = csv("perf_full_dynamic")
+    val framingPerformance: String = csv("perf_only_framing")
+
     val levels: String = csv("levels")
     val metadata: String = csv("metadata")
+    //
     val verifyLogs: String = log("verify")
     val compilationLogs: String = log("cc0")
-    val baselineCompilationLogs: String = log("cc0_baseline")
+    val dynamicCompilationLogs: String = log("cc0_full_dynamic")
+    val framingCompilationLogs: String = log("cc0_only_framing")
+    //
     val execLogs: String = log("exec")
-    val baselineExecLogs: String = log("exec_baseline")
+    val dynamicExecLogs: String = log("exec_full_dynamic")
+    val framingExecLogs: String = log("exec_only_framing")
+    //
     val source: String = c0("source")
     val logs = "logs"
     val stressDeclaration = "stress"
@@ -138,9 +148,33 @@ object Bench {
       )
       filePath
     }
+
+    def generateBaseline(
+        ir: IRGraph.Program,
+        id: String,
+        labels: mutable.TreeSet[ASTLabel],
+        destDir: Path,
+        onlyFraming: Boolean = false
+    ): Unit = {
+      BaselineChecker.check(ir, onlyFraming = onlyFraming)
+      val dynamicSource =
+        GraphPrinter.print(
+          ir,
+          includeSpecs = false
+        )
+      dumpPermutation(
+        destDir,
+        c0(id),
+        labels,
+        dynamicSource
+      )
+    }
+
     val bottomID =
       LabelTools.createID(benchmarkConfig.labels, Set.empty).toString(16)
     val outputBottom =
+      benchmarkConfig.files.perms.resolve(c0(bottomID))
+    val outputBottomVerified =
       benchmarkConfig.files.verifiedPerms.resolve(c0(bottomID))
     val outputBottomText =
       GraphPrinter.print(benchmarkConfig.ir, includeSpecs = false)
@@ -148,20 +182,13 @@ object Bench {
       outputBottom.toString,
       outputBottomText
     )
+    Main.writeFile(
+      outputBottomVerified.toString,
+      outputBottomText
+    )
     csv.logPermutation(
       bottomID,
       Set.empty
-    )
-
-    val topID =
-      LabelTools
-        .createID(benchmarkConfig.labels, benchmarkConfig.labels.toSet)
-        .toString(16)
-    val outputTop =
-      benchmarkConfig.files.verifiedPerms.resolve(c0(topID))
-    Main.writeFile(
-      outputTop.toString,
-      GraphPrinter.print(benchmarkConfig.ir, includeSpecs = false)
     )
 
     val offset = benchmarkConfig.prior.visitedPaths.size
@@ -169,6 +196,7 @@ object Bench {
       val sampleToPermute =
         sampler.sample(SamplingHeuristic.Random)
       csv.logPath(sampleIndex, benchmarkConfig.labels, sampleToPermute)
+
       val summary = LabelTools.appendPathComment("", sampleToPermute)
       val summaryDestination =
         benchmarkConfig.files.pathDescriptions.resolve(
@@ -179,16 +207,9 @@ object Bench {
       val currentPermutation = mutable.TreeSet()(LabelOrdering)
       val permutationIndices = mutable.TreeSet[Int]()
 
-      csv.logStep(
-        topID,
-        sampleIndex,
-        sampleToPermute.length,
-        Some(sampleToPermute.last)
-      )
       csv.logStep(bottomID, sampleIndex, 0, None)
 
       for (labelIndex <- sampleToPermute.indices) {
-
         currentPermutation += sampleToPermute(labelIndex)
         permutationIndices += sampleToPermute(labelIndex).exprIndex
         val id =
@@ -225,22 +246,23 @@ object Bench {
                 )
                 csv.logConjuncts(idString, vPerm.profiling)
                 if (!config.disableBaseline) {
-                  val baselinePermutation = selector.visit(permutationIndices)
-                  BaselineChecker.check(baselinePermutation)
-                  val baselineSourceText =
-                    GraphPrinter.print(
-                      baselinePermutation,
-                      includeSpecs = false
-                    )
-                  dumpPermutation(
-                    benchmarkConfig.files.baselinePerms.get,
-                    c0(idString),
+                  val builtDynamic = selector.visit(permutationIndices)
+                  generateBaseline(
+                    builtDynamic,
+                    idString,
                     currentPermutation,
-                    baselineSourceText
+                    benchmarkConfig.files.dynamicPerms.get
+                  )
+                  val builtFraming = selector.visit(permutationIndices)
+                  generateBaseline(
+                    builtFraming,
+                    idString,
+                    currentPermutation,
+                    benchmarkConfig.files.framingPerms.get,
+                    onlyFraming = true
                   )
                 }
               case None =>
-
             }
           } catch {
             case ex: VerificationException =>
@@ -272,14 +294,20 @@ object Bench {
       }
     }
     if (!config.disableBaseline) {
-      BaselineChecker.check(benchmarkConfig.ir)
-      val baselineSourceText =
-        GraphPrinter.print(benchmarkConfig.ir, includeSpecs = false)
-      dumpPermutation(
-        benchmarkConfig.files.baselinePerms.get,
-        c0(topID),
-        mutable.TreeSet[ASTLabel]()(LabelOrdering),
-        baselineSourceText
+      val templateCopyDynamic = selector.visit(mutable.TreeSet[Int]())
+      generateBaseline(
+        templateCopyDynamic,
+        bottomID,
+        mutable.TreeSet[ASTLabel]()(LabelOrdering).empty,
+        benchmarkConfig.files.dynamicPerms.get
+      )
+      val templateCopyFraming = selector.visit(mutable.TreeSet[Int]())
+      generateBaseline(
+        templateCopyFraming,
+        bottomID,
+        mutable.TreeSet[ASTLabel]()(LabelOrdering).empty,
+        benchmarkConfig.files.framingPerms.get,
+        onlyFraming = true
       )
     }
     csv.close()
@@ -289,17 +317,19 @@ object Bench {
   case class StressList(levels: List[Int]) extends Stress
   case class StressScaling(stepSize: Int, upperBound: Int) extends Stress
   case class ErrorLogging(cc0: ErrorCSVPrinter, exec: ErrorCSVPrinter)
+
   def markExecution(
       config: Config,
       benchmarkConfig: BenchmarkConfig
   ): Unit = {
 
+    val errCC0 = new ErrorCSVPrinter(benchmarkConfig.files.compilationLogs)
+    val errExec = new ErrorCSVPrinter(benchmarkConfig.files.execLogs)
+
     val printer = new PerformanceCSVPrinter(
       benchmarkConfig.files.performance,
       benchmarkConfig.workload.iterations
     )
-    val errCC0 = new ErrorCSVPrinter(benchmarkConfig.files.compilationLogs)
-    val errExec = new ErrorCSVPrinter(benchmarkConfig.files.execLogs)
 
     markDirectory(
       benchmarkConfig.files.verifiedPerms,
@@ -310,15 +340,27 @@ object Bench {
     )
 
     if (!config.disableBaseline) {
-      val baselinePrinter = new PerformanceCSVPrinter(
-        benchmarkConfig.files.baselinePerformance,
+      val framingPrinter = new PerformanceCSVPrinter(
+        benchmarkConfig.files.framingPerformance,
         benchmarkConfig.workload.iterations
       )
       markDirectory(
-        benchmarkConfig.files.baselinePerms.get,
-        baselinePrinter,
+        benchmarkConfig.files.framingPerms.get,
+        framingPrinter,
         benchmarkConfig,
-        ExecutionType.Dynamic,
+        ExecutionType.FramingOnly,
+        ErrorLogging(errCC0, errExec)
+      )
+
+      val dynamicPrinter = new PerformanceCSVPrinter(
+        benchmarkConfig.files.dynamicPerformance,
+        benchmarkConfig.workload.iterations
+      )
+      markDirectory(
+        benchmarkConfig.files.dynamicPerms.get,
+        dynamicPrinter,
+        benchmarkConfig,
+        ExecutionType.FullDynamic,
         ErrorLogging(errCC0, errExec)
       )
     }

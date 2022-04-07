@@ -9,7 +9,6 @@ object CC0Architecture {
   case object Arch32 { val name = "32" }
   case object Arch64 { val name = "64" }
 }
-
 case class CC0Options(
     compilerPath: String = "cc0",
     verbose: Boolean = false,
