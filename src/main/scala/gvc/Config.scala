@@ -1,4 +1,6 @@
 package gvc
+import gvc.permutation.ExecutionType
+
 import java.nio.file.{Files, Paths}
 import java.io.File
 import scala.annotation.tailrec
@@ -20,6 +22,7 @@ case class Config(
     benchmarkIterations: Option[Int] = None,
     benchmarkWList: Option[List[Int]] = None,
     benchmarkSkipVerification: Boolean = false,
+    benchmarkStressMode: Option[ExecutionType] = None,
     disableBaseline: Boolean = false,
     saveFiles: Boolean = false,
     exec: Boolean = false,
@@ -107,7 +110,9 @@ object Config {
                |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
                |  
                |                --stress=<dir>                 Perform a stress test of full dynamic verification, comparing performance against the unverified source program.
-               |
+               |                --s-only-dynamic               Only stress test fully dynamic verification.
+               |                --s-only-framing               Only stress test dynamic verification for framing.
+               |                --s-only-unverified            Only stress test the original program, without runtime checks.
                |                --w-step=<n>                   Specify the step size of the stress factor from 0 to the upper bound.
                |                --w-upper=<n>                  Specify the upper bound on the stress factor.
                |                --w-list=<n,...>            Specify a list of stress levels to execute."""
@@ -159,6 +164,21 @@ object Config {
       current: Config = Config()
   ): Config =
     args match {
+      case "--s-only-dynamic" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkStressMode = Some(ExecutionType.FullDynamic))
+        )
+      case "--s-only-framing" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkStressMode = Some(ExecutionType.FramingOnly))
+        )
+      case "--s-only-unverified" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkStressMode = Some(ExecutionType.Unverified))
+        )
       case "--only-exec" :: tail =>
         fromCommandLineArgs(
           tail,

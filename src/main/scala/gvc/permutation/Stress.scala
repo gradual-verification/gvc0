@@ -58,9 +58,48 @@ object Stress {
 
     assignmentHook match {
       case Some(assign) =>
-        testExecution(ir, config, output.none, assign, ExecutionType.Unverified)
-        BaselineChecker.check(ir)
-        testExecution(ir, config, output.all, assign, ExecutionType.Dynamic)
+        config.benchmarkStressMode match {
+          case Some(value) =>
+            value match {
+              case ExecutionType.FullDynamic => BaselineChecker.check(ir)
+              case ExecutionType.FramingOnly => BaselineChecker.checkFraming(ir)
+              case ExecutionType.Unverified  =>
+              case _                         => throw new StressException("Invalid execution type.")
+            }
+            testExecution(
+              ir,
+              config,
+              output.all,
+              assign,
+              value
+            )
+          case None => {
+            testExecution(
+              ir,
+              config,
+              output.none,
+              assign,
+              ExecutionType.Unverified
+            )
+            BaselineChecker.check(ir)
+            testExecution(
+              ir,
+              config,
+              output.all,
+              assign,
+              ExecutionType.FullDynamic
+            )
+            val framingIR = Main.generateIR(source, librarySearchDirs)
+            val framingAssignmentHook = resolveAssignment(framingIR).get
+            testExecution(
+              framingIR,
+              config,
+              output.all,
+              framingAssignmentHook,
+              ExecutionType.FramingOnly
+            )
+          }
+        }
       case None =>
         throw new StressException(
           "To perform a stress test on a c0 file, the first statement in main must be an assignment of the form 'int stress = ...'"
