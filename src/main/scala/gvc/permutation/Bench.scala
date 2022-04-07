@@ -123,7 +123,7 @@ object Bench {
     val err = new ErrorCSVPrinter(benchmarkConfig.files.verifyLogs)
     val sampler = new Sampler(benchmarkConfig)
     val progress =
-      new VerificationTracker(benchmarkConfig.labels.length - 1, maxPaths)
+      new VerificationTracker(benchmarkConfig.labels.length, maxPaths)
 
     def dumpPermutation(
         dir: Path,
