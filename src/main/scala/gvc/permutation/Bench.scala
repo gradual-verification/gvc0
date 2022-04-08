@@ -17,7 +17,8 @@ import scala.concurrent.TimeoutException
 import scala.util.matching.Regex
 
 object Bench {
-  val stressDeclaration: Regex =
+  val arbitraryStressDeclaration: Regex = "(int )?(stress = [0-9]+;)".r
+  val correctStressDeclaration: Regex =
     "(int[ ]+main\\(\\s*\\)\\s\\{[\\s\\S]*\n\\s*int stress = [0-9]+;)".r
   class BenchmarkException(message: String) extends Exception(message)
   val readStress =
@@ -461,14 +462,17 @@ object Bench {
   }
 
   def injectStress(source: String): String = {
-    val withStressDeclaration = stressDeclaration.replaceFirstIn(
+
+    val withStressDeclaration = correctStressDeclaration.replaceFirstIn(
       source,
       readStress + "int main()\n{\nint stress = readStress();\n"
     )
-    "#use <conio>\n#use <args>\n" + withStressDeclaration
+    val removedAdditionalAssignments =
+      arbitraryStressDeclaration.replaceAllIn(withStressDeclaration, "")
+    "#use <conio>\n#use <args>\n" + removedAdditionalAssignments
   }
   def isInjectable(source: String): Boolean = {
-    stressDeclaration
+    correctStressDeclaration
       .findAllMatchIn(source)
       .nonEmpty
   }
