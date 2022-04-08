@@ -25,7 +25,8 @@ object BenchConfig {
       wUpper: Int,
       wStep: Int,
       wList: List[Int],
-      nPaths: Int
+      nPaths: Int,
+      stepList: List[Int]
   )
 
   case class BenchmarkPrior(
@@ -497,14 +498,22 @@ object BenchConfig {
     )
   }
 
-  def resolveWorkload(config: Config): BenchmarkWorkload =
+  def resolveWorkload(config: Config): BenchmarkWorkload = {
+    val step = config.benchmarkWStep.getOrElse(8)
+    val upper = config.benchmarkWUpper.getOrElse(32)
+    val stepList = config.benchmarkWList match {
+      case Some(value) => value
+      case None        => for (i <- 0 to upper by step) yield i
+    }
     BenchmarkWorkload(
       config.benchmarkIterations.getOrElse(1),
       config.benchmarkWUpper.getOrElse(32),
       config.benchmarkWStep.getOrElse(8),
       config.benchmarkWList.getOrElse(List()),
-      config.benchmarkPaths.getOrElse(1)
+      config.benchmarkPaths.getOrElse(1),
+      stepList.toList
     )
+  }
 
   def resolveBenchmarkConfig(
       source: String,

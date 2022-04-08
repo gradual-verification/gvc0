@@ -365,6 +365,10 @@ object Bench {
         ErrorLogging(errCC0, errExec)
       )
     }
+    if (Files.exists(Paths.get(Names.tempC0File)))
+      Files.delete(Paths.get(Names.tempC0File))
+    if (Files.exists(Paths.get(Names.tempBinaryFile)))
+      Files.delete(Paths.get(Names.tempBinaryFile))
   }
 
   def markFile(
@@ -376,70 +380,63 @@ object Bench {
   ): Unit = {
     val id = Extensions.remove(in.getFileName.toString)
     val sourceString = Files.readString(in)
+    val stepsRequired =
+      printer.findMissingWorkloads(id, benchConfig.workload.stepList)
 
-    if (!isInjectable(sourceString)) {
-      throw new BenchmarkException(
-        s"The file ${in.getFileName} doesn't include an assignment of the form 'int stress = ...'."
-      )
-    }
-    val source = injectStress(sourceString)
+    if (stepsRequired.nonEmpty) {
 
-    val tempC0File = Paths.get(Names.tempC0File)
-    val tempBinaryFile = Paths.get(Names.tempBinaryFile)
-    Main.writeFile(
-      tempC0File.toAbsolutePath.toString,
-      source
-    )
-    try {
-      CapturedExecution.compile(
-        tempC0File,
-        tempBinaryFile,
-        benchConfig.rootConfig
-      )
-      if (benchConfig.workload.wList.isEmpty) {
-        for (
-          i <- 0 to benchConfig.workload.wUpper by benchConfig.workload.wStep
-        ) {
-          val perf = CapturedExecution.exec_timed(
-            tempBinaryFile,
-            benchConfig.workload.iterations,
-            List(s"--stress $i")
-          )
-          printer.logID(id, i, perf)
-        }
-      } else {
-        for (i <- benchConfig.workload.wList) {
-          val perf = CapturedExecution.exec_timed(
-            tempBinaryFile,
-            benchConfig.workload.iterations,
-            List(s"--stress $i")
-          )
-          printer.logID(id, i, perf)
-        }
+      if (!isInjectable(sourceString)) {
+        throw new BenchmarkException(
+          s"The file ${in.getFileName} doesn't include an assignment of the form 'int stress = ...'."
+        )
       }
-    } catch {
-      case c0: CapturedOutputException =>
-        c0 match {
-          case cc0: CC0CompilationException =>
-            cc0.logMessage(id, logging.cc0)
-            progressTracker match {
-              case Some(value) => value.cc0Error()
-              case None        =>
-            }
-          case exec: ExecutionException =>
-            exec.logMessage(id, logging.exec)
-            progressTracker match {
-              case Some(value) => value.execError()
-              case None        =>
-            }
+
+      val source = injectStress(sourceString)
+
+      val tempC0File = Paths.get(Names.tempC0File)
+      val tempBinaryFile = Paths.get(Names.tempBinaryFile)
+      Main.writeFile(
+        tempC0File.toAbsolutePath.toString,
+        source
+      )
+      try {
+        CapturedExecution.compile(
+          tempC0File,
+          tempBinaryFile,
+          benchConfig.rootConfig
+        )
+
+        for (workload <- stepsRequired) {
+          val perf = CapturedExecution.exec_timed(
+            tempBinaryFile,
+            benchConfig.workload.iterations,
+            List(s"--stress $workload")
+          )
+          printer.logID(id, workload, perf)
         }
+
+      } catch {
+        case c0: CapturedOutputException =>
+          c0 match {
+            case cc0: CC0CompilationException =>
+              cc0.logMessage(id, logging.cc0)
+              progressTracker match {
+                case Some(value) => value.cc0Error()
+                case None        =>
+              }
+            case exec: ExecutionException =>
+              exec.logMessage(id, logging.exec)
+              progressTracker match {
+                case Some(value) => value.execError()
+                case None        =>
+              }
+          }
+      }
     }
     progressTracker match {
       case Some(value) => value.increment()
       case None        =>
     }
-    if (Files.exists(tempC0File)) Files.delete(tempC0File)
-    if (Files.exists(tempBinaryFile)) Files.delete(tempBinaryFile)
   }
 
   def markDirectory(

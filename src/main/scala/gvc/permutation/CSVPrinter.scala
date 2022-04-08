@@ -30,7 +30,7 @@ object Columns {
     List("id", "path_id", "level_id", "component_added")
   val pathColumnNames: List[String] =
     List("id", "path_hash")
-  val conjunctColumnNames:List[String] =
+  val conjunctColumnNames: List[String] =
     List("id", "conjuncts_total", "conjuncts_elim")
   def metadataColumnNames(template: List[ASTLabel]): List[String] =
     List("id") ++ template.map(_.hash)
@@ -60,7 +60,16 @@ class PerformanceCSVPrinter(out: Path, iterations: Int) {
 
   def close(): Unit = writer.close()
 
-
+  def findMissingWorkloads(
+      id: String,
+      requested: List[Int]
+  ): List[Int] = {
+    if (table.contains(id)) {
+      requested.toSet.diff(table(id)).toList
+    } else {
+      requested
+    }
+  }
 
   private def generatePerformanceTable(
       path: Path
@@ -87,7 +96,7 @@ class PerformanceCSVPrinter(out: Path, iterations: Int) {
       id: String,
       stress: Int
   ): Boolean = {
-      table.contains(id) && table(id).contains(stress)
+    table.contains(id) && table(id).contains(stress)
   }
 
   def logID(
@@ -192,7 +201,7 @@ class MetadataCSVPrinter(
 
   def logPermutation(
       id: String,
-      permutation: Set[ASTLabel],
+      permutation: Set[ASTLabel]
   ): Unit = {
     val entry =
       CSVIO.generateMetadataColumnEntry(
@@ -204,10 +213,15 @@ class MetadataCSVPrinter(
     metaWriter.flush()
   }
 
-  def logStep(id: String, pathIndex: Int, levelIndex: Int, componentAdded: Option[ASTLabel]): Unit = {
+  def logStep(
+      id: String,
+      pathIndex: Int,
+      levelIndex: Int,
+      componentAdded: Option[ASTLabel]
+  ): Unit = {
     val labelText = componentAdded match {
       case Some(value) => value.hash
-      case None => "NA"
+      case None        => "NA"
     }
     mappingWriter.write(
       List(id, pathIndex, levelIndex, labelText).mkString(",") + '\n'
@@ -216,7 +230,9 @@ class MetadataCSVPrinter(
   }
 
   def logConjuncts(id: String, perf: ProfilingInfo): Unit = {
-    val conjunctEntry = List(id, perf.nConjuncts.toString, perf.nConjunctsEliminated.toString).mkString(",") + '\n'
+    val conjunctEntry =
+      List(id, perf.nConjuncts.toString, perf.nConjunctsEliminated.toString)
+        .mkString(",") + '\n'
     conjunctWriter.write(conjunctEntry)
     conjunctWriter.flush()
   }
