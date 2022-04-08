@@ -19,12 +19,14 @@ object Stress {
   case class StressTestOutputFiles(
       root: Path,
       all: Path,
+      framing: Path,
       none: Path
   )
 
   object Names {
-    val allEnding = "_all.csv"
-    val noneEnding = "_none.csv"
+    val allEnding = "_full_dynamic.csv"
+    val framingEnding = "_only_framing.csv"
+    val noneEnding = "_unverified.csv"
     val stress = "stress"
     val tempExec = "a.out"
     val tempC0 = "temp.c0"
@@ -41,9 +43,10 @@ object Stress {
       files.baseName.length()
     )
     val all = root.resolve(base + Names.allEnding)
+    val framing = root.resolve(base + Names.framingEnding)
     val none = root.resolve(base + Names.noneEnding)
 
-    StressTestOutputFiles(root, all, none)
+    StressTestOutputFiles(root, all, framing, none)
   }
 
   def test(
@@ -60,16 +63,18 @@ object Stress {
       case Some(assign) =>
         config.benchmarkStressMode match {
           case Some(value) =>
-            value match {
-              case ExecutionType.FullDynamic => BaselineChecker.check(ir)
-              case ExecutionType.FramingOnly => BaselineChecker.checkFraming(ir)
-              case ExecutionType.Unverified  =>
-              case _                         => throw new StressException("Invalid execution type.")
+            val outputCSV = value match {
+              case ExecutionType.FullDynamic =>
+                BaselineChecker.check(ir); output.all
+              case ExecutionType.FramingOnly =>
+                BaselineChecker.checkFraming(ir); output.framing
+              case ExecutionType.Unverified => output.none
+              case _                        => throw new StressException("Invalid execution type.")
             }
             testExecution(
               ir,
               config,
-              output.all,
+              outputCSV,
               assign,
               value
             )
@@ -94,7 +99,7 @@ object Stress {
             testExecution(
               framingIR,
               config,
-              output.all,
+              output.framing,
               framingAssignmentHook,
               ExecutionType.FramingOnly
             )
