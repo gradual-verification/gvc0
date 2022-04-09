@@ -365,10 +365,13 @@ object Bench {
         ErrorLogging(errCC0, errExec)
       )
     }
-    if (Files.exists(Paths.get(Names.tempC0File)))
-      Files.delete(Paths.get(Names.tempC0File))
-    if (Files.exists(Paths.get(Names.tempBinaryFile)))
-      Files.delete(Paths.get(Names.tempBinaryFile))
+    val tempC0File = Paths.get(benchmarkConfig.files.root.getFileName + "_" + Names.tempC0File)
+    val tempBinaryFile = Paths.get(benchmarkConfig.files.root.getFileName + "_" + Names.tempBinaryFile)
+
+    if (Files.exists(tempC0File))
+      Files.delete(tempC0File)
+    if (Files.exists(tempBinaryFile))
+      Files.delete(tempBinaryFile)
   }
 
   def markFile(
@@ -393,8 +396,8 @@ object Bench {
 
       val source = injectStress(sourceString)
 
-      val tempC0File = Paths.get(Names.tempC0File)
-      val tempBinaryFile = Paths.get(Names.tempBinaryFile)
+      val tempC0File = Paths.get(benchConfig.files.root.getFileName + "_" + Names.tempC0File)
+      val tempBinaryFile = Paths.get(benchConfig.files.root.getFileName + "_" + Names.tempBinaryFile)
       Main.writeFile(
         tempC0File.toAbsolutePath.toString,
         source
