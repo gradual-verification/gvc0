@@ -20,7 +20,9 @@ object Stress {
       root: Path,
       all: Path,
       framing: Path,
-      none: Path
+      none: Path,
+      tempC0: Path,
+      tempBinary: Path
   )
 
   object Names {
@@ -45,8 +47,9 @@ object Stress {
     val all = root.resolve(base + Names.allEnding)
     val framing = root.resolve(base + Names.framingEnding)
     val none = root.resolve(base + Names.noneEnding)
-
-    StressTestOutputFiles(root, all, framing, none)
+    val tempC0 = Files.createTempFile("", Names.tempC0)
+    val tempBinary = Files.createTempFile("", Names.tempExec)
+    StressTestOutputFiles(root, all, framing, none, tempC0, tempBinary)
   }
 
   def test(
@@ -74,14 +77,16 @@ object Stress {
             testExecution(
               ir,
               config,
+              output,
               outputCSV,
               assign,
               value
             )
-          case None => {
+          case None =>
             testExecution(
               ir,
               config,
+              output,
               output.none,
               assign,
               ExecutionType.Unverified
@@ -90,6 +95,7 @@ object Stress {
             testExecution(
               ir,
               config,
+              output,
               output.all,
               assign,
               ExecutionType.FullDynamic
@@ -99,11 +105,11 @@ object Stress {
             testExecution(
               framingIR,
               config,
+              output,
               output.framing,
               framingAssignmentHook,
               ExecutionType.FramingOnly
             )
-          }
         }
       case None =>
         throw new StressException(
@@ -115,12 +121,11 @@ object Stress {
   def testExecution(
       ir: IRGraph.Program,
       config: Config,
+      outputFiles: StressTestOutputFiles,
       csvOutput: Path,
       assign: IRGraph.Assign,
       executionType: ExecutionType
   ): Unit = {
-    val tempC0 = Paths.get(Names.tempC0)
-    val tempExec = Paths.get(Names.tempExec)
 
     val entries = CSVIO.readEntries(csvOutput, Columns.performanceColumnNames)
     val validEntries =
@@ -141,11 +146,11 @@ object Stress {
       if (!stressSet.contains(i)) {
         assign.value = new IRGraph.Int(i)
         val printedSource = GraphPrinter.print(ir, includeSpecs = false)
-        Files.writeString(tempC0, printedSource)
+        Files.writeString(outputFiles.tempC0, printedSource)
         try {
           val perf = compile_and_exec(
-            tempC0,
-            tempExec,
+            outputFiles.tempC0,
+            outputFiles.tempBinary,
             config.benchmarkIterations.getOrElse(1),
             List(),
             config
