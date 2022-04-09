@@ -10,6 +10,9 @@ clean <- function(frame, status) {
     return(frame %>% select(where(not_all_na)) %>% drop_na())
 }
 
+perf_global <- data.frame()
+vcs_global <- data.frame()
+
 compile <- function(dir) {
     levels_path <- file.path(dir, "levels.csv")
     levels <- read_csv(
@@ -134,14 +137,16 @@ compile <- function(dir) {
 
     all$median <- all$median / 10 ** 6
     all["example"] <- basename(dir)
+    perf_global <<- bind_rows(perf_global, all)
+    
     all %>% write.csv(
-                file.path(dir,paste(
-                    basename(dir),
-                    "_best_worst_median.csv",
-                    sep = ""
-                )),
-                row.names = FALSE 
-            )
+            file.path(dir,paste(
+                basename(dir),
+                "_best_worst_median.csv",
+                sep = ""
+            )),
+            row.names = FALSE 
+        )
 
 
     levels_index <- levels %>% select(id, path_id, level_id)
@@ -158,6 +163,10 @@ compile <- function(dir) {
         conj_static %>% inner_join(levels_index, on = c("id")),
         conj_total %>% inner_join(levels_index, on = c("id")),
     ) %>% select(conjuncts, type, path_id, level_id)
+
+    conj_all["example"] <- basename(dir)
+    vcs_global <<- bind_rows(vcs_global, conj_all)
+
     conj_all %>% write.csv(
             file.path(dir,paste(
                 basename(dir),
@@ -171,3 +180,13 @@ compile <- function(dir) {
 compile("./results/bst")
 compile("./results/list")
 compile("./results/composite")
+
+perf_global %>% write.csv(
+        file.path("results/perf.csv"),
+        row.names = FALSE
+    )
+
+vcs_global %>% write.csv(
+        file.path("results/vcs.csv"),
+        row.names = FALSE
+    )
