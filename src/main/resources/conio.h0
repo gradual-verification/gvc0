@@ -1,0 +1,4 @@
+void printint(int value);
+void printchar(char value);
+void printbool(bool value);
+void flush();

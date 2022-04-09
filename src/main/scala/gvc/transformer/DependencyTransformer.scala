@@ -37,7 +37,17 @@ object DependencyTransformer {
         case t => Some(transformType(t))
       })
 
+      if (isNonTrivial(input.precondition) || isNonTrivial(input.postcondition))
+        throw new TransformerException("Specification in library declarations are not implemented")
+
       input.arguments.foreach(param => method.addParameter(param.name, transformType(param.valueType)))
     })
   }
+
+  def isNonTrivial(spec: Option[ResolvedExpression]) =
+    spec match {
+      case None => false
+      case Some(e: ResolvedBool) if e.value => false
+      case _ => true
+    }
 }

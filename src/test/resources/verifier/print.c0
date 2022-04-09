@@ -1,0 +1,13 @@
+#use <conio>
+
+int main()
+{
+  printchar('H');
+  printchar('e');
+  printchar('l');
+  printchar('l');
+  printchar('o');
+  printchar('\n');
+  flush();
+  return 0;
+}

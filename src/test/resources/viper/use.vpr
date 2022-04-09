@@ -1,0 +1,20 @@
+method main() returns ($result: Int)
+{
+  printint(1)
+  $result := 0
+}
+
+method printint(value: Int)
+{
+  
+}
+
+method printchar(value: Int)
+{
+  
+}
+
+method printbool(value: Bool)
+{
+  
+}

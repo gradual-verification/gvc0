@@ -1,13 +1,12 @@
 package gvc.specs.permutation
 import gvc.Config
 import gvc.permutation._
-import org.scalatest.funsuite.{AnyFunSuite, FixtureAnyFunSuite}
-
-import scala.collection.mutable
 import gvc.specs._
 import org.scalatest.Outcome
+import org.scalatest.funsuite.FixtureAnyFunSuite
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Files
+import scala.collection.mutable
 
 class PermutationSpec extends FixtureAnyFunSuite {
 

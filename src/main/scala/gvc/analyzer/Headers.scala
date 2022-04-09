@@ -8,5 +8,6 @@ case class ResolvedUseDeclaration(
     parsed: UseDeclaration,
     name: String,
     isLibrary: Boolean,
-    filePath: Path
+    path: Option[Path],
+    dependency: Option[ResolvedProgram]
 ) extends ResolvedNode

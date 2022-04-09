@@ -56,7 +56,10 @@ object IRGraphSilver {
     def convert(): SilverProgram = {
       val predicates = ir.predicates.map(convertPredicate).toList
       val tempVarIndex = mutable.Map[SilverVarId, Invoke]()
-      val methods = ir.methods.map(convertMethod(_, tempVarIndex)).toList
+      val methods = (
+        ir.methods.map(convertMethod(_, tempVarIndex)) ++
+        ir.dependencies.flatMap(_.methods.map(convertLibraryMethod))
+      ).toList
       val fields = this.fields.toSeq.sortBy(_.name).toList
 
       val program = vpr.Program(
@@ -71,14 +74,35 @@ object IRGraphSilver {
       new SilverProgram(program, tempVarIndex.toMap)
     }
 
+    private def returnVar(t: Option[IRGraph.Type]): List[vpr.LocalVarDecl] = {
+      t.map({ ret => vpr.LocalVarDecl(Names.ResultVar, convertType(ret))() })
+        .toList
+    }
+
+    private def convertLibraryMethod(method: DependencyMethod): vpr.Method = {
+      val retVar = returnVar(method.returnType)
+      val body = vpr.Seqn(
+        method.returnType.map(r =>
+          vpr.LocalVarAssign(retVar.head.localVar, convertExpr(r.default))()).toSeq,
+        Seq.empty
+      )()
+
+      vpr.Method(
+        method.name,
+        method.parameters.map(convertDecl).toList,
+        retVar,
+        Seq.empty,
+        Seq.empty,
+        Some(body)
+      )()
+    }
+
     private def convertMethod(method: Method, tempVarIndex: mutable.Map[SilverVarId, Invoke]): vpr.Method = {
       var tempCount = 0
 
       val params = method.parameters.map(convertDecl).toList
       val vars = method.variables.map(convertDecl).toList
-      val ret = method.returnType
-        .map({ ret => vpr.LocalVarDecl(Names.ResultVar, convertType(ret))() })
-        .toSeq
+      val ret = returnVar(method.returnType)
       val pre = method.precondition.map(convertExpr).toSeq
       val post = method.postcondition.map(convertExpr).toSeq
       val tempVars = new TempVars(method.name, tempVarIndex)

@@ -1,5 +1,7 @@
 package gvc.analyzer
 
+import scala.annotation.tailrec
+
 // Validates that all methods and predicates used are defined, that methods do
 // not use expressions valid only in predicates, and that predicates are valid
 // specifications.
@@ -7,6 +9,7 @@ object ImplementationValidator {
 
   def validate(program: ResolvedProgram, errors: ErrorSink): Unit = {
     val definedMethods = program.methodDefinitions.toSeq.map(_.name).toSet
+    val libraryMethods = collectLibraryMethods(program.dependencies, errors)
     val definedPredicates = program.predicateDefinitions.toSeq.map(_.name).toSet
     if (!definedMethods.contains("main")) {
       errors.programError("'main' method not defined")
@@ -16,10 +19,9 @@ object ImplementationValidator {
       ExpressionVisitor.visit(
         expr,
         _ match {
-          case invoke: ResolvedInvoke
-              if invoke.method.isDefined && !invoke.method.get.maskedLibrary && !definedMethods
-                .contains(invoke.method.get.name) => {
-            errors.error(invoke, s"'${invoke.methodName}' is never implemented")
+          case invoke: ResolvedInvoke => invoke.method.foreach { m =>
+            if (!libraryMethods.contains(m.name) && !definedMethods.contains(m.name))
+              errors.error(invoke, s"'${invoke.methodName}' is never implemented")
           }
 
           case pred: ResolvedPredicate
@@ -65,6 +67,38 @@ object ImplementationValidator {
     // Only check predicates in folds/unfolds
 
     program.methodDefinitions.foreach(m => statement(m.body))
+  }
 
+  @tailrec
+  def collectLibraryMethods(
+      uses: List[ResolvedUseDeclaration],
+      errors: ErrorSink,
+      methods: Set[String] = Set(),
+      visitedLibraries: Set[String] = Set()
+  ): Set[String] = {
+    uses match {
+      case Nil => methods
+      case use :: rest => use.dependency match {
+        case Some(program) if !visitedLibraries.contains(use.name) =>
+          program.methodDefinitions.foreach(defn =>
+            errors.error(defn, "Imported libraries may not contain method implementations"))
+          program.predicateDefinitions.foreach(defn =>
+            errors.error(defn, "Imported libraries may not contain predicate implementations"))
+          program.structDefinitions.foreach(defn =>
+            errors.error(defn, "Imported libraries may not contain struct definitions"))
+
+          // TODO: Allow abstract predicates to be imported?
+          program.predicateDeclarations.foreach(defn =>
+            errors.error(defn, "Imported predicates are not implemented"))
+
+          collectLibraryMethods(
+            program.dependencies ::: rest,
+            errors,
+            methods ++ program.methodDeclarations.map(_.name),
+            visitedLibraries + use.name
+          )
+        case _ => collectLibraryMethods(rest, errors, methods, visitedLibraries)
+      }
+    }
   }
 }
