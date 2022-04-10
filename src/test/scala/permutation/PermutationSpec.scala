@@ -41,7 +41,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
         currentPermutation += sampleToPermute(labelIndex)
         permutationIndices += sampleToPermute(labelIndex).exprIndex
-        val builtPermutation = selector.visit(permutationIndices)
+        val builtPermutation = selector.visit(permutationIndices.toSet)
 
         val builtLabels = auxLabeller.visit(builtPermutation)
         assert(

@@ -60,7 +60,10 @@ object BenchConfig {
       metadata: Path,
       source: Path,
       permMap: Path,
-      conjunctMap: Path
+      conjunctMap: Path,
+      //
+      tempC0File: Path,
+      tempBinaryFile: Path
   )
 
   case class TaggedPath(hash: BigInteger, source: Path)
@@ -472,6 +475,9 @@ object BenchConfig {
     val dynamicExec = logs.resolve(Names.dynamicExecLogs)
     val framingExec = logs.resolve(Names.framingExecLogs)
 
+    val tempC0File = Files.createTempFile("", Names.tempC0File)
+    val tempBinaryFile = Files.createTempFile("", Names.tempBinaryFile)
+
     BenchmarkOutputFiles(
       root = root,
       perms = perms,
@@ -494,7 +500,9 @@ object BenchConfig {
       framingExecLogs = framingExec,
       framingCompilationLogs = framingCompileLog,
       framingPerms = framingPerms,
-      framingPerformance = framingPerformance
+      framingPerformance = framingPerformance,
+      tempC0File = tempC0File,
+      tempBinaryFile = tempBinaryFile
     )
   }
 

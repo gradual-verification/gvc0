@@ -15,13 +15,13 @@ class SelectVisitor(program: IRGraph.Program)
   private val incompleteExpr = mutable.ListBuffer[Option[IRGraph.Expression]]()
   private val finishedExpr = mutable.ListBuffer[Option[IRGraph.Expression]]()
 
-  private var permutation = mutable.TreeSet[Int]()
+  private var permutation = Set[Int]()
 
   override def reset(): Unit = {
     super.reset()
   }
 
-  def visit(permutation: mutable.TreeSet[Int]): IRGraph.Program = {
+  def visit(permutation: Set[Int]): IRGraph.Program = {
     this.permutation = permutation
     super.visit(program)
   }
@@ -110,8 +110,8 @@ class SelectVisitor(program: IRGraph.Program)
     this.finishedBlocks.insert(0, this.incompleteBlocks.remove(0))
 
   private def mergeBinary(
-      lVal: Option[IRGraph.Expression],
-      rVal: Option[IRGraph.Expression]
+      rVal: Option[IRGraph.Expression],
+      lVal: Option[IRGraph.Expression]
   ): Option[IRGraph.Expression] = {
     lVal match {
       case Some(l) =>

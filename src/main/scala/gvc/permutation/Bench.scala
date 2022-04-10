@@ -11,7 +11,7 @@ import gvc.permutation.Output.blue
 import gvc.transformer.{GraphPrinter, IRGraph}
 import gvc.{Config, Main, OutputFileCollection, VerificationException}
 import java.math.BigInteger
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.util.matching.Regex
@@ -136,6 +136,10 @@ object Bench {
     val progress =
       new VerificationTracker(benchmarkConfig.labels.length, maxPaths)
 
+    val top = selector.visit(benchmarkConfig.labels.map(_.exprIndex).toSet)
+    val topText = GraphPrinter.print(top, includeSpecs = true)
+    print(topText)
+
     def dumpPermutation(
         dir: Path,
         name: String,
@@ -220,7 +224,7 @@ object Bench {
         if (!alreadySampled.contains(id)) {
           csv.logPermutation(idString, currentPermutation.toSet)
 
-          val builtPermutation = selector.visit(permutationIndices)
+          val builtPermutation = selector.visit(permutationIndices.toSet)
           val sourceText =
             GraphPrinter.print(builtPermutation, includeSpecs = true)
           dumpPermutation(
@@ -247,14 +251,14 @@ object Bench {
                 )
                 csv.logConjuncts(idString, vPerm.profiling)
                 if (!config.disableBaseline) {
-                  val builtDynamic = selector.visit(permutationIndices)
+                  val builtDynamic = selector.visit(permutationIndices.toSet)
                   generateBaseline(
                     builtDynamic,
                     idString,
                     currentPermutation,
                     benchmarkConfig.files.dynamicPerms.get
                   )
-                  val builtFraming = selector.visit(permutationIndices)
+                  val builtFraming = selector.visit(permutationIndices.toSet)
                   generateBaseline(
                     builtFraming,
                     idString,
@@ -295,14 +299,14 @@ object Bench {
       }
     }
     if (!config.disableBaseline) {
-      val templateCopyDynamic = selector.visit(mutable.TreeSet[Int]())
+      val templateCopyDynamic = selector.visit(Set.empty[Int])
       generateBaseline(
         templateCopyDynamic,
         bottomID,
         mutable.TreeSet[ASTLabel]()(LabelOrdering).empty,
         benchmarkConfig.files.dynamicPerms.get
       )
-      val templateCopyFraming = selector.visit(mutable.TreeSet[Int]())
+      val templateCopyFraming = selector.visit(Set.empty[Int])
       generateBaseline(
         templateCopyFraming,
         bottomID,
@@ -365,13 +369,10 @@ object Bench {
         ErrorLogging(errCC0, errExec)
       )
     }
-    val tempC0File = Paths.get(benchmarkConfig.files.root.getFileName + "_" + Names.tempC0File)
-    val tempBinaryFile = Paths.get(benchmarkConfig.files.root.getFileName + "_" + Names.tempBinaryFile)
-
-    if (Files.exists(tempC0File))
-      Files.delete(tempC0File)
-    if (Files.exists(tempBinaryFile))
-      Files.delete(tempBinaryFile)
+    if (Files.exists(benchmarkConfig.files.tempC0File))
+      Files.delete(benchmarkConfig.files.tempC0File)
+    if (Files.exists(benchmarkConfig.files.tempBinaryFile))
+      Files.delete(benchmarkConfig.files.tempBinaryFile)
   }
 
   def markFile(
@@ -396,22 +397,21 @@ object Bench {
 
       val source = injectStress(sourceString)
 
-      val tempC0File = Paths.get(benchConfig.files.root.getFileName + "_" + Names.tempC0File)
-      val tempBinaryFile = Paths.get(benchConfig.files.root.getFileName + "_" + Names.tempBinaryFile)
+
       Main.writeFile(
-        tempC0File.toAbsolutePath.toString,
+        benchConfig.files.tempC0File.toAbsolutePath.toString,
         source
       )
       try {
         CapturedExecution.compile(
-          tempC0File,
-          tempBinaryFile,
+          benchConfig.files.tempC0File,
+          benchConfig.files.tempBinaryFile,
           benchConfig.rootConfig
         )
 
         for (workload <- stepsRequired) {
           val perf = CapturedExecution.exec_timed(
-            tempBinaryFile,
+            benchConfig.files.tempBinaryFile,
             benchConfig.workload.iterations,
             List(s"--stress $workload")
           )
@@ -462,7 +462,6 @@ object Bench {
   }
 
   def injectStress(source: String): String = {
-
     val withStressDeclaration = correctStressDeclaration.replaceFirstIn(
       source,
       readStress + "int main()\n{\nint stress = readStress();\n"
