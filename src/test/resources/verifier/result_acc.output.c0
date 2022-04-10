@@ -28,8 +28,8 @@ struct Test* getTestPrecise(int* _instanceCounter)
   _tempFields = initOwnedFields(_instanceCounter);
   _ = getTest(_tempFields);
   join(_ownedFields, _tempFields);
-  assert(!(_ == NULL));
   assertAcc(_ownedFields, _ != NULL ? _->_id : -1, 0, "Field access runtime check failed for struct Test.value");
+  assert(!(_ == NULL));
   return _;
 }
 

@@ -41,10 +41,10 @@ void test(struct A* x, struct A* y, struct OwnedFields* _ownedFields)
 {
   struct OwnedFields* _tempFields = NULL;
   _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  assert(!(x == NULL));
-  assert(!(y == NULL));
   assertAcc(_ownedFields, y != NULL ? y->_id : -1, 0, "Field access runtime check failed for struct A.value");
   assertAcc(_ownedFields, x != NULL ? x->_id : -1, 0, "Field access runtime check failed for struct A.value");
+  assert(!(x == NULL));
+  assert(!(y == NULL));
   addAccEnsureSeparate(_tempFields, x != NULL ? x->_id : -1, 0, 2, "Overlapping field permissions for struct A.value");
   addAccEnsureSeparate(_tempFields, y != NULL ? y->_id : -1, 0, 2, "Overlapping field permissions for struct A.value");
   loseAcc(_ownedFields, x->_id, 0);

@@ -1,0 +1,38 @@
+
+void test(int x, int** y, int* z)
+  //@requires ? && acc(**y) && (x == 1 ? acc(*z) : true);
+{
+}
+
+int get()
+  //@ensures ?;
+{
+  return 1;
+}
+
+int* create()
+  //@ensures ?;
+{
+  return alloc(int);
+}
+
+int **createNested()
+  //@ensures ?;
+{
+  int **ptr = alloc(int*);
+  *ptr = create();
+  return ptr;
+}
+
+int main()
+{
+  int v = get();
+  int **a = createNested();
+  int *b = create();
+
+  // Creates runtime check for acc(*a), acc(**a), and acc(*b)
+  // Ensure that acc(*a) and acc(*b) are checked *before* acc(**a)
+  // Ensure that a *single* set of temporary fields is used for checking for separation
+  test(v, a, b);
+  return 0;
+}
