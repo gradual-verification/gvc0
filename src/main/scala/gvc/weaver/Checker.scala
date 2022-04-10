@@ -3,6 +3,7 @@ import gvc.transformer.IRGraph._
 import Collector._
 import gvc.transformer.{IRGraph, SilverVarId}
 import scala.collection.mutable
+import scala.annotation.tailrec
 
 object Checker {
   type StructIDTracker = Map[scala.Predef.String, StructField]
@@ -159,9 +160,8 @@ object Checker {
     // Group them by location and condition, so that multiple checks can be contained in a single
     // if block.
     val context = CheckContext(program, checkMethod, implementation, runtime)
-    methodData.checks
-      .groupBy(c => (c.location, c.when))
-      .foreach { case ((loc, when), checks) =>
+    naiveGrouping(methodData.checks)
+      .foreach { case (loc, when, checks) =>
         val condition = when.map(getCondition(_))
         insertAt(
           loc,
@@ -449,5 +449,73 @@ object Checker {
         ops.foreach(iff.ifTrue += _)
         Seq(iff)
     }
+  }
+
+  // TODO: Finish up a proper ordering strategy for checks that uses the following method instead of this
+  def naiveGrouping(items: List[RuntimeCheck]): List[(Location, Option[Condition], List[RuntimeCheck])] = {
+    items.groupBy(i => (i.location, i.when))
+      .map { case ((loc, when), checks) => (loc, when, checks) }
+      .toList
+  }
+
+  def groupChecks(items: List[RuntimeCheck]): List[(Location, Option[Condition], List[RuntimeCheck])] = {
+    items.groupBy(_.location)
+      .toList
+      .flatMap { case (loc, checks) =>
+        val groups = groupConditions(checks)
+        val sorted = orderChecks(groups)
+        groupAdjacentConditions(sorted).map { case (cond, checks) => (loc, cond, checks) }
+      }
+  }
+
+  // Groups conditions but does not change order
+  @tailrec
+  def groupAdjacentConditions(
+      items: List[RuntimeCheck],
+      acc: List[(Option[Condition], List[RuntimeCheck])] = Nil
+  ): List[(Option[Condition], List[RuntimeCheck])] = {
+    items match {
+      case Nil => acc
+      case head :: rest => {
+        val (same, remaining) = rest.span(_.when == head.when)
+        groupAdjacentConditions(remaining, acc :+ (head.when, head :: same))
+      }
+    }
+  }
+
+  // Groups conditions in a stable-sort manner (the first items in each group are in order, etc.),
+  // but allows ordering changes
+  def groupConditions(items: List[RuntimeCheck]): List[RuntimeCheck] = {
+    val map = mutable.LinkedHashMap[Option[Condition], mutable.ListBuffer[RuntimeCheck]]()
+    for (check <- items) {
+      val list = map.getOrElseUpdate(check.when, mutable.ListBuffer())
+      list += check
+    }
+
+    map.flatMap { case (_, checks) => checks }
+      .toList
+  }
+
+  def orderChecks(checks: List[RuntimeCheck]) =
+    checks.sortBy(c => c.check match {
+      case acc: FieldAccessibilityCheck => nesting(acc.field)
+      case _ => 0
+    })(Ordering.Int.reverse)
+
+  def nesting(expr: CheckExpression): scala.Int = expr match {
+    case b: CheckExpression.Binary =>
+      Math.max(nesting(b.left), nesting(b.right)) + 1
+    case c: CheckExpression.Cond =>
+      Math.max(nesting(c.cond), Math.max(nesting(c.ifTrue), nesting(c.ifFalse))) + 1
+    case d: CheckExpression.Deref =>
+      nesting(d.operand) + 1
+    case f: CheckExpression.Field =>
+      nesting(f.root) + 1
+    case u: CheckExpression.Unary =>
+      nesting(u.operand) + 1
+    case _: CheckExpression.Literal
+      | _: CheckExpression.Var
+      | CheckExpression.Result
+      | _: CheckExpression.ResultVar => 1
   }
 }
