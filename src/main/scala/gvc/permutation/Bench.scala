@@ -136,10 +136,6 @@ object Bench {
     val progress =
       new VerificationTracker(benchmarkConfig.labels.length, maxPaths)
 
-    val top = selector.visit(benchmarkConfig.labels.map(_.exprIndex).toSet)
-    val topText = GraphPrinter.print(top, includeSpecs = true)
-    print(topText)
-
     def dumpPermutation(
         dir: Path,
         name: String,
