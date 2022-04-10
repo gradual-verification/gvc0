@@ -1,6 +1,6 @@
 package gvc.permutation
-import gvc.transformer.IRGraph
-import gvc.transformer.IRGraph.{Block, Expression, Method, Predicate}
+import gvc.transformer.IR
+import gvc.transformer.IR.{Block, Expression, Method, Predicate}
 import gvc.permutation.ExprType.ExprType
 import gvc.permutation.SpecType.SpecType
 
@@ -33,7 +33,7 @@ abstract class SpecVisitor[I, O] {
 
   def visitSpec(
       parent: Either[Method, Predicate],
-      template: IRGraph.Op,
+      template: IR.Op,
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
@@ -41,11 +41,11 @@ abstract class SpecVisitor[I, O] {
     specIndex += 1
   }
 
-  def visitOp(parent: Either[Method, Predicate], template: IRGraph.Op): Unit = {
+  def visitOp(parent: Either[Method, Predicate], template: IR.Op): Unit = {
     currentContext = Some(parent)
   }
 
-  def visit(input: IRGraph.Program): O = {
+  def visit(input: IR.Program): O = {
     new SpecTraversal[I, O]().visitAST(input, this)
     val output = collectOutput()
     reset()
@@ -53,9 +53,9 @@ abstract class SpecVisitor[I, O] {
   }
 
   def collectAssertion(): Unit
-  def collectIf(stmt: IRGraph.If): Unit
-  def collectConditional(cond: IRGraph.Conditional): Unit
-  def collectWhile(whl: IRGraph.While): Unit
+  def collectIf(stmt: IR.If): Unit
+  def collectConditional(cond: IR.Conditional): Unit
+  def collectWhile(whl: IR.While): Unit
 
   def enterExpr(): Unit
   def leaveExpr(): Unit
@@ -72,7 +72,7 @@ abstract class SpecVisitor[I, O] {
 }
 
 class SpecTraversal[I, O] {
-  def visitAST(program: IRGraph.Program, visitor: SpecVisitor[I, O]): Unit = {
+  def visitAST(program: IR.Program, visitor: SpecVisitor[I, O]): Unit = {
     program.methods.foreach(visitMethod(_, visitor))
     program.predicates.foreach(visitPredicate(_, visitor))
   }
@@ -131,8 +131,8 @@ class SpecTraversal[I, O] {
     while (it.hasNext) {
       val op = it.next()
       op match {
-        case assert: IRGraph.Assert =>
-          if (assert.kind == IRGraph.AssertKind.Specification) {
+        case assert: IR.Assert =>
+          if (assert.kind == IR.AssertKind.Specification) {
             visitExpression(
               Left(context),
               SpecType.Assert,
@@ -143,25 +143,25 @@ class SpecTraversal[I, O] {
           } else {
             visitor.visitOp(Left(context), op)
           }
-        case _: IRGraph.Fold =>
+        case _: IR.Fold =>
           visitor.visitSpec(
             Left(context),
             op,
             SpecType.Fold,
             ExprType.Predicate
           )
-        case _: IRGraph.Unfold =>
+        case _: IR.Unfold =>
           visitor.visitSpec(
             Left(context),
             op,
             SpecType.Unfold,
             ExprType.Predicate
           )
-        case ifstmt: IRGraph.If =>
+        case ifstmt: IR.If =>
           visitBlock(context, ifstmt.ifTrue, visitor)
           visitBlock(context, ifstmt.ifFalse, visitor)
           visitor.collectIf(ifstmt)
-        case whl: IRGraph.While =>
+        case whl: IR.While =>
           visitExpression(
             Left(context),
             SpecType.Invariant,
@@ -196,28 +196,28 @@ class SpecTraversal[I, O] {
     expression match {
       case Some(expr) =>
         expr match {
-          case _: IRGraph.Accessibility =>
+          case _: IR.Accessibility =>
             visitor.visitSpec(
               context,
               expr,
               specType,
               ExprType.Accessibility
             )
-          case _: IRGraph.PredicateInstance =>
+          case _: IR.PredicateInstance =>
             visitor.visitSpec(
               context,
               expr,
               specType,
               ExprType.Predicate
             )
-          case imprecise: IRGraph.Imprecise =>
+          case imprecise: IR.Imprecise =>
             buildExpression(
               context,
               specType,
               imprecise.precise,
               visitor
             )
-          case conditional: IRGraph.Conditional =>
+          case conditional: IR.Conditional =>
             visitExpression(
               context,
               specType,
@@ -231,8 +231,8 @@ class SpecTraversal[I, O] {
               visitor
             )
             visitor.collectConditional(conditional)
-          case binary: IRGraph.Binary =>
-            if (binary.operator == IRGraph.BinaryOp.And) {
+          case binary: IR.Binary =>
+            if (binary.operator == IR.BinaryOp.And) {
               buildExpression(context, specType, Some(binary.right), visitor)
               buildExpression(context, specType, Some(binary.left), visitor)
             } else {
@@ -244,7 +244,7 @@ class SpecTraversal[I, O] {
               )
             }
           case _ =>
-            if (!expr.isInstanceOf[IRGraph.Bool]) {
+            if (!expr.isInstanceOf[IR.BoolLit]) {
               visitor.visitSpec(
                 context,
                 expr,

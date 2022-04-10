@@ -10,12 +10,12 @@ import gvc.transformer._
 import gvc.weaver.Weaver
 
 case class TestProgram(
-    ir: IRGraph.Program,
+    ir: IR.Program,
     silverProgram: SilverProgram
 ) {
   def weave = Weaver.weave(ir, silverProgram)
 
-  def irSource = GraphPrinter.print(ir, true)
+  def irSource = IRPrinter.print(ir, true)
 
   def silverSource = silverProgram.program.toString()
 }
@@ -148,8 +148,8 @@ object TestUtils {
     if (!sink.errors.isEmpty)
       throw new ValidatorException(getErrors)
 
-    val ir = GraphTransformer.transform(result)
-    val silver = IRGraphSilver.toSilver(ir)
+    val ir = IRTransformer.transform(result)
+    val silver = IRSilver.toSilver(ir)
 
     TestProgram(ir, silver)
   }

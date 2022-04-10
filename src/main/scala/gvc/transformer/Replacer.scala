@@ -1,69 +1,68 @@
 package gvc.transformer
-import IRGraph._
 
 object Replacer {
-  type Mapping = Map[Var, Var]
+  type Mapping = Map[IR.Var, IR.Var]
 
-  def replace(block: Block, m: Mapping): Unit =
+  def replace(block: IR.Block, m: Mapping): Unit =
     block.foreach(replace(_, m))
   
-  def replace(op: Op, m: Mapping): Unit = {
+  def replace(op: IR.Op, m: Mapping): Unit = {
     replaceShallow(op, m)
 
     op match {
-      case iff: If => {
+      case iff: IR.If => {
         replace(iff.ifTrue, m)
         replace(iff.ifFalse, m)
       }
-      case loop: While => {
+      case loop: IR.While => {
         replace(loop.body, m)
       }
       case _ => ()
     }
   }
 
-  def replaceShallow(op: Op, m: Mapping): Unit = op match {
-    case inv: Invoke => {
+  def replaceShallow(op: IR.Op, m: Mapping): Unit = op match {
+    case inv: IR.Invoke => {
       inv.arguments = inv.arguments.map(replace(_, m))
       inv.target = inv.target.map(replace(_, m))
     }
-    case alloc: AllocValue => {
+    case alloc: IR.AllocValue => {
       alloc.target = replace(alloc.target, m)
     }
-    case alloc: AllocStruct => {
+    case alloc: IR.AllocStruct => {
       alloc.target = replace(alloc.target, m)
     }
-    case alloc: AllocArray => {
+    case alloc: IR.AllocArray => {
       //TODO: alloc.length
       alloc.target = replace(alloc.target, m)
     }
-    case assign: Assign => {
+    case assign: IR.Assign => {
       assign.target = replace(assign.target, m)
       assign.value = replace(assign.value, m)
     }
-    case assign: AssignMember => {
+    case assign: IR.AssignMember => {
       assign.value = replace(assign.value, m)
       assign.member = replace(assign.member, m)
     }
-    case assert: Assert => {
+    case assert: IR.Assert => {
       assert.value = replace(assert.value, m)
     }
-    case fold: Fold => {
+    case fold: IR.Fold => {
       fold.instance = replace(fold.instance, m)
     }
-    case unfold: Unfold => {
+    case unfold: IR.Unfold => {
       unfold.instance = replace(unfold.instance, m)
     }
-    case error: Error => {
+    case error: IR.Error => {
       error.value = replace(error.value, m)
     }
-    case ret: Return => {
+    case ret: IR.Return => {
       ret.value = ret.value.map(replace(_, m))
     }
-    case iff: If => {
+    case iff: IR.If => {
       iff.condition = replace(iff.condition, m)
     }
-    case loop: While => {
+    case loop: IR.While => {
       loop.condition = replace(loop.condition, m)
     }
   }
@@ -71,30 +70,30 @@ object Replacer {
   // Recursively follows all mappings
   // Note that this could cause an infinite loop if a cycle of mappings occurred
   // (i.e. v1 -> v2 -> v1)
-  def replace(v: Var, m: Mapping): Var = m.get(v) match {
+  def replace(v: IR.Var, m: Mapping): IR.Var = m.get(v) match {
     case None => v
     case Some(mappedVar) => replace(mappedVar, m)
   }
 
-  def replace(member: Member, m: Mapping): Member = member match {
-    case field: FieldMember => new FieldMember(replace(field.root, m), field.field)
-    case deref: DereferenceMember => new DereferenceMember(replace(deref.root, m))
-    case array: ArrayMember => new ArrayMember(replace(array.root, m), array.index) // TODO: index
+  def replace(member: IR.Member, m: Mapping): IR.Member = member match {
+    case field: IR.FieldMember => new IR.FieldMember(replace(field.root, m), field.field)
+    case deref: IR.DereferenceMember => new IR.DereferenceMember(replace(deref.root, m))
+    case array: IR.ArrayMember => new IR.ArrayMember(replace(array.root, m), array.index) // TODO: index
   }
 
-  def replace(pred: PredicateInstance, m: Mapping): PredicateInstance =
-    new PredicateInstance(pred.predicate, pred.arguments.map(replace(_, m)))
+  def replace(pred: IR.PredicateInstance, m: Mapping): IR.PredicateInstance =
+    new IR.PredicateInstance(pred.predicate, pred.arguments.map(replace(_, m)))
 
-  def replace(expr: Expression, m: Mapping): Expression = expr match {
-    case v: Var => replace(v, m)
-    case member: Member => replace(member, m)
-    case acc: Accessibility => new Accessibility(replace(acc.member, m))
-    case pred: PredicateInstance => replace(pred, m)
-    case result: Result => result
-    case imprecise: Imprecise => new Imprecise(imprecise.precise.map(replace(_, m)))
-    case literal: Literal => literal
-    case cond: Conditional => new Conditional(replace(cond.condition, m), replace(cond.ifTrue, m), replace(cond.ifFalse, m))
-    case binary: Binary => new Binary(binary.operator, replace(binary.left, m), replace(binary.right, m))
-    case unary: Unary => new Unary(unary.operator, replace(unary.operand, m))
+  def replace(expr: IR.Expression, m: Mapping): IR.Expression = expr match {
+    case v: IR.Var => replace(v, m)
+    case member: IR.Member => replace(member, m)
+    case acc: IR.Accessibility => new IR.Accessibility(replace(acc.member, m))
+    case pred: IR.PredicateInstance => replace(pred, m)
+    case result: IR.Result => result
+    case imprecise: IR.Imprecise => new IR.Imprecise(imprecise.precise.map(replace(_, m)))
+    case literal: IR.Literal => literal
+    case cond: IR.Conditional => new IR.Conditional(replace(cond.condition, m), replace(cond.ifTrue, m), replace(cond.ifFalse, m))
+    case binary: IR.Binary => new IR.Binary(binary.operator, replace(binary.left, m), replace(binary.right, m))
+    case unary: IR.Unary => new IR.Unary(unary.operator, replace(unary.operand, m))
   }
 }

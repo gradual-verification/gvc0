@@ -3,7 +3,7 @@ package gvc.permutation
 import gvc.{Config, Main}
 import gvc.permutation.Bench.{BenchmarkException, Names}
 import gvc.permutation.Extensions.{c0, csv}
-import gvc.transformer.{GraphPrinter, IRGraph}
+import gvc.transformer.{IRPrinter, IR}
 
 import java.math.BigInteger
 import java.nio.file.{Files, Path, Paths}
@@ -15,7 +15,7 @@ object BenchConfig {
       files: BenchmarkOutputFiles,
       prior: BenchmarkPrior,
       workload: BenchmarkWorkload,
-      ir: IRGraph.Program,
+      ir: IR.Program,
       labels: List[ASTLabel],
       rootConfig: Config
   )
@@ -231,7 +231,7 @@ object BenchConfig {
       val destination = targetDirectory.resolve(c0(id))
       Files.writeString(
         destination,
-        GraphPrinter.print(ir, includeSpecs = false)
+        IRPrinter.print(ir, includeSpecs = false)
       )
       completedCount += 1
       print(

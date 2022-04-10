@@ -1,8 +1,7 @@
 package gvc.weaver
 
 import scala.collection.mutable
-import gvc.transformer.IRGraph._
-import gvc.transformer.{SilverProgram, SilverVarId}
+import gvc.transformer.{IR, SilverProgram, SilverVarId}
 import viper.silver.ast.MethodCall
 import viper.silver.{ast => vpr}
 import viper.silicon.state.CheckPosition
@@ -10,15 +9,12 @@ import viper.silicon.state.LoopPosition
 import viper.silicon.state.BranchCond
 
 object Collector {
-  private val DoSimplification =
-    sys.env.get("DISABLE_SIMPLIFICATION") != Some("1")
-
   sealed trait Location
-  sealed trait AtOp extends Location { val op: Op }
-  case class Pre(override val op: Op) extends AtOp
-  case class Post(override val op: Op) extends AtOp
-  case class LoopStart(override val op: Op) extends AtOp
-  case class LoopEnd(override val op: Op) extends AtOp
+  sealed trait AtOp extends Location { val op: IR.Op }
+  case class Pre(override val op: IR.Op) extends AtOp
+  case class Post(override val op: IR.Op) extends AtOp
+  case class LoopStart(override val op: IR.Op) extends AtOp
+  case class LoopEnd(override val op: IR.Op) extends AtOp
   case object MethodPre extends Location
   case object MethodPost extends Location
 
@@ -49,27 +45,27 @@ object Collector {
   case object MainCallStyle extends CallStyle
 
   class CollectedMethod(
-      val method: Method,
+      val method: IR.Method,
       val conditions: List[TrackedCondition],
       val checks: List[RuntimeCheck],
-      val returns: List[Return],
+      val returns: List[IR.Return],
       val hasImplicitReturn: Boolean,
       val calls: List[CollectedInvocation],
-      val allocations: List[Op],
+      val allocations: List[IR.Op],
       val callStyle: CallStyle,
       val checkedSpecificationLocations: Set[Location]
   )
 
   class CollectedProgram(
-      val program: Program,
-      val temporaryVars: Map[SilverVarId, Invoke],
+      val program: IR.Program,
+      val temporaryVars: Map[SilverVarId, IR.Invoke],
       val methods: Map[scala.Predef.String, CollectedMethod]
   )
 
-  case class CollectedInvocation(ir: Invoke, vpr: MethodCall)
+  case class CollectedInvocation(ir: IR.Invoke, vpr: MethodCall)
 
   def collect(
-      irProgram: Program,
+      irProgram: IR.Program,
       vprProgram: SilverProgram
   ): CollectedProgram = {
     val checks = collectChecks(vprProgram.program)
@@ -258,9 +254,9 @@ object Collector {
   }
 
   private def collect(
-      irProgram: Program,
+      irProgram: IR.Program,
       vprProgram: vpr.Program,
-      irMethod: Method,
+      irMethod: IR.Method,
       vprMethod: vpr.Method,
       vprChecks: ViperCheckMap
   ): CollectedMethod = {
@@ -270,10 +266,10 @@ object Collector {
 
     // A list of `return` statements in the IR method, used for inserting any runtime checks that
     // the postcondition may require.
-    val exits = mutable.ListBuffer[Return]()
+    val exits = mutable.ListBuffer[IR.Return]()
     // A list of invocations and allocations, used for inserting permission tracking
     val invokes = mutable.ListBuffer[CollectedInvocation]()
-    val allocations = mutable.ListBuffer[Op]()
+    val allocations = mutable.ListBuffer[IR.Op]()
 
     // The collection of conditions that are used in runtime checks
     val trackedConditions = mutable.LinkedHashSet[TrackedCondition]()
@@ -382,7 +378,7 @@ object Collector {
     // Combines indexing and runtime check collection for a given Viper node. Indexing must be
     // completed first, since the conditions on a runtime check may be at locations contained in
     // the same node.
-    def visit(op: Op, node: vpr.Node, loopInvs: List[vpr.Exp]): Unit = {
+    def visit(op: IR.Op, node: vpr.Node, loopInvs: List[vpr.Exp]): Unit = {
       val loc = Pre(op)
       node match {
         case iff: vpr.If => {
@@ -418,20 +414,20 @@ object Collector {
     }
 
     def visitBlock(
-        irBlock: Block,
+        irBlock: IR.Block,
         vprBlock: vpr.Seqn,
         loopInvs: List[vpr.Exp]
     ): Unit = {
       var vprOps = vprBlock.ss.toList
       for (irOp <- irBlock) {
         vprOps = (irOp, vprOps) match {
-          case (irIf: If, (vprIf: vpr.If) :: vprRest) => {
+          case (irIf: IR.If, (vprIf: vpr.If) :: vprRest) => {
             visit(irIf, vprIf, loopInvs)
             visitBlock(irIf.ifTrue, vprIf.thn, loopInvs)
             visitBlock(irIf.ifFalse, vprIf.els, loopInvs)
             vprRest
           }
-          case (irWhile: While, (vprWhile: vpr.While) :: vprRest) => {
+          case (irWhile: IR.While, (vprWhile: vpr.While) :: vprRest) => {
             visit(irWhile, vprWhile, loopInvs)
             // Supports only a single invariant
             val newInvs =
@@ -443,60 +439,60 @@ object Collector {
 
             vprRest
           }
-          case (irInvoke: Invoke, (vprInvoke: vpr.MethodCall) :: vprRest) => {
+          case (irInvoke: IR.Invoke, (vprInvoke: vpr.MethodCall) :: vprRest) => {
             invokes += CollectedInvocation(irInvoke, vprInvoke)
             visit(irInvoke, vprInvoke, loopInvs)
             vprRest
           }
-          case (irAlloc: AllocValue, (vprAlloc: vpr.NewStmt) :: vprRest) => {
+          case (irAlloc: IR.AllocValue, (vprAlloc: vpr.NewStmt) :: vprRest) => {
             allocations += irAlloc
             visit(irAlloc, vprAlloc, loopInvs)
             vprRest
           }
-          case (irAlloc: AllocStruct, (vprAlloc: vpr.NewStmt) :: vprRest) => {
+          case (irAlloc: IR.AllocStruct, (vprAlloc: vpr.NewStmt) :: vprRest) => {
             allocations += irAlloc
             visit(irAlloc, vprAlloc, loopInvs)
             vprRest
           }
           case (
-                irAssign: Assign,
+                irAssign: IR.Assign,
                 (vprAssign: vpr.LocalVarAssign) :: vprRest
               ) => {
             visit(irAssign, vprAssign, loopInvs)
             vprRest
           }
           case (
-                irAssign: AssignMember,
+                irAssign: IR.AssignMember,
                 (vprAssign: vpr.FieldAssign) :: vprRest
               ) => {
             visit(irAssign, vprAssign, loopInvs)
             vprRest
           }
-          case (irAssert: Assert, vprRest)
-              if irAssert.kind == AssertKind.Imperative =>
+          case (irAssert: IR.Assert, vprRest)
+              if irAssert.kind == IR.AssertKind.Imperative =>
             vprRest
-          case (irAssert: Assert, (vprAssert: vpr.Assert) :: vprRest)
-              if irAssert.kind == AssertKind.Specification => {
+          case (irAssert: IR.Assert, (vprAssert: vpr.Assert) :: vprRest)
+              if irAssert.kind == IR.AssertKind.Specification => {
             visit(irAssert, vprAssert, loopInvs)
             vprRest
           }
-          case (irFold: Fold, (vprFold: vpr.Fold) :: vprRest) => {
+          case (irFold: IR.Fold, (vprFold: vpr.Fold) :: vprRest) => {
             visit(irFold, vprFold, loopInvs)
             vprRest
           }
-          case (irUnfold: Unfold, (vprUnfold: vpr.Unfold) :: vprRest) => {
+          case (irUnfold: IR.Unfold, (vprUnfold: vpr.Unfold) :: vprRest) => {
             visit(irUnfold, vprUnfold, loopInvs)
             vprRest
           }
-          case (irError: Error, (vprError: vpr.Assert) :: vprRest) => {
+          case (irError: IR.Error, (vprError: vpr.Assert) :: vprRest) => {
             visit(irError, vprError, loopInvs)
             vprRest
           }
-          case (irReturn: Return, vprRest) if irReturn.value.isEmpty => {
+          case (irReturn: IR.Return, vprRest) if irReturn.value.isEmpty => {
             exits += irReturn
             vprRest
           }
-          case (irReturn: Return, (vprReturn: vpr.LocalVarAssign) :: vprRest)
+          case (irReturn: IR.Return, (vprReturn: vpr.LocalVarAssign) :: vprRest)
               if irReturn.value.isDefined => {
             visit(irReturn, vprReturn, loopInvs)
             exits += irReturn
@@ -528,10 +524,10 @@ object Collector {
       case Post(op) if (op.getNext.isDefined) => Pre(op.getNext.get)
 
       // LoopStart is the same as Pre of the first op in the loop
-      case LoopStart(op: While) if op.body.nonEmpty => Pre(op.body.head)
+      case LoopStart(op: IR.While) if op.body.nonEmpty => Pre(op.body.head)
 
       // LoopEnd is the same as Post of the last op in the loop
-      case LoopEnd(op: While) if op.body.nonEmpty => Post(op.body.last)
+      case LoopEnd(op: IR.While) if op.body.nonEmpty => Post(op.body.last)
 
       // Otherwise, don't change
       case loc => loc
@@ -618,8 +614,8 @@ object Collector {
       val (spec, arguments) = location match {
         case at: AtOp =>
           at.op match {
-            case op: Invoke => op.callee match {
-              case callee: Method if callee.precondition.isDefined =>
+            case op: IR.Invoke => op.callee match {
+              case callee: IR.Method if callee.precondition.isDefined =>
                 (
                   callee.precondition.get,
                   Some(
@@ -631,7 +627,7 @@ object Collector {
               case _ => throw new WeaverException(s"Could not locate specification at invoke: $location")
             }
             // TODO: Do we need unfold?
-            case op: Fold =>
+            case op: IR.Fold =>
               (
                 op.instance.predicate.expression,
                 Some(
@@ -640,8 +636,8 @@ object Collector {
                     .toMap
                 )
               )
-            case op: While  => (op.invariant, None)
-            case op: Assert => (op.value, None)
+            case op: IR.While  => (op.invariant, None)
+            case op: IR.Assert => (op.value, None)
             case _ =>
               throw new WeaverException(
                 "Could not locate specification for permission checking: " + location
@@ -688,21 +684,21 @@ object Collector {
   }
   // TODO: Factor this out
   def traversePermissions(
-      spec: Expression,
-      arguments: Option[Map[Parameter, CheckExpression]],
+      spec: IR.Expression,
+      arguments: Option[Map[IR.Parameter, CheckExpression]],
       condition: Option[CheckExpression],
       checkType: CheckType
   ): Seq[CheckInfo] = spec match {
     // Imprecise expressions just needs the precise part checked.
     // TODO: This should also enable framing checks.
-    case imp: Imprecise => {
+    case imp: IR.Imprecise => {
       imp.precise.toSeq.flatMap(
         traversePermissions(_, arguments, condition, checkType)
       )
     }
 
     // And expressions just traverses both parts
-    case and: Binary if and.operator == BinaryOp.And => {
+    case and: IR.Binary if and.operator == IR.BinaryOp.And => {
       val left = traversePermissions(and.left, arguments, condition, checkType)
       val right =
         traversePermissions(and.right, arguments, condition, checkType)
@@ -711,7 +707,7 @@ object Collector {
 
     // A condition expression traverses each side with its respective condition, joined with the
     // existing condition if provided to support nested conditionals.
-    case cond: Conditional => {
+    case cond: IR.Conditional => {
       val baseCond = resolveValue(cond.condition, arguments)
       val negCond = CheckExpression.Not(baseCond)
       val (trueCond, falseCond) = condition match {
@@ -735,7 +731,7 @@ object Collector {
     }
 
     // A single accessibility check
-    case acc: Accessibility => {
+    case acc: IR.Accessibility => {
       val field = resolveValue(acc.member, arguments) match {
         case f: CheckExpression.Field => f
         case invalid =>
@@ -760,7 +756,7 @@ object Collector {
       }
 
     }
-    case pred: PredicateInstance => {
+    case pred: IR.PredicateInstance => {
       checkType match {
         case Separation =>
           Seq(
@@ -791,17 +787,17 @@ object Collector {
     }
   }
 
-  def hasImplicitReturn(method: Method): Boolean =
+  def hasImplicitReturn(method: IR.Method): Boolean =
     method.body.lastOption match {
       case None         => true
       case Some(tailOp) => hasImplicitReturn(tailOp)
     }
 
   // Checks if execution can fall-through a given Op
-  def hasImplicitReturn(tailOp: Op): Boolean = tailOp match {
-    case r: Return => false
-    case _: While  => true
-    case iff: If =>
+  def hasImplicitReturn(tailOp: IR.Op): Boolean = tailOp match {
+    case r: IR.Return => false
+    case _: IR.While  => true
+    case iff: IR.If =>
       (iff.ifTrue.lastOption, iff.ifFalse.lastOption) match {
         case (Some(t), Some(f)) => hasImplicitReturn(t) || hasImplicitReturn(f)
         case _                  => true
@@ -809,12 +805,12 @@ object Collector {
     case _ => true
   }
 
-  def isImprecise(cond: Option[Expression]) = cond match {
-    case Some(_: Imprecise) => true
+  def isImprecise(cond: Option[IR.Expression]) = cond match {
+    case Some(_: IR.Imprecise) => true
     case _                  => false
   }
 
-  def getCallstyle(irMethod: Method) =
+  def getCallstyle(irMethod: IR.Method) =
     if (irMethod.name == "main")
       MainCallStyle
     else if (isImprecise(irMethod.precondition))
@@ -827,24 +823,24 @@ object Collector {
   // mapping is given, it will use this mapping to resolve variables. Otherwise, it will assume
   // any variables are accessible in the current scope.
   def resolveValue(
-      input: Expression,
-      arguments: Option[Map[Parameter, CheckExpression]] = None
+      input: IR.Expression,
+      arguments: Option[Map[IR.Parameter, CheckExpression]] = None
   ): CheckExpression = {
-    def resolve(input: Expression) = resolveValue(input, arguments)
+    def resolve(input: IR.Expression) = resolveValue(input, arguments)
 
     input match {
       // These types can only be used at the "root" of a specification, not in an arbitrary
       // expression
-      case _: ArrayMember | _: Imprecise | _: PredicateInstance |
-          _: Accessibility =>
+      case _: IR.ArrayMember | _: IR.Imprecise | _: IR.PredicateInstance |
+          _: IR.Accessibility =>
         throw new WeaverException("Invalid specification value")
 
-      case n: Var =>
+      case n: IR.Var =>
         arguments match {
           case None => CheckExpression.Var(n.name)
           case Some(arguments) =>
             n match {
-              case p: Parameter =>
+              case p: IR.Parameter =>
                 arguments.getOrElse(
                   p,
                   throw new WeaverException(s"Unknown parameter '${p.name}'")
@@ -854,49 +850,49 @@ object Collector {
             }
         }
 
-      case n: FieldMember =>
+      case n: IR.FieldMember =>
         CheckExpression.Field(
           resolve(n.root),
           n.field.struct.name,
           n.field.name
         )
-      case n: DereferenceMember => CheckExpression.Deref(resolve(n.root))
-      case n: Result            => CheckExpression.Result
-      case n: Int               => CheckExpression.IntLit(n.value)
-      case n: Char              => CheckExpression.CharLit(n.value)
-      case n: Bool              => CheckExpression.BoolLit(n.value)
-      case n: String            => CheckExpression.StrLit(n.value)
-      case n: Null              => CheckExpression.NullLit
-      case n: Conditional =>
+      case n: IR.DereferenceMember => CheckExpression.Deref(resolve(n.root))
+      case n: IR.Result            => CheckExpression.Result
+      case n: IR.IntLit               => CheckExpression.IntLit(n.value)
+      case n: IR.CharLit              => CheckExpression.CharLit(n.value)
+      case n: IR.BoolLit              => CheckExpression.BoolLit(n.value)
+      case n: IR.StringLit            => CheckExpression.StrLit(n.value)
+      case n: IR.NullLit              => CheckExpression.NullLit
+      case n: IR.Conditional =>
         CheckExpression.Cond(
           resolve(n.condition),
           resolve(n.ifTrue),
           resolve(n.ifFalse)
         )
-      case n: Binary => {
+      case n: IR.Binary => {
         val l = resolve(n.left)
         val r = resolve(n.right)
         n.operator match {
-          case BinaryOp.Add      => CheckExpression.Add(l, r)
-          case BinaryOp.Subtract => CheckExpression.Sub(l, r)
-          case BinaryOp.Divide   => CheckExpression.Div(l, r)
-          case BinaryOp.Multiply => CheckExpression.Mul(l, r)
-          case BinaryOp.And      => CheckExpression.And(l, r)
-          case BinaryOp.Or       => CheckExpression.Or(l, r)
-          case BinaryOp.Equal    => CheckExpression.Eq(l, r)
-          case BinaryOp.NotEqual =>
+          case IR.BinaryOp.Add      => CheckExpression.Add(l, r)
+          case IR.BinaryOp.Subtract => CheckExpression.Sub(l, r)
+          case IR.BinaryOp.Divide   => CheckExpression.Div(l, r)
+          case IR.BinaryOp.Multiply => CheckExpression.Mul(l, r)
+          case IR.BinaryOp.And      => CheckExpression.And(l, r)
+          case IR.BinaryOp.Or       => CheckExpression.Or(l, r)
+          case IR.BinaryOp.Equal    => CheckExpression.Eq(l, r)
+          case IR.BinaryOp.NotEqual =>
             CheckExpression.Not(CheckExpression.Eq(l, r))
-          case BinaryOp.Less           => CheckExpression.Lt(l, r)
-          case BinaryOp.LessOrEqual    => CheckExpression.LtEq(l, r)
-          case BinaryOp.Greater        => CheckExpression.Gt(l, r)
-          case BinaryOp.GreaterOrEqual => CheckExpression.GtEq(l, r)
+          case IR.BinaryOp.Less           => CheckExpression.Lt(l, r)
+          case IR.BinaryOp.LessOrEqual    => CheckExpression.LtEq(l, r)
+          case IR.BinaryOp.Greater        => CheckExpression.Gt(l, r)
+          case IR.BinaryOp.GreaterOrEqual => CheckExpression.GtEq(l, r)
         }
       }
-      case n: Unary => {
+      case n: IR.Unary => {
         val o = resolve(n.operand)
         n.operator match {
-          case UnaryOp.Not    => CheckExpression.Not(o)
-          case UnaryOp.Negate => CheckExpression.Neg(o)
+          case IR.UnaryOp.Not    => CheckExpression.Not(o)
+          case IR.UnaryOp.Negate => CheckExpression.Neg(o)
         }
       }
     }

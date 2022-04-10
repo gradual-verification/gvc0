@@ -4,8 +4,7 @@ import scala.io.Source
 import fastparse.Parsed.{Failure, Success}
 import gvc.parser.Parser
 import gvc.analyzer.{ErrorSink, ResolvedProgram, Resolver}
-import gvc.transformer.IRGraph._
-import gvc.transformer.{DependencyTransformer, IRGraph}
+import gvc.transformer.{DependencyTransformer, IR}
 object CheckRuntime {
   val name = "runtime"
   private lazy val header: ResolvedProgram = {
@@ -24,7 +23,7 @@ object CheckRuntime {
     resolved
   }
 
-  def addToIR(program: IRGraph.Program): CheckRuntime = {
+  def addToIR(program: IR.Program): CheckRuntime = {
     val dependency = program.addDependency(name, isLibrary = true)
     DependencyTransformer.transform(program, dependency, header)
     new CheckRuntime(program)
@@ -51,22 +50,22 @@ object CheckRuntime {
   }
 }
 
-class CheckRuntime private (program: IRGraph.Program) {
+class CheckRuntime private (program: IR.Program) {
   import CheckRuntime.Names
-  val ownedFields: IRGraph.StructDefinition =
+  val ownedFields: IR.StructDefinition =
     program.struct(Names.ownedFieldsStruct)
-  val ownedFieldsRef = new IRGraph.ReferenceType(ownedFields)
-  val ownedFieldInstanceCounter: StructField =
+  val ownedFieldsRef = new IR.ReferenceType(ownedFields)
+  val ownedFieldInstanceCounter: IR.StructField =
     ownedFields.fields.find(_.name == "instanceCounter").get
-  val initOwnedFields: IRGraph.MethodDefinition =
+  val initOwnedFields: IR.MethodDefinition =
     program.method(Names.initOwnedFields)
-  val addStructAcc: IRGraph.MethodDefinition =
+  val addStructAcc: IR.MethodDefinition =
     program.method(Names.addStructAcc)
-  val addAcc: IRGraph.MethodDefinition = program.method(Names.addAcc)
-  val addAccEnsureSeparate: IRGraph.MethodDefinition =
+  val addAcc: IR.MethodDefinition = program.method(Names.addAcc)
+  val addAccEnsureSeparate: IR.MethodDefinition =
     program.method(Names.addAccEnsureSeparate)
-  val loseAcc: IRGraph.MethodDefinition = program.method(Names.loseAcc)
-  val join: IRGraph.MethodDefinition = program.method(Names.join)
-  val assertAcc: IRGraph.MethodDefinition = program.method(Names.assertAcc)
-  val find: IRGraph.MethodDefinition = program.method(Names.find)
+  val loseAcc: IR.MethodDefinition = program.method(Names.loseAcc)
+  val join: IR.MethodDefinition = program.method(Names.join)
+  val assertAcc: IR.MethodDefinition = program.method(Names.assertAcc)
+  val find: IR.MethodDefinition = program.method(Names.find)
 }

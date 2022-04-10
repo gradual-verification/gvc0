@@ -1,25 +1,24 @@
 package gvc.transformer
 
 import scala.collection.immutable.ListMap
-import gvc.transformer.IRGraph._
 
 // This transformation removes cases of `x = f(x)`, because Silver does not support this pattern.
 // The basic idea is to assign to a new variable, and then use that variable anywhere the original
 // variable is used in the following code. This is somewhat challenging when dealing with branches
 // (if) and loops (while).
 object ReassignmentElimination {
-  def transform(method: Method): Unit = {
+  def transform(method: IR.Method): Unit = {
     val reassign = new Reassignments(method)
     method.body.foreach(replace(_, reassign))
   }
 
   private class Reassignments(
-    method: Method,
-    var mappings: Map[Var, Var] = Map.empty,
-    var created: ListMap[Var, Var] = ListMap.empty,
-    var remaining: ListMap[Var, Var] = ListMap.empty,
+    method: IR.Method,
+    var mappings: Map[IR.Var, IR.Var] = Map.empty,
+    var created: ListMap[IR.Var, IR.Var] = ListMap.empty,
+    var remaining: ListMap[IR.Var, IR.Var] = ListMap.empty,
   ) {
-    def reassign(v: Var): Var = {
+    def reassign(v: IR.Var): IR.Var = {
       val newV = remaining.get(v) match {
         case Some(newV) => {
           remaining -= v
@@ -33,7 +32,7 @@ object ReassignmentElimination {
       newV
     }
 
-    def assign(v: Var): Var =
+    def assign(v: IR.Var): IR.Var =
       remaining.get(v)
         .map(newV => {
           remaining -= v
@@ -43,29 +42,29 @@ object ReassignmentElimination {
         })
         .getOrElse(v)
 
-    def copy(created: ListMap[Var, Var] = ListMap.empty, remaining: ListMap[Var, Var] = ListMap.empty) =
+    def copy(created: ListMap[IR.Var, IR.Var] = ListMap.empty, remaining: ListMap[IR.Var, IR.Var] = ListMap.empty) =
       new Reassignments(method = method, mappings = mappings, created = created, remaining = remaining)
   }
 
-  private def replace(op: Op, reassign: Reassignments): Unit = {
+  private def replace(op: IR.Op, reassign: Reassignments): Unit = {
     Replacer.replaceShallow(op, reassign.mappings)
 
     op match {
-      case inv: Invoke => {
+      case inv: IR.Invoke => {
         inv.target = inv.target.map {
-          case v: Var if inv.arguments.exists(_.contains(v)) =>
+          case v: IR.Var if inv.arguments.exists(_.contains(v)) =>
             reassign.reassign(v)
           case other => other
         }
       }
 
-      case assign: Assign => {
+      case assign: IR.Assign => {
         // Attempt to minimize the number of "patched" assignments by using
         // the variable from the remaining list if one exists
         assign.target = reassign.assign(assign.target)
       }
 
-      case iff: If => {
+      case iff: IR.If => {
         val trueReassign = reassign.copy(remaining = reassign.remaining)
         iff.ifTrue.foreach(replace(_, trueReassign))
 
@@ -75,10 +74,10 @@ object ReassignmentElimination {
         // Any mappings created in the false branch and not in the true branch
         // are "patched up" by aliasing in the true branch
         (falseReassign.created -- trueReassign.created.keys)
-          .foreach { case (oldV, newV) => iff.ifTrue += new Assign(newV, oldV) }
+          .foreach { case (oldV, newV) => iff.ifTrue += new IR.Assign(newV, oldV) }
         // Same thing, but for the false branch
         (trueReassign.created -- falseReassign.created.keys)
-          .foreach { case (oldV, newV) => iff.ifFalse += new Assign(newV, oldV) }
+          .foreach { case (oldV, newV) => iff.ifFalse += new IR.Assign(newV, oldV) }
 
         val created = trueReassign.created ++ falseReassign.created
         reassign.created = reassign.created ++ created
@@ -86,7 +85,7 @@ object ReassignmentElimination {
         reassign.mappings = reassign.mappings ++ created
       }
 
-      case loop: While => {
+      case loop: IR.While => {
         // Any mappings created inside the loop body are "undone" at the end of the loop
         // body, thus code after the loop body (the conditional, following code, or the
         // next loop iteration) is unaffected.
@@ -95,7 +94,7 @@ object ReassignmentElimination {
         loop.body.foreach(replace(_, bodyReassign))
 
         bodyReassign.created.foreach {
-          case (oldV, newV) => loop.body += new Assign(oldV, newV)
+          case (oldV, newV) => loop.body += new IR.Assign(oldV, newV)
         }
       }
 

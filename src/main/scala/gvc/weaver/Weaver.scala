@@ -1,5 +1,5 @@
 package gvc.weaver
-import gvc.transformer.{IRGraph=>IR}
+import gvc.transformer.IR
 import gvc.transformer.SilverProgram
 
 class WeaverException(message: String) extends Exception(message)

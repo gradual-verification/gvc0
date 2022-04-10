@@ -1,6 +1,6 @@
 package gvc.weaver
 import viper.silver.{ast => vpr}
-import gvc.transformer.{IRGraph => IR}
+import gvc.transformer.IR
 
 sealed trait Check
 
@@ -209,24 +209,24 @@ object CheckExpression {
 
   case class IntLit(value: Int) extends Literal {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
-      new IR.Int(value)
+      new IR.IntLit(value)
   }
   case class CharLit(value: Char) extends Literal {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
-      new IR.Char(value)
+      new IR.CharLit(value)
   }
   case class StrLit(value: String) extends Literal {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
-      new IR.String(value)
+      new IR.StringLit(value)
   }
   case object NullLit extends Literal {
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
-      new IR.Null()
+      new IR.NullLit()
   }
   sealed trait BoolLit extends Literal {
     def value: Boolean
     def toIR(p: IR.Program, m: CheckMethod, r: Option[IR.Expression]) =
-      new IR.Bool(value)
+      new IR.BoolLit(value)
   }
   object BoolLit {
     def apply(value: Boolean): BoolLit = if (value) TrueLit else FalseLit
@@ -285,11 +285,11 @@ object CheckExpression {
         Field(irValue(n.root), n.field.struct.name, n.field.name)
       case n: IR.DereferenceMember => Deref(irValue(n.root))
       case n: IR.Result            => Result
-      case n: IR.Int               => IntLit(n.value)
-      case n: IR.Char              => CharLit(n.value)
-      case n: IR.Bool              => BoolLit(n.value)
-      case n: IR.String            => StrLit(n.value)
-      case n: IR.Null              => NullLit
+      case n: IR.IntLit               => IntLit(n.value)
+      case n: IR.CharLit              => CharLit(n.value)
+      case n: IR.BoolLit              => BoolLit(n.value)
+      case n: IR.StringLit            => StrLit(n.value)
+      case n: IR.NullLit              => NullLit
       case n: IR.Conditional =>
         Cond(irValue(n.condition), irValue(n.ifTrue), irValue(n.ifFalse))
       case n: IR.Binary =>

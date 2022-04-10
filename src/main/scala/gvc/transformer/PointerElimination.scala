@@ -1,7 +1,7 @@
 package gvc.transformer
-import gvc.transformer.{IRGraph=>IR}
 import scala.collection.mutable
 
+// Rewrites all bare pointers to instead be single-field structs
 object PointerElimination {
   def transform(program: IR.Program): Unit = {
     val c = new Converter(program)

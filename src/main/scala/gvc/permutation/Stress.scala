@@ -6,7 +6,7 @@ import gvc.permutation.CapturedExecution.{
   ExecutionException,
   compile_and_exec
 }
-import gvc.transformer.{GraphPrinter, IRGraph}
+import gvc.transformer.{IRPrinter, IR}
 import gvc.{Config, Main, OutputFileCollection}
 
 import java.io.FileWriter
@@ -119,11 +119,11 @@ object Stress {
   }
 
   def testExecution(
-      ir: IRGraph.Program,
+      ir: IR.Program,
       config: Config,
       outputFiles: StressTestOutputFiles,
       csvOutput: Path,
-      assign: IRGraph.Assign,
+      assign: IR.Assign,
       executionType: ExecutionType
   ): Unit = {
 
@@ -144,8 +144,8 @@ object Stress {
 
     for (i <- 0 to upper by step) {
       if (!stressSet.contains(i)) {
-        assign.value = new IRGraph.Int(i)
-        val printedSource = GraphPrinter.print(ir, includeSpecs = false)
+        assign.value = new IR.IntLit(i)
+        val printedSource = IRPrinter.print(ir, includeSpecs = false)
         Files.writeString(outputFiles.tempC0, printedSource)
         try {
           val perf = compile_and_exec(
@@ -166,15 +166,15 @@ object Stress {
     performanceOutput.close()
   }
 
-  def resolveAssignment(ir: IRGraph.Program): Option[IRGraph.Assign] = {
+  def resolveAssignment(ir: IR.Program): Option[IR.Assign] = {
     ir.methodBody("main") match {
       case Some(value) =>
         value.headOption match {
           case Some(op) =>
             op match {
-              case assign: IRGraph.Assign
+              case assign: IR.Assign
                   if (assign.target.name == Names.stress
-                    && assign.target.varType == IRGraph.IntType) =>
+                    && assign.target.varType == IR.IntType) =>
                 Some(assign)
               case _ => None
             }

@@ -8,7 +8,7 @@ import gvc.permutation.CapturedExecution.{
 }
 import gvc.permutation.Extensions.{c0, csv, log, out, txt}
 import gvc.permutation.Output.blue
-import gvc.transformer.{GraphPrinter, IRGraph}
+import gvc.transformer.{IRPrinter, IR}
 import gvc.{Config, Main, OutputFileCollection, VerificationException}
 import java.math.BigInteger
 import java.nio.file.{Files, Path}
@@ -151,7 +151,7 @@ object Bench {
     }
 
     def generateBaseline(
-        ir: IRGraph.Program,
+        ir: IR.Program,
         id: String,
         labels: mutable.TreeSet[ASTLabel],
         destDir: Path,
@@ -159,7 +159,7 @@ object Bench {
     ): Unit = {
       BaselineChecker.check(ir, onlyFraming = onlyFraming)
       val dynamicSource =
-        GraphPrinter.print(
+        IRPrinter.print(
           ir,
           includeSpecs = false
         )
@@ -178,7 +178,7 @@ object Bench {
     val outputBottomVerified =
       benchmarkConfig.files.verifiedPerms.resolve(c0(bottomID))
     val outputBottomText =
-      GraphPrinter.print(benchmarkConfig.ir, includeSpecs = false)
+      IRPrinter.print(benchmarkConfig.ir, includeSpecs = false)
     Main.writeFile(
       outputBottom.toString,
       outputBottomText
@@ -222,7 +222,7 @@ object Bench {
 
           val builtPermutation = selector.visit(permutationIndices.toSet)
           val sourceText =
-            GraphPrinter.print(builtPermutation, includeSpecs = true)
+            IRPrinter.print(builtPermutation, includeSpecs = true)
           dumpPermutation(
             benchmarkConfig.files.perms,
             c0(idString),

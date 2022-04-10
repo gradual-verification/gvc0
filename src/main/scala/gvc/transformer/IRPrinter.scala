@@ -1,7 +1,6 @@
 package gvc.transformer
-import gvc.transformer.IRGraph._
 
-object GraphPrinter {
+object IRPrinter {
   private object Precedence {
     val Unary = 1
     val Multiply = 2
@@ -14,7 +13,7 @@ object GraphPrinter {
     val Top = 9
   }
 
-  def print(program: Program, includeSpecs: Boolean): scala.Predef.String = {
+  def print(program: IR.Program, includeSpecs: Boolean): scala.Predef.String = {
     val p = new Printer()
 
     def printList[T](values: Seq[T])(action: T => Unit): Unit = {
@@ -26,7 +25,7 @@ object GraphPrinter {
       }
     }
 
-    def printDependency(dependency: Dependency): Unit = {
+    def printDependency(dependency: IR.Dependency): Unit = {
       p.print("#use ")
       if (dependency.isLibrary) {
         p.print("<" + dependency.path + ">")
@@ -34,12 +33,12 @@ object GraphPrinter {
         p.print("\"" + dependency.path + "\"")
       }
     }
-    def printStructHeader(struct: Struct): Unit = {
+    def printStructHeader(struct: IR.Struct): Unit = {
       p.print("struct ")
       p.print(struct.name)
     }
 
-    def printStruct(struct: Struct): Unit = {
+    def printStruct(struct: IR.Struct): Unit = {
       printStructHeader(struct)
       p.println()
       p.println("{")
@@ -54,9 +53,9 @@ object GraphPrinter {
       p.println("};")
     }
 
-    def printType(t: Type): Unit = p.print(t.name)
+    def printType(t: IR.Type): Unit = p.print(t.name)
 
-    def printPredicateHeader(predicate: Predicate): Unit = {
+    def printPredicateHeader(predicate: IR.Predicate): Unit = {
       p.print("//@predicate ")
       p.print(predicate.name)
       p.print("(")
@@ -68,14 +67,14 @@ object GraphPrinter {
       p.print(")")
     }
 
-    def printPredicate(predicate: Predicate): Unit = {
+    def printPredicate(predicate: IR.Predicate): Unit = {
       printPredicateHeader(predicate)
       p.print(" = ")
       printExpr(predicate.expression)
       p.println(";")
     }
 
-    def printMethodHeader(method: Method): Unit = {
+    def printMethodHeader(method: IR.Method): Unit = {
       method.returnType match {
         case None      => p.print("void")
         case Some(ret) => printType(ret)
@@ -95,7 +94,7 @@ object GraphPrinter {
       p.print(")")
     }
 
-    def printMethod(method: Method): Unit = {
+    def printMethod(method: IR.Method): Unit = {
       printMethodHeader(method)
       p.println()
 
@@ -124,12 +123,12 @@ object GraphPrinter {
       p.println("}")
     }
 
-    def printVar(v: Var): Unit = {
+    def printVar(v: IR.Var): Unit = {
       p.print(v.varType.name)
       p.print(" ")
       p.print(v.name)
       v.varType match {
-        case _: ArrayType | _: ReferenceArrayType => ()
+        case _: IR.ArrayType | _: IR.ReferenceArrayType => ()
         case varType => {
           p.print(" = ")
           printExpr(varType.default)
@@ -138,14 +137,14 @@ object GraphPrinter {
       p.println(";")
     }
 
-    def printBlock(block: Block): Unit = {
+    def printBlock(block: IR.Block): Unit = {
       p.println("{")
       p.withIndent(block.foreach(printOp))
       p.println("}")
     }
 
-    def printOp(op: Op): Unit = op match {
-      case invoke: Invoke => {
+    def printOp(op: IR.Op): Unit = op match {
+      case invoke: IR.Invoke => {
         invoke.target.foreach { target =>
           printExpr(target)
           p.print(" = ")
@@ -160,14 +159,14 @@ object GraphPrinter {
 
         p.println(");")
       }
-      case alloc: AllocValue => {
+      case alloc: IR.AllocValue => {
         printExpr(alloc.target)
         p.print(" = alloc(")
         printType(alloc.valueType)
         p.println(");")
       }
 
-      case alloc: AllocArray => {
+      case alloc: IR.AllocArray => {
         printExpr(alloc.target)
         p.print(" = alloc_array(")
         printType(alloc.valueType)
@@ -176,32 +175,32 @@ object GraphPrinter {
         p.println(");")
       }
 
-      case alloc: AllocStruct => {
+      case alloc: IR.AllocStruct => {
         printExpr(alloc.target)
         p.print(" = alloc(struct ")
         p.print(alloc.struct.name)
         p.println(");")
       }
 
-      case assign: Assign => {
+      case assign: IR.Assign => {
         printExpr(assign.target)
         p.print(" = ")
         printExpr(assign.value)
         p.println(";")
       }
 
-      case assign: AssignMember => {
+      case assign: IR.AssignMember => {
         assign.member match {
-          case member: FieldMember => {
+          case member: IR.FieldMember => {
             printExpr(member.root)
             p.print("->")
             p.print(member.field.name)
           }
-          case member: DereferenceMember => {
+          case member: IR.DereferenceMember => {
             p.print("*")
             printExpr(member.root, Precedence.Unary)
           }
-          case member: ArrayMember => {
+          case member: IR.ArrayMember => {
             printExpr(member.root)
             p.print("[")
             printExpr(member.index)
@@ -214,42 +213,42 @@ object GraphPrinter {
         p.println(";")
       }
 
-      case assert: Assert =>
+      case assert: IR.Assert =>
         assert.kind match {
-          case AssertKind.Specification =>
+          case IR.AssertKind.Specification =>
             if (includeSpecs) {
               p.print("//@assert ")
               printExpr(assert.value)
               p.println(";")
             }
-          case AssertKind.Imperative => {
+          case IR.AssertKind.Imperative => {
             p.print("assert(")
             printExpr(assert.value)
             p.println(");")
           }
         }
 
-      case fold: Fold =>
+      case fold: IR.Fold =>
         if (includeSpecs) {
           p.print("//@fold ")
           printExpr(fold.instance)
           p.println(";")
         }
 
-      case unfold: Unfold =>
+      case unfold: IR.Unfold =>
         if (includeSpecs) {
           p.print("//@unfold ")
           printExpr(unfold.instance)
           p.println(";")
         }
 
-      case error: IRGraph.Error => {
+      case error: IR.Error => {
         p.print("error(")
         printExpr(error.value)
         p.println(");")
       }
 
-      case ret: Return => {
+      case ret: IR.Return => {
         p.print("return")
         ret.value.foreach { value =>
           p.print(" ")
@@ -258,7 +257,7 @@ object GraphPrinter {
         p.println(";")
       }
 
-      case iff: If => {
+      case iff: IR.If => {
         p.print("if (")
         printExpr(iff.condition)
         p.println(")")
@@ -270,7 +269,7 @@ object GraphPrinter {
         }
       }
 
-      case w: While => {
+      case w: IR.While => {
         p.print("while (")
         printExpr(w.condition)
         p.println(")")
@@ -298,39 +297,39 @@ object GraphPrinter {
     }
 
     def printExpr(
-        expr: Expression,
+        expr: IR.Expression,
         precedence: scala.Int = Precedence.Top
     ): Unit = expr match {
-      case v: Var => p.print(v.name)
-      case m: FieldMember => {
+      case v: IR.Var => p.print(v.name)
+      case m: IR.FieldMember => {
         printExpr(m.root)
         p.print("->")
         p.print(m.field.name)
       }
-      case deref: DereferenceMember =>
+      case deref: IR.DereferenceMember =>
         wrapExpr(precedence, Precedence.Unary) {
           p.print("*")
           printExpr(deref.root, Precedence.Unary)
         }
-      case acc: Accessibility => {
+      case acc: IR.Accessibility => {
         p.print("acc(")
         printExpr(acc.member)
         p.print(")")
       }
-      case pred: PredicateInstance => {
+      case pred: IR.PredicateInstance => {
         p.print(pred.predicate.name)
         p.print("(")
         printList(pred.arguments) { arg => printExpr(arg) }
         p.print(")")
       }
-      case arr: ArrayMember => {
+      case arr: IR.ArrayMember => {
         printExpr(arr.root)
         p.print("[")
         printExpr(arr.index)
         p.print("]")
       }
-      case res: Result => p.print("\\result")
-      case imp: Imprecise =>
+      case res: IR.Result => p.print("\\result")
+      case imp: IR.Imprecise =>
         imp.precise match {
           case None => p.print("?")
           case Some(precise) =>
@@ -339,12 +338,12 @@ object GraphPrinter {
               printExpr(precise, Precedence.And)
             }
         }
-      case int: Int => p.print(int.value.toString())
-      case str: String =>
+      case int: IR.IntLit => p.print(int.value.toString())
+      case str: IR.StringLit =>
         p.print("\"")
         p.print(str.value)
         p.print("\"")
-      case char: Char => {
+      case char: IR.CharLit => {
         p.print("'")
         p.print(char.value match {
           case '\\'  => "\\\\"
@@ -356,10 +355,10 @@ object GraphPrinter {
         })
         p.print("'")
       }
-      case bool: Bool => p.print(if (bool.value) "true" else "false")
-      case _: Null    => p.print("NULL")
+      case bool: IR.BoolLit => p.print(if (bool.value) "true" else "false")
+      case _: IR.NullLit    => p.print("NULL")
 
-      case cond: Conditional =>
+      case cond: IR.Conditional =>
         wrapExpr(precedence, Precedence.Conditional) {
           printExpr(cond.condition, Precedence.Conditional)
           p.print(" ? ")
@@ -368,20 +367,20 @@ object GraphPrinter {
           printExpr(cond.ifFalse, Precedence.Conditional)
         }
 
-      case binary: Binary => {
+      case binary: IR.Binary => {
         val (sep, opPrecedence) = binary.operator match {
-          case BinaryOp.Add            => (" + ", Precedence.Add)
-          case BinaryOp.Subtract       => (" - ", Precedence.Add)
-          case BinaryOp.Divide         => (" / ", Precedence.Multiply)
-          case BinaryOp.Multiply       => (" * ", Precedence.Multiply)
-          case BinaryOp.And            => (" && ", Precedence.And)
-          case BinaryOp.Or             => (" || ", Precedence.Or)
-          case BinaryOp.Equal          => (" == ", Precedence.Equality)
-          case BinaryOp.NotEqual       => (" != ", Precedence.Equality)
-          case BinaryOp.Less           => (" < ", Precedence.Inequality)
-          case BinaryOp.LessOrEqual    => (" <= ", Precedence.Inequality)
-          case BinaryOp.Greater        => (" > ", Precedence.Inequality)
-          case BinaryOp.GreaterOrEqual => (" >= ", Precedence.Inequality)
+          case IR.BinaryOp.Add            => (" + ", Precedence.Add)
+          case IR.BinaryOp.Subtract       => (" - ", Precedence.Add)
+          case IR.BinaryOp.Divide         => (" / ", Precedence.Multiply)
+          case IR.BinaryOp.Multiply       => (" * ", Precedence.Multiply)
+          case IR.BinaryOp.And            => (" && ", Precedence.And)
+          case IR.BinaryOp.Or             => (" || ", Precedence.Or)
+          case IR.BinaryOp.Equal          => (" == ", Precedence.Equality)
+          case IR.BinaryOp.NotEqual       => (" != ", Precedence.Equality)
+          case IR.BinaryOp.Less           => (" < ", Precedence.Inequality)
+          case IR.BinaryOp.LessOrEqual    => (" <= ", Precedence.Inequality)
+          case IR.BinaryOp.Greater        => (" > ", Precedence.Inequality)
+          case IR.BinaryOp.GreaterOrEqual => (" >= ", Precedence.Inequality)
         }
 
         wrapExpr(precedence, opPrecedence) {
@@ -391,11 +390,11 @@ object GraphPrinter {
         }
       }
 
-      case unary: Unary =>
+      case unary: IR.Unary =>
         wrapExpr(precedence, Precedence.Unary) {
           p.print(unary.operator match {
-            case UnaryOp.Not    => "!"
-            case UnaryOp.Negate => "-"
+            case IR.UnaryOp.Not    => "!"
+            case IR.UnaryOp.Negate => "-"
           })
           printExpr(unary.operand, Precedence.Unary)
         }

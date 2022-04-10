@@ -1,15 +1,14 @@
 package gvc.transformer
 import scala.collection.mutable
 
-object IRGraph {
-  class IRException(message: scala.Predef.String) extends Exception(message)
+class IRException(message: scala.Predef.String) extends Exception(message)
 
+object IR {
   // Note that names of methods, vars, etc. are immutable, since they are also copied in their respective Maps
-
   class Program {
-    private[IRGraph] var _structs =
+    private[IR] var _structs =
       mutable.Map[scala.Predef.String, StructDefinition]()
-    private[IRGraph] var _methods =
+    private[IR] var _methods =
       mutable.Map[scala.Predef.String, MethodDefinition]()
     private var _predicates = mutable.Map[scala.Predef.String, Predicate]()
     private var _dependencies = mutable.ListBuffer[Dependency]()
@@ -41,7 +40,7 @@ object IRGraph {
     }
 
     def addPredicate(name: scala.Predef.String): Predicate = {
-      val predicate = new Predicate(name, new IRGraph.Bool(true))
+      val predicate = new Predicate(name, new IR.BoolLit(true))
       if (_predicates.getOrElseUpdate(predicate.name, predicate) != predicate)
         throw new IRException(s"Predicate '${predicate.name}' already exists")
       predicate
@@ -105,7 +104,7 @@ object IRGraph {
       )((m, pred) => { m + (pred.name -> pred) })
 
     def copy(methods: Seq[Method], predicates: Seq[Predicate]) = {
-      val newProgram = new IRGraph.Program()
+      val newProgram = new IR.Program()
 
       newProgram.replacePredicates(predicates)
       newProgram.replaceMethods(methods)
@@ -206,7 +205,7 @@ object IRGraph {
       _parameters.foreach(p => copyOf.addParameter(p.varType, p.name))
       scope.foreach(entry => {
         if (!copyOf.scope.contains(entry._1)) {
-          copyOf.scope += entry._1 -> new IRGraph.Var(
+          copyOf.scope += entry._1 -> new IR.Var(
             entry._2.varType,
             entry._2.name
           )
@@ -219,7 +218,7 @@ object IRGraph {
   }
   class Predicate(
       val name: scala.Predef.String,
-      var expression: IRGraph.Expression
+      var expression: IR.Expression
   ) {
     private var _parameters = mutable.ListBuffer[Parameter]()
 
@@ -243,10 +242,10 @@ object IRGraph {
     // Gets the method that this block is in
     def method: Method
 
-    private[IRGraph] var headNode: Option[Op] = None
-    private[IRGraph] var tailNode: Option[Op] = None
+    private[IR] var headNode: Option[Op] = None
+    private[IR] var tailNode: Option[Op] = None
 
-    private[IRGraph] def claim(op: Op): Unit = {
+    private[IR] def claim(op: Op): Unit = {
       if (op._block.isDefined)
         throw new IRException("Op is already added to a Block")
       op._block = Some(this)
@@ -317,7 +316,7 @@ object IRGraph {
       }
     }
 
-    private[IRGraph] def insertBefore(op: Op, newOp: Op): Unit = {
+    private[IR] def insertBefore(op: Op, newOp: Op): Unit = {
       claim(newOp)
 
       newOp.next = Some(op)
@@ -335,7 +334,7 @@ object IRGraph {
       op.previous = Some(newOp)
     }
 
-    private[IRGraph] def insertAfter(op: Op, newOp: Op): Unit = {
+    private[IR] def insertAfter(op: Op, newOp: Op): Unit = {
       claim(newOp)
 
       newOp.previous = Some(op)
@@ -354,7 +353,7 @@ object IRGraph {
       op.next = Some(newOp)
     }
 
-    private[IRGraph] def remove(op: Op): Unit = {
+    private[IR] def remove(op: Op): Unit = {
       op.previous match {
         case None         => headNode = op.next
         case Some(prevOp) => prevOp.next = op.next
@@ -441,7 +440,7 @@ object IRGraph {
 
   class PredicateInstance(
       var predicate: Predicate,
-      var arguments: List[IRGraph.Expression]
+      var arguments: List[IR.Expression]
   ) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || arguments.exists(_.contains(exp))
@@ -453,26 +452,26 @@ object IRGraph {
   }
 
   // Wraps another expression and adds imprecision (i.e. `? && precise`)
-  class Imprecise(var precise: Option[IRGraph.Expression])
+  class Imprecise(var precise: Option[IR.Expression])
       extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || precise.exists(_.contains(exp))
   }
 
   sealed trait Literal extends Expression
-  class Int(val value: scala.Int) extends Literal {
+  class IntLit(val value: scala.Int) extends Literal {
     def valueType: Option[Type] = Some(IntType)
   }
-  class Char(val value: scala.Char) extends Literal {
+  class CharLit(val value: scala.Char) extends Literal {
     def valueType: Option[Type] = Some(CharType)
   }
-  class Bool(val value: scala.Boolean) extends Literal {
+  class BoolLit(val value: scala.Boolean) extends Literal {
     def valueType: Option[Type] = Some(BoolType)
   }
-  class String(val value: scala.Predef.String) extends Literal {
+  class StringLit(val value: scala.Predef.String) extends Literal {
     def valueType: Option[Type] = Some(StringType)
   }
-  class Null extends Literal {
+  class NullLit extends Literal {
     def valueType: Option[Type] = None
   }
 
@@ -542,58 +541,58 @@ object IRGraph {
 
   sealed trait Type {
     def name: scala.Predef.String
-    def default: IRGraph.Literal
+    def default: IR.Literal
   }
 
   // A pointer to a struct value
   class ReferenceType(val struct: StructDefinition) extends Type {
     def name: scala.Predef.String = "struct " + struct.name + "*"
-    def default = new IRGraph.Null()
+    def default = new IR.NullLit()
   }
 
   // A pointer to a primitive value
   class PointerType(val valueType: Type) extends Type {
     def name: scala.Predef.String = valueType.name + "*"
-    def default = new IRGraph.Null()
+    def default = new IR.NullLit()
   }
 
   // An array of primitive values
   class ArrayType(val valueType: Type) extends Type {
     def name: scala.Predef.String = valueType.name + "[]"
-    def default = new IRGraph.Null()
+    def default = new IR.NullLit()
   }
 
   // An array of struct values
   class ReferenceArrayType(val struct: StructDefinition) extends Type {
     def name: scala.Predef.String = "struct " + struct.name + "[]"
-    def default = new IRGraph.Null()
+    def default = new IR.NullLit()
   }
 
   object IntType extends Type {
     def name = "int"
-    def default = new IRGraph.Int(0)
+    def default = new IR.IntLit(0)
   }
 
   object BoolType extends Type {
     def name = "bool"
-    def default = new IRGraph.Bool(false)
+    def default = new IR.BoolLit(false)
   }
 
   object CharType extends Type {
     def name = "char"
-    def default = new IRGraph.Char(0)
+    def default = new IR.CharLit(0)
   }
 
   object StringType extends Type {
     def name = "string"
-    def default = new IRGraph.Char(0)
+    def default = new IR.CharLit(0)
   }
 
   // Represents a single operation, roughly equivalent to a C0 statement
   sealed trait Op {
-    private[IRGraph] var _block: Option[Block] = None
-    private[IRGraph] var previous: Option[Op] = None
-    private[IRGraph] var next: Option[Op] = None
+    private[IR] var _block: Option[Block] = None
+    private[IR] var previous: Option[Op] = None
+    private[IR] var next: Option[Op] = None
 
     def getPrev: Option[Op] = previous
     def getNext: Option[Op] = next
@@ -618,7 +617,7 @@ object IRGraph {
 
     // Creates a copy of the current Op
     // The new copy will not be attached to any Block
-    def copy: IRGraph.Op
+    def copy: IR.Op
   }
 
   class Invoke(
@@ -646,7 +645,7 @@ object IRGraph {
   // TODO: Length should be an expression
   class AllocArray(
       var valueType: Type,
-      var length: Int,
+      var length: IntLit,
       var target: Var
   ) extends Op {
     def copy = new AllocArray(valueType, length, target)
@@ -733,8 +732,8 @@ object IRGraph {
       newWhile
     }
     def copy(
-        newInvariant: IRGraph.Expression,
-        newBody: List[IRGraph.Op]
+        newInvariant: IR.Expression,
+        newBody: List[IR.Op]
     ) = {
       val newWhile = new While(condition, newInvariant)
       newBody.foreach(newWhile.body += _.copy)

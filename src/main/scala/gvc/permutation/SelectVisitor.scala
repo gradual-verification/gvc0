@@ -1,19 +1,19 @@
 package gvc.permutation
-import gvc.transformer.IRGraph
-import gvc.transformer.IRGraph.{Conditional, Expression, Method, Op, Predicate}
+import gvc.transformer.IR
+import gvc.transformer.IR.{Conditional, Expression, Method, Op, Predicate}
 import gvc.permutation.ExprType.ExprType
 import gvc.permutation.SpecType.SpecType
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
-class SelectVisitor(program: IRGraph.Program)
-    extends SpecVisitor[IRGraph.Program, IRGraph.Program] {
+class SelectVisitor(program: IR.Program)
+    extends SpecVisitor[IR.Program, IR.Program] {
   private val predicates = mutable.ListBuffer[Predicate]()
   private val methods = mutable.ListBuffer[Method]()
   private val incompleteBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
   private val finishedBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
-  private val incompleteExpr = mutable.ListBuffer[Option[IRGraph.Expression]]()
-  private val finishedExpr = mutable.ListBuffer[Option[IRGraph.Expression]]()
+  private val incompleteExpr = mutable.ListBuffer[Option[IR.Expression]]()
+  private val finishedExpr = mutable.ListBuffer[Option[IR.Expression]]()
 
   private var permutation = Set[Int]()
 
@@ -21,7 +21,7 @@ class SelectVisitor(program: IRGraph.Program)
     super.reset()
   }
 
-  def visit(permutation: Set[Int]): IRGraph.Program = {
+  def visit(permutation: Set[Int]): IR.Program = {
     this.permutation = permutation
     super.visit(program)
   }
@@ -41,7 +41,7 @@ class SelectVisitor(program: IRGraph.Program)
 
   override def visitSpec(
       parent: Either[Method, Predicate],
-      template: IRGraph.Op,
+      template: IR.Op,
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
@@ -53,42 +53,42 @@ class SelectVisitor(program: IRGraph.Program)
 
   override def visitOp(
       parent: Either[Method, Predicate],
-      template: IRGraph.Op
+      template: IR.Op
   ): Unit = {
     this.incompleteBlocks.head += template.copy
   }
-  override def collectOutput(): IRGraph.Program =
+  override def collectOutput(): IR.Program =
     program.copy(this.methods.toList, this.predicates.toList)
 
   override def collectAssertion(): Unit = {
     val assertion = this.finishedExpr.remove(0)
     if (assertion.isDefined) {
-      this.incompleteBlocks.head += new IRGraph.Assert(
+      this.incompleteBlocks.head += new IR.Assert(
         assertion.get,
-        IRGraph.AssertKind.Specification
+        IR.AssertKind.Specification
       )
     }
   }
 
-  override def collectIf(template: IRGraph.If): Unit = {
+  override def collectIf(template: IR.If): Unit = {
     val falseBranch = this.finishedBlocks.remove(0).toList
     val trueBranch = this.finishedBlocks.remove(0).toList
     this.incompleteBlocks.head += template.copy(trueBranch, falseBranch)
   }
 
-  override def collectWhile(whl: IRGraph.While): Unit = {
-    val invariant = new IRGraph.Imprecise(this.finishedExpr.remove(0))
+  override def collectWhile(whl: IR.While): Unit = {
+    val invariant = new IR.Imprecise(this.finishedExpr.remove(0))
     val body = this.finishedBlocks.remove(0)
     this.incompleteBlocks.head += whl.copy(invariant, body.toList)
   }
 
   override def collectConditional(template: Conditional): Unit = {
     val falseBranch =
-      this.finishedExpr.remove(0).getOrElse(new IRGraph.Bool(true))
+      this.finishedExpr.remove(0).getOrElse(new IR.BoolLit(true))
     val trueBranch =
-      this.finishedExpr.remove(0).getOrElse(new IRGraph.Bool(true))
+      this.finishedExpr.remove(0).getOrElse(new IR.BoolLit(true))
     val resolvedConditional = Some(
-      new IRGraph.Conditional(
+      new IR.Conditional(
         template.condition,
         trueBranch,
         falseBranch
@@ -110,14 +110,14 @@ class SelectVisitor(program: IRGraph.Program)
     this.finishedBlocks.insert(0, this.incompleteBlocks.remove(0))
 
   private def mergeBinary(
-      rVal: Option[IRGraph.Expression],
-      lVal: Option[IRGraph.Expression]
-  ): Option[IRGraph.Expression] = {
+      rVal: Option[IR.Expression],
+      lVal: Option[IR.Expression]
+  ): Option[IR.Expression] = {
     lVal match {
       case Some(l) =>
         rVal match {
           case Some(r) =>
-            Some(new IRGraph.Binary(IRGraph.BinaryOp.And, l, r))
+            Some(new IR.Binary(IR.BinaryOp.And, l, r))
           case None => lVal
         }
       case None =>
@@ -133,7 +133,7 @@ class SelectVisitor(program: IRGraph.Program)
   override def leavePredicate(): Unit = {
     val pred = this.currentContext.get.right.get
     val body = this.finishedExpr.remove(0)
-    this.predicates += pred.copy(new IRGraph.Imprecise(body))
+    this.predicates += pred.copy(new IR.Imprecise(body))
   }
 
   override def enterMethod(method: Method): Unit = {
@@ -143,10 +143,10 @@ class SelectVisitor(program: IRGraph.Program)
   override def leaveMethod(): Unit = {
     val method = this.currentContext.get.left.get
     val postcondition = Some(
-      new IRGraph.Imprecise(this.finishedExpr.remove(0))
+      new IR.Imprecise(this.finishedExpr.remove(0))
     )
     val precondition = Some(
-      new IRGraph.Imprecise(this.finishedExpr.remove(0))
+      new IR.Imprecise(this.finishedExpr.remove(0))
     )
     val body = this.finishedBlocks.remove(0)
     this.methods += method.copy(

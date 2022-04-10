@@ -1,5 +1,5 @@
 package gvc.permutation
-import gvc.transformer.{IRGraph => IR}
+import gvc.transformer.IR
 import gvc.weaver._
 object BaselineChecker {
 

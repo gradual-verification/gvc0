@@ -1,20 +1,19 @@
 package gvc.weaver
-import gvc.transformer.IRGraph._
+import gvc.transformer.{IR, SilverVarId}
 import Collector._
-import gvc.transformer.{IRGraph, SilverVarId}
 import scala.collection.mutable
 import scala.annotation.tailrec
 
 object Checker {
-  type StructIDTracker = Map[scala.Predef.String, StructField]
+  type StructIDTracker = Map[scala.Predef.String, IR.StructField]
 
   class CheckerMethod(
-      val method: Method,
-      tempVars: Map[SilverVarId, Invoke]
+      val method: IR.Method,
+      tempVars: Map[SilverVarId, IR.Invoke]
   ) extends CheckMethod {
-    val resultVars = mutable.Map[java.lang.String, Expression]()
+    val resultVars = mutable.Map[java.lang.String, IR.Expression]()
 
-    def resultVar(name: java.lang.String): Expression = {
+    def resultVar(name: java.lang.String): IR.Expression = {
       resultVars.getOrElseUpdate(
         name, {
           val invoke = tempVars.getOrElse(
@@ -38,14 +37,14 @@ object Checker {
     }
   }
 
-  def insert(program: CollectedProgram): Unit = {
+  def insert(program: Collector.CollectedProgram): Unit = {
     val runtime = CheckRuntime.addToIR(program.program)
 
     // Add the _id field to each struct
     // Keep a separate map since the name may be something other than `_id` due
     // to name collision avoidance
     val structIdFields = program.program.structs
-      .map(s => (s.name, s.addField(CheckRuntime.Names.id, IntType)))
+      .map(s => (s.name, s.addField(CheckRuntime.Names.id, IR.IntType)))
       .toMap
 
     val implementation =
@@ -69,10 +68,10 @@ object Checker {
     // `ops` is a function that generates the operations, given the current return value at that
     // position. DO NOT construct the ops before passing them to this method since multiple copies
     // may be required.
-    def insertAt(at: Location, ops: Option[Expression] => Seq[Op]): Unit =
+    def insertAt(at: Location, ops: Option[IR.Expression] => Seq[IR.Op]): Unit =
       at match {
-        case LoopStart(op: While) => ops(None) ++=: op.body
-        case LoopEnd(op: While)   => op.body ++= ops(None)
+        case LoopStart(op: IR.While) => ops(None) ++=: op.body
+        case LoopEnd(op: IR.While)   => op.body ++= ops(None)
         case Pre(op)              => op.insertBefore(ops(None))
         case Post(op)             => op.insertAfter(ops(None))
         case MethodPre            => ops(None) ++=: method.body
@@ -86,69 +85,69 @@ object Checker {
 
     var nextConditionalId = 1
     val conditionVars = methodData.conditions.map { c =>
-      val flag = method.addVar(BoolType, s"_cond_$nextConditionalId")
+      val flag = method.addVar(IR.BoolType, s"_cond_$nextConditionalId")
       nextConditionalId += 1
       c -> flag
     }.toMap
 
-    def foldConditionList(conds: List[Condition], op: IRGraph.BinaryOp): Expression = {
-      conds.foldLeft[Option[Expression]](None) {
+    def foldConditionList(conds: List[Condition], op: IR.BinaryOp): IR.Expression = {
+      conds.foldLeft[Option[IR.Expression]](None) {
         case (Some(expr), cond) =>
-          Some(new Binary(op, expr, getCondition(cond)))
+          Some(new IR.Binary(op, expr, getCondition(cond)))
         case (None, cond) => Some(getCondition(cond))
       }.getOrElse(throw new WeaverException("Invalid empty condition list"))
     }
 
-    def getCondition(cond: Condition): Expression = cond match {
+    def getCondition(cond: Condition): IR.Expression = cond match {
       case ImmediateCondition(expr) => expr.toIR(program, checkMethod, None)
       case cond: TrackedCondition => conditionVars(cond)
-      case NotCondition(value) => new Unary(UnaryOp.Not, getCondition(value))
-      case AndCondition(values) => foldConditionList(values, IRGraph.BinaryOp.And)
-      case OrCondition(values) => foldConditionList(values, IRGraph.BinaryOp.Or)
+      case NotCondition(value) => new IR.Unary(IR.UnaryOp.Not, getCondition(value))
+      case AndCondition(values) => foldConditionList(values, IR.BinaryOp.And)
+      case OrCondition(values) => foldConditionList(values, IR.BinaryOp.Or)
     }
 
-    val initializeOps = mutable.ListBuffer[Op]()
+    val initializeOps = mutable.ListBuffer[IR.Op]()
 
     var (primaryOwnedFields, instanceCounter) = methodData.callStyle match {
       case MainCallStyle => {
         val instanceCounter =
           method.addVar(
-            new PointerType(IntType),
+            new IR.PointerType(IR.IntType),
             CheckRuntime.Names.instanceCounter
           )
-        initializeOps += new AllocValue(IntType, instanceCounter)
+        initializeOps += new IR.AllocValue(IR.IntType, instanceCounter)
         (None, instanceCounter)
       }
 
       case PreciseCallStyle => {
         val instanceCounter =
           method.addParameter(
-            new PointerType(IntType),
+            new IR.PointerType(IR.IntType),
             CheckRuntime.Names.instanceCounter
           )
         (None, instanceCounter)
       }
 
       case ImpreciseCallStyle | PrecisePreCallStyle => {
-        val ownedFields: Var =
+        val ownedFields: IR.Var =
           method.addParameter(
             runtime.ownedFieldsRef,
             CheckRuntime.Names.primaryOwnedFields
           )
         val instanceCounter =
-          new FieldMember(ownedFields, runtime.ownedFieldInstanceCounter)
+          new IR.FieldMember(ownedFields, runtime.ownedFieldInstanceCounter)
         (Some(ownedFields), instanceCounter)
       }
     }
 
-    def getPrimaryOwnedFields(): Var = primaryOwnedFields.getOrElse {
+    def getPrimaryOwnedFields(): IR.Var = primaryOwnedFields.getOrElse {
       val ownedFields = method.addVar(
         runtime.ownedFieldsRef,
         CheckRuntime.Names.primaryOwnedFields
       )
       primaryOwnedFields = Some(ownedFields)
 
-      initializeOps += new Invoke(
+      initializeOps += new IR.Invoke(
         runtime.initOwnedFields,
         List(instanceCounter),
         primaryOwnedFields
@@ -179,7 +178,7 @@ object Checker {
     val needsToTrackPrecisePerms =
       primaryOwnedFields.isDefined ||
         methodData.calls.exists(c => (
-          c.ir.callee.isInstanceOf[Method] &&
+          c.ir.callee.isInstanceOf[IR.Method] &&
           (programData.methods(c.ir.callee.name).callStyle match {
             case ImpreciseCallStyle | PrecisePreCallStyle => true
             case _                                        => false
@@ -189,8 +188,8 @@ object Checker {
     // Update the call sites to add any required parameters
     for (call <- methodData.calls) {
       call.ir.callee match {
-        case _: DependencyMethod => ()
-        case callee: Method =>
+        case _: IR.DependencyMethod => ()
+        case callee: IR.Method =>
           val calleeData = programData.methods(callee.name)
           calleeData.callStyle match {
             // No parameters can be added to a main method
@@ -241,7 +240,7 @@ object Checker {
                 CheckRuntime.Names.temporaryOwnedFields
               )
 
-              val createTemp = new Invoke(
+              val createTemp = new IR.Invoke(
                 runtime.initOwnedFields,
                 List(instanceCounter),
                 Some(tempSet)
@@ -270,7 +269,7 @@ object Checker {
               )
               call.ir.arguments :+= tempSet
               call.ir.insertAfter(
-                new Invoke(
+                new IR.Invoke(
                   runtime.join,
                   List(getPrimaryOwnedFields, tempSet),
                   None
@@ -297,7 +296,7 @@ object Checker {
       .groupBy(_.location)
       .foreach {
         case (loc, conds) => insertAt(loc, retVal => {
-          conds.map(c => new Assign(conditionVars(c), c.value.toIR(program, checkMethod, retVal)))
+          conds.map(c => new IR.Assign(conditionVars(c), c.value.toIR(program, checkMethod, retVal)))
         })
     }
 
@@ -306,15 +305,15 @@ object Checker {
   }
 
   def addAllocationTracking(
-      primaryOwnedFields: Option[Var],
-      instanceCounter: Expression,
-      allocations: List[Op],
+      primaryOwnedFields: Option[IR.Var],
+      instanceCounter: IR.Expression,
+      allocations: List[IR.Op],
       implementation: CheckImplementation,
       runtime: CheckRuntime
   ): Unit = {
     for (alloc <- allocations) {
       alloc match {
-        case alloc: AllocStruct => primaryOwnedFields match {
+        case alloc: IR.AllocStruct => primaryOwnedFields match {
           case Some(primary) => implementation.trackAllocation(alloc, primary)
           case None => implementation.idAllocation(alloc, instanceCounter)
         }
@@ -330,7 +329,7 @@ object Checker {
       check: FieldPermissionCheck,
       fields: FieldCollection,
       context: CheckContext
-  ): Seq[Op] = {
+  ): Seq[IR.Op] = {
     val field = check.field.toIR(context.program, context.method, None)
     val (mode, perms) = check match {
       case _: FieldSeparationCheck =>
@@ -343,11 +342,11 @@ object Checker {
 
   def implementPredicateCheck(
       check: PredicatePermissionCheck,
-      returnValue: Option[Expression],
+      returnValue: Option[IR.Expression],
       fields: FieldCollection,
       context: CheckContext
-  ): Seq[Op] = {
-    val instance = new PredicateInstance(
+  ): Seq[IR.Op] = {
+    val instance = new IR.PredicateInstance(
       context.program.predicate(check.predicateName),
       check.arguments.map(_.toIR(context.program, context.method, returnValue))
     )
@@ -361,12 +360,12 @@ object Checker {
   }
 
   case class FieldCollection(
-      primaryOwnedFields: () => Var,
-      temporaryOwnedFields: () => Var
+      primaryOwnedFields: () => IR.Var,
+      temporaryOwnedFields: () => IR.Var
   )
 
   case class CheckContext(
-      program: Program,
+      program: IR.Program,
       method: CheckMethod,
       implementation: CheckImplementation,
       runtime: CheckRuntime
@@ -374,10 +373,10 @@ object Checker {
 
   def implementCheck(
       check: Check,
-      returnValue: Option[IRGraph.Expression],
+      returnValue: Option[IR.Expression],
       fields: FieldCollection,
       context: CheckContext
-  ): Seq[Op] = {
+  ): Seq[IR.Op] = {
     check match {
       case acc: FieldPermissionCheck =>
         implementAccCheck(
@@ -394,25 +393,25 @@ object Checker {
         )
       case expr: CheckExpression =>
         Seq(
-          new Assert(
+          new IR.Assert(
             expr.toIR(context.program, context.method, returnValue),
-            AssertKind.Imperative
+            IR.AssertKind.Imperative
           )
         )
     }
   }
 
   def implementChecks(
-      cond: Option[Expression],
+      cond: Option[IR.Expression],
       checks: List[Check],
-      returnValue: Option[Expression],
-      getPrimaryOwnedFields: () => Var,
-      instanceCounter: Expression,
+      returnValue: Option[IR.Expression],
+      getPrimaryOwnedFields: () => IR.Var,
+      instanceCounter: IR.Expression,
       context: CheckContext
-  ): Seq[Op] = {
+  ): Seq[IR.Op] = {
     // Create a temporary owned fields instance when it is required
-    var temporaryOwnedFields: Option[Var] = None
-    def getTemporaryOwnedFields(): Var = temporaryOwnedFields.getOrElse {
+    var temporaryOwnedFields: Option[IR.Var] = None
+    def getTemporaryOwnedFields(): IR.Var = temporaryOwnedFields.getOrElse {
       val tempVar = context.method.method.addVar(
         context.runtime.ownedFieldsRef,
         CheckRuntime.Names.temporaryOwnedFields
@@ -433,7 +432,7 @@ object Checker {
 
     // Prepend op to initialize owned fields if it is required
     temporaryOwnedFields.foreach { tempOwned =>
-      ops = new Invoke(
+      ops = new IR.Invoke(
         context.runtime.initOwnedFields,
         List(instanceCounter),
         Some(tempOwned)
@@ -444,7 +443,7 @@ object Checker {
     cond match {
       case None => ops
       case Some(cond) =>
-        val iff = new If(cond)
+        val iff = new IR.If(cond)
         iff.condition = cond
         ops.foreach(iff.ifTrue += _)
         Seq(iff)

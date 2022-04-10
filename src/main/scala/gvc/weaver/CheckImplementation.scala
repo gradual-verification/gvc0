@@ -1,7 +1,7 @@
 package gvc.weaver
 
 import scala.collection.mutable
-import gvc.transformer.{IRGraph => IR}
+import gvc.transformer.IR
 
 sealed trait CheckMode { def prefix: String }
 case object AddMode extends CheckMode { def prefix = "add_" }
@@ -145,15 +145,15 @@ class CheckImplementation(
     val struct = convertedMember.field.struct
     val instanceId =
       new IR.FieldMember(convertedMember.root, structIdField(struct))
-    val fieldIndex = new IR.Int(struct.fields.indexOf(convertedMember.field))
-    val numFields = new IR.Int(struct.fields.length)
-    //TODO: add support for GraphPrinter.printExpr here
+    val fieldIndex = new IR.IntLit(struct.fields.indexOf(convertedMember.field))
+    val numFields = new IR.IntLit(struct.fields.length)
+    //TODO: add support for IRPrinter.printExpr here
     val fullName = s"struct ${struct.name}.${convertedMember.field.name}"
 
     mode match {
       case SeparationMode =>
         val error =
-          new IR.String(s"Overlapping field permissions for $fullName")
+          new IR.StringLit(s"Overlapping field permissions for $fullName")
         Seq(
           new IR.Invoke(
             runtime.addAccEnsureSeparate,
@@ -163,7 +163,7 @@ class CheckImplementation(
         )
       case VerifyMode =>
         val error =
-          new IR.String(s"Field access runtime check failed for $fullName")
+          new IR.StringLit(s"Field access runtime check failed for $fullName")
         Seq(
           new IR.Invoke(
             runtime.assertAcc,
@@ -214,7 +214,7 @@ class CheckImplementation(
     alloc.insertAfter(
       new IR.Invoke(
         runtime.addStructAcc,
-        List(perms, new IR.Int(structType.fields.length)),
+        List(perms, new IR.IntLit(structType.fields.length)),
         Some(idField)
       )
     )
@@ -234,7 +234,7 @@ class CheckImplementation(
         new IR.Binary(
           IR.BinaryOp.Add,
           new IR.DereferenceMember(instanceCounter),
-          new IR.Int(1)))
+          new IR.IntLit(1)))
     ))
   }
 }

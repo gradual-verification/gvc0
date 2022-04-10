@@ -137,7 +137,7 @@ object Main extends App {
   def generateIR(
       inputSource: String,
       librarySearchPaths: List[String]
-  ): IRGraph.Program = {
+  ): IR.Program = {
     val parsed = Parser.parseProgram(inputSource) match {
       case fail: Failure =>
         Config.error(s"Parse error:\n${fail.trace().longAggregateMsg}")
@@ -152,7 +152,7 @@ object Main extends App {
             errors.errors.map(_.toString()).mkString("\n")
         )
       )
-    GraphTransformer.transform(resolved)
+    IRTransformer.transform(resolved)
   }
   case class VerifiedOutput(
       silver: Program,
@@ -177,11 +177,11 @@ object Main extends App {
       )
 
     if (config.dump.contains(Config.DumpIR))
-      dump(GraphPrinter.print(ir, includeSpecs = true))
+      dump(IRPrinter.print(ir, includeSpecs = true))
     else if (config.saveFiles)
       writeFile(
         fileNames.irFileName,
-        GraphPrinter.print(ir, includeSpecs = true)
+        IRPrinter.print(ir, includeSpecs = true)
       )
 
     val reporter = viper.silver.reporter.StdIOReporter()
@@ -196,7 +196,7 @@ object Main extends App {
     runtimeChecks.reset
     silicon.start()
 
-    val silver = IRGraphSilver.toSilver(ir)
+    val silver = IRSilver.toSilver(ir)
     if (config.dump.contains(Config.DumpSilver)) dump(silver.program.toString())
     else if (config.saveFiles)
       writeFile(fileNames.silverFileName, silver.program.toString())
@@ -214,7 +214,7 @@ object Main extends App {
 
     Weaver.weave(ir, silver)
 
-    val c0Source = GraphPrinter.print(ir, includeSpecs = false)
+    val c0Source = IRPrinter.print(ir, includeSpecs = false)
     if (config.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
     VerifiedOutput(

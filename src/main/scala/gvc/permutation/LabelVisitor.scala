@@ -1,13 +1,13 @@
 package gvc.permutation
 
-import gvc.transformer.IRGraph
-import gvc.transformer.IRGraph.{Expression, Method, Predicate}
+import gvc.transformer.IR
+import gvc.transformer.IR.{Expression, Method, Predicate}
 import gvc.permutation.ExprType.ExprType
 import gvc.permutation.SpecType.SpecType
 
 import scala.collection.mutable
 
-class LabelVisitor extends SpecVisitor[IRGraph.Program, List[ASTLabel]] {
+class LabelVisitor extends SpecVisitor[IR.Program, List[ASTLabel]] {
 
   private var labelSet = mutable.ListBuffer[ASTLabel]()
 
@@ -28,7 +28,7 @@ class LabelVisitor extends SpecVisitor[IRGraph.Program, List[ASTLabel]] {
 
   override def visitSpec(
       parent: Either[Method, Predicate],
-      template: IRGraph.Op,
+      template: IR.Op,
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
@@ -45,18 +45,18 @@ class LabelVisitor extends SpecVisitor[IRGraph.Program, List[ASTLabel]] {
   }
   override def visitOp(
       parent: Either[Method, Predicate],
-      template: IRGraph.Op
+      template: IR.Op
   ): Unit = {}
 
   override def collectOutput(): List[ASTLabel] = { labelSet.toList }
 
   override def collectAssertion(): Unit = {}
 
-  override def collectIf(template: IRGraph.If): Unit = {}
+  override def collectIf(template: IR.If): Unit = {}
 
-  override def collectConditional(template: IRGraph.Conditional): Unit = {}
+  override def collectConditional(template: IR.Conditional): Unit = {}
 
-  override def collectWhile(template: IRGraph.While): Unit = {}
+  override def collectWhile(template: IR.While): Unit = {}
 
   override def leaveExpr(): Unit = {}
 

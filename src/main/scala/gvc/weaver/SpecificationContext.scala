@@ -1,6 +1,6 @@
 package gvc.weaver
-import gvc.transformer.{IRGraph => IR}
-import gvc.transformer.IRGraph
+import gvc.transformer.IR
+import gvc.transformer.IR
 
 abstract class SpecificationContext {
   def convertVar(source: IR.Var): IR.Expression
@@ -61,10 +61,10 @@ object ValueContext extends SpecificationContext {
 }
 
 class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Var]) extends SpecificationContext {
-  def convertResult: IRGraph.Expression =
+  def convertResult: IR.Expression =
     throw new WeaverException(s"Invalid \result expression in '${pred.name}'")
 
-  def convertVar(source: IRGraph.Var): IRGraph.Expression =
+  def convertVar(source: IR.Var): IR.Expression =
     params.getOrElse(
       source,
       throw new WeaverException(s"Could not find variable '${source.name}' in '${pred.name}'")
@@ -72,10 +72,10 @@ class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Var]) extends 
 }
 
 class ReturnContext(returnValue: IR.Expression) extends SpecificationContext {
-  def convertVar(source: IRGraph.Var): IRGraph.Expression =
+  def convertVar(source: IR.Var): IR.Expression =
     source
   
-  def convertResult: IRGraph.Expression =
+  def convertResult: IR.Expression =
     returnValue
 }
 
