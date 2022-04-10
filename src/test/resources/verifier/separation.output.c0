@@ -1,0 +1,60 @@
+#use <runtime>
+struct _ptr_int;
+
+struct _ptr_int
+{
+  int value;
+  int _id;
+};
+
+struct _ptr_int* create(struct OwnedFields* _ownedFields);
+void ensureSeparate(struct _ptr_int* x, struct _ptr_int* y, int* _instanceCounter);
+int main();
+void test(struct _ptr_int* x, struct _ptr_int* y, struct OwnedFields* _ownedFields);
+
+struct _ptr_int* create(struct OwnedFields* _ownedFields)
+{
+  struct _ptr_int* _ = NULL;
+  _ = alloc(struct _ptr_int);
+  _->_id = addStructAcc(_ownedFields, 2);
+  return _;
+}
+
+void ensureSeparate(struct _ptr_int* x, struct _ptr_int* y, int* _instanceCounter)
+{
+}
+
+int main()
+{
+  struct _ptr_int* _ = NULL;
+  struct _ptr_int* _1 = NULL;
+  int* _instanceCounter = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields1 = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  _tempFields = initOwnedFields(_instanceCounter);
+  _ = create(_tempFields);
+  join(_ownedFields, _tempFields);
+  _tempFields1 = initOwnedFields(_instanceCounter);
+  _1 = create(_tempFields1);
+  join(_ownedFields, _tempFields1);
+  test(_, _1, _ownedFields);
+  return 0;
+}
+
+void test(struct _ptr_int* x, struct _ptr_int* y, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  assert(!(x == NULL));
+  assert(!(y == NULL));
+  assertAcc(_ownedFields, y->_id, 0, "Field access runtime check failed for struct _ptr_int.value");
+  assertAcc(_ownedFields, x->_id, 0, "Field access runtime check failed for struct _ptr_int.value");
+  addAccEnsureSeparate(_tempFields, x->_id, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
+  addAccEnsureSeparate(_tempFields, y->_id, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
+  loseAcc(_ownedFields, x->_id, 0);
+  loseAcc(_ownedFields, y->_id, 0);
+  ensureSeparate(x, y, _ownedFields->instanceCounter);
+}

@@ -158,6 +158,7 @@ object Collector {
           ) => {
         // This must be a method pre-condition or post-condition
         val callee = program.findMethod(invoke.methodName)
+        
         val location: ViperLocation =
           if (isContained(position, callee.posts)) ViperLocation.PostInvoke
           else if (isContained(position, callee.pres)) ViperLocation.PreInvoke
@@ -299,9 +300,6 @@ object Collector {
     def indexAll(node: vpr.Node, loc: Location): Unit =
       node.visit { case n => locations += n.uniqueIdentifier -> loc }
 
-    // Collects all permissions in the given specification, and adds checks for them at the given
-    // location.
-
     // Finds all the runtime checks required by the given Viper node, and adds them at the given
     // IR location.
     // `loopInvs` is the list of the invariants from all the loops that contain this position.
@@ -312,28 +310,34 @@ object Collector {
         loopInvs: List[vpr.Exp]
     ): Unit = {
       for (vprCheck <- vprChecks.get(node.uniqueIdentifier).toSeq.flatten) {
-        val checkLocation = loc match {
+        val (checkLocation, inSpec) = loc match {
           case at: AtOp =>
             vprCheck.location match {
               case ViperLocation.Value =>
                 methodCall match {
-                  case Some(method)
-                      if isContained(vprCheck.context, method.posts) =>
-                    Post(at.op)
-                  case _ => Pre(at.op)
+                  case Some(method) =>
+                    if (isContained(vprCheck.context, method.posts))
+                      (Post(at.op), true)
+                    else if (isContained(vprCheck.context, method.pres))
+                      (Pre(at.op), true)
+                    else
+                      (Pre(at.op), false)
+                  case _ => (Pre(at.op), false)
                 }
               case ViperLocation.PreLoop | ViperLocation.PreInvoke |
                   ViperLocation.Fold | ViperLocation.Unfold =>
-                Pre(at.op)
+                (Pre(at.op), true)
               case ViperLocation.PostLoop | ViperLocation.PostInvoke =>
-                Post(at.op)
-              case ViperLocation.InvariantLoopStart => LoopStart(at.op)
-              case ViperLocation.InvariantLoopEnd   => LoopEnd(at.op)
+                (Post(at.op), true)
+              case ViperLocation.InvariantLoopStart =>
+                (LoopStart(at.op), true)
+              case ViperLocation.InvariantLoopEnd   =>
+                (LoopEnd(at.op), true)
             }
           case _ => {
             if (vprCheck.location != ViperLocation.Value)
               throw new WeaverException("Invalid check location")
-            loc
+            (loc, loc == MethodPre || loc == MethodPost)
           }
         }
 
@@ -359,7 +363,7 @@ object Collector {
         if (
           check.isInstanceOf[
             AccessibilityCheck
-          ] && (loc == MethodPre || loc == MethodPost || vprCheck.location != ViperLocation.Value)
+          ] && inSpec
         ) {
           needsFullPermissionChecking += checkLocation
         }
@@ -614,15 +618,18 @@ object Collector {
       val (spec, arguments) = location match {
         case at: AtOp =>
           at.op match {
-            case op: Invoke if op.method.precondition.isDefined =>
-              (
-                op.method.precondition.get,
-                Some(
-                  op.method.parameters
-                    .zip(op.arguments.map(resolveValue(_)))
-                    .toMap
+            case op: Invoke => op.callee match {
+              case callee: Method if callee.precondition.isDefined =>
+                (
+                  callee.precondition.get,
+                  Some(
+                    op.callee.parameters
+                      .zip(op.arguments.map(resolveValue(_)))
+                      .toMap
+                  )
                 )
-              )
+              case _ => throw new WeaverException(s"Could not locate specification at invoke: $location")
+            }
             // TODO: Do we need unfold?
             case op: Fold =>
               (
