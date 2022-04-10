@@ -144,7 +144,33 @@ class CheckImplementation(
     val convertedMember = context.convertFieldMember(member)
     val struct = convertedMember.field.struct
     val instanceId =
-      new IR.FieldMember(convertedMember.root, structIdField(struct))
+      if (convertedMember.root.valueType.isDefined) {
+        mode match {
+          case SeparationMode | VerifyMode =>
+            new IR.Conditional(
+              new IR.Binary(
+                IR.BinaryOp.NotEqual,
+                convertedMember.root,
+                new IR.NullLit()
+              ),
+              new IR.FieldMember(convertedMember.root, structIdField(struct)),
+              new IR.IntLit(-1)
+            )
+          case AddMode | RemoveMode =>
+            // If it's in add/remove, it doesn't need the null check
+            new IR.FieldMember(convertedMember.root, structIdField(struct))
+        }
+      } else {
+        // If valueType is not defined, there is a NULL dereference in
+        // the expression, so we cannot compile it
+        mode match {
+          case SeparationMode | VerifyMode =>
+            new IR.IntLit(-1)
+          case AddMode | RemoveMode =>
+            throw new WeaverException("Invalid NULL dereference")
+        }
+      }
+
     val fieldIndex = new IR.IntLit(struct.fields.indexOf(convertedMember.field))
     val numFields = new IR.IntLit(struct.fields.length)
     //TODO: add support for IRPrinter.printExpr here
