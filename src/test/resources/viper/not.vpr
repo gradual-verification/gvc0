@@ -1,4 +1,4 @@
-field $intValue: Int
+field _ptr_int$value: Int
 
 method main() returns ($result: Int)
 {
@@ -9,5 +9,5 @@ method test(value: Ref)
   requires ? && !(value == null)
   ensures ? && true
 {
-  value.$intValue := 1
+  value._ptr_int$value := 1
 }

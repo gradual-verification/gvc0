@@ -1,0 +1,24 @@
+struct Test {
+  int value;
+};
+
+// Try to create a name collision
+struct _ptr_int {
+  char test;
+};
+
+int main()
+{
+  struct Test** refPtr = alloc(struct Test*);
+  *refPtr = alloc(struct Test);
+
+  int*** intTest = alloc(int**);
+  *intTest = alloc(int*);
+  **intTest = alloc(int);
+  ***intTest = -1;
+
+  char* c = alloc(char);
+  *c = '\0';
+
+  return 0;
+}

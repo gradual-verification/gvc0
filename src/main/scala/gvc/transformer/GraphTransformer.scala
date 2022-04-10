@@ -6,7 +6,9 @@ class TransformerException(message: String) extends Exception(message)
 
 object GraphTransformer {
   def transform(input: ResolvedProgram): IRGraph.Program = {
-    new Transformer(input).transform()
+    var p = new Transformer(input).transform()
+    PointerElimination.transform(p)
+    p
   }
 
   private class Transformer(program: ResolvedProgram) {

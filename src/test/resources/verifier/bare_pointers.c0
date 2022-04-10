@@ -1,0 +1,40 @@
+struct Test {
+  int value;
+};
+
+struct Wrapper {
+  struct Test** test;
+};
+
+//@predicate accInt(int* ptr) = acc(*ptr);
+
+void test(int *input)
+  //@requires accInt(input);
+  //@ensures accInt(input);
+{
+}
+
+int main()
+{
+  struct Test** refPtr = alloc(struct Test*);
+  *refPtr = alloc(struct Test);
+
+  int*** intTest = alloc(int**);
+  *intTest = alloc(int*);
+  **intTest = alloc(int);
+  ***intTest = -1;
+
+  char* c = alloc(char);
+  *c = '\0';
+
+  int *ptr = alloc(int);
+  //@fold accInt(ptr);
+  test(ptr);
+
+  struct Wrapper* wrapper = alloc(struct Wrapper);
+  wrapper->test = alloc(struct Test*);
+  *(wrapper->test) = alloc(struct Test);
+  (*(wrapper->test))->value = 1;
+
+  return 0;
+}

@@ -351,6 +351,7 @@ object GraphPrinter {
           case '\n'  => "\\n"
           case '\r'  => "\\r"
           case '\t'  => "\\t"
+          case '\u0000' => "\\0"
           case other => other.toString()
         })
         p.print("'")

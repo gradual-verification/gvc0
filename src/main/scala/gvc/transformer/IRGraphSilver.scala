@@ -18,9 +18,6 @@ object IRGraphSilver {
 
   object Names {
     val ResultVar = "$result"
-    val RefPointerValue = "$refValue"
-    val IntPointerValue = "$intValue"
-    val BoolPointerValue = "$boolValue"
   }
 
   private class TempVars(methodName: java.lang.String, index: mutable.Map[SilverVarId, Invoke]) {
@@ -48,10 +45,6 @@ object IRGraphSilver {
       fields += field
       field
     }
-
-    lazy val refPointer = declareField(Names.RefPointerValue, vpr.Ref)
-    lazy val intPointer = declareField(Names.IntPointerValue, vpr.Int)
-    lazy val boolPointer = declareField(Names.BoolPointerValue, vpr.Bool)
 
     def convert(): SilverProgram = {
       val predicates = ir.predicates.map(convertPredicate).toList
@@ -141,13 +134,6 @@ object IRGraphSilver {
       case _                => throw new IRException(s"Unsupported type: ${t.name}")
     }
 
-    def getPointerField(t: Type) = t match {
-      case _: ReferenceType | _: PointerType => refPointer
-      case IntType | CharType                => intPointer
-      case BoolType                          => boolPointer
-      case _                                 => throw new IRException(s"Unsupported type: ${t.name}")
-    }
-
     def getReturnVar(method: Method): vpr.LocalVar =
       vpr.LocalVar(Names.ResultVar, convertType(method.returnType.get))()
 
@@ -201,9 +187,7 @@ object IRGraphSilver {
       }
 
       case alloc: AllocValue => {
-        val target = convertVar(alloc.target)
-        val field = getPointerField(alloc.valueType)
-        Seq(vpr.NewStmt(target, Seq(field))())
+        throw new IRException("Bare pointers cannot be converted")
       }
 
       case alloc: AllocStruct => {
@@ -267,14 +251,7 @@ object IRGraphSilver {
       case member: FieldMember =>
         vpr.FieldAccess(convertExpr(member.root), convertField(member.field))()
       case member: DereferenceMember =>
-        vpr.FieldAccess(
-          convertExpr(member.root),
-          getPointerField(
-            member.valueType.getOrElse(
-              throw new IRException("Invalid dereference")
-            )
-          )
-        )()
+        throw new IRException("Bare pointers cannot be converted")
       case _: ArrayMember =>
         throw new IRException("Array operations are not implemented in Silver")
     }

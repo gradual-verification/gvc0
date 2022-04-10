@@ -1,22 +1,29 @@
-//@predicate testPred(int* value);
+struct _ptr_int;
 
-//@predicate testPred(int* value) = acc(*value);
+struct _ptr_int
+{
+  int value;
+};
+
+//@predicate testPred(struct _ptr_int* value);
+
+//@predicate testPred(struct _ptr_int* value) = acc(value->value);
 
 int main();
-void test(int* value);
+void test(struct _ptr_int* value);
 
 int main()
 {
-  int* a = NULL;
-  a = alloc(int);
+  struct _ptr_int* a = NULL;
+  a = alloc(struct _ptr_int);
   //@fold testPred(a);
   test(a);
   return 0;
 }
 
-void test(int* value)
+void test(struct _ptr_int* value)
   //@requires testPred(value);
 {
   //@unfold testPred(value);
-  *value = 1;
+  value->value = 1;
 }

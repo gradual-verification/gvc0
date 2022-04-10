@@ -18,3 +18,8 @@ method printbool(value: Bool)
 {
   
 }
+
+method flush()
+{
+  
+}
