@@ -194,3 +194,5 @@ vcs_global %>% write.csv(
         file.path("results/vcs.csv"),
         row.names = FALSE
     )
+
+problems()
