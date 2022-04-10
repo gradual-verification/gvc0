@@ -66,6 +66,8 @@ int main()
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
   a = alloc(struct Node);
+  a->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
   a->next = NULL;
   _ = fullyPrecise(a, _instanceCounter);
   return _;

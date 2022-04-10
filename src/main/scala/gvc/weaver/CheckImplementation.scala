@@ -219,4 +219,22 @@ class CheckImplementation(
       )
     )
   }
+
+  def idAllocation(alloc: IR.AllocStruct, instanceCounter: IR.Expression): Unit = {
+    val structType = alloc.struct
+    val idField = new IR.FieldMember(
+      alloc.target,
+      structIdField(alloc.struct)
+    )
+
+    alloc.insertAfter(Seq(
+      new IR.AssignMember(idField, new IR.DereferenceMember(instanceCounter)),
+      new IR.AssignMember(
+        new IR.DereferenceMember(instanceCounter),
+        new IR.Binary(
+          IR.BinaryOp.Add,
+          new IR.DereferenceMember(instanceCounter),
+          new IR.Int(1)))
+    ))
+  }
 }

@@ -1,0 +1,57 @@
+#use <runtime>
+struct A;
+
+struct A
+{
+  int value;
+  int _id;
+};
+
+struct A* create(int* _instanceCounter);
+int main();
+void test(struct A* x, struct A* y, struct OwnedFields* _ownedFields);
+void test2(struct A* x, struct A* y, int* _instanceCounter);
+
+struct A* create(int* _instanceCounter)
+{
+  struct A* _ = NULL;
+  _ = alloc(struct A);
+  _->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  return _;
+}
+
+int main()
+{
+  struct A* _ = NULL;
+  struct A* _1 = NULL;
+  int* _instanceCounter = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  _ = create(_instanceCounter);
+  addAcc(_ownedFields, _->_id, 2, 0);
+  _1 = create(_instanceCounter);
+  addAcc(_ownedFields, _1->_id, 2, 0);
+  test(_, _1, _ownedFields);
+  return 0;
+}
+
+void test(struct A* x, struct A* y, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  assert(!(x == NULL));
+  assert(!(y == NULL));
+  assertAcc(_ownedFields, y->_id, 0, "Field access runtime check failed for struct A.value");
+  assertAcc(_ownedFields, x->_id, 0, "Field access runtime check failed for struct A.value");
+  addAccEnsureSeparate(_tempFields, x->_id, 0, 2, "Overlapping field permissions for struct A.value");
+  addAccEnsureSeparate(_tempFields, y->_id, 0, 2, "Overlapping field permissions for struct A.value");
+  loseAcc(_ownedFields, x->_id, 0);
+  loseAcc(_ownedFields, y->_id, 0);
+  test2(x, y, _ownedFields->instanceCounter);
+}
+
+void test2(struct A* x, struct A* y, int* _instanceCounter)
+{
+}

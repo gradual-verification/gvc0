@@ -1,0 +1,26 @@
+struct A {
+  int value;
+};
+
+struct A* create()
+  //@requires true;
+  //@ensures acc(\result->value);
+{
+  return alloc(struct A);
+}
+
+void test2(struct A* x, struct A* y)
+  //@requires acc(x->value) && acc(y->value);
+{
+}
+
+void test(struct A* x, struct A* y)
+  //@requires ?;
+{
+  test2(x, y);
+}
+
+int main() {
+  test(create(), create());
+  return 0;
+}

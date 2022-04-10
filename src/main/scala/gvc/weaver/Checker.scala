@@ -284,6 +284,7 @@ object Checker {
     // If a primary owned fields instance is required for this method, add all allocations into it
     addAllocationTracking(
       primaryOwnedFields,
+      instanceCounter,
       methodData.allocations,
       implementation,
       runtime
@@ -306,21 +307,21 @@ object Checker {
 
   def addAllocationTracking(
       primaryOwnedFields: Option[Var],
+      instanceCounter: Expression,
       allocations: List[Op],
       implementation: CheckImplementation,
       runtime: CheckRuntime
   ): Unit = {
-    for (ownedFields <- primaryOwnedFields) {
-      for (alloc <- allocations) {
-        alloc match {
-          case alloc: AllocStruct => {
-            implementation.trackAllocation(alloc, ownedFields)
-          }
-          case _ =>
-            throw new WeaverException(
-              "Tracking is only currently supported for struct allocations."
-            )
+    for (alloc <- allocations) {
+      alloc match {
+        case alloc: AllocStruct => primaryOwnedFields match {
+          case Some(primary) => implementation.trackAllocation(alloc, primary)
+          case None => implementation.idAllocation(alloc, instanceCounter)
         }
+        case _ =>
+          throw new WeaverException(
+            "Tracking is only currently supported for struct allocations."
+          )
       }
     }
   }
