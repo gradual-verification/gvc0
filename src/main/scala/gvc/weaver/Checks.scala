@@ -1,6 +1,6 @@
 package gvc.weaver
 import viper.silver.{ast => vpr}
-import gvc.transformer.IR
+import gvc.transformer.{IR, IRSilver}
 
 sealed trait Check
 
@@ -371,9 +371,10 @@ object CheckExpression {
 
       case v: vpr.LocalVar =>
         v.name match {
-          case "$result"                           => Result
-          case temp if temp.startsWith("$result_") => ResultVar(temp)
-          case id                                  => Var(id)
+          case IRSilver.Names.ReturnVar => Result
+          case IRSilver.Names.RenamedResult => Var(IRSilver.Names.ReservedResult)
+          case temp if temp.startsWith(IRSilver.Names.TempResultPrefix) => ResultVar(temp)
+          case id => Var(id)
         }
 
       case lit: vpr.BoolLit => if (lit.value) TrueLit else FalseLit

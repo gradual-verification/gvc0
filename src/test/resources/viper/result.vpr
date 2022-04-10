@@ -1,0 +1,7 @@
+method main() returns ($result: Int)
+{
+  var _result$: Int
+  _result$ := 0
+  _result$ := _result$ + 1
+  $result := _result$
+}

@@ -16,7 +16,10 @@ object IRSilver {
   def toSilver(program: IR.Program) = new Converter(program).convert()
 
   object Names {
-    val ResultVar = "$result"
+    val ReturnVar = "$result"
+    val TempResultPrefix = "$result_"
+    val ReservedResult = "result"
+    val RenamedResult = "_result$"
   }
 
   private class TempVars(methodName: String, index: mutable.Map[SilverVarId, IR.Invoke]) {
@@ -25,7 +28,7 @@ object IRSilver {
 
     def next(invoke: IR.Invoke, t: vpr.Type): vpr.LocalVar = {
       counter += 1
-      val name = "$result_" + counter
+      val name = Names.TempResultPrefix + counter
 
       index += SilverVarId(methodName, name) -> invoke
 
@@ -66,13 +69,13 @@ object IRSilver {
       new SilverProgram(program, tempVarIndex.toMap)
     }
 
-    private def returnVar(t: Option[IR.Type]): List[vpr.LocalVarDecl] = {
-      t.map({ ret => vpr.LocalVarDecl(Names.ResultVar, convertType(ret))() })
+    private def returnVarDecl(t: Option[IR.Type]): List[vpr.LocalVarDecl] = {
+      t.map({ ret => vpr.LocalVarDecl(Names.ReturnVar, convertType(ret))() })
         .toList
     }
 
     private def convertLibraryMethod(method: IR.DependencyMethod): vpr.Method = {
-      val retVar = returnVar(method.returnType)
+      val retVar = returnVarDecl(method.returnType)
       val body = vpr.Seqn(
         method.returnType.map(r =>
           vpr.LocalVarAssign(retVar.head.localVar, convertExpr(r.default))()).toSeq,
@@ -94,7 +97,7 @@ object IRSilver {
 
       val params = method.parameters.map(convertDecl).toList
       val vars = method.variables.map(convertDecl).toList
-      val ret = returnVar(method.returnType)
+      val ret = returnVarDecl(method.returnType)
       val pre = method.precondition.map(convertExpr).toSeq
       val post = method.postcondition.map(convertExpr).toSeq
       val tempVars = new TempVars(method.name, tempVarIndex)
@@ -112,7 +115,7 @@ object IRSilver {
     }
 
     def convertDecl(decl: IR.Var): vpr.LocalVarDecl = {
-      vpr.LocalVarDecl(decl.name, convertType(decl.varType))()
+      vpr.LocalVarDecl(varName(decl.name), convertType(decl.varType))()
     }
 
     def convertField(field: IR.StructField): vpr.Field =
@@ -134,7 +137,7 @@ object IRSilver {
     }
 
     def getReturnVar(method: IR.Method): vpr.LocalVar =
-      vpr.LocalVar(Names.ResultVar, convertType(method.returnType.get))()
+      vpr.LocalVar(Names.ReturnVar, convertType(method.returnType.get))()
 
     private def convertOp(op: IR.Op, tempVars: TempVars): Seq[vpr.Stmt] = op match {
       case iff: IR.If => {
@@ -243,8 +246,14 @@ object IRSilver {
         }
     }
 
-    def convertVar(v: IR.Var): vpr.LocalVar =
-      vpr.LocalVar(v.name, convertType(v.varType))()
+    def varName(name: String) = name match {
+      case Names.ReservedResult => Names.RenamedResult
+      case n => n
+    }
+
+    def convertVar(v: IR.Var): vpr.LocalVar = {
+      vpr.LocalVar(varName(v.name), convertType(v.varType))()
+    }
 
     def convertMember(member: IR.Member): vpr.FieldAccess = member match {
       case member: IR.FieldMember =>

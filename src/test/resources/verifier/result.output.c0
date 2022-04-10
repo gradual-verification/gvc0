@@ -1,0 +1,24 @@
+#use <runtime>
+int get(struct OwnedFields* _ownedFields);
+int main();
+
+int get(struct OwnedFields* _ownedFields)
+{
+  return 2;
+}
+
+int main()
+{
+  int result = 0;
+  int* _instanceCounter = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  _tempFields = initOwnedFields(_instanceCounter);
+  result = get(_tempFields);
+  join(_ownedFields, _tempFields);
+  result = result - 1;
+  assert(result > 0);
+  return 0;
+}

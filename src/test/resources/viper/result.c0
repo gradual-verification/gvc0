@@ -1,0 +1,8 @@
+// The name `result` is reserved in Silver, so it must be renamed
+
+int main()
+{
+  int result = 0;
+  result++;
+  return result;
+}
