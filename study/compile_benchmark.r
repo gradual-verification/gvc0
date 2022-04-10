@@ -150,21 +150,25 @@ compile <- function(dir) {
 
 
     levels_index <- levels %>% select(id, path_id, level_id)
+    conj <- conj %>% filter(conjuncts_elim < conjuncts_total)
 
     conj_total <- conj %>% select(id, conjuncts_total) 
-    colnames(conj_total) <- c("id", "conjuncts")
-    conj_total["type"] <- "total"
+    colnames(conj_total) <- c("id", "% VCs")
+    conj_total["conj_type"] <- "total"
 
     conj_static <- conj %>% select(id, conjuncts_elim) 
-    colnames(conj_static) <- c("id", "conjuncts")
-    conj_static["type"] <- "static"
+    colnames(conj_static) <- c("id", "% VCs")
+    conj_static["conj_type"] <- "eliminated"
 
     conj_all <- bind_rows(
         conj_static %>% inner_join(levels_index, on = c("id")),
         conj_total %>% inner_join(levels_index, on = c("id")),
-    ) %>% select(conjuncts, type, path_id, level_id)
+    )
+    max_vcs <- max(conj$conjuncts_total)
 
+    conj_all["% VCs"] <- conj_all['% VCs'] / max_vcs * 100
     conj_all["example"] <- basename(dir)
+    conj_all["% Specified"] <- conj_all$level_id / max(conj_all$level_id) * 100
     vcs_global <<- bind_rows(vcs_global, conj_all)
 
     conj_all %>% write.csv(
