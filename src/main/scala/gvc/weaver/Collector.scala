@@ -767,7 +767,7 @@ object Collector {
             CheckInfo(
               PredicateSeparationCheck(
                 pred.predicate.name,
-                pred.arguments.map(CheckExpression.irValue)
+                pred.arguments.map(resolveValue(_, arguments))
               ),
               condition.map(ImmediateCondition)
             )
@@ -777,7 +777,7 @@ object Collector {
             CheckInfo(
               PredicateAccessibilityCheck(
                 pred.predicate.name,
-                pred.arguments.map(CheckExpression.irValue)
+                pred.arguments.map(resolveValue(_, arguments))
               ),
               condition.map(ImmediateCondition)
             )
