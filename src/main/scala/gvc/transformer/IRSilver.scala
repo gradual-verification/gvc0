@@ -2,7 +2,7 @@ package gvc.transformer
 import viper.silver.{ast => vpr}
 import scala.collection.mutable
 
-case class SilverVarId(methodName: java.lang.String, varName: java.lang.String)
+case class SilverVarId(methodName: String, varName: String)
 
 class SilverProgram(
   val program: vpr.Program,
@@ -19,7 +19,7 @@ object IRSilver {
     val ResultVar = "$result"
   }
 
-  private class TempVars(methodName: java.lang.String, index: mutable.Map[SilverVarId, IR.Invoke]) {
+  private class TempVars(methodName: String, index: mutable.Map[SilverVarId, IR.Invoke]) {
     private var counter = -1
     val declarations = mutable.ListBuffer[vpr.LocalVarDecl]()
 
@@ -39,7 +39,7 @@ object IRSilver {
     val fields = mutable.ListBuffer[vpr.Field]()
     val structFields = mutable.Map[IR.StructField, vpr.Field]()
 
-    def declareField(name: scala.Predef.String, typ: vpr.Type): vpr.Field = {
+    def declareField(name: String, typ: vpr.Type): vpr.Field = {
       val field = vpr.Field(name, typ)()
       fields += field
       field

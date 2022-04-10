@@ -13,7 +13,7 @@ object IRPrinter {
     val Top = 9
   }
 
-  def print(program: IR.Program, includeSpecs: Boolean): scala.Predef.String = {
+  def print(program: IR.Program, includeSpecs: Boolean): String = {
     val p = new Printer()
 
     def printList[T](values: Seq[T])(action: T => Unit): Unit = {
@@ -284,7 +284,7 @@ object IRPrinter {
       }
     }
 
-    def wrapExpr(currentPrecedence: scala.Int, exprPrecedence: scala.Int)(
+    def wrapExpr(currentPrecedence: Int, exprPrecedence: Int)(
         action: => Unit
     ): Unit = {
       if (currentPrecedence < exprPrecedence) {
@@ -298,7 +298,7 @@ object IRPrinter {
 
     def printExpr(
         expr: IR.Expression,
-        precedence: scala.Int = Precedence.Top
+        precedence: Int = Precedence.Top
     ): Unit = expr match {
       case v: IR.Var => p.print(v.name)
       case m: IR.FieldMember => {
@@ -482,12 +482,12 @@ object IRPrinter {
       indentLevel -= 1
     }
 
-    def print(value: scala.Predef.String): Unit = {
+    def print(value: String): Unit = {
       startLine()
       builder ++= value
     }
 
-    def println(value: scala.Predef.String): Unit = {
+    def println(value: String): Unit = {
       startLine()
       builder ++= value
       builder += '\n'
@@ -499,6 +499,6 @@ object IRPrinter {
       startedLine = false
     }
 
-    override def toString(): scala.Predef.String = builder.toString()
+    override def toString(): String = builder.toString()
   }
 }

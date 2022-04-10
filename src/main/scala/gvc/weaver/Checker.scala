@@ -5,15 +5,15 @@ import scala.collection.mutable
 import scala.annotation.tailrec
 
 object Checker {
-  type StructIDTracker = Map[scala.Predef.String, IR.StructField]
+  type StructIDTracker = Map[String, IR.StructField]
 
   class CheckerMethod(
       val method: IR.Method,
       tempVars: Map[SilverVarId, IR.Invoke]
   ) extends CheckMethod {
-    val resultVars = mutable.Map[java.lang.String, IR.Expression]()
+    val resultVars = mutable.Map[String, IR.Expression]()
 
-    def resultVar(name: java.lang.String): IR.Expression = {
+    def resultVar(name: String): IR.Expression = {
       resultVars.getOrElseUpdate(
         name, {
           val invoke = tempVars.getOrElse(
@@ -501,7 +501,7 @@ object Checker {
       case _ => 0
     })(Ordering.Int.reverse)
 
-  def nesting(expr: CheckExpression): scala.Int = expr match {
+  def nesting(expr: CheckExpression): Int = expr match {
     case b: CheckExpression.Binary =>
       Math.max(nesting(b.left), nesting(b.right)) + 1
     case c: CheckExpression.Cond =>

@@ -1,16 +1,16 @@
 package gvc.transformer
 import scala.collection.mutable
 
-class IRException(message: scala.Predef.String) extends Exception(message)
+class IRException(message: String) extends Exception(message)
 
 object IR {
   // Note that names of methods, vars, etc. are immutable, since they are also copied in their respective Maps
   class Program {
     private[IR] var _structs =
-      mutable.Map[scala.Predef.String, StructDefinition]()
+      mutable.Map[String, StructDefinition]()
     private[IR] var _methods =
-      mutable.Map[scala.Predef.String, MethodDefinition]()
-    private var _predicates = mutable.Map[scala.Predef.String, Predicate]()
+      mutable.Map[String, MethodDefinition]()
+    private var _predicates = mutable.Map[String, Predicate]()
     private var _dependencies = mutable.ListBuffer[Dependency]()
 
     lazy val ownedFieldsStruct = struct(
@@ -18,7 +18,7 @@ object IR {
     )
 
     def addDependency(
-        path: scala.Predef.String,
+        path: String,
         isLibrary: Boolean
     ): Dependency = {
       if (_dependencies.exists(d => d.path == path && d.isLibrary == isLibrary))
@@ -30,7 +30,7 @@ object IR {
     }
 
     def addMethod(
-        name: scala.Predef.String,
+        name: String,
         returnType: Option[Type]
     ): Method = {
       val method = new Method(name, returnType)
@@ -39,7 +39,7 @@ object IR {
       method
     }
 
-    def addPredicate(name: scala.Predef.String): Predicate = {
+    def addPredicate(name: String): Predicate = {
       val predicate = new Predicate(name, new IR.BoolLit(true))
       if (_predicates.getOrElseUpdate(predicate.name, predicate) != predicate)
         throw new IRException(s"Predicate '${predicate.name}' already exists")
@@ -61,24 +61,24 @@ object IR {
     def dependencies: Seq[Dependency] = _dependencies.toList.sortBy(_.path)
 
     // Structs can be used even if they are never declared
-    def struct(name: scala.Predef.String): StructDefinition =
+    def struct(name: String): StructDefinition =
       _structs.getOrElseUpdate(name, new Struct(name))
 
     // Adds a new struct, renaming it if necessary to avoid collisions
-    def newStruct(name: scala.Predef.String): Struct = {
+    def newStruct(name: String): Struct = {
       val actualName = Helpers.findAvailableName(_structs, name)
       val struct = new Struct(actualName)
       _structs += actualName -> struct
       struct
     }
 
-    def method(name: scala.Predef.String): MethodDefinition =
+    def method(name: String): MethodDefinition =
       _methods.getOrElse(
         name,
         throw new IRException(s"Method '$name' not found")
       )
 
-    def methodBody(name: scala.Predef.String): Option[MethodBlock] =
+    def methodBody(name: String): Option[MethodBlock] =
       _methods.values
         .collect { case (m: Method) => m }
         .find(_.name.equals(name)) match {
@@ -86,21 +86,21 @@ object IR {
         case None        => None
       }
 
-    def predicate(name: scala.Predef.String): Predicate = _predicates.getOrElse(
+    def predicate(name: String): Predicate = _predicates.getOrElse(
       name,
       throw new IRException(s"Predicate '$name' not found")
     )
 
     def replaceMethods(methodList: Seq[MethodDefinition]): Unit =
       _methods = methodList.foldLeft(
-        mutable.Map[scala.Predef.String, MethodDefinition]()
+        mutable.Map[String, MethodDefinition]()
       )((m, defn) => {
         m + (defn.name -> defn)
       })
 
     def replacePredicates(predicateList: Seq[Predicate]): Unit =
       _predicates = predicateList.foldLeft(
-        mutable.Map[scala.Predef.String, Predicate]()
+        mutable.Map[String, Predicate]()
       )((m, pred) => { m + (pred.name -> pred) })
 
     def copy(methods: Seq[Method], predicates: Seq[Predicate]) = {
@@ -124,14 +124,14 @@ object IR {
   }
 
   sealed trait StructDefinition {
-    def name: scala.Predef.String
+    def name: String
     def fields: Seq[StructField]
   }
 
-  class Struct(val name: scala.Predef.String) extends StructDefinition {
+  class Struct(val name: String) extends StructDefinition {
     private val _fields = mutable.ListBuffer[StructField]()
 
-    def addField(name: scala.Predef.String, valueType: Type): StructField = {
+    def addField(name: String, valueType: Type): StructField = {
       val field = new StructField(
         this,
         Helpers.findAvailableName(_fields.map(_.name), name),
@@ -145,18 +145,18 @@ object IR {
 
   class StructField(
       val struct: StructDefinition,
-      val name: scala.Predef.String,
+      val name: String,
       var valueType: Type
   )
 
   sealed trait MethodDefinition {
-    def name: scala.Predef.String
+    def name: String
     def returnType: Option[Type]
     def parameters: Seq[Parameter]
   }
 
   class Method(
-      val name: scala.Predef.String,
+      val name: String,
       var returnType: Option[Type],
       var precondition: Option[Expression] = None,
       var postcondition: Option[Expression] = None,
@@ -165,20 +165,20 @@ object IR {
     // Scope is a map of both parameters and variables
     private var _parameters = mutable.ListBuffer[Parameter]()
     private var _variables = mutable.ListBuffer[Var]()
-    private var scope = mutable.Map[scala.Predef.String, Var]()
+    private var scope = mutable.Map[String, Var]()
 
     var body = new MethodBlock(this)
 
     def parameters: Seq[Parameter] = _parameters
     def variables: Seq[Var] = _variables
 
-    def variable(name: scala.Predef.String): Var =
+    def variable(name: String): Var =
       scope.getOrElse(
         name,
         throw new IRException(s"Variable '$name' not found")
       )
 
-    def addParameter(valueType: Type, name: scala.Predef.String): Parameter = {
+    def addParameter(valueType: Type, name: String): Parameter = {
       val newParam =
         new Parameter(valueType, Helpers.findAvailableName(scope, name))
       scope += newParam.name -> newParam
@@ -186,14 +186,14 @@ object IR {
       newParam
     }
 
-    def addVar(valueType: Type, name: scala.Predef.String = "_"): Var = {
+    def addVar(valueType: Type, name: String = "_"): Var = {
       val newVar = new Var(valueType, Helpers.findAvailableName(scope, name))
       scope += newVar.name -> newVar
       _variables += newVar
       newVar
     }
 
-    def getVar(name: scala.Predef.String): Option[Var] = scope.get(name)
+    def getVar(name: String): Option[Var] = scope.get(name)
 
     def copy(
         replacementPre: Option[Expression] = precondition,
@@ -217,14 +217,14 @@ object IR {
     }
   }
   class Predicate(
-      val name: scala.Predef.String,
+      val name: String,
       var expression: IR.Expression
   ) {
     private var _parameters = mutable.ListBuffer[Parameter]()
 
     def parameters: Seq[Parameter] = _parameters
 
-    def addParameter(valueType: Type, name: scala.Predef.String): Parameter = {
+    def addParameter(valueType: Type, name: String): Parameter = {
       val newParam = new Parameter(valueType, name)
       _parameters += newParam
       newParam
@@ -396,9 +396,9 @@ object IR {
       exp == this
   }
 
-  class Parameter(varType: Type, name: scala.Predef.String)
+  class Parameter(varType: Type, name: String)
       extends Var(varType, name)
-  class Var(var varType: Type, val name: scala.Predef.String)
+  class Var(var varType: Type, val name: String)
       extends Expression {
     def valueType: Option[Type] = Some(varType)
   }
@@ -459,7 +459,7 @@ object IR {
   }
 
   sealed trait Literal extends Expression
-  class IntLit(val value: scala.Int) extends Literal {
+  class IntLit(val value: Int) extends Literal {
     def valueType: Option[Type] = Some(IntType)
   }
   class CharLit(val value: scala.Char) extends Literal {
@@ -468,7 +468,7 @@ object IR {
   class BoolLit(val value: scala.Boolean) extends Literal {
     def valueType: Option[Type] = Some(BoolType)
   }
-  class StringLit(val value: scala.Predef.String) extends Literal {
+  class StringLit(val value: String) extends Literal {
     def valueType: Option[Type] = Some(StringType)
   }
   class NullLit extends Literal {
@@ -540,31 +540,31 @@ object IR {
   }
 
   sealed trait Type {
-    def name: scala.Predef.String
+    def name: String
     def default: IR.Literal
   }
 
   // A pointer to a struct value
   class ReferenceType(val struct: StructDefinition) extends Type {
-    def name: scala.Predef.String = "struct " + struct.name + "*"
+    def name: String = "struct " + struct.name + "*"
     def default = new IR.NullLit()
   }
 
   // A pointer to a primitive value
   class PointerType(val valueType: Type) extends Type {
-    def name: scala.Predef.String = valueType.name + "*"
+    def name: String = valueType.name + "*"
     def default = new IR.NullLit()
   }
 
   // An array of primitive values
   class ArrayType(val valueType: Type) extends Type {
-    def name: scala.Predef.String = valueType.name + "[]"
+    def name: String = valueType.name + "[]"
     def default = new IR.NullLit()
   }
 
   // An array of struct values
   class ReferenceArrayType(val struct: StructDefinition) extends Type {
-    def name: scala.Predef.String = "struct " + struct.name + "[]"
+    def name: String = "struct " + struct.name + "[]"
     def default = new IR.NullLit()
   }
 
@@ -743,7 +743,7 @@ object IR {
 
   class Dependency(
       program: Program,
-      val path: scala.Predef.String,
+      val path: String,
       val isLibrary: Boolean
   ) {
     private val _methods = mutable.ListBuffer[DependencyMethod]()
@@ -753,7 +753,7 @@ object IR {
     def structs: Seq[DependencyStruct] = _structs
 
     def defineMethod(
-        name: scala.Predef.String,
+        name: String,
         returnType: Option[Type]
     ): DependencyMethod = {
       if (program._methods.contains(name)) {
@@ -768,7 +768,7 @@ object IR {
       method
     }
 
-    def defineStruct(name: scala.Predef.String): DependencyStruct = {
+    def defineStruct(name: String): DependencyStruct = {
       val struct = new DependencyStruct(name)
       if (_structs.contains(struct.name)) {
         // TODO: This should not throw if the struct *fields* have not been defined
@@ -783,14 +783,14 @@ object IR {
     }
   }
 
-  class DependencyStruct(val name: scala.Predef.String)
+  class DependencyStruct(val name: String)
       extends StructDefinition {
     private val _fields = mutable.ListBuffer[StructField]()
 
     def fields: Seq[StructField] = _fields
 
     def addField(
-        fieldName: scala.Predef.String,
+        fieldName: String,
         valueType: Type
     ): StructField = {
       val field = new StructField(this, fieldName, valueType)
@@ -804,14 +804,14 @@ object IR {
   }
 
   class DependencyMethod(
-      val name: scala.Predef.String,
+      val name: String,
       val returnType: Option[Type]
   ) extends MethodDefinition {
     val _parameters = mutable.ListBuffer[Parameter]()
 
     def parameters: Seq[Parameter] = _parameters
 
-    def addParameter(name: scala.Predef.String, valueType: Type): Parameter = {
+    def addParameter(name: String, valueType: Type): Parameter = {
       val param = new Parameter(valueType, name)
       if (_parameters.exists(_.name == name))
         throw new TransformerException(s"Parameter '$name' already exists")

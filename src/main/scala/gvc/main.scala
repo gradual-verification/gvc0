@@ -162,7 +162,7 @@ object Main extends App {
 
   case class ProfilingInfo(nConjuncts: Int, nConjunctsEliminated: Int)
 
-  class VerifierException(message: scala.Predef.String)
+  class VerifierException(message: String)
       extends Exception(message)
 
   def verify(

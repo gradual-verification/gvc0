@@ -59,7 +59,7 @@ object Collector {
   class CollectedProgram(
       val program: IR.Program,
       val temporaryVars: Map[SilverVarId, IR.Invoke],
-      val methods: Map[scala.Predef.String, CollectedMethod]
+      val methods: Map[String, CollectedMethod]
   )
 
   case class CollectedInvocation(ir: IR.Invoke, vpr: MethodCall)
@@ -92,7 +92,7 @@ object Collector {
     )
   }
 
-  private class ConditionTerm(val id: scala.Int) {
+  private class ConditionTerm(val id: Int) {
     val conditions = mutable.Set[Logic.Conjunction]()
   }
 
@@ -203,7 +203,7 @@ object Collector {
   )
 
   private type ViperCheckMap =
-    mutable.HashMap[scala.Int, mutable.ListBuffer[ViperCheck]]
+    mutable.HashMap[Int, mutable.ListBuffer[ViperCheck]]
 
   // Convert the verifier's check map into a ViperCheckMap
   private def collectChecks(vprProgram: vpr.Program): ViperCheckMap = {
@@ -262,7 +262,7 @@ object Collector {
   ): CollectedMethod = {
     // A mapping of Viper node IDs to the corresponding IR op.
     // This is used for locating the correct insertion of conditionals.
-    val locations = mutable.Map[scala.Int, Location]()
+    val locations = mutable.Map[Int, Location]()
 
     // A list of `return` statements in the IR method, used for inserting any runtime checks that
     // the postcondition may require.
