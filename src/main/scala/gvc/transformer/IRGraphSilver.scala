@@ -18,9 +18,6 @@ object IRGraphSilver {
 
   object Names {
     val ResultVar = "$result"
-    val RefPointerValue = "$refValue"
-    val IntPointerValue = "$intValue"
-    val BoolPointerValue = "$boolValue"
   }
 
   private class TempVars(methodName: java.lang.String, index: mutable.Map[SilverVarId, Invoke]) {
@@ -49,14 +46,13 @@ object IRGraphSilver {
       field
     }
 
-    lazy val refPointer = declareField(Names.RefPointerValue, vpr.Ref)
-    lazy val intPointer = declareField(Names.IntPointerValue, vpr.Int)
-    lazy val boolPointer = declareField(Names.BoolPointerValue, vpr.Bool)
-
     def convert(): SilverProgram = {
       val predicates = ir.predicates.map(convertPredicate).toList
       val tempVarIndex = mutable.Map[SilverVarId, Invoke]()
-      val methods = ir.methods.map(convertMethod(_, tempVarIndex)).toList
+      val methods = (
+        ir.methods.map(convertMethod(_, tempVarIndex)) ++
+        ir.dependencies.flatMap(_.methods.map(convertLibraryMethod))
+      ).toList
       val fields = this.fields.toSeq.sortBy(_.name).toList
 
       val program = vpr.Program(
@@ -71,14 +67,35 @@ object IRGraphSilver {
       new SilverProgram(program, tempVarIndex.toMap)
     }
 
+    private def returnVar(t: Option[IRGraph.Type]): List[vpr.LocalVarDecl] = {
+      t.map({ ret => vpr.LocalVarDecl(Names.ResultVar, convertType(ret))() })
+        .toList
+    }
+
+    private def convertLibraryMethod(method: DependencyMethod): vpr.Method = {
+      val retVar = returnVar(method.returnType)
+      val body = vpr.Seqn(
+        method.returnType.map(r =>
+          vpr.LocalVarAssign(retVar.head.localVar, convertExpr(r.default))()).toSeq,
+        Seq.empty
+      )()
+
+      vpr.Method(
+        method.name,
+        method.parameters.map(convertDecl).toList,
+        retVar,
+        Seq.empty,
+        Seq.empty,
+        Some(body)
+      )()
+    }
+
     private def convertMethod(method: Method, tempVarIndex: mutable.Map[SilverVarId, Invoke]): vpr.Method = {
       var tempCount = 0
 
       val params = method.parameters.map(convertDecl).toList
       val vars = method.variables.map(convertDecl).toList
-      val ret = method.returnType
-        .map({ ret => vpr.LocalVarDecl(Names.ResultVar, convertType(ret))() })
-        .toSeq
+      val ret = returnVar(method.returnType)
       val pre = method.precondition.map(convertExpr).toSeq
       val post = method.postcondition.map(convertExpr).toSeq
       val tempVars = new TempVars(method.name, tempVarIndex)
@@ -115,13 +132,6 @@ object IRGraphSilver {
       case BoolType         => vpr.Bool
       case CharType         => vpr.Int
       case _                => throw new IRException(s"Unsupported type: ${t.name}")
-    }
-
-    def getPointerField(t: Type) = t match {
-      case _: ReferenceType | _: PointerType => refPointer
-      case IntType | CharType                => intPointer
-      case BoolType                          => boolPointer
-      case _                                 => throw new IRException(s"Unsupported type: ${t.name}")
     }
 
     def getReturnVar(method: Method): vpr.LocalVar =
@@ -177,9 +187,7 @@ object IRGraphSilver {
       }
 
       case alloc: AllocValue => {
-        val target = convertVar(alloc.target)
-        val field = getPointerField(alloc.valueType)
-        Seq(vpr.NewStmt(target, Seq(field))())
+        throw new IRException("Bare pointers cannot be converted")
       }
 
       case alloc: AllocStruct => {
@@ -243,14 +251,7 @@ object IRGraphSilver {
       case member: FieldMember =>
         vpr.FieldAccess(convertExpr(member.root), convertField(member.field))()
       case member: DereferenceMember =>
-        vpr.FieldAccess(
-          convertExpr(member.root),
-          getPointerField(
-            member.valueType.getOrElse(
-              throw new IRException("Invalid dereference")
-            )
-          )
-        )()
+        throw new IRException("Bare pointers cannot be converted")
       case _: ArrayMember =>
         throw new IRException("Array operations are not implemented in Silver")
     }

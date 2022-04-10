@@ -1,7 +1,6 @@
 package gvc.weaver
 import viper.silver.{ast => vpr}
 import gvc.transformer.{IRGraph => IR}
-import gvc.transformer.IRGraphSilver.Names
 
 sealed trait Check
 
@@ -350,9 +349,6 @@ object CheckExpression {
       case access: vpr.FieldAccess => {
         val root = expr(access.rcv)
         access.field.name match {
-          case Names.BoolPointerValue | Names.IntPointerValue |
-              Names.RefPointerValue =>
-            Deref(root)
           case field => {
             val segments = field.split('.')
             var modifiedRoot = root

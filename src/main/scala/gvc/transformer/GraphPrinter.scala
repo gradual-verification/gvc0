@@ -351,6 +351,7 @@ object GraphPrinter {
           case '\n'  => "\\n"
           case '\r'  => "\\r"
           case '\t'  => "\\t"
+          case '\u0000' => "\\0"
           case other => other.toString()
         })
         p.print("'")
@@ -443,7 +444,7 @@ object GraphPrinter {
 
     printSeparator()
 
-    for (method <- program.methods.filter(!_.maskedLibrary)) {
+    for (method <- program.methods) {
       printMethodHeader(method)
       p.println(";")
       empty = false
@@ -452,7 +453,7 @@ object GraphPrinter {
     printSeparator()
 
     var first = true
-    for (method <- program.methods.filter(!_.maskedLibrary)) {
+    for (method <- program.methods) {
       if (first) first = false
       else p.println()
       printMethod(method)

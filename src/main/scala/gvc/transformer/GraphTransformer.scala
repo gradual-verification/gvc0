@@ -6,7 +6,9 @@ class TransformerException(message: String) extends Exception(message)
 
 object GraphTransformer {
   def transform(input: ResolvedProgram): IRGraph.Program = {
-    new Transformer(input).transform()
+    var p = new Transformer(input).transform()
+    PointerElimination.transform(p)
+    p
   }
 
   private class Transformer(program: ResolvedProgram) {
@@ -22,10 +24,8 @@ object GraphTransformer {
         definePredicate(predicate)
       for (predicate <- program.predicateDefinitions)
         implementPredicate(predicate)
-      for (method <- program.methodDeclarations.filter(_.maskedLibrary))
-        defineLibraryMethod(method)
       for (method <- program.methodDefinitions)
-        if (!method.declaration.maskedLibrary) defineMethod(method)
+        defineMethod(method)
       for (method <- program.methodDefinitions)
         implementMethod(method)
       ir
@@ -62,8 +62,17 @@ object GraphTransformer {
         with StructItem
     class StructValue(val field: IRGraph.StructField) extends StructItem
 
-    def defineDependency(declaration: ResolvedUseDeclaration): Unit =
-      ir.addDependency(declaration.name, declaration.isLibrary)
+    def defineDependency(declaration: ResolvedUseDeclaration): Unit = {
+      if (declaration.isLibrary && !ir.dependencies.exists(_.path == declaration.name)) {
+        val dep = ir.addDependency(declaration.name, declaration.isLibrary)
+        declaration.dependency match {
+          case None => throw new TransformerException("Unresolved dependency")
+          case Some(libraryDef) => {
+            DependencyTransformer.transform(ir, dep, libraryDef)
+          }
+        }
+      }
+    }
 
     def implementStruct(input: ResolvedStructDefinition): Unit = {
       val struct = ir.struct(input.name) match {
@@ -184,34 +193,6 @@ object GraphTransformer {
         case VoidType => throw new TransformerException("Invalid void type")
       }
 
-    def defineLibraryMethod(input: ResolvedMethodDeclaration): Unit = {
-      val method =
-        ir.addMethod(input.name, transformReturnType(input.returnType))
-      method.maskedLibrary = true
-      for (param <- input.arguments) {
-        method.addParameter(transformType(param.valueType), param.name)
-      }
-      method.body += (input.returnType match {
-        case ResolvedStructType(_) =>
-          throw new TransformerException(
-            "Struct return types aren't supported for library methods."
-          )
-        case ResolvedPointer(_) =>
-          new IRGraph.Return(Some(new IRGraph.Null()))
-        case builtinType: BuiltinType =>
-          builtinType match {
-            case IntType => new IRGraph.Return(Some(new IRGraph.Int(1)))
-            case StringType =>
-              throw new TransformerException("Strings are not supported.")
-            case CharType =>
-              new IRGraph.Return(Some(new IRGraph.Char('\u0000')))
-            case BoolType => new IRGraph.Return(Some(new IRGraph.Bool(true)))
-            case NullType => new IRGraph.Return(Some(new IRGraph.Null()))
-            case VoidType => new IRGraph.Return(None)
-          }
-
-      })
-    }
     def defineMethod(input: ResolvedMethodDefinition): Unit = {
       val method = ir.addMethod(
         input.name,

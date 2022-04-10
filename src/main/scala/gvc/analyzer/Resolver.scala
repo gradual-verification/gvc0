@@ -1,10 +1,10 @@
 package gvc.analyzer
 import fastparse.Parsed.{Failure, Success}
-import gvc.Config
 import gvc.parser._
 
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.ListBuffer
+import java.io.IOException
 
 trait ResolvedNode {
   val parsed: Node
@@ -28,6 +28,7 @@ case class Scope(
     predicateDefinitions: Map[String, ResolvedPredicateDefinition],
     structDefinitions: Map[String, ResolvedStructDefinition],
     typeDefs: Map[String, ResolvedTypeDef],
+    libraries: Map[Path, ResolvedProgram],
     errors: ErrorSink
 ) {
   def defineStruct(struct: ResolvedStructDefinition): Scope = {
@@ -127,6 +128,9 @@ case class Scope(
     // Add one-by-one to check for already defined variables
     variables.foldLeft(this) { _.declareVariable(_) }
   }
+
+  def declareLibrary(path: Path, library: ResolvedProgram): Scope =
+    copy(libraries = libraries + (path -> library)) 
 }
 
 object Resolver {
@@ -941,47 +945,20 @@ object Resolver {
     ResolvedPredicateDefinition(input, localDecl, body)
   }
 
-  def resolveUseDeclaration(
-      use: UseDeclaration,
-      librarySearchPaths: List[String],
-      scope: Scope
-  ): Option[ResolvedUseDeclaration] = {
-    val foundPath: Option[Path] = librarySearchPaths
-      .map(
-        Paths
-          .get(_)
-          .resolve(
-            if (use.isLibrary) use.path.value + ".h0" else use.path.value
-          )
-      )
+  def resolveLibraryPath(
+      lib: String,
+      searchPaths: List[String]
+  ): Option[Path] = {
+    searchPaths.map(Paths.get(_).resolve(lib + ".h0"))
       .find(Files.exists(_))
-    if (foundPath.isDefined) {
-      Some(
-        ResolvedUseDeclaration(
-          use,
-          use.path.value,
-          use.isLibrary,
-          foundPath.get
-        )
-      )
-    } else {
-      None
-    }
   }
 
   def resolveProgram(
-      program: List[Definition],
-      librarySearchPaths: List[String],
-      errors: ErrorSink
+    defs: List[Definition],
+    librarySearchPaths: List[String],
+    errors: ErrorSink
   ): ResolvedProgram = {
-    val methodDeclarations = ListBuffer[ResolvedMethodDeclaration]()
-    val methodDefinitions = ListBuffer[ResolvedMethodDefinition]()
-    val predicateDeclarations = ListBuffer[ResolvedPredicateDeclaration]()
-    val predicateDefinitions = ListBuffer[ResolvedPredicateDefinition]()
-    val structDefinitions = ListBuffer[ResolvedStructDefinition]()
-    val types = ListBuffer[ResolvedTypeDef]()
-    val dependencies = ListBuffer[ResolvedUseDeclaration]()
-    var scope = Scope(
+    val scope = Scope(
       variables = Map.empty,
       methodDeclarations = Map.empty,
       methodDefinitions = Map.empty,
@@ -989,60 +966,73 @@ object Resolver {
       predicateDefinitions = Map.empty,
       structDefinitions = Map.empty,
       typeDefs = Map.empty,
-      errors = errors
+      libraries = Map.empty,
+      errors
     )
+
+    val (_, program) = resolveProgram(defs, librarySearchPaths, scope)
+    program
+  }
+
+  def resolveProgram(
+    program: List[Definition],
+    librarySearchPaths: List[String],
+    initialScope: Scope
+  ): (Scope, ResolvedProgram) = {
+    val methodDeclarations = ListBuffer[ResolvedMethodDeclaration]()
+    val methodDefinitions = ListBuffer[ResolvedMethodDefinition]()
+    val predicateDeclarations = ListBuffer[ResolvedPredicateDeclaration]()
+    val predicateDefinitions = ListBuffer[ResolvedPredicateDefinition]()
+    val structDefinitions = ListBuffer[ResolvedStructDefinition]()
+    val types = ListBuffer[ResolvedTypeDef]()
+    val dependencies = ListBuffer[ResolvedUseDeclaration]()
+    var scope = initialScope
 
     for (definition <- program) {
       definition match {
         case u: UseDeclaration => {
-          def libError(): Unit = {
-            val libNameError =
-              if (u.isLibrary) "<" + u.path.value + ">"
-              else "\"" + u.path.value + "\""
-            errors.error(u, s"Unable to find library $libNameError")
+          val library = if (u.isLibrary) Some(u.path.value) else {
+            scope.errors.error(u, "Local imports are not implemented")
+            None
           }
-          val dep = resolveUseDeclaration(u, librarySearchPaths, scope)
-          if (dep.isDefined) {
 
-            val librarySource = Files.readString(dep.get.filePath)
-            val parsedLibrary = Parser.parseProgram(librarySource) match {
-              case fail: Failure =>
-                Config.error(
-                  s"Parse error:\n${fail.trace().longAggregateMsg}"
-                )
-              case Success(value, _) => value
-            }
-            val resolvedLibraryProgram =
-              resolveProgram(parsedLibrary, librarySearchPaths, errors)
+          val path = library.flatMap(lib => {
+            resolveLibraryPath(lib, librarySearchPaths).orElse({
+                scope.errors.error(u, s"Unable to find library ${u.path.raw}")
+                None
+            })
+          })
 
-            resolvedLibraryProgram.types.foreach(t => {
-              types += t
-              scope = scope.defineType(t)
+          val resolved = path.flatMap(path => scope.libraries.get(path).orElse {
+            val source =
+              try {
+                Some(Files.readString(path))
+              } catch {
+                case e: IOException =>
+                  scope.errors.error(u, s"Could not read file '$path'")
+                  None
+              }
+
+            val parsed = source.flatMap(source => {
+              Parser.parseProgram(source) match {
+                case Success(value, _) => Some(value)
+                case fail: Failure =>
+                  val error = fail.trace().longAggregateMsg
+                  scope.errors.error(u, s"Parsing error while parsing '$path':\n$error")
+                  None
+              }
             })
 
-            resolvedLibraryProgram.methodDeclarations.foreach(mdc => {
-              mdc.maskedLibrary = true
-              methodDeclarations += mdc
-              scope = scope.declareMethod(mdc)
+            parsed.map(parsed => {
+              val (s, p) = resolveProgram(parsed, librarySearchPaths, scope)
+              scope = s.declareLibrary(path, p)
+              p
             })
+          })
 
-            resolvedLibraryProgram.structDefinitions.foreach(sd => {
-              structDefinitions += sd
-              scope = scope.defineStruct(sd)
-            })
-
-            resolvedLibraryProgram.predicateDeclarations.foreach(pd => {
-              predicateDeclarations += pd
-              scope = scope.declarePredicate(pd)
-            })
-
-            dependencies ++= resolvedLibraryProgram.dependencies
-            dependencies += dep.get
-
-          } else {
-            libError()
-          }
+          dependencies += ResolvedUseDeclaration(u, u.path.value, u.isLibrary, path, resolved)
         }
+
         case t: TypeDefinition => {
           val typeDef = resolveTypeDef(t, scope)
           types += typeDef
@@ -1083,7 +1073,7 @@ object Resolver {
       }
     }
 
-    ResolvedProgram(
+    (scope, ResolvedProgram(
       methodDeclarations = methodDeclarations.toList,
       methodDefinitions = methodDefinitions.toList,
       predicateDeclarations = predicateDeclarations.toList,
@@ -1091,6 +1081,6 @@ object Resolver {
       structDefinitions = structDefinitions.toList,
       types = types.toList,
       dependencies = dependencies.toList
-    )
+    ))
   }
 }

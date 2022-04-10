@@ -65,6 +65,14 @@ object IRGraph {
     def struct(name: scala.Predef.String): StructDefinition =
       _structs.getOrElseUpdate(name, new Struct(name))
 
+    // Adds a new struct, renaming it if necessary to avoid collisions
+    def newStruct(name: scala.Predef.String): Struct = {
+      val actualName = Helpers.findAvailableName(_structs, name)
+      val struct = new Struct(actualName)
+      _structs += actualName -> struct
+      struct
+    }
+
     def method(name: scala.Predef.String): MethodDefinition =
       _methods.getOrElse(
         name,
@@ -153,7 +161,6 @@ object IRGraph {
       var returnType: Option[Type],
       var precondition: Option[Expression] = None,
       var postcondition: Option[Expression] = None,
-      var maskedLibrary: Boolean = false
   ) extends MethodDefinition {
     // Variables/parameters are added to both a list and a map to preserve order and speedup lookup
     // Scope is a map of both parameters and variables
@@ -205,7 +212,7 @@ object IRGraph {
           )
         }
       })
-      copyOf.maskedLibrary = maskedLibrary
+
       replacementBody.foreach(copyOf.body += _.copy)
       copyOf
     }
@@ -423,7 +430,7 @@ object IRGraph {
 
   // Expressions that can only be used within specifications
   sealed trait SpecificationExpression extends Expression {
-    def valueType = None
+    def valueType: Option[Type] = None
   }
 
   class Accessibility(var member: Member) extends SpecificationExpression {
@@ -441,7 +448,9 @@ object IRGraph {
   }
 
   // Represents a \result expression in a specification
-  class Result(var method: Method) extends SpecificationExpression
+  class Result(var method: Method) extends SpecificationExpression {
+    override def valueType = method.returnType
+  }
 
   // Wraps another expression and adds imprecision (i.e. `? && precise`)
   class Imprecise(var precise: Option[IRGraph.Expression])

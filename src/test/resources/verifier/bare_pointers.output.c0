@@ -1,0 +1,93 @@
+#use <runtime>
+struct Test;
+struct Wrapper;
+struct _ptr_char;
+struct _ptr_int;
+struct _ptr_int_;
+struct _ptr_int__;
+struct _ptr_struct_Test_;
+
+struct Test
+{
+  int value;
+  int _id;
+};
+
+struct Wrapper
+{
+  struct _ptr_struct_Test_* test;
+  int _id;
+};
+
+struct _ptr_char
+{
+  char value;
+  int _id;
+};
+
+struct _ptr_int
+{
+  int value;
+  int _id;
+};
+
+struct _ptr_int_
+{
+  struct _ptr_int* value;
+  int _id;
+};
+
+struct _ptr_int__
+{
+  struct _ptr_int_* value;
+  int _id;
+};
+
+struct _ptr_struct_Test_
+{
+  struct Test* value;
+  int _id;
+};
+
+int main();
+void test(struct _ptr_int* input, int* _instanceCounter);
+
+int main()
+{
+  struct _ptr_struct_Test_* refPtr = NULL;
+  struct _ptr_int__* intTest = NULL;
+  struct _ptr_char* c = NULL;
+  struct _ptr_int* ptr = NULL;
+  struct Wrapper* wrapper = NULL;
+  struct Test* _ = NULL;
+  struct _ptr_int_* _1 = NULL;
+  struct _ptr_int* _2 = NULL;
+  struct _ptr_struct_Test_* _3 = NULL;
+  struct Test* _4 = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  refPtr = alloc(struct _ptr_struct_Test_);
+  _ = alloc(struct Test);
+  refPtr->value = _;
+  intTest = alloc(struct _ptr_int__);
+  _1 = alloc(struct _ptr_int_);
+  intTest->value = _1;
+  _2 = alloc(struct _ptr_int);
+  intTest->value->value = _2;
+  intTest->value->value->value = -1;
+  c = alloc(struct _ptr_char);
+  c->value = '\0';
+  ptr = alloc(struct _ptr_int);
+  test(ptr, _instanceCounter);
+  wrapper = alloc(struct Wrapper);
+  _3 = alloc(struct _ptr_struct_Test_);
+  wrapper->test = _3;
+  _4 = alloc(struct Test);
+  wrapper->test->value = _4;
+  wrapper->test->value->value = 1;
+  return 0;
+}
+
+void test(struct _ptr_int* input, int* _instanceCounter)
+{
+}

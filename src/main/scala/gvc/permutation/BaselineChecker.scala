@@ -369,8 +369,7 @@ object BaselineChecker {
         invoke.insertBefore(argAccess ++ targetAccess)
         invoke.callee match {
           case method: IR.Method =>
-            if (!method.maskedLibrary)
-              invoke.arguments = invoke.arguments :+ perms
+            invoke.arguments = invoke.arguments :+ perms
           case method: IR.DependencyMethod =>
         }
       case fold: IR.Fold     =>

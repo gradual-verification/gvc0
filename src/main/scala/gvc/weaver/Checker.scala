@@ -178,39 +178,84 @@ object Checker {
 
     val needsToTrackPrecisePerms =
       primaryOwnedFields.isDefined ||
-        methodData.calls.exists(c =>
-          programData.methods(c.ir.callee.name).callStyle match {
+        methodData.calls.exists(c => (
+          c.ir.callee.isInstanceOf[Method] &&
+          (programData.methods(c.ir.callee.name).callStyle match {
             case ImpreciseCallStyle | PrecisePreCallStyle => true
             case _                                        => false
-          }
-        )
+          })
+        ))
 
     // Update the call sites to add any required parameters
     for (call <- methodData.calls) {
-      val callee = call.ir.callee match {
-        case method: Method => method
-        case _: DependencyMethod =>
-          throw new WeaverException("Invalid method call")
-      }
-      val calleeData = programData.methods(callee.name)
-      if (!calleeData.method.maskedLibrary) {
-        calleeData.callStyle match {
-          // No parameters can be added to a main method
-          case MainCallStyle => ()
+      call.ir.callee match {
+        case _: DependencyMethod => ()
+        case callee: Method =>
+          val calleeData = programData.methods(callee.name)
+          calleeData.callStyle match {
+            // No parameters can be added to a main method
+            case MainCallStyle => ()
 
-          // Imprecise methods always get the primary owned fields instance directly
-          case ImpreciseCallStyle => call.ir.arguments :+= getPrimaryOwnedFields
+            // Imprecise methods always get the primary owned fields instance directly
+            case ImpreciseCallStyle => call.ir.arguments :+= getPrimaryOwnedFields
 
-          case PreciseCallStyle => {
-            // Always pass the instance counter
-            call.ir.arguments :+= instanceCounter
+            case PreciseCallStyle => {
+              // Always pass the instance counter
+              call.ir.arguments :+= instanceCounter
 
-            // If we need to track precise permissons, add the code at the call site
-            if (needsToTrackPrecisePerms) {
-              // Convert precondition into calls to removeAcc
+              // If we need to track precise permissons, add the code at the call site
+              if (needsToTrackPrecisePerms) {
+                // Convert precondition into calls to removeAcc
+                val context = new CallSiteContext(call.ir, method)
+                call.ir.insertBefore(
+                  callee.precondition.toSeq.flatMap(
+                    implementation.translate(
+                      RemoveMode,
+                      _,
+                      getPrimaryOwnedFields,
+                      context
+                    )
+                  )
+                )
+
+                // Convert postcondition into calls to addAcc
+                call.ir.insertAfter(
+                  callee.postcondition.toSeq.flatMap(
+                    implementation.translate(
+                      AddMode,
+                      _,
+                      getPrimaryOwnedFields,
+                      context
+                    )
+                  )
+                )
+              }
+            }
+
+            // For precise-pre/imprecise-post, create a temporary set of permissions, add the
+            // permissions from the precondition, call the method, and add the temporary set to the
+            // primary set
+            case PrecisePreCallStyle => {
+              val tempSet = method.addVar(
+                runtime.ownedFieldsRef,
+                CheckRuntime.Names.temporaryOwnedFields
+              )
+
+              val createTemp = new Invoke(
+                runtime.initOwnedFields,
+                List(instanceCounter),
+                Some(tempSet)
+              )
+
               val context = new CallSiteContext(call.ir, method)
-              call.ir.insertBefore(
-                callee.precondition.toSeq.flatMap(
+
+              val addPermsToTemp = callee.precondition.toSeq
+                .flatMap(
+                  implementation.translate(AddMode, _, tempSet, context)
+                )
+                .toList
+              val removePermsFromPrimary = callee.precondition.toSeq
+                .flatMap(
                   implementation.translate(
                     RemoveMode,
                     _,
@@ -218,68 +263,21 @@ object Checker {
                     context
                   )
                 )
-              )
+                .toList
 
-              // Convert postcondition into calls to addAcc
+              call.ir.insertBefore(
+                createTemp :: addPermsToTemp ++ removePermsFromPrimary
+              )
+              call.ir.arguments :+= tempSet
               call.ir.insertAfter(
-                callee.postcondition.toSeq.flatMap(
-                  implementation.translate(
-                    AddMode,
-                    _,
-                    getPrimaryOwnedFields,
-                    context
-                  )
+                new Invoke(
+                  runtime.join,
+                  List(getPrimaryOwnedFields, tempSet),
+                  None
                 )
               )
             }
           }
-
-          // For precise-pre/imprecise-post, create a temporary set of permissions, add the
-          // permissions from the precondition, call the method, and add the temporary set to the
-          // primary set
-          case PrecisePreCallStyle => {
-            val tempSet = method.addVar(
-              runtime.ownedFieldsRef,
-              CheckRuntime.Names.temporaryOwnedFields
-            )
-
-            val createTemp = new Invoke(
-              runtime.initOwnedFields,
-              List(instanceCounter),
-              Some(tempSet)
-            )
-
-            val context = new CallSiteContext(call.ir, method)
-
-            val addPermsToTemp = callee.precondition.toSeq
-              .flatMap(
-                implementation.translate(AddMode, _, tempSet, context)
-              )
-              .toList
-            val removePermsFromPrimary = callee.precondition.toSeq
-              .flatMap(
-                implementation.translate(
-                  RemoveMode,
-                  _,
-                  getPrimaryOwnedFields,
-                  context
-                )
-              )
-              .toList
-
-            call.ir.insertBefore(
-              createTemp :: addPermsToTemp ++ removePermsFromPrimary
-            )
-            call.ir.arguments :+= tempSet
-            call.ir.insertAfter(
-              new Invoke(
-                runtime.join,
-                List(getPrimaryOwnedFields, tempSet),
-                None
-              )
-            )
-          }
-        }
       }
     }
 

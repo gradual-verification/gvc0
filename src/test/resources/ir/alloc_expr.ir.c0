@@ -1,6 +1,12 @@
 struct Test;
+struct _ptr_int;
 
 struct Test
+{
+  int value;
+};
+
+struct _ptr_int
 {
   int value;
 };
@@ -11,15 +17,15 @@ void something(struct Test* value);
 int main()
 {
   struct Test* _ = NULL;
-  int* _1 = NULL;
-  int* _2 = NULL;
+  struct _ptr_int* _1 = NULL;
+  struct _ptr_int* _2 = NULL;
   struct Test* _3 = NULL;
   struct Test* _4 = NULL;
   _ = alloc(struct Test);
-  _1 = alloc(int);
+  _1 = alloc(struct _ptr_int);
   if (true)
   {
-    _2 = alloc(int);
+    _2 = alloc(struct _ptr_int);
   }
   _3 = alloc(struct Test);
   something(_3);

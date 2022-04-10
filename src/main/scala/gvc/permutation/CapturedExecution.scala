@@ -1,12 +1,16 @@
 package gvc.permutation
 
-import gvc.CC0Wrapper.{CommandOutput, Performance}
-import gvc.{CC0Options, CC0Wrapper, Config}
+import gvc.CC0Options
+import gvc.CC0Wrapper
+import gvc.CC0Wrapper.CommandOutput
+import gvc.CC0Wrapper.Performance
+import gvc.Config
+
+import java.nio.file.Path
+import java.nio.file.Paths
+import scala.collection.mutable
 
 import sys.process._
-import java.io.ByteArrayOutputStream
-import java.nio.file.{Path, Paths}
-import scala.collection.mutable
 
 object CapturedExecution {
 

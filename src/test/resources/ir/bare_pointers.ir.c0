@@ -1,0 +1,66 @@
+struct Test;
+struct _ptr_char;
+struct _ptr_int;
+struct _ptr_int1;
+struct _ptr_int_;
+struct _ptr_int__;
+struct _ptr_struct_Test_;
+
+struct Test
+{
+  int value;
+};
+
+struct _ptr_char
+{
+  char value;
+};
+
+struct _ptr_int
+{
+  char test;
+};
+
+struct _ptr_int1
+{
+  int value;
+};
+
+struct _ptr_int_
+{
+  struct _ptr_int1* value;
+};
+
+struct _ptr_int__
+{
+  struct _ptr_int_* value;
+};
+
+struct _ptr_struct_Test_
+{
+  struct Test* value;
+};
+
+int main();
+
+int main()
+{
+  struct _ptr_struct_Test_* refPtr = NULL;
+  struct _ptr_int__* intTest = NULL;
+  struct _ptr_char* c = NULL;
+  struct Test* _ = NULL;
+  struct _ptr_int_* _1 = NULL;
+  struct _ptr_int1* _2 = NULL;
+  refPtr = alloc(struct _ptr_struct_Test_);
+  _ = alloc(struct Test);
+  refPtr->value = _;
+  intTest = alloc(struct _ptr_int__);
+  _1 = alloc(struct _ptr_int_);
+  intTest->value = _1;
+  _2 = alloc(struct _ptr_int1);
+  intTest->value->value = _2;
+  intTest->value->value->value = -1;
+  c = alloc(struct _ptr_char);
+  c->value = '\0';
+  return 0;
+}

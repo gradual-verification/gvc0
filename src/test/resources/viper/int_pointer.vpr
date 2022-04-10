@@ -1,8 +1,8 @@
-field $intValue: Int
+field _ptr_int$value: Int
 
 method deref(ptr: Ref) returns ($result: Int)
 {
-  $result := ptr.$intValue
+  $result := ptr._ptr_int$value
 }
 
 method main() returns ($result: Int)
