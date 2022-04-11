@@ -33,7 +33,7 @@ void list(struct Node* node, struct OwnedFields* _ownedFields)
   }
   else
   {
-    assertAcc(_ownedFields, node->_id, 0, "Field access runtime check failed for struct Node.value");
+    assertAcc(_ownedFields, node != NULL ? node->_id : -1, 0, "Field access runtime check failed for struct Node.value");
     list(node->next, _ownedFields);
   }
 }
@@ -57,9 +57,9 @@ struct Node* prependList(int value, struct Node* node, struct OwnedFields* _owne
   sep_list(node, _tempFields);
   newNode = alloc(struct Node);
   newNode->_id = addStructAcc(_ownedFields, 3);
-  assertAcc(_ownedFields, newNode->_id, 1, "Field access runtime check failed for struct Node.next");
+  assertAcc(_ownedFields, newNode != NULL ? newNode->_id : -1, 1, "Field access runtime check failed for struct Node.next");
   newNode->next = node;
-  assertAcc(_ownedFields, newNode->_id, 0, "Field access runtime check failed for struct Node.value");
+  assertAcc(_ownedFields, newNode != NULL ? newNode->_id : -1, 0, "Field access runtime check failed for struct Node.value");
   newNode->value = value;
   list(newNode, _ownedFields);
   _tempFields = initOwnedFields(_ownedFields->instanceCounter);
@@ -71,7 +71,7 @@ void sep_list(struct Node* node, struct OwnedFields* _ownedFields)
 {
   if (!(node == NULL))
   {
-    addAccEnsureSeparate(_ownedFields, node->_id, 0, 3, "Overlapping field permissions for struct Node.value");
+    addAccEnsureSeparate(_ownedFields, node != NULL ? node->_id : -1, 0, 3, "Overlapping field permissions for struct Node.value");
     sep_list(node->next, _ownedFields);
   }
 }

@@ -48,12 +48,12 @@ void test(struct _ptr_int* x, struct _ptr_int* y, struct OwnedFields* _ownedFiel
 {
   struct OwnedFields* _tempFields = NULL;
   _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  assertAcc(_ownedFields, y != NULL ? y->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
+  assertAcc(_ownedFields, x != NULL ? x->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
   assert(!(x == NULL));
   assert(!(y == NULL));
-  assertAcc(_ownedFields, y->_id, 0, "Field access runtime check failed for struct _ptr_int.value");
-  assertAcc(_ownedFields, x->_id, 0, "Field access runtime check failed for struct _ptr_int.value");
-  addAccEnsureSeparate(_tempFields, x->_id, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
-  addAccEnsureSeparate(_tempFields, y->_id, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
+  addAccEnsureSeparate(_tempFields, x != NULL ? x->_id : -1, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
+  addAccEnsureSeparate(_tempFields, y != NULL ? y->_id : -1, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
   loseAcc(_ownedFields, x->_id, 0);
   loseAcc(_ownedFields, y->_id, 0);
   ensureSeparate(x, y, _ownedFields->instanceCounter);

@@ -29,24 +29,24 @@ struct Outer* createOuter(struct OwnedFields* _ownedFields)
   inner->_id = addStructAcc(_ownedFields, 2);
   outer = alloc(struct Outer);
   outer->_id = addStructAcc(_ownedFields, 2);
-  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
   outer->inner = inner;
-  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
   _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  addAccEnsureSeparate(_tempFields, outer->inner->_id, 0, 2, "Overlapping field permissions for struct Inner.value");
+  addAccEnsureSeparate(_tempFields, outer->inner != NULL ? outer->inner->_id : -1, 0, 2, "Overlapping field permissions for struct Inner.value");
   return outer;
 }
 
 int getValue(struct Outer* outer, struct OwnedFields* _ownedFields)
 {
   struct OwnedFields* _tempFields = NULL;
-  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
   _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  addAccEnsureSeparate(_tempFields, outer->inner->_id, 0, 2, "Overlapping field permissions for struct Inner.value");
-  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  addAccEnsureSeparate(_tempFields, outer->inner != NULL ? outer->inner->_id : -1, 0, 2, "Overlapping field permissions for struct Inner.value");
+  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
   return outer->inner->value;
 }
 
@@ -55,12 +55,12 @@ int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields)
   struct OwnedFields* _tempFields = NULL;
   if (outer != NULL)
   {
-    assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
+    assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
   }
   if (outer != NULL && outer->inner != NULL)
   {
-    assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
-    assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+    assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
+    assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
     return outer->inner->value;
   }
   else
@@ -72,18 +72,18 @@ int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields)
 int getValueStatic(struct Outer* outer, struct OwnedFields* _ownedFields)
 {
   struct OwnedFields* _tempFields = NULL;
-  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
   _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  addAccEnsureSeparate(_tempFields, outer->_id, 0, 2, "Overlapping field permissions for struct Outer.inner");
-  addAccEnsureSeparate(_tempFields, outer->inner->_id, 0, 2, "Overlapping field permissions for struct Inner.value");
-  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
-  assertAcc(_ownedFields, outer->_id, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_ownedFields, outer->inner->_id, 0, "Field access runtime check failed for struct Inner.value");
+  addAccEnsureSeparate(_tempFields, outer != NULL ? outer->_id : -1, 0, 2, "Overlapping field permissions for struct Outer.inner");
+  addAccEnsureSeparate(_tempFields, outer->inner != NULL ? outer->inner->_id : -1, 0, 2, "Overlapping field permissions for struct Inner.value");
+  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
+  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
+  assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
   _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  addAccEnsureSeparate(_tempFields, outer->_id, 0, 2, "Overlapping field permissions for struct Outer.inner");
-  addAccEnsureSeparate(_tempFields, outer->inner->_id, 0, 2, "Overlapping field permissions for struct Inner.value");
+  addAccEnsureSeparate(_tempFields, outer != NULL ? outer->_id : -1, 0, 2, "Overlapping field permissions for struct Outer.inner");
+  addAccEnsureSeparate(_tempFields, outer->inner != NULL ? outer->inner->_id : -1, 0, 2, "Overlapping field permissions for struct Inner.value");
   return outer->inner->value;
 }
 

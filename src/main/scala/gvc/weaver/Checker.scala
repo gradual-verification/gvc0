@@ -159,21 +159,46 @@ object Checker {
     // Group them by location and condition, so that multiple checks can be contained in a single
     // if block.
     val context = CheckContext(program, checkMethod, implementation, runtime)
-    naiveGrouping(methodData.checks)
-      .foreach { case (loc, when, checks) =>
-        val condition = when.map(getCondition(_))
-        insertAt(
-          loc,
-          implementChecks(
+    for ((loc, checkData) <- groupChecks(methodData.checks)) {
+      insertAt(loc, retVal => {
+        val ops = mutable.ListBuffer[IR.Op]()
+
+        // Create a temporary owned fields instance when it is required
+        var temporaryOwnedFields: Option[IR.Var] = None
+        def getTemporaryOwnedFields(): IR.Var = temporaryOwnedFields.getOrElse {
+          val tempVar = context.method.method.addVar(
+            context.runtime.ownedFieldsRef,
+            CheckRuntime.Names.temporaryOwnedFields
+          )
+          temporaryOwnedFields = Some(tempVar)
+          tempVar
+        }
+
+        for ((cond, checks) <- checkData) {
+          val condition = cond.map(getCondition(_))
+          ops ++= implementChecks(
             condition,
             checks.map(_.check),
-            _,
+            retVal,
             getPrimaryOwnedFields,
+            getTemporaryOwnedFields,
             instanceCounter,
             context
           )
-        )
-      }
+        }
+
+        // Prepend op to initialize owned fields if it is required
+        temporaryOwnedFields.foreach { tempOwned =>
+          new IR.Invoke(
+            context.runtime.initOwnedFields,
+            List(instanceCounter),
+            Some(tempOwned)
+          ) +=: ops
+        }
+
+        ops
+      })
+    }
 
     val needsToTrackPrecisePerms =
       primaryOwnedFields.isDefined ||
@@ -406,19 +431,10 @@ object Checker {
       checks: List[Check],
       returnValue: Option[IR.Expression],
       getPrimaryOwnedFields: () => IR.Var,
+      getTemporaryOwnedFields: () => IR.Var,
       instanceCounter: IR.Expression,
       context: CheckContext
   ): Seq[IR.Op] = {
-    // Create a temporary owned fields instance when it is required
-    var temporaryOwnedFields: Option[IR.Var] = None
-    def getTemporaryOwnedFields(): IR.Var = temporaryOwnedFields.getOrElse {
-      val tempVar = context.method.method.addVar(
-        context.runtime.ownedFieldsRef,
-        CheckRuntime.Names.temporaryOwnedFields
-      )
-      temporaryOwnedFields = Some(tempVar)
-      tempVar
-    }
     // Collect all the ops for the check
     var ops =
       checks.flatMap(
@@ -429,15 +445,6 @@ object Checker {
           context
         )
       )
-
-    // Prepend op to initialize owned fields if it is required
-    temporaryOwnedFields.foreach { tempOwned =>
-      ops = new IR.Invoke(
-        context.runtime.initOwnedFields,
-        List(instanceCounter),
-        Some(tempOwned)
-      ) :: ops
-    }
 
     // Wrap in an if statement if it is conditional
     cond match {
@@ -450,20 +457,13 @@ object Checker {
     }
   }
 
-  // TODO: Finish up a proper ordering strategy for checks that uses the following method instead of this
-  def naiveGrouping(items: List[RuntimeCheck]): List[(Location, Option[Condition], List[RuntimeCheck])] = {
-    items.groupBy(i => (i.location, i.when))
-      .map { case ((loc, when), checks) => (loc, when, checks) }
-      .toList
-  }
-
-  def groupChecks(items: List[RuntimeCheck]): List[(Location, Option[Condition], List[RuntimeCheck])] = {
+  def groupChecks(items: List[RuntimeCheck]): List[(Location, List[(Option[Condition], List[RuntimeCheck])])] = {
     items.groupBy(_.location)
       .toList
-      .flatMap { case (loc, checks) =>
+      .map { case (loc, checks) =>
         val groups = groupConditions(checks)
         val sorted = orderChecks(groups)
-        groupAdjacentConditions(sorted).map { case (cond, checks) => (loc, cond, checks) }
+        (loc, groupAdjacentConditions(sorted).map { case (cond, checks) => (cond, checks) })
       }
   }
 
@@ -498,8 +498,8 @@ object Checker {
   def orderChecks(checks: List[RuntimeCheck]) =
     checks.sortBy(c => c.check match {
       case acc: FieldAccessibilityCheck => nesting(acc.field)
-      case _ => 0
-    })(Ordering.Int.reverse)
+      case _ => Int.MaxValue
+    })(Ordering.Int)
 
   def nesting(expr: CheckExpression): Int = expr match {
     case b: CheckExpression.Binary =>

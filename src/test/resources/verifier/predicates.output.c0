@@ -26,7 +26,7 @@ void add_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
 
 int fullyImprecise(struct Node* a, struct OwnedFields* _ownedFields)
 {
-  assertAcc(_ownedFields, a->_id, 0, "Field access runtime check failed for struct Node.value");
+  assertAcc(_ownedFields, a != NULL ? a->_id : -1, 0, "Field access runtime check failed for struct Node.value");
   return a->value;
 }
 
@@ -55,7 +55,7 @@ int imprecisePostcondition(struct Node* a, struct OwnedFields* _ownedFields)
 
 int imprecisePrecondition(struct Node* a, struct OwnedFields* _ownedFields)
 {
-  assertAcc(_ownedFields, a->_id, 0, "Field access runtime check failed for struct Node.value");
+  assertAcc(_ownedFields, a != NULL ? a->_id : -1, 0, "Field access runtime check failed for struct Node.value");
   return a->value;
 }
 
@@ -81,12 +81,12 @@ void remove_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
 
 void sep_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
 {
-  addAccEnsureSeparate(_ownedFields, node->_id, 0, 3, "Overlapping field permissions for struct Node.value");
-  addAccEnsureSeparate(_ownedFields, node->_id, 1, 3, "Overlapping field permissions for struct Node.next");
+  addAccEnsureSeparate(_ownedFields, node != NULL ? node->_id : -1, 0, 3, "Overlapping field permissions for struct Node.value");
+  addAccEnsureSeparate(_ownedFields, node != NULL ? node->_id : -1, 1, 3, "Overlapping field permissions for struct Node.next");
 }
 
 void wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields)
 {
-  assertAcc(_ownedFields, node->_id, 0, "Field access runtime check failed for struct Node.value");
-  assertAcc(_ownedFields, node->_id, 1, "Field access runtime check failed for struct Node.next");
+  assertAcc(_ownedFields, node != NULL ? node->_id : -1, 0, "Field access runtime check failed for struct Node.value");
+  assertAcc(_ownedFields, node != NULL ? node->_id : -1, 1, "Field access runtime check failed for struct Node.next");
 }

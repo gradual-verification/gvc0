@@ -31,13 +31,13 @@ int main()
   _tempFields = initOwnedFields(_instanceCounter);
   test = getTest(_tempFields);
   join(_ownedFields, _tempFields);
-  assertAcc(_ownedFields, test->_id, 0, "Field access runtime check failed for struct Test.a");
+  assertAcc(_ownedFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.a");
   _cond_1 = !(test == NULL) && test->a == 0;
   if (test->a == 0)
   {
     if (_cond_1)
     {
-      assertAcc(_ownedFields, test->_id, 1, "Field access runtime check failed for struct Test.b");
+      assertAcc(_ownedFields, test != NULL ? test->_id : -1, 1, "Field access runtime check failed for struct Test.b");
     }
     test->b = 1;
   }
