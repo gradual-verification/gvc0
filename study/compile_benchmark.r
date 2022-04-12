@@ -11,9 +11,22 @@ clean <- function(frame, status) {
 }
 
 
-unpack_component <- function(component) {
-    parts <- str_split(component, n=4)
+unpack_context <- function(df) {
+    df["context_name"] = NA
+    df["context_type"] = NA
+    df["component_type"] = NA
+    for(row in 1:nrow(df)){
+        #ex: p.sortedSegHelper.6.pred.default.74
+
+        parts <- strsplit(df[[row, "component_added"]], "\\.")
+    
+        df[row,]$context_name <- parts[[1]][[2]]
+        df[row,]$context_type <- parts[[1]][[4]]
+        df[row,]$component_type <- parts[[1]][[5]] 
+    }
+    return(df)
 }
+
 
 create_summary_row <- function(data, stressLevel, prefix) {
     subset <- data %>% filter(stress == stressLevel)
@@ -134,9 +147,10 @@ compile <- function(dir, stressLevels) {
     quantile_max <- unname(quantile(increases$diff, c(.9)))[[1]]
     quantile_min <- -unname(quantile(abs(decreases$diff), c(.9)))[[1]]
 
-    quantile_min_spikes <- decreases %>% filter(diff <= quantile_min)
-    quantile_max_spikes <- increases %>% filter(diff >= quantile_max)
-    
+    quantile_min_spikes <- decreases %>% filter(diff <= quantile_min) %>% unpack_context
+
+    quantile_max_spikes <- increases %>% filter(diff >= quantile_max) %>% unpack_context
+
     quantile_min_spikes %>% write.csv(
             file.path(dir,paste(
                 basename(dir),
@@ -145,7 +159,6 @@ compile <- function(dir, stressLevels) {
             )),
             row.names = FALSE 
         )
-
     quantile_max_spikes %>% write.csv(
             file.path(dir,paste(
                 basename(dir),
@@ -154,7 +167,6 @@ compile <- function(dir, stressLevels) {
             )),
             row.names = FALSE 
         )
-
 
 
     # DATA - [Gradual Versus Dynamic Summary Statistics]
