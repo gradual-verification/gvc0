@@ -10,10 +10,43 @@ clean <- function(frame, status) {
     return(frame %>% select(where(not_all_na)) %>% drop_na())
 }
 
+
+unpack_component <- function(component) {
+    parts <- str_split(component, n=4)
+}
+
+create_summary_row <- function(data, stressLevel, prefix) {
+    subset <- data %>% filter(stress == stressLevel)
+
+    rows_lt_dyn <- subset %>% filter(diff_grad < 0)
+    rows_gt_dyn <- subset %>% filter(diff_grad > 0)
+
+    steps_lt_dyn <- round(nrow(rows_lt_dyn)/nrow(subset) * 100, 1)
+    steps_gt_dyn <- round(nrow(rows_gt_dyn)/nrow(subset) * 100, 1)
+
+    pdiff_grad_mean <- round(mean(subset$percent_diff_grad), 1)
+    pdiff_grad_max <- round(max(subset$percent_diff_grad), 1)
+    pdiff_grad_min <- round(min(subset$percent_diff_grad), 1)
+    pdiff_grad_sd <- round(sd(subset$percent_diff_grad), 1)
+    c(
+        prefix,
+        steps_lt_dyn,
+        steps_gt_dyn, 
+        pdiff_grad_mean, 
+        pdiff_grad_max, 
+        pdiff_grad_min, 
+        pdiff_grad_sd
+    )
+}
+
 perf_global <- data.frame()
 vcs_global <- data.frame()
+table_global <- data.frame()
 
-compile <- function(dir) {
+compile <- function(dir, stressLevels) {
+
+    # INITIALIZATION
+
     levels_path <- file.path(dir, "levels.csv")
     levels <- read_csv(
             levels_path,
@@ -47,6 +80,7 @@ compile <- function(dir) {
             id,
             path_id,
             level_id,
+            component_added,
             stress,
             median,
             verification
@@ -86,24 +120,90 @@ compile <- function(dir) {
             verification
         )
 
-    path_characteristics <- perf_lattice %>%
+    #DATA - [90th percentile jumps and decreases]
+
+    path_level_characteristics <- perf_lattice %>%
         arrange(level_id) %>%
         group_by(path_id, stress) %>%
-        mutate(diff_time_elapsed = median - lag(median)) %>%
-        filter(level_id > 0) %>%
+        mutate(diff = median - lag(median)) %>%
+        filter(level_id > 0) 
+
+    decreases <- path_level_characteristics %>% filter(diff < 0)
+    increases <- path_level_characteristics %>% filter(diff > 0)
+
+    quantile_max <- unname(quantile(increases$diff, c(.9)))[[1]]
+    quantile_min <- -unname(quantile(abs(decreases$diff), c(.9)))[[1]]
+
+    quantile_min_spikes <- decreases %>% filter(diff <= quantile_min)
+    quantile_max_spikes <- increases %>% filter(diff >= quantile_max)
+    
+    quantile_min_spikes %>% write.csv(
+            file.path(dir,paste(
+                basename(dir),
+                "_min_spikes.csv",
+                sep = ""
+            )),
+            row.names = FALSE 
+        )
+
+    quantile_max_spikes %>% write.csv(
+            file.path(dir,paste(
+                basename(dir),
+                "_max_spikes.csv",
+                sep = ""
+            )),
+            row.names = FALSE 
+        )
+
+
+
+    # DATA - [Gradual Versus Dynamic Summary Statistics]
+    dynamic_timing <- full_dynamic_lattice %>% 
+        select(
+            path_id,
+            level_id,
+            stress,
+            median
+        )
+    names(dynamic_timing)[names(dynamic_timing) == 'median'] <- 'dyn_median'
+    g_vs_d <- dynamic_timing %>% 
+        inner_join(
+            perf_lattice, 
+            by = c("path_id", "level_id", "stress")
+        )
+    g_vs_d$diff_grad <- g_vs_d$median - g_vs_d$dyn_median
+    g_vs_d$percent_diff_grad <- g_vs_d$diff_grad / g_vs_d$dyn_median * 100
+
+
+    for (stressL in stressLevels)
+    {
+        sum_row <- create_summary_row(g_vs_d, stressL, basename(dir))
+        table_global <<- rbind(table_global, sum_row)
+    }
+
+    g_vs_d %>% select(path_id, level_id, stress, diff_grad, percent_diff_grad) %>%
+        write.csv(
+            file.path(dir,paste(
+                basename(dir),
+                "_grad_vs_dyn.csv",
+                sep = ""
+            )),
+            row.names = FALSE 
+        )
+
+
+    # DATA - [Best, Worst, and Median Paths]
+
+    path_characteristics <- path_level_characteristics %>%
         group_by(path_id, stress) %>%
         summarize(
             time_elapsed = mean(median),
-            diff_time_elapsed = mean(abs(diff_time_elapsed)),
-            highest_positive_spike = max(diff_time_elapsed),
-            highest_negative_spike = min(diff_time_elapsed),
+            max_spike = max(diff),
+            min_spike = min(diff),
+            diff_time_elapsed = mean(abs(diff)),
             .groups = "keep"
         ) %>%
         arrange(time_elapsed)
-
-    decreases <- path_characteristics $>$ filter(diff_time_elapsed < 0)
-    increases <- path_characteristics $>$ filter(diff_time_elapsed > 0)
-    print(quantile(increases, c(.90)))
 
     best <- path_characteristics %>%
         group_by(stress) %>%
@@ -115,10 +215,6 @@ compile <- function(dir) {
         group_by(stress) %>%
         filter(row_number() == ceiling(n() / 2)) %>%
         summarize(path_id = head(path_id, 1), classification = "median")
-
-
-
-
     path_classifications <- bind_rows(best, worst, median) %>% arrange(stress)
 
     perf_joined <- inner_join(
@@ -159,6 +255,8 @@ compile <- function(dir) {
             row.names = FALSE 
         )
 
+
+    #DATA - [VCs Numbers Eliminated/Total]
     
     levels_index <- levels %>% select(id, path_id, level_id)
     conj <- conj %>% filter(conjuncts_elim < conjuncts_total)
@@ -188,13 +286,11 @@ compile <- function(dir) {
             )),
             row.names = FALSE 
         )
-
-
 }
 
-compile("./results/bst")
-compile("./results/list")
-compile("./results/composite")
+compile("./results/bst", c(16, 32, 64))
+compile("./results/list", c(16, 32, 64))
+compile("./results/composite", c(8, 16, 32))
 
 pg <- perf_global %>% write.csv(
         file.path("results/perf.csv"),
@@ -205,3 +301,9 @@ pvcs <- vcs_global %>% write.csv(
         file.path("results/vcs.csv"),
         row.names = FALSE
     )
+
+colnames(table_global) <- c("example", "<", ">", "mean", "max", "min", "sd")
+ptbl <- table_global %>% write.csv(
+        file.path("results/table.csv"),
+        row.names = FALSE
+)

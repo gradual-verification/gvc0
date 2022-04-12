@@ -51,6 +51,7 @@ compile_individual <- function (df, model, name, hColor) {
     fit <- lm(model, data=df)
     fit_r2 <- summary(fit)$r.squared
     print(summary(fit))
+    print(summary(fit))
     print(fit_r2)
 
     if(max(df$y) < 10**9){
