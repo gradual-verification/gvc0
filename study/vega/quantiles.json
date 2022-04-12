@@ -1,0 +1,54 @@
+{
+  "title": "Binary Search Tree",
+  "width": 200,
+  "height": 200,
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "description": "Using `labelExpr` to show only initial letters of month names.",
+  "data": {
+    "url": "https://gist.githubusercontent.com/icmccorm/18092295972e8ca81056d0afa7da598e/raw/bf4b197c63ec37b677cdd8089035e387c9480126/jumps.csv"
+  },
+  "mark": "bar",
+  "transform": [
+    {
+      "filter": {
+        "field": "classification",
+        "equal": "max"
+      }
+    },
+    {
+      "filter": {
+        "field": "example",
+        "equal": "bst"
+      }
+    }
+  ],
+  "encoding": {
+    "x": {
+      "field": "context_type",
+      "axis": {
+        "title": "Location Type"
+      }
+    },
+    "y": {
+      "aggregate": "count",
+      "field": "component_type",
+      "axis": {
+        "title": "Count of Components"
+      }
+    },
+    "color": {
+      "field": "component_type",
+      "legend": null,
+      "scale": {
+        "range": [
+          "#33A02C",
+          "#de2d26",
+          "#6a3d9a"
+        ]
+      }
+    },
+    "xOffset": {
+      "datum": "context_type"
+    }
+  }
+}

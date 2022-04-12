@@ -11,19 +11,19 @@ clean <- function(frame, status) {
 }
 
 
-unpack_context <- function(df) {
+unpack_context <- function(df, type, example) {
     df["context_name"] = NA
     df["context_type"] = NA
-    df["component_type"] = NA
+    df[paste(example, "_component_type",sep="")] = NA
     for(row in 1:nrow(df)){
         #ex: p.sortedSegHelper.6.pred.default.74
-
         parts <- strsplit(df[[row, "component_added"]], "\\.")
-    
-        df[row,]$context_name <- parts[[1]][[2]]
-        df[row,]$context_type <- parts[[1]][[4]]
-        df[row,]$component_type <- parts[[1]][[5]] 
+        df[row,]["context_name"] <- parts[[1]][[2]]
+        df[row,]["context_type"] <- parts[[1]][[4]]
+        df[row,][paste(example, "_component_type",sep="")] <- parts[[1]][[5]] 
     }
+    df['example'] <- example
+    df['classification'] <- type
     return(df)
 }
 
@@ -55,6 +55,7 @@ create_summary_row <- function(data, stressLevel, prefix) {
 perf_global <- data.frame()
 vcs_global <- data.frame()
 table_global <- data.frame()
+jumps_global <- data.frame()
 
 compile <- function(dir, stressLevels) {
 
@@ -98,7 +99,6 @@ compile <- function(dir, stressLevels) {
             median,
             verification
         )
-
     full_dynamic_path <- file.path(dir, "perf_full_dynamic.csv")
     full_dynamic <- read_csv(full_dynamic_path, show_col_types = FALSE) %>%
         clean("dynamic")
@@ -115,7 +115,7 @@ compile <- function(dir, stressLevels) {
             median,
             verification
         )
-    
+
     only_framing_path <- file.path(dir, "perf_only_framing.csv")
     only_framing <- read_csv(only_framing_path, show_col_types = FALSE) %>%
         clean("framing")
@@ -147,22 +147,23 @@ compile <- function(dir, stressLevels) {
     quantile_max <- unname(quantile(increases$diff, c(.9)))[[1]]
     quantile_min <- -unname(quantile(abs(decreases$diff), c(.9)))[[1]]
 
-    quantile_min_spikes <- decreases %>% filter(diff <= quantile_min) %>% unpack_context
+    quantile_min_jumps <- decreases %>% filter(diff <= quantile_min) %>% unpack_context("min", basename(dir))
+    quantile_max_jumps <- increases %>% filter(diff >= quantile_max) %>% unpack_context("max", basename(dir))
+    
+    jumps_global <<- bind_rows(jumps_global, quantile_min_jumps, quantile_max_jumps)
 
-    quantile_max_spikes <- increases %>% filter(diff >= quantile_max) %>% unpack_context
-
-    quantile_min_spikes %>% write.csv(
+    quantile_min_jumps %>% write.csv(
             file.path(dir,paste(
                 basename(dir),
-                "_min_spikes.csv",
+                "_min_jumps.csv",
                 sep = ""
             )),
             row.names = FALSE 
         )
-    quantile_max_spikes %>% write.csv(
+    quantile_max_jumps %>% write.csv(
             file.path(dir,paste(
                 basename(dir),
-                "_max_spikes.csv",
+                "_max_jumps.csv",
                 sep = ""
             )),
             row.names = FALSE 
@@ -228,7 +229,6 @@ compile <- function(dir, stressLevels) {
         filter(row_number() == ceiling(n() / 2)) %>%
         summarize(path_id = head(path_id, 1), classification = "median")
     path_classifications <- bind_rows(best, worst, median) %>% arrange(stress)
-
     perf_joined <- inner_join(
         perf_lattice,
         path_classifications,
@@ -281,9 +281,11 @@ compile <- function(dir, stressLevels) {
     colnames(conj_static) <- c("id", "VCs")
     conj_static["conj_type"] <- "eliminated"
 
+    conj_static_levels <- conj_static %>% inner_join(levels_index, by = c("id"))
+    conj_total_levels <- conj_total %>% inner_join(levels_index, by = c("id"))
     conj_all <- bind_rows(
-        conj_static %>% inner_join(levels_index, on = c("id")),
-        conj_total %>% inner_join(levels_index, on = c("id")),
+        conj_static_levels,
+        conj_total_levels
     )
     #max_vcs <- max(conj$conjuncts_total)
     conj_all["example"] <- basename(dir)
@@ -317,5 +319,10 @@ pvcs <- vcs_global %>% write.csv(
 colnames(table_global) <- c("example", "<", ">", "mean", "max", "min", "sd")
 ptbl <- table_global %>% write.csv(
         file.path("results/table.csv"),
+        row.names = FALSE
+)
+
+pjumps <- jumps_global %>% write.csv(
+        file.path("results/jumps.csv"),
         row.names = FALSE
 )
