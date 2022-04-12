@@ -86,7 +86,7 @@ class ASTLabel(
       case Left(value)  => "m." + value.name
       case Right(value) => "p." + value.name
     }
-    name + '.' + specType.id + '.' + (specType match {
+    val specTypeName = specType match {
       case SpecType.Postcondition => "post"
       case SpecType.Assert        => "assert"
       case SpecType.Precondition  => "pre"
@@ -94,7 +94,13 @@ class ASTLabel(
       case SpecType.Fold          => "fold"
       case SpecType.Predicate     => "pred"
       case SpecType.Invariant     => "inv"
-    }) + '.' + exprIndex
+    }
+    val exprTypeName = exprType match {
+      case gvc.permutation.ExprType.Accessibility => "acc"
+      case gvc.permutation.ExprType.Predicate     => "pred_inst"
+      case gvc.permutation.ExprType.Default       => "default"
+    }
+    List(name, specType.id, specTypeName, exprTypeName, exprIndex).mkString(".")
   }
 }
 

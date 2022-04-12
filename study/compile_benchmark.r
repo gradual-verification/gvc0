@@ -101,6 +101,10 @@ compile <- function(dir) {
         ) %>%
         arrange(time_elapsed)
 
+    decreases <- path_characteristics $>$ filter(diff_time_elapsed < 0)
+    increases <- path_characteristics $>$ filter(diff_time_elapsed > 0)
+    print(quantile(increases, c(.90)))
+
     best <- path_characteristics %>%
         group_by(stress) %>%
         summarize(path_id = head(path_id, 1), classification = "best")
@@ -111,6 +115,9 @@ compile <- function(dir) {
         group_by(stress) %>%
         filter(row_number() == ceiling(n() / 2)) %>%
         summarize(path_id = head(path_id, 1), classification = "median")
+
+
+
 
     path_classifications <- bind_rows(best, worst, median) %>% arrange(stress)
 
@@ -132,13 +139,17 @@ compile <- function(dir) {
         by = c("stress", "path_id") 
     )
 
-    all <- bind_rows(perf_joined, full_dynamic_joined, only_framing_joined) %>% 
-        filter(stress %in% c(16, 24, 32))
+    all <- bind_rows(perf_joined, full_dynamic_joined, only_framing_joined)
 
     all$median <- all$median / 10 ** 6
     all["example"] <- basename(dir)
+    max_stress <- max(all$stress)
+    all <- all %>% filter(stress == max_stress)
+    all$level_id <- all$level_id / max(all$level_id) * 100
+
     perf_global <<- bind_rows(perf_global, all)
     
+
     all %>% write.csv(
             file.path(dir,paste(
                 basename(dir),
@@ -177,6 +188,8 @@ compile <- function(dir) {
             )),
             row.names = FALSE 
         )
+
+
 }
 
 compile("./results/bst")
