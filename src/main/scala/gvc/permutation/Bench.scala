@@ -212,6 +212,10 @@ object Bench {
       csv.logStep(bottomID, sampleIndex, 0, None)
 
       for (labelIndex <- sampleToPermute.indices) {
+
+        if (labelIndex == 152) {
+          print("Hi!")
+        }
         currentPermutation += sampleToPermute(labelIndex)
         permutationIndices += sampleToPermute(labelIndex).exprIndex
         val id =

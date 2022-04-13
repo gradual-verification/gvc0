@@ -137,7 +137,7 @@ class SelectVisitor(program: IR.Program)
                   tempNode = tempNode.left.asInstanceOf[Binary]
                 }
                 tempNode.left = new IR.Binary(BinaryOp.And, app, tempNode.left)
-                toAppend
+                current
               case _ => Some(new IR.Binary(IR.BinaryOp.And, app, curr))
             }
           }
@@ -145,8 +145,8 @@ class SelectVisitor(program: IR.Program)
         }
       }
       case None =>
-        current match {
-          case Some(_) => current
+        toAppend match {
+          case Some(_) => toAppend
           case None    => None
         }
     }
