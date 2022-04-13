@@ -8,6 +8,34 @@ import gvc.permutation.SpecType.SpecType
 import scala.collection.mutable
 
 class LabelVisitor extends SpecVisitor[IR.Program, List[ASTLabel]] {
+  def printCounts(labels: List[ASTLabel]) = {
+    Output.info("Specification component counts: ")
+
+    val folds = labels.filter(_.specType == SpecType.Fold)
+    Output.info("Folds: " + folds.length)
+
+    val unfolds = labels.filter(_.specType == SpecType.Unfold)
+    Output.info("Unfolds: " + unfolds.length)
+
+    val preconditions = labels.filter(_.specType == SpecType.Precondition)
+    Output.info("Preconditions: " + componentTypeCounts(preconditions))
+
+    val postconditions = labels.filter(_.specType == SpecType.Postcondition)
+    Output.info("Postconditions: " + componentTypeCounts(postconditions))
+
+    val invariants = labels.filter(_.specType == SpecType.Invariant)
+    Output.info("Loop Invariants: " + componentTypeCounts(invariants))
+
+    val pred_bodies = labels.filter(_.specType == SpecType.Predicate)
+    Output.info("Predicate bodies: " + componentTypeCounts(pred_bodies))
+  }
+
+  private def componentTypeCounts(labels: List[ASTLabel]): String = {
+    val pred_inst = labels.count(_.exprType == ExprType.Predicate)
+    val bool_expr = labels.count(_.exprType == ExprType.Default)
+    val acc = labels.count(_.exprType == ExprType.Accessibility)
+    List(acc, pred_inst, bool_expr).mkString("/")
+  }
 
   private var labelSet = mutable.ListBuffer[ASTLabel]()
 

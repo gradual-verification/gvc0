@@ -58,6 +58,7 @@ table_global <- data.frame()
 jumps_global <- data.frame()
 
 compile <- function(dir, stressLevels) {
+    print(paste("---[", basename(dir), "]---", sep=" "))
 
     # INITIALIZATION
 
@@ -65,8 +66,7 @@ compile <- function(dir, stressLevels) {
     levels <- read_csv(
             levels_path,
             show_col_types = FALSE
-        ) %>%
-        select(where(not_all_na))
+        )
 
     meta_path <- file.path(dir, "metadata.csv")
     meta <- read_csv(
@@ -139,17 +139,22 @@ compile <- function(dir, stressLevels) {
         arrange(level_id) %>%
         group_by(path_id, stress) %>%
         mutate(diff = median - lag(median)) %>%
+        mutate(pdiff = round((median - lag(median))/lag(median) * 100, 1)) %>%
         filter(level_id > 0) 
 
+    
     decreases <- path_level_characteristics %>% filter(diff < 0)
     increases <- path_level_characteristics %>% filter(diff > 0)
 
-    quantile_max <- unname(quantile(increases$diff, c(.9)))[[1]]
-    quantile_min <- -unname(quantile(abs(decreases$diff), c(.9)))[[1]]
+    quantile_max <- unname(quantile(increases$diff, c(.99)))[[1]]
+    quantile_min <- -unname(quantile(abs(decreases$diff), c(.99)))[[1]]
 
     quantile_min_jumps <- decreases %>% filter(diff <= quantile_min) %>% unpack_context("min", basename(dir))
     quantile_max_jumps <- increases %>% filter(diff >= quantile_max) %>% unpack_context("max", basename(dir))
     
+    quantile_min_jumps$level_id <-round((quantile_min_jumps$level_id / max(quantile_min_jumps$level_id))*100, 1)
+    quantile_max_jumps$level_id <-round((quantile_max_jumps$level_id / max(quantile_max_jumps$level_id))*100, 1)
+
     jumps_global <<- bind_rows(jumps_global, quantile_min_jumps, quantile_max_jumps)
 
     quantile_min_jumps %>% write.csv(
@@ -194,7 +199,7 @@ compile <- function(dir, stressLevels) {
         table_global <<- rbind(table_global, sum_row)
     }
 
-    g_vs_d %>% select(path_id, level_id, stress, diff_grad, percent_diff_grad) %>%
+    g_vs_d %>% select(id, path_id, level_id, stress, diff_grad, percent_diff_grad) %>%
         write.csv(
             file.path(dir,paste(
                 basename(dir),
@@ -271,7 +276,7 @@ compile <- function(dir, stressLevels) {
     #DATA - [VCs Numbers Eliminated/Total]
     
     levels_index <- levels %>% select(id, path_id, level_id)
-    conj <- conj %>% filter(conjuncts_elim < conjuncts_total)
+
 
     conj_total <- conj %>% select(id, conjuncts_total) 
     colnames(conj_total) <- c("id", "VCs")
@@ -292,6 +297,7 @@ compile <- function(dir, stressLevels) {
     conj_all["% Specified"] <- conj_all$level_id / max(conj_all$level_id) * 100
     vcs_global <<- bind_rows(vcs_global, conj_all)
 
+
     conj_all %>% write.csv(
             file.path(dir,paste(
                 basename(dir),
@@ -300,6 +306,19 @@ compile <- function(dir, stressLevels) {
             )),
             row.names = FALSE 
         )
+
+    conj_linked <- conj %>% inner_join(levels, by=c("id"))
+    conj_linked <- conj_linked %>% mutate(percent_static = round((conj_linked$conjuncts_elim/conj_linked$conjuncts_total) * 100, 1))
+  
+    conj_by_level <- conj_linked %>% group_by(level_id) %>% summarize(
+        avg_conj_total = mean(conjuncts_total),
+        avg_conj_elim = mean(conjuncts_elim),
+        percent_static_elim = round((mean(conjuncts_elim)/mean(conjuncts_total)) * 100, 1)
+    )
+
+
+    change_from_start <- tail(conj_by_level$percent_static_elim, 1) - head(conj_by_level$percent_static_elim, 1)
+    print(paste("Change in proportion of VCs eliminated: ", change_from_start))
 }
 
 compile("./results/bst", c(16, 32, 64))

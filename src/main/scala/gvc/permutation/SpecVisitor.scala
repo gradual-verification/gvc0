@@ -11,7 +11,7 @@ object SpecType extends Enumeration {
 }
 
 object ExprType extends Enumeration {
-  type ExprType = Any
+  type ExprType = Value
   val Accessibility, Predicate, Default = Value
 }
 

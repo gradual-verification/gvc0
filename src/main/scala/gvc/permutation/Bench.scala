@@ -66,6 +66,7 @@ object Bench {
     val file = c0(outputFiles.baseName)
     val benchConfig =
       BenchConfig.resolveBenchmarkConfig(source, librarySearchDirs, config)
+
     Output.info(
       s"Saved ${benchConfig.prior.visitedPermutations.size} permutations from previous runs."
     )
@@ -392,7 +393,6 @@ object Bench {
       }
 
       val source = injectStress(sourceString)
-
 
       Main.writeFile(
         benchConfig.files.tempC0File.toAbsolutePath.toString,

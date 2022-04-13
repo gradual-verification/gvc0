@@ -1,8 +1,17 @@
 package gvc.permutation
 import gvc.transformer.IR
-import gvc.transformer.IR.{Conditional, Expression, Method, Op, Predicate}
+import gvc.transformer.IR.{
+  Binary,
+  BinaryOp,
+  Conditional,
+  Expression,
+  Method,
+  Op,
+  Predicate
+}
 import gvc.permutation.ExprType.ExprType
 import gvc.permutation.SpecType.SpecType
+
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
@@ -110,19 +119,34 @@ class SelectVisitor(program: IR.Program)
     this.finishedBlocks.insert(0, this.incompleteBlocks.remove(0))
 
   private def mergeBinary(
-      rVal: Option[IR.Expression],
-      lVal: Option[IR.Expression]
+      current: Option[IR.Expression],
+      toAppend: Option[IR.Expression]
   ): Option[IR.Expression] = {
-    lVal match {
-      case Some(l) =>
-        rVal match {
-          case Some(r) =>
-            Some(new IR.Binary(IR.BinaryOp.And, l, r))
-          case None => lVal
+    current match {
+      case Some(curr) => {
+        toAppend match {
+          case Some(app) => {
+            curr match {
+              case binary: IR.Binary if binary.operator == BinaryOp.And =>
+                var tempNode: IR.Binary = binary
+                while (
+                  tempNode.left.isInstanceOf[IR.Binary] && tempNode.left
+                    .asInstanceOf[IR.Binary]
+                    .operator == BinaryOp.And
+                ) {
+                  tempNode = tempNode.left.asInstanceOf[Binary]
+                }
+                tempNode.left = new IR.Binary(BinaryOp.And, app, tempNode.left)
+                toAppend
+              case _ => Some(new IR.Binary(IR.BinaryOp.And, app, curr))
+            }
+          }
+          case None => toAppend
         }
+      }
       case None =>
-        rVal match {
-          case Some(_) => rVal
+        current match {
+          case Some(_) => current
           case None    => None
         }
     }

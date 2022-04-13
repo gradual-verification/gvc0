@@ -1,0 +1,109 @@
+{
+    "title": {
+      "text": "Linked List",
+      "anchor": "start"
+    },
+    "config": {
+      "font": "Helvetica",
+      "autosize": "fit-y"
+    },
+    "width": 600,
+    "height": 250,
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "description": "A scatterplot showing horsepower and miles per gallons for various cars.",
+  
+    "layer":[
+  
+    {
+        "data": {
+      "url": "https://gist.githubusercontent.com/icmccorm/759809d5b219b2f61212e345e8add676/raw/6653145e0cef46c71837e6dda4b7e86fee821896/jumps_small.csv"
+    },
+    "mark": "point",
+    "transform": [
+      {
+        "filter": {
+          "field": "example",
+          "equal": "list"
+        }
+      },
+      {
+        "calculate": "{'fold': 'Fold', 'inv':'Loop Invariant', 'pre':'Precondition', 'post':'Postcondition', 'pred': 'Predicate Body', 'unfold':'Unfold'}[datum.context_type]",
+        "as": "context"
+      },
+      {
+        "calculate": "{'default':'Boolean Expression','pred_inst':'Predicate Instance','acc':'Accessibility'}[datum.list_component_type]",
+        "as": "component"
+      },
+      {
+        "calculate": "datum.diff/1000000",
+        "as": "diff_ms"
+      },
+  
+    ],
+    "encoding": {
+      "x": {
+        "field": "level_id",
+        "type": "quantitative",
+        "scale": {
+          "domain": [
+            25,
+            100
+          ]
+        },
+        "axis": {
+          "title": "% Specified"
+        }
+      },
+      "y": {
+        "field": "diff_ms",
+        "type": "quantitative",
+        "title": "Δt (ms)",
+        "scale": {
+   
+        }
+      },
+      "color": {
+        "field": "context",
+        "title": "Specification Context",
+        "legend": null,
+        "scale": {
+          "domain": [
+            "Fold",
+            "Unfold",
+            "Loop Invariant",
+            "Precondition",
+            "Postcondition",
+            "Predicate Body"
+          ],
+          "range": [
+            "#54a24b",
+            "#4c78a8",
+            "#72b7b2",
+            "#eeca3b",
+            "#e45656",
+            "#6A3D9A"
+  
+          ]
+        }
+      },
+      "shape": {
+        "field": "component",
+        "title": "Component Type",
+        "legend": null,
+        "scale": {
+          "domain":[
+            "Predicate Instance",
+            "Accessibility",
+            "Boolean Expression"
+          ],
+          "range":[
+            "circle",
+            "square",
+            "triangle"
+          ]
+        }
+      }
+    }
+    }
+    ]
+  }
