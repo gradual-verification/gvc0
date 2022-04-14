@@ -1,13 +1,32 @@
 package gvc.permutation
 
 import gvc.transformer.IR
-import gvc.transformer.IR.{Expression, Method, Predicate}
+import gvc.transformer.IR.{Expression, Method, Predicate, PredicateInstance}
 import gvc.permutation.ExprType.ExprType
 import gvc.permutation.SpecType.SpecType
 
 import scala.collection.mutable
 
-class LabelVisitor extends SpecVisitor[IR.Program, List[ASTLabel]] {
+case class LabelOutput(
+    labels: List[ASTLabel],
+    completeMethodCounts: Map[String, Int],
+    completePredicateCounts: Map[String, Int],
+    methodPredicateDependencies: Map[String, mutable.Set[String]],
+    predicatePredicateDependencies: Map[String, mutable.Set[String]]
+)
+
+class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
+
+  val methodLabels: mutable.Map[String, Int] = mutable.Map[String, Int]()
+  val predicateLabels: mutable.Map[String, Int] = mutable.Map[String, Int]()
+  val methodToPredicateDependencies: mutable.Map[String, mutable.Set[String]] =
+    mutable.Map[String, mutable.Set[String]]()
+  val predicateToPredicateDependencies
+      : mutable.Map[String, mutable.Set[String]] =
+    mutable.Map[String, mutable.Set[String]]()
+
+  var labelCount = 0
+
   def printCounts(labels: List[ASTLabel]) = {
     Output.info("Specification component counts: ")
 
@@ -52,6 +71,32 @@ class LabelVisitor extends SpecVisitor[IR.Program, List[ASTLabel]] {
   ): Unit = {
     super.visitSpec(parent, template, specType, exprType)
     addLabel(parent, specType, exprType)
+    template match {
+      case predInst: PredicateInstance => {
+        parent match {
+          case Left(value) =>
+            if (!methodToPredicateDependencies.contains(value.name)) {
+              methodToPredicateDependencies += (value.name -> mutable
+                .Set[String](predInst.predicate.name))
+            } else {
+              methodToPredicateDependencies(
+                value.name
+              ) += predInst.predicate.name
+            }
+          case Right(value) => {
+            if (!predicateToPredicateDependencies.contains(value.name)) {
+              predicateToPredicateDependencies += (value.name -> mutable
+                .Set[String](predInst.predicate.name))
+            } else {
+              predicateToPredicateDependencies(
+                value.name
+              ) += predInst.predicate.name
+            }
+          }
+        }
+      }
+      case _ =>
+    }
   }
 
   override def visitSpec(
@@ -70,13 +115,23 @@ class LabelVisitor extends SpecVisitor[IR.Program, List[ASTLabel]] {
       exprType: ExprType
   ): Unit = {
     labelSet += new ASTLabel(parent, specType, exprType, this.previous())
+    labelCount += 1
   }
+
   override def visitOp(
       parent: Either[Method, Predicate],
       template: IR.Op
   ): Unit = {}
 
-  override def collectOutput(): List[ASTLabel] = { labelSet.toList }
+  override def collectOutput(): LabelOutput = {
+    LabelOutput(
+      labelSet.toList,
+      methodLabels.toMap,
+      predicateLabels.toMap,
+      methodToPredicateDependencies.toMap,
+      predicateToPredicateDependencies.toMap
+    )
+  }
 
   override def collectAssertion(): Unit = {}
 
@@ -94,9 +149,15 @@ class LabelVisitor extends SpecVisitor[IR.Program, List[ASTLabel]] {
 
   override def enterExpr(): Unit = {}
 
-  override def leavePredicate(): Unit = {}
+  override def leavePredicate(predicate: Predicate): Unit = {
+    predicateLabels += (predicate.name -> labelCount)
+    labelCount = 0
+  }
 
-  override def leaveMethod(): Unit = {}
+  override def leaveMethod(method: Method): Unit = {
+    methodLabels += (method.name -> labelCount)
+    labelCount = 0
+  }
 
   override def enterPredicate(predicate: Predicate): Unit = {}
 
