@@ -49,13 +49,15 @@ void grow(OwnedFields* fields)
 }
 
 FieldArray* find(OwnedFields* fields, int _id){
-  int index = hash(_id, fields->capacity);
-  while(fields->contents[index] != NULL){
-    if(!fields->contents[index]->deleted && fields->contents[index]->_id == _id){
-        return fields->contents[index];
-    }else{
-        index = (index + 1) % fields->capacity;
-    }
+  if(_id >= 0){
+      int index = hash(_id, fields->capacity);
+      while(fields->contents[index] != NULL){
+        if(!fields->contents[index]->deleted && fields->contents[index]->_id == _id){
+            return fields->contents[index];
+        }else{
+            index = (index + 1) % fields->capacity;
+        }
+      }
   }
   return NULL;
 }
