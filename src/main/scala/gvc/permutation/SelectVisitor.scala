@@ -141,7 +141,7 @@ class SelectVisitor(program: IR.Program)
               case _ => Some(new IR.Binary(IR.BinaryOp.And, app, curr))
             }
           }
-          case None => toAppend
+          case None => current
         }
       }
       case None =>
