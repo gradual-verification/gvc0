@@ -1,11 +1,14 @@
 {
-  "title": "Binary Search Tree",
+  "title": {
+    "text": "95th Percentile Increases in Run-time Overhead",
+    "fontSize": 14
+  },
   "width": 200,
   "height": 200,
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
   "description": "Using `labelExpr` to show only initial letters of month names.",
   "data": {
-    "url": "https://gist.githubusercontent.com/icmccorm/18092295972e8ca81056d0afa7da598e/raw/bf4b197c63ec37b677cdd8089035e387c9480126/jumps.csv"
+    "url": "https://gist.githubusercontent.com/icmccorm/82aaa3a50cd3721f84881a2e8a617e47/raw/976df303be7c9139f4ceb4205e3a2f8ef5d3af18/jumps.csv"
   },
   "mark": "bar",
   "transform": [
@@ -15,37 +18,38 @@
         "equal": "max"
       }
     },
-    {
-      "filter": {
-        "field": "example",
-        "equal": "bst"
-      }
+        {
+      "calculate": "{'assert': 'Assert', 'fold': 'Fold', 'inv':'Loop Inv.', 'post':'Postcond.', 'pre':'Precond.', 'pred':'Pred. Body', 'unfold':'Unfold'}[datum.context_type]",
+      "as": "Location Added Within Specification"
     }
   ],
   "encoding": {
     "x": {
-      "field": "context_type",
+      "field": "Location Added Within Specification",
       "axis": {
-        "title": "Location Type"
+        "labelFontSize": 12,
+        "titleFontSize": 12
       }
     },
     "y": {
       "aggregate": "count",
       "field": "component_type",
       "axis": {
-        "title": "Count of Components"
+        "title": "Count of Specification Elements",
+        "labelFontSize": 12,
+        "titleFontSize": 12
       }
     },
     "color": {
       "field": "component_type",
-      "legend": null,
       "scale": {
         "range": [
           "#33A02C",
           "#de2d26",
           "#6a3d9a"
         ]
-      }
+      },
+      "legend": null
     },
     "xOffset": {
       "datum": "context_type"

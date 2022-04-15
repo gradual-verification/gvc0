@@ -14,13 +14,13 @@ clean <- function(frame, status) {
 unpack_context <- function(df, type, example) {
     df["context_name"] = NA
     df["context_type"] = NA
-    df[paste(example, "_component_type",sep="")] = NA
+    df["component_type"] = NA
     for(row in 1:nrow(df)){
         #ex: p.sortedSegHelper.6.pred.default.74
         parts <- strsplit(df[[row, "component_added"]], "\\.")
         df[row,]["context_name"] <- parts[[1]][[2]]
         df[row,]["context_type"] <- parts[[1]][[4]]
-        df[row,][paste(example, "_component_type",sep="")] <- parts[[1]][[5]] 
+        df[row,]["component_type"] <- parts[[1]][[5]] 
     }
     df['example'] <- example
     df['classification'] <- type
@@ -38,6 +38,7 @@ create_summary_row <- function(data, stressLevel, prefix) {
     steps_gt_dyn <- round(nrow(rows_gt_dyn)/nrow(subset) * 100, 1)
 
     pdiff_grad_mean <- round(mean(subset$percent_diff_grad), 1)
+
     pdiff_grad_max <- round(max(subset$percent_diff_grad), 1)
     pdiff_grad_min <- round(min(subset$percent_diff_grad), 1)
     pdiff_grad_sd <- round(sd(subset$percent_diff_grad), 1)
@@ -146,8 +147,8 @@ compile <- function(dir, stressLevels) {
     decreases <- path_level_characteristics %>% filter(diff < 0)
     increases <- path_level_characteristics %>% filter(diff > 0)
 
-    quantile_max <- unname(quantile(increases$diff, c(.99)))[[1]]
-    quantile_min <- -unname(quantile(abs(decreases$diff), c(.99)))[[1]]
+    quantile_max <- unname(quantile(increases$diff, c(.95)))[[1]]
+    quantile_min <- -unname(quantile(abs(decreases$diff), c(.95)))[[1]]
 
     quantile_min_jumps <- decreases %>% filter(diff <= quantile_min) %>% unpack_context("min", basename(dir))
     quantile_max_jumps <- increases %>% filter(diff >= quantile_max) %>% unpack_context("max", basename(dir))
@@ -322,7 +323,7 @@ compile <- function(dir, stressLevels) {
 }
 
 compile("./results/bst", c(16, 32, 64))
-compile("./results/list", c(16, 32, 64))
+compile("./results/list", c(32, 64, 128))
 compile("./results/composite", c(8, 16, 32))
 
 pg <- perf_global %>% write.csv(
