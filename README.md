@@ -43,3 +43,7 @@ A number of tests use resource files for the input and expected output. When mod
     testOnly ** -- -Dupdate_files=true
 
 Note that you will need to manually verify any modified files before committing to ensure that the new output is correct.
+
+## Architecture
+
+See the [architecture docs](docs/).
