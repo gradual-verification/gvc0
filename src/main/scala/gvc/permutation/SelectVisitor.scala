@@ -23,8 +23,8 @@ class SelectVisitor(program: IR.Program)
   private var methods = mutable.ListBuffer[Method]()
   private var incompleteBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
   private var finishedBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
-  private var incompleteExpr = mutable.ListBuffer[Option[IR.Expression]]()
-  private var finishedExpr = mutable.ListBuffer[Option[IR.Expression]]()
+  private val incompleteExpr = mutable.ListBuffer[Option[IR.Expression]]()
+  private val finishedExpr = mutable.ListBuffer[Option[IR.Expression]]()
 
   private var permutation = Set[Int]()
   private var permutationMetadata: Option[LabelPermutation] = None

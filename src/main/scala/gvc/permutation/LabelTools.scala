@@ -36,8 +36,7 @@ class Sampler(benchConfig: BenchmarkConfig) {
   private def sampleRandom(
       orderedList: List[ASTLabel]
   ): List[ASTLabel] = {
-    val shuffle = scala.util.Random.shuffle(orderedList.indices.toList)
-    shuffle.map(index => orderedList(index))
+    scala.util.Random.shuffle(orderedList)
   }
 }
 
@@ -91,14 +90,14 @@ class LabelPermutation(
 ) {
   private val methodLabelCounts = mutable.Map[String, Int]()
   private val predicateLabelCounts = mutable.Map[String, Int]()
-  private val orderedContents = mutable.TreeSet[ASTLabel]()(LabelOrdering)
+  private val contents = mutable.TreeSet[ASTLabel]()(LabelOrdering)
   private val orderedIndices = mutable.ListBuffer[Int]()
 
   def addLabel(label: ASTLabel): Unit = {
     orderedIndices += label.exprIndex
-    orderedContents += label
+    contents += label
     label.parent match {
-      case Left(value) => {
+      case Left(value) =>
         if (!methodLabelCounts.contains(value.name)) {
           methodLabelCounts += (value.name -> 1)
         } else {
@@ -114,9 +113,7 @@ class LabelPermutation(
         ) {
           completedMethods += value.name
           updateFinishedMethod()
-
         }
-      }
       case Right(value) =>
         if (!predicateLabelCounts.contains(value.name)) {
           predicateLabelCounts += (value.name -> 1)
@@ -133,12 +130,11 @@ class LabelPermutation(
         ) {
           completedPredicates += value.name
           updateFinishedPredicate()
-
         }
     }
   }
 
-  def labels: Set[ASTLabel] = orderedContents.toSet
+  def labels: Set[ASTLabel] = contents.toSet
   def indices: Set[Int] = orderedIndices.toSet
 
   val completedMethods: mutable.Set[String] = mutable.Set.empty[String]

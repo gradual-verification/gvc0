@@ -531,7 +531,6 @@ object BenchConfig {
     val ir = Main.generateIR(source, librarySearchPaths)
     val labeller = new LabelVisitor()
     val labels = labeller.visit(ir)
-    println(IRPrinter.print(ir, includeSpecs = true))
     labeller.printCounts(labels.labels);
     val files = resolveOutputFiles(source, config)
     val prior = resolvePriorBenchmark(labels.labels, files, librarySearchPaths)

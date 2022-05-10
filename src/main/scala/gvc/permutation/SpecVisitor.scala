@@ -27,11 +27,8 @@ abstract class SpecVisitor[I, O] {
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
-    template match {
-      case bool: IR.BoolLit => {}
-      case _                => specIndex += 1
-    }
     currentContext = Some(parent)
+    specIndex += 1
   }
 
   def visitSpec(

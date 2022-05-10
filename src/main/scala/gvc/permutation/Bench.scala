@@ -125,6 +125,7 @@ object Bench {
       outputFiles: OutputFileCollection,
       benchmarkConfig: BenchmarkConfig
   ): Unit = {
+
     val alreadySampled: mutable.Set[BigInteger] =
       mutable.Set[BigInteger]()
     var previousID: Option[String] = None
@@ -163,6 +164,7 @@ object Bench {
         destDir: Path,
         onlyFraming: Boolean = false
     ): Unit = {
+
       BaselineChecker.check(ir, onlyFraming = onlyFraming)
       val dynamicSource =
         IRPrinter.print(
@@ -216,14 +218,9 @@ object Bench {
         )
       Files.writeString(summaryDestination, summary)
 
-      val currentPermutation = new LabelPermutation(benchmarkConfig)
-
       csv.logStep(bottomID, sampleIndex, 0, None)
-
+      val currentPermutation = new LabelPermutation(benchmarkConfig)
       for (labelIndex <- sampleToPermute.indices) {
-        if (labelIndex == 104) {
-          print("hi!");
-        }
         val visitor = new SelectVisitor(benchmarkConfig.ir)
         currentPermutation.addLabel(sampleToPermute(labelIndex))
         val id =
@@ -231,6 +228,7 @@ object Bench {
             benchmarkConfig.labelOutput.labels,
             currentPermutation.labels
           )
+
         val idString = id.toString(16)
 
         if (!alreadySampled.contains(id)) {
