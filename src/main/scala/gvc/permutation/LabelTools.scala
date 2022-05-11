@@ -112,7 +112,12 @@ class LabelPermutation(
           )
         ) {
           completedMethods += value.name
-          updateFinishedMethod()
+          val dependencySet =
+            benchmarkConfig.labelOutput.methodPredicateDependencies
+              .getOrElse(value.name, Set.empty[String])
+          if (dependencySet.diff(finishedPredicates).isEmpty) {
+            finishedMethods += value.name
+          }
         }
       case Right(value) =>
         if (!predicateLabelCounts.contains(value.name)) {
@@ -128,8 +133,7 @@ class LabelPermutation(
             0
           )
         ) {
-          completedPredicates += value.name
-          updateFinishedPredicate()
+          updateFinishedPredicate(value.name)
         }
     }
   }
@@ -142,19 +146,15 @@ class LabelPermutation(
   val finishedMethods: mutable.Set[String] = mutable.Set.empty[String]
   val finishedPredicates: mutable.Set[String] = mutable.Set.empty[String]
 
-  def updateFinishedMethod(): Unit = {
-    benchmarkConfig.labelOutput.methodPredicateDependencies.foreach(pair => {
-      if (
-        !finishedMethods.contains(pair._1) && completedMethods.contains(pair._1)
-      ) {
-        if (pair._2.diff(finishedPredicates).isEmpty) {
-          finishedMethods += pair._1
-        }
-      }
-    })
-  }
+  def updateFinishedPredicate(name: String): Unit = {
+    completedPredicates += name
+    val dependencySet =
+      benchmarkConfig.labelOutput.predicatePredicateDependencies
+        .getOrElse(name, Set.empty[String])
+    if (dependencySet.diff(finishedPredicates).isEmpty) {
+      finishedPredicates += name
+    }
 
-  def updateFinishedPredicate(): Unit = {
     benchmarkConfig.labelOutput.predicatePredicateDependencies.foreach(pair => {
       if (
         !finishedPredicates.contains(pair._1) && completedPredicates
@@ -165,8 +165,17 @@ class LabelPermutation(
         }
       }
     })
-    updateFinishedMethod()
+    benchmarkConfig.labelOutput.methodPredicateDependencies.foreach(pair => {
+      if (
+        !finishedMethods
+          .contains(pair._1) && completedMethods
+          .contains(pair._1) && pair._2.diff(finishedPredicates).isEmpty
+      ) {
+        finishedMethods += pair._1
+      }
+    })
   }
+
   def methodIsFinished(method: Method): Boolean =
     finishedMethods.contains(method.name)
   def predicateIsFinished(predicate: Predicate): Boolean = {

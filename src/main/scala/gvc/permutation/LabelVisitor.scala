@@ -72,34 +72,21 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
     super.visitSpec(parent, template, specType, exprType)
     addLabel(parent, specType, exprType)
     template match {
-      case predInst: PredicateInstance => {
+      case predInst: PredicateInstance =>
         parent match {
           case Left(value) =>
-            if (!methodToPredicateDependencies.contains(value.name)) {
-              methodToPredicateDependencies += (value.name -> mutable
-                .Set[String](predInst.predicate.name))
-            } else {
-              methodToPredicateDependencies(
-                value.name
+            methodToPredicateDependencies.getOrElseUpdate(
+              value.name,
+              mutable.Set.empty[String]
+            ) += predInst.predicate.name
+          case Right(value) =>
+            if (value.name != predInst.predicate.name) {
+              predicateToPredicateDependencies.getOrElseUpdate(
+                value.name,
+                mutable.Set.empty[String]
               ) += predInst.predicate.name
             }
-          case Right(value) => {
-            if (value.name != predInst.predicate.name) {
-              if (
-                !predicateToPredicateDependencies
-                  .contains(value.name)
-              ) {
-                predicateToPredicateDependencies += (value.name -> mutable
-                  .Set[String](predInst.predicate.name))
-              } else {
-                predicateToPredicateDependencies(
-                  value.name
-                ) += predInst.predicate.name
-              }
-            }
-          }
         }
-      }
       case _ =>
     }
   }
