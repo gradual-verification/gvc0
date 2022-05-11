@@ -6,7 +6,6 @@ import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuite
 
 import java.nio.file.Files
-import scala.collection.mutable
 
 class PermutationSpec extends FixtureAnyFunSuite {
 
@@ -15,7 +14,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
       val tempDir = Files.createTempDirectory("gvc0-permutation-spec")
       val benchConfig =
         BenchConfig.resolveBenchmarkConfig(
-          input(".c0").read,
+          input(".c0").read(),
           List("src/main/resources/"),
           Config(compileBenchmark = Some(tempDir.toString))
         )
@@ -33,19 +32,17 @@ class PermutationSpec extends FixtureAnyFunSuite {
           })
           .toSet
       }
-
-      val currentPermutation = mutable.TreeSet()(LabelOrdering)
-      val permutationIndices = mutable.TreeSet[Int]()
+      val labelPermutation = new LabelPermutation(benchConfig)
 
       for (labelIndex <- 0 to sampleToPermute.length - 2) {
-        currentPermutation += sampleToPermute(labelIndex)
-        permutationIndices += sampleToPermute(labelIndex).exprIndex
-        val builtPermutation = selector.visit(permutationIndices.toSet)
+        labelPermutation.addLabel(sampleToPermute(labelIndex))
+
+        val builtPermutation = selector.visit(labelPermutation)
 
         val builtLabels = auxLabeller.visit(builtPermutation)
         assert(
-          labelSet(builtLabels)
-            .diff(labelSet(currentPermutation.toList))
+          labelSet(builtLabels.labels)
+            .diff(labelSet(labelPermutation.labels.toList))
             .isEmpty
         )
       }

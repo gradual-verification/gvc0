@@ -125,28 +125,34 @@ object Bench {
       outputFiles: OutputFileCollection,
       benchmarkConfig: BenchmarkConfig
   ): Unit = {
+
     val alreadySampled: mutable.Set[BigInteger] =
       mutable.Set[BigInteger]()
     var previousID: Option[String] = None
     val maxPaths = config.benchmarkPaths.getOrElse(1)
-    val selector = new SelectVisitor(benchmarkConfig.ir)
     val csv =
-      new MetadataCSVPrinter(benchmarkConfig.files, benchmarkConfig.labels)
+      new MetadataCSVPrinter(
+        benchmarkConfig.files,
+        benchmarkConfig.labelOutput.labels
+      )
     val err = new ErrorCSVPrinter(benchmarkConfig.files.verifyLogs)
     val sampler = new Sampler(benchmarkConfig)
     val progress =
-      new VerificationTracker(benchmarkConfig.labels.length, maxPaths)
+      new VerificationTracker(
+        benchmarkConfig.labelOutput.labels.length,
+        maxPaths
+      )
 
     def dumpPermutation(
         dir: Path,
         name: String,
-        permutation: mutable.TreeSet[ASTLabel],
+        permutation: List[ASTLabel],
         sourceText: String
     ): Path = {
       val filePath = dir.resolve(name)
       Main.writeFile(
         filePath.toString,
-        LabelTools.appendPathComment(sourceText, permutation.toList)
+        LabelTools.appendPathComment(sourceText, permutation)
       )
       filePath
     }
@@ -154,10 +160,11 @@ object Bench {
     def generateBaseline(
         ir: IR.Program,
         id: String,
-        labels: mutable.TreeSet[ASTLabel],
+        labels: List[ASTLabel],
         destDir: Path,
         onlyFraming: Boolean = false
     ): Unit = {
+
       BaselineChecker.check(ir, onlyFraming = onlyFraming)
       val dynamicSource =
         IRPrinter.print(
@@ -171,9 +178,10 @@ object Bench {
         dynamicSource
       )
     }
-
     val bottomID =
-      LabelTools.createID(benchmarkConfig.labels, Set.empty).toString(16)
+      LabelTools
+        .createID(benchmarkConfig.labelOutput.labels, Set.empty)
+        .toString(16)
     val outputBottom =
       benchmarkConfig.files.perms.resolve(c0(bottomID))
     val outputBottomVerified =
@@ -197,7 +205,11 @@ object Bench {
     for (sampleIndex <- offset until maxPaths + offset) {
       val sampleToPermute =
         sampler.sample(SamplingHeuristic.Random)
-      csv.logPath(sampleIndex, benchmarkConfig.labels, sampleToPermute)
+      csv.logPath(
+        sampleIndex,
+        benchmarkConfig.labelOutput.labels,
+        sampleToPermute
+      )
 
       val summary = LabelTools.appendPathComment("", sampleToPermute)
       val summaryDestination =
@@ -206,32 +218,30 @@ object Bench {
         )
       Files.writeString(summaryDestination, summary)
 
-      val currentPermutation = mutable.TreeSet()(LabelOrdering)
-      val permutationIndices = mutable.TreeSet[Int]()
-
       csv.logStep(bottomID, sampleIndex, 0, None)
-
+      val currentPermutation = new LabelPermutation(benchmarkConfig)
       for (labelIndex <- sampleToPermute.indices) {
-
-        if (labelIndex == 152) {
-          print("Hi!")
-        }
-        currentPermutation += sampleToPermute(labelIndex)
-        permutationIndices += sampleToPermute(labelIndex).exprIndex
+        val visitor = new SelectVisitor(benchmarkConfig.ir)
+        currentPermutation.addLabel(sampleToPermute(labelIndex))
         val id =
-          LabelTools.createID(benchmarkConfig.labels, currentPermutation.toSet)
+          LabelTools.createID(
+            benchmarkConfig.labelOutput.labels,
+            currentPermutation.labels
+          )
+
         val idString = id.toString(16)
 
         if (!alreadySampled.contains(id)) {
-          csv.logPermutation(idString, currentPermutation.toSet)
+          csv.logPermutation(idString, currentPermutation.labels)
 
-          val builtPermutation = selector.visit(permutationIndices.toSet)
+          val builtPermutation =
+            visitor.visit(currentPermutation)
           val sourceText =
             IRPrinter.print(builtPermutation, includeSpecs = true)
           dumpPermutation(
             benchmarkConfig.files.perms,
             c0(idString),
-            currentPermutation,
+            currentPermutation.labels.toList,
             sourceText
           )
           try {
@@ -247,23 +257,25 @@ object Bench {
                 dumpPermutation(
                   benchmarkConfig.files.verifiedPerms,
                   c0(idString),
-                  currentPermutation,
+                  currentPermutation.labels.toList,
                   vPerm.c0Source
                 )
                 csv.logConjuncts(idString, vPerm.profiling)
                 if (!config.disableBaseline) {
-                  val builtDynamic = selector.visit(permutationIndices.toSet)
+                  val builtDynamic = new SelectVisitor(benchmarkConfig.ir)
+                    .visit(currentPermutation)
                   generateBaseline(
                     builtDynamic,
                     idString,
-                    currentPermutation,
+                    currentPermutation.labels.toList,
                     benchmarkConfig.files.dynamicPerms.get
                   )
-                  val builtFraming = selector.visit(permutationIndices.toSet)
+                  val builtFraming = new SelectVisitor(benchmarkConfig.ir)
+                    .visit(currentPermutation)
                   generateBaseline(
                     builtFraming,
                     idString,
-                    currentPermutation,
+                    currentPermutation.labels.toList,
                     benchmarkConfig.files.framingPerms.get,
                     onlyFraming = true
                   )
@@ -300,18 +312,20 @@ object Bench {
       }
     }
     if (!config.disableBaseline) {
-      val templateCopyDynamic = selector.visit(Set.empty[Int])
+      val templateCopyDynamic =
+        new SelectVisitor(benchmarkConfig.ir).visitEmpty()
       generateBaseline(
         templateCopyDynamic,
         bottomID,
-        mutable.TreeSet[ASTLabel]()(LabelOrdering).empty,
+        List.empty,
         benchmarkConfig.files.dynamicPerms.get
       )
-      val templateCopyFraming = selector.visit(Set.empty[Int])
+      val templateCopyFraming =
+        new SelectVisitor(benchmarkConfig.ir).visitEmpty()
       generateBaseline(
         templateCopyFraming,
         bottomID,
-        mutable.TreeSet[ASTLabel]()(LabelOrdering).empty,
+        List.empty,
         benchmarkConfig.files.framingPerms.get,
         onlyFraming = true
       )

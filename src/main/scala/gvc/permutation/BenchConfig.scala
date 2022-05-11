@@ -16,7 +16,7 @@ object BenchConfig {
       prior: BenchmarkPrior,
       workload: BenchmarkWorkload,
       ir: IR.Program,
-      labels: List[ASTLabel],
+      labelOutput: LabelOutput,
       rootConfig: Config
   )
 
@@ -258,7 +258,7 @@ object BenchConfig {
           .generateMetadataColumnEntry(
             tag.hash.toString(16),
             template.toSet,
-            labels.toSet
+            labels.labels.toSet
           )
       })
       .toList
@@ -531,16 +531,15 @@ object BenchConfig {
     val ir = Main.generateIR(source, librarySearchPaths)
     val labeller = new LabelVisitor()
     val labels = labeller.visit(ir)
-    labeller.printCounts(labels);
-
+    labeller.printCounts(labels.labels);
     val files = resolveOutputFiles(source, config)
-    val prior = resolvePriorBenchmark(labels, files, librarySearchPaths)
+    val prior = resolvePriorBenchmark(labels.labels, files, librarySearchPaths)
     val work = resolveWorkload(config)
     BenchmarkConfig(
       files = files,
       prior = prior,
       ir = ir,
-      labels = labels,
+      labelOutput = labels,
       workload = work,
       rootConfig = config
     )

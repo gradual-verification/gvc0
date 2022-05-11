@@ -14,26 +14,29 @@ import sys.process._
 
 object CapturedExecution {
 
-  def compile(input: Path,
-                    binary: Path,
-                    config: Config
-             ): CommandOutput = {
+  def compile(input: Path, binary: Path, config: Config): CommandOutput = {
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
       output = Some(binary.toString),
       includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
-      compilerArgs = List()
+      compilerArgs = List("-fbracket-depth=1024")
     )
     val compileOutput = CC0Wrapper.exec_output(input.toString, cc0Options)
     if (compileOutput.exitCode != 0) {
       throw new CC0CompilationException(compileOutput)
-    }else {
+    } else {
       compileOutput
     }
   }
 
-  def compile_and_exec(input: Path, output: Path, iterations: Int, args: List[String], config: Config): Performance = {
+  def compile_and_exec(
+      input: Path,
+      output: Path,
+      iterations: Int,
+      args: List[String],
+      config: Config
+  ): Performance = {
     compile(input, output, config)
     exec_timed(output, iterations, args)
   }
@@ -90,8 +93,7 @@ object CapturedExecution {
     else 0
   }
 
-  class CapturedOutputException(output: CommandOutput)
-      extends Exception {
+  class CapturedOutputException(output: CommandOutput) extends Exception {
     def logMessage(name: String, printer: ErrorCSVPrinter): Unit = {
       printer.log(name, output.exitCode, output.output)
     }

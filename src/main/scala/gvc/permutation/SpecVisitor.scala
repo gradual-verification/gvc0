@@ -62,10 +62,10 @@ abstract class SpecVisitor[I, O] {
   def enterBlock(): Unit
   def leaveBlock(): Unit
 
-  def leavePredicate(): Unit
+  def leavePredicate(predicate: Predicate): Unit
   def enterPredicate(predicate: Predicate): Unit
 
-  def leaveMethod(): Unit
+  def leaveMethod(method: Method): Unit
   def enterMethod(method: Method): Unit
 
   def collectOutput(): O
@@ -92,7 +92,7 @@ class SpecTraversal[I, O] {
       Some(predicate.expression),
       visitor
     )
-    visitor.leavePredicate()
+    visitor.leavePredicate(predicate)
   }
 
   private def visitMethod(method: Method, visitor: SpecVisitor[I, O]): Unit = {
@@ -118,7 +118,7 @@ class SpecTraversal[I, O] {
       visitor
     )
 
-    visitor.leaveMethod()
+    visitor.leaveMethod(method)
   }
 
   private def visitBlock(
@@ -244,14 +244,12 @@ class SpecTraversal[I, O] {
               )
             }
           case _ =>
-            if (!expr.isInstanceOf[IR.BoolLit]) {
-              visitor.visitSpec(
-                context,
-                expr,
-                specType,
-                exprType = ExprType.Default
-              )
-            }
+            visitor.visitSpec(
+              context,
+              expr,
+              specType,
+              exprType = ExprType.Default
+            )
         }
       case None =>
     }

@@ -29,8 +29,7 @@ OwnedFields* initOwnedFields( int * instanceCounter){
 }
 
 void grow(OwnedFields* fields)
-  //@requires fields != NULL;
-  //@ensures fields != NULL && fields->capacity > fields->length;
+
 {
   int oldCapacity = fields->capacity;
   fields->capacity = GROW_CAPACITY(oldCapacity);
@@ -50,14 +49,17 @@ void grow(OwnedFields* fields)
 
 FieldArray* find(OwnedFields* fields, int _id){
   if(_id >= 0){
-      int index = hash(_id, fields->capacity);
-      while(fields->contents[index] != NULL){
+    int index = hash(_id, fields->capacity);
+    while(fields->contents[index] != NULL){
+    int index = hash(_id, fields->capacity);
+    while(fields->contents[index] != NULL){
         if(!fields->contents[index]->deleted && fields->contents[index]->_id == _id){
             return fields->contents[index];
         }else{
             index = (index + 1) % fields->capacity;
         }
       }
+    }
   }
   return NULL;
 }
@@ -83,7 +85,11 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   for(int i = 0; i<array->length; i += 1){
     array->contents[i] = accAll;
   }
-  if(accAll) array->numAccessible = array->length;
+  if(accAll) {
+    array->numAccessible = array->length;
+  } else {
+    array->numAccessible = 0;
+  }
   return fields->contents[fieldIndex];
 }
 
