@@ -147,7 +147,7 @@ class LabelPermutation(
       if (
         !finishedMethods.contains(pair._1) && completedMethods.contains(pair._1)
       ) {
-        if (pair._2.diff(completedPredicates).isEmpty) {
+        if (pair._2.diff(finishedPredicates).isEmpty) {
           finishedMethods += pair._1
         }
       }
@@ -160,7 +160,7 @@ class LabelPermutation(
         !finishedPredicates.contains(pair._1) && completedPredicates
           .contains(pair._1)
       ) {
-        if (pair._2.diff(completedPredicates).isEmpty) {
+        if (pair._2.diff(finishedPredicates).isEmpty) {
           finishedPredicates += pair._1
         }
       }

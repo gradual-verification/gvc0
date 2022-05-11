@@ -84,13 +84,18 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
               ) += predInst.predicate.name
             }
           case Right(value) => {
-            if (!predicateToPredicateDependencies.contains(value.name)) {
-              predicateToPredicateDependencies += (value.name -> mutable
-                .Set[String](predInst.predicate.name))
-            } else {
-              predicateToPredicateDependencies(
-                value.name
-              ) += predInst.predicate.name
+            if (value.name != predInst.predicate.name) {
+              if (
+                !predicateToPredicateDependencies
+                  .contains(value.name)
+              ) {
+                predicateToPredicateDependencies += (value.name -> mutable
+                  .Set[String](predInst.predicate.name))
+              } else {
+                predicateToPredicateDependencies(
+                  value.name
+                ) += predInst.predicate.name
+              }
             }
           }
         }
