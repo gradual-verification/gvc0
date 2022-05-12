@@ -51,8 +51,6 @@ FieldArray* find(OwnedFields* fields, int _id){
   if(_id >= 0){
     int index = hash(_id, fields->capacity);
     while(fields->contents[index] != NULL){
-    int index = hash(_id, fields->capacity);
-    while(fields->contents[index] != NULL){
         if(!fields->contents[index]->deleted && fields->contents[index]->_id == _id){
             return fields->contents[index];
         }else{
@@ -60,7 +58,6 @@ FieldArray* find(OwnedFields* fields, int _id){
         }
       }
     }
-  }
   return NULL;
 }
 
