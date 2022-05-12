@@ -20,7 +20,7 @@ object CapturedExecution {
       saveIntermediateFiles = config.saveFiles,
       output = Some(binary.toString),
       includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
-      compilerArgs = List("-fbracket-depth=1024")
+      compilerArgs = List("")
     )
     val compileOutput = CC0Wrapper.exec_output(input.toString, cc0Options)
     if (compileOutput.exitCode != 0) {
