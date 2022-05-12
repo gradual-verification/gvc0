@@ -37,6 +37,7 @@ int fullyPrecise(struct Node* a, int* _instanceCounter)
   struct OwnedFields* _tempFields = NULL;
   struct OwnedFields* _tempFields1 = NULL;
   _ownedFields = initOwnedFields(_instanceCounter);
+  add_wrappedAcc(a, _ownedFields);
   _tempFields1 = initOwnedFields(_instanceCounter);
   add_wrappedAcc(a, _tempFields1);
   remove_wrappedAcc(a, _ownedFields);

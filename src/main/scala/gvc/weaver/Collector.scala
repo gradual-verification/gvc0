@@ -53,6 +53,7 @@ object Collector {
       val calls: List[CollectedInvocation],
       val allocations: List[IR.Op],
       val callStyle: CallStyle,
+      val bodyContainsImprecision: Boolean,
       val checkedSpecificationLocations: Set[Location]
   )
 
@@ -417,23 +418,25 @@ object Collector {
         irBlock: IR.Block,
         vprBlock: vpr.Seqn,
         loopInvs: List[vpr.Exp]
-    ): Unit = {
+    ): Boolean = {
+      var containsImprecision = false
       var vprOps = vprBlock.ss.toList
       for (irOp <- irBlock) {
         vprOps = (irOp, vprOps) match {
           case (irIf: IR.If, (vprIf: vpr.If) :: vprRest) => {
             visit(irIf, vprIf, loopInvs)
-            visitBlock(irIf.ifTrue, vprIf.thn, loopInvs)
-            visitBlock(irIf.ifFalse, vprIf.els, loopInvs)
+            containsImprecision = visitBlock(irIf.ifTrue, vprIf.thn, loopInvs) || containsImprecision
+            containsImprecision = visitBlock(irIf.ifFalse, vprIf.els, loopInvs) || containsImprecision
             vprRest
           }
           case (irWhile: IR.While, (vprWhile: vpr.While) :: vprRest) => {
             visit(irWhile, vprWhile, loopInvs)
             // Supports only a single invariant
+            containsImprecision = containsImprecision || irWhile.invariant.isInstanceOf[IR.Imprecise]
             val newInvs =
               vprWhile.invs.headOption.map(_ :: loopInvs).getOrElse(loopInvs)
-            visitBlock(irWhile.body, vprWhile.body, newInvs)
-            
+            containsImprecision = visitBlock(irWhile.body, vprWhile.body, newInvs) || containsImprecision
+
             // Check invariants after loop body since they may depend on conditions from body
             vprWhile.invs.foreach { i => checkAll(i, Pre(irWhile), None, loopInvs) }
 
@@ -477,10 +480,12 @@ object Collector {
             vprRest
           }
           case (irFold: IR.Fold, (vprFold: vpr.Fold) :: vprRest) => {
+            containsImprecision = containsImprecision || irFold.instance.predicate.expression.isInstanceOf[IR.Imprecise]
             visit(irFold, vprFold, loopInvs)
             vprRest
           }
           case (irUnfold: IR.Unfold, (vprUnfold: vpr.Unfold) :: vprRest) => {
+            containsImprecision = containsImprecision || irUnfold.instance.predicate.expression.isInstanceOf[IR.Imprecise]
             visit(irUnfold, vprUnfold, loopInvs)
             vprRest
           }
@@ -514,6 +519,7 @@ object Collector {
           s"Unexpected Silver statement: ${vprOps.head}"
         )
       }
+      containsImprecision
     }
 
     def normalizeLocation(loc: Location): Location = loc match {
@@ -583,7 +589,7 @@ object Collector {
     vprMethod.pres.foreach(checkAll(_, MethodPre, None, Nil))
 
     // Loop through each operation and collect checks
-    visitBlock(irMethod.body, vprMethod.body.get, Nil)
+    val bodyContainsImprecision = visitBlock(irMethod.body, vprMethod.body.get, Nil)
 
     // Index post-conditions and add required runtime checks
     vprMethod.posts.foreach(indexAll(_, MethodPost))
@@ -679,6 +685,7 @@ object Collector {
       calls = invokes.toList,
       allocations = allocations.toList,
       callStyle = getCallstyle(irMethod),
+      bodyContainsImprecision = bodyContainsImprecision,
       checkedSpecificationLocations = needsFullPermissionChecking.toSet
     )
   }

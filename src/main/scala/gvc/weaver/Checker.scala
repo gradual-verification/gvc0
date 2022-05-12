@@ -201,7 +201,7 @@ object Checker {
     }
 
     val needsToTrackPrecisePerms =
-      primaryOwnedFields.isDefined ||
+      primaryOwnedFields.isDefined || methodData.bodyContainsImprecision ||
         methodData.calls.exists(c => (
           c.ir.callee.isInstanceOf[IR.Method] &&
           (programData.methods(c.ir.callee.name).callStyle match {
@@ -209,7 +209,18 @@ object Checker {
             case _                                        => false
           })
         ))
-
+    if(needsToTrackPrecisePerms && methodData.callStyle == PreciseCallStyle){
+      if(methodData.callStyle == PreciseCallStyle) {
+        initializeOps ++= methodData.method.precondition.toSeq.flatMap(
+          implementation.translate(
+            AddMode,
+            _,
+            getPrimaryOwnedFields,
+            ValueContext
+          )
+        )
+      }
+    }
     // Update the call sites to add any required parameters
     for (call <- methodData.calls) {
       call.ir.callee match {
@@ -221,7 +232,8 @@ object Checker {
             case MainCallStyle => ()
 
             // Imprecise methods always get the primary owned fields instance directly
-            case ImpreciseCallStyle => call.ir.arguments :+= getPrimaryOwnedFields
+            case ImpreciseCallStyle =>
+              call.ir.arguments :+= getPrimaryOwnedFields()
 
             case PreciseCallStyle => {
               // Always pass the instance counter
