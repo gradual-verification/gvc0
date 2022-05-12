@@ -460,7 +460,7 @@ int main()
     {
         int r = rand(seed);
         seed = r;
-        int toRemove = mod(r, 2 * stress);
+        int toRemove = mod(r, 2 * stressCaptured);
         t1 = tree_remove(t1, toRemove);
         tree_main_lemma(t1, toRemove);
         bool test = tree_contains(t1, toRemove);
