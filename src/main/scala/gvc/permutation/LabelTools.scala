@@ -115,7 +115,7 @@ class LabelPermutation(
           val dependencySet =
             benchmarkConfig.labelOutput.methodPredicateDependencies
               .getOrElse(value.name, Set.empty[String])
-          if (dependencySet.diff(finishedPredicates).isEmpty) {
+          if (dependencySet.diff(completedPredicates).isEmpty) {
             finishedMethods += value.name
           }
         }
@@ -151,7 +151,7 @@ class LabelPermutation(
     val dependencySet =
       benchmarkConfig.labelOutput.predicatePredicateDependencies
         .getOrElse(name, Set.empty[String])
-    if (dependencySet.diff(finishedPredicates).isEmpty) {
+    if (dependencySet.diff(completedPredicates).isEmpty) {
       finishedPredicates += name
     }
 
@@ -160,7 +160,7 @@ class LabelPermutation(
         !finishedPredicates.contains(pair._1) && completedPredicates
           .contains(pair._1)
       ) {
-        if (pair._2.diff(finishedPredicates).isEmpty) {
+        if (pair._2.diff(completedPredicates).isEmpty) {
           finishedPredicates += pair._1
         }
       }
@@ -169,7 +169,7 @@ class LabelPermutation(
       if (
         !finishedMethods
           .contains(pair._1) && completedMethods
-          .contains(pair._1) && pair._2.diff(finishedPredicates).isEmpty
+          .contains(pair._1) && pair._2.diff(completedPredicates).isEmpty
       ) {
         finishedMethods += pair._1
       }
