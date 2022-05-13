@@ -1,5 +1,7 @@
 package gvc.weaver
 
+import gvc.transformer.IR.Predicate
+
 import scala.collection.mutable
 import gvc.transformer.{IR, SilverProgram, SilverVarId}
 import viper.silver.ast.MethodCall
@@ -72,18 +74,18 @@ object Collector {
     val checks = collectChecks(vprProgram.program)
 
     val methods = irProgram.methods
-      .map(m =>
-        (
-          m.name,
-          collect(
-            irProgram,
-            vprProgram.program,
-            m,
-            vprProgram.program.findMethod(m.name),
-            checks
-          )
-        )
-      )
+      .map(
+        m =>
+          (
+            m.name,
+            collect(
+              irProgram,
+              vprProgram.program,
+              m,
+              vprProgram.program.findMethod(m.name),
+              checks
+            )
+        ))
       .toMap
 
     new CollectedProgram(
@@ -149,13 +151,13 @@ object Collector {
         program: vpr.Program
     ) = branch match {
       case BranchCond(
-            condition,
-            position,
-            Some(CheckPosition.GenericNode(invoke: vpr.MethodCall))
+          condition,
+          position,
+          Some(CheckPosition.GenericNode(invoke: vpr.MethodCall))
           ) => {
         // This must be a method pre-condition or post-condition
         val callee = program.findMethod(invoke.methodName)
-        
+
         val location: ViperLocation =
           if (isContained(position, callee.posts)) ViperLocation.PostInvoke
           else if (isContained(position, callee.pres)) ViperLocation.PreInvoke
@@ -164,22 +166,22 @@ object Collector {
       }
 
       case BranchCond(
-            condition,
-            position,
-            Some(CheckPosition.GenericNode(unfold: vpr.Unfold))
+          condition,
+          position,
+          Some(CheckPosition.GenericNode(unfold: vpr.Unfold))
           ) =>
         new ViperBranch(unfold, ViperLocation.Fold, condition)
       case BranchCond(
-            condition,
-            position,
-            Some(CheckPosition.GenericNode(unfold: vpr.Fold))
+          condition,
+          position,
+          Some(CheckPosition.GenericNode(unfold: vpr.Fold))
           ) =>
         new ViperBranch(unfold, ViperLocation.Unfold, condition)
 
       case BranchCond(
-            condition,
-            _,
-            Some(CheckPosition.Loop(inv, position))
+          condition,
+          _,
+          Some(CheckPosition.Loop(inv, position))
           ) => {
         // This must be an invariant
         if (inv.isEmpty || !inv.tail.isEmpty)
@@ -247,10 +249,11 @@ object Collector {
   private def isContained(node: vpr.Node, containers: Seq[vpr.Node]): Boolean =
     containers.exists(isContained(node, _))
 
-  private def unwrap(expr: CheckExpression, value: Boolean = true): (CheckExpression, Boolean) = {
+  private def unwrap(expr: CheckExpression,
+                     value: Boolean = true): (CheckExpression, Boolean) = {
     expr match {
       case CheckExpression.Not(operand) => unwrap(operand, !value)
-      case e => (e, value)
+      case e                            => (e, value)
     }
   }
 
@@ -280,9 +283,10 @@ object Collector {
     // Note: Uses a List as a Map so that the order is preserved in the way that the verifier
     // determines (this is important for acc checks of a nested field, for example).
     val checks =
-      mutable.Map[Location, mutable.ListBuffer[
-        (Check, mutable.ListBuffer[Option[Condition]])
-      ]]()
+      mutable.Map[Location,
+                  mutable.ListBuffer[
+                    (Check, mutable.ListBuffer[Option[Condition]])
+                  ]]()
 
     // A set of all locations that need the full specification walked to verify separation. Used
     // to implement the semantics of the separating conjunction. Pre-calculates a set so that the
@@ -328,7 +332,7 @@ object Collector {
                 (Post(at.op), true)
               case ViperLocation.InvariantLoopStart =>
                 (LoopStart(at.op), true)
-              case ViperLocation.InvariantLoopEnd   =>
+              case ViperLocation.InvariantLoopEnd =>
                 (LoopEnd(at.op), true)
             }
           case _ => {
@@ -338,15 +342,17 @@ object Collector {
           }
         }
 
-        val condition = branchCondition(checkLocation, vprCheck.conditions, loopInvs)
+        val condition =
+          branchCondition(checkLocation, vprCheck.conditions, loopInvs)
 
         // TODO: Split apart ANDed checks?
         val check = Check.fromViper(vprCheck.check, irProgram, irMethod)
 
         val locationChecks =
           checks.getOrElseUpdate(checkLocation, mutable.ListBuffer())
-        val conditions = locationChecks.find { case (c, _) =>
-          c == check
+        val conditions = locationChecks.find {
+          case (c, _) =>
+            c == check
         } match {
           case Some((_, conditions)) => conditions
           case None =>
@@ -357,11 +363,9 @@ object Collector {
 
         conditions += condition
 
-        if (
-          check.isInstanceOf[
-            AccessibilityCheck
-          ] && inSpec
-        ) {
+        if (check.isInstanceOf[
+              AccessibilityCheck
+            ] && inSpec) {
           needsFullPermissionChecking += checkLocation
         }
       }
@@ -432,13 +436,18 @@ object Collector {
           case (irWhile: IR.While, (vprWhile: vpr.While) :: vprRest) => {
             visit(irWhile, vprWhile, loopInvs)
             // Supports only a single invariant
-            containsImprecision = containsImprecision || irWhile.invariant.isInstanceOf[IR.Imprecise]
+            containsImprecision = containsImprecision || isImprecise(
+              Some(irWhile.invariant))
             val newInvs =
               vprWhile.invs.headOption.map(_ :: loopInvs).getOrElse(loopInvs)
-            containsImprecision = visitBlock(irWhile.body, vprWhile.body, newInvs) || containsImprecision
+            containsImprecision = visitBlock(irWhile.body,
+                                             vprWhile.body,
+                                             newInvs) || containsImprecision
 
             // Check invariants after loop body since they may depend on conditions from body
-            vprWhile.invs.foreach { i => checkAll(i, Pre(irWhile), None, loopInvs) }
+            vprWhile.invs.foreach { i =>
+              checkAll(i, Pre(irWhile), None, loopInvs)
+            }
 
             vprRest
           }
@@ -458,15 +467,15 @@ object Collector {
             vprRest
           }
           case (
-                irAssign: IR.Assign,
-                (vprAssign: vpr.LocalVarAssign) :: vprRest
+              irAssign: IR.Assign,
+              (vprAssign: vpr.LocalVarAssign) :: vprRest
               ) => {
             visit(irAssign, vprAssign, loopInvs)
             vprRest
           }
           case (
-                irAssign: IR.AssignMember,
-                (vprAssign: vpr.FieldAssign) :: vprRest
+              irAssign: IR.AssignMember,
+              (vprAssign: vpr.FieldAssign) :: vprRest
               ) => {
             visit(irAssign, vprAssign, loopInvs)
             vprRest
@@ -480,12 +489,16 @@ object Collector {
             vprRest
           }
           case (irFold: IR.Fold, (vprFold: vpr.Fold) :: vprRest) => {
-            containsImprecision = containsImprecision || irFold.instance.predicate.expression.isInstanceOf[IR.Imprecise]
+            containsImprecision = containsImprecision || isImprecise(
+              Some(irFold.instance.predicate.expression),
+              mutable.Set(irFold.instance.predicate))
             visit(irFold, vprFold, loopInvs)
             vprRest
           }
           case (irUnfold: IR.Unfold, (vprUnfold: vpr.Unfold) :: vprRest) => {
-            containsImprecision = containsImprecision || irUnfold.instance.predicate.expression.isInstanceOf[IR.Imprecise]
+            containsImprecision = containsImprecision || isImprecise(
+              Some(irUnfold.instance.predicate.expression),
+              mutable.Set(irUnfold.instance.predicate))
             visit(irUnfold, vprUnfold, loopInvs)
             vprRest
           }
@@ -524,7 +537,8 @@ object Collector {
 
     def normalizeLocation(loc: Location): Location = loc match {
       // Pre of first op in the method is the same as MethodPre
-      case Pre(op) if (op.getPrev.isEmpty && op.block == irMethod.body) => MethodPre
+      case Pre(op) if (op.getPrev.isEmpty && op.block == irMethod.body) =>
+        MethodPre
 
       // Post is the same as Pre of the next op
       case Post(op) if (op.getNext.isDefined) => Pre(op.getNext.get)
@@ -562,8 +576,10 @@ object Collector {
           case p => p
         }
 
-        val conditionLocation = normalizeLocation(ViperLocation.forIR(irLoc, position))
-        val (expr, flag) = unwrap(CheckExpression.fromViper(b.condition, irMethod))
+        val conditionLocation =
+          normalizeLocation(ViperLocation.forIR(irLoc, position))
+        val (expr, flag) =
+          unwrap(CheckExpression.fromViper(b.condition, irMethod))
 
         val unwrappedCondition: Condition =
           if (conditionLocation == normalizeLocation(location)) {
@@ -574,12 +590,13 @@ object Collector {
             tracked
           }
 
-        val cond = if (flag) unwrappedCondition else NotCondition(unwrappedCondition)
+        val cond =
+          if (flag) unwrappedCondition else NotCondition(unwrappedCondition)
 
         Some(when match {
-          case None => cond
+          case None                       => cond
           case Some(AndCondition(values)) => AndCondition(values :+ cond)
-          case Some(other) => AndCondition(List(other, cond))
+          case Some(other)                => AndCondition(List(other, cond))
         })
       })
     }
@@ -589,7 +606,8 @@ object Collector {
     vprMethod.pres.foreach(checkAll(_, MethodPre, None, Nil))
 
     // Loop through each operation and collect checks
-    val bodyContainsImprecision = visitBlock(irMethod.body, vprMethod.body.get, Nil)
+    val bodyContainsImprecision =
+      visitBlock(irMethod.body, vprMethod.body.get, Nil)
 
     // Index post-conditions and add required runtime checks
     vprMethod.posts.foreach(indexAll(_, MethodPost))
@@ -620,18 +638,21 @@ object Collector {
       val (spec, arguments) = location match {
         case at: AtOp =>
           at.op match {
-            case op: IR.Invoke => op.callee match {
-              case callee: IR.Method if callee.precondition.isDefined =>
-                (
-                  callee.precondition.get,
-                  Some(
-                    op.callee.parameters
-                      .zip(op.arguments.map(resolveValue(_)))
-                      .toMap
+            case op: IR.Invoke =>
+              op.callee match {
+                case callee: IR.Method if callee.precondition.isDefined =>
+                  (
+                    callee.precondition.get,
+                    Some(
+                      op.callee.parameters
+                        .zip(op.arguments.map(resolveValue(_)))
+                        .toMap
+                    )
                   )
-                )
-              case _ => throw new WeaverException(s"Could not locate specification at invoke: $location")
-            }
+                case _ =>
+                  throw new WeaverException(
+                    s"Could not locate specification at invoke: $location")
+              }
             // TODO: Do we need unfold?
             case op: IR.Fold =>
               (
@@ -661,8 +682,7 @@ object Collector {
 
       val separationChecks =
         traversePermissions(spec, arguments, None, Separation).map(info =>
-          RuntimeCheck(location, info.check, info.when)
-        )
+          RuntimeCheck(location, info.check, info.when))
 
       // Since the checks are for separation, only include them if there is more than one
       // otherwise, there can be no overlap
@@ -812,10 +832,33 @@ object Collector {
     case _ => true
   }
 
-  def isImprecise(cond: Option[IR.Expression]) = cond match {
-    case Some(_: IR.Imprecise) => true
-    case _                  => false
-  }
+  def isImprecise(
+      cond: Option[IR.Expression],
+      visited: mutable.Set[Predicate] = mutable.Set.empty[Predicate]): Boolean =
+    cond match {
+      case Some(expr: IR.Expression) =>
+        expr match {
+          case instance: IR.PredicateInstance =>
+            if (visited.contains(instance.predicate)) {
+              false
+            } else {
+              visited += instance.predicate
+              isImprecise(Some(instance.predicate.expression), visited)
+            }
+          case _: IR.Imprecise => true
+          case conditional: IR.Conditional =>
+            isImprecise(Some(conditional.condition), visited) || isImprecise(
+              Some(conditional.ifTrue),
+              visited) || isImprecise(Some(conditional.ifFalse), visited)
+          case binary: IR.Binary =>
+            isImprecise(Some(binary.left), visited) || isImprecise(
+              Some(binary.right),
+              visited)
+          case unary: IR.Unary => isImprecise(Some(unary.operand), visited)
+          case _               => false
+        }
+      case None => false
+    }
 
   def getCallstyle(irMethod: IR.Method) =
     if (irMethod.name == "main")
@@ -865,11 +908,11 @@ object Collector {
         )
       case n: IR.DereferenceMember => CheckExpression.Deref(resolve(n.root))
       case n: IR.Result            => CheckExpression.Result
-      case n: IR.IntLit               => CheckExpression.IntLit(n.value)
-      case n: IR.CharLit              => CheckExpression.CharLit(n.value)
-      case n: IR.BoolLit              => CheckExpression.BoolLit(n.value)
-      case n: IR.StringLit            => CheckExpression.StrLit(n.value)
-      case n: IR.NullLit              => CheckExpression.NullLit
+      case n: IR.IntLit            => CheckExpression.IntLit(n.value)
+      case n: IR.CharLit           => CheckExpression.CharLit(n.value)
+      case n: IR.BoolLit           => CheckExpression.BoolLit(n.value)
+      case n: IR.StringLit         => CheckExpression.StrLit(n.value)
+      case n: IR.NullLit           => CheckExpression.NullLit
       case n: IR.Conditional =>
         CheckExpression.Cond(
           resolve(n.condition),

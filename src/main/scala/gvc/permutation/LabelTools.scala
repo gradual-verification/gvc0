@@ -103,21 +103,13 @@ class LabelPermutation(
         } else {
           methodLabelCounts(value.name) += 1
         }
-        if (
-          methodLabelCounts(
-            value.name
-          ) == benchmarkConfig.labelOutput.completeMethodCounts.getOrElse(
-            value.name,
-            0
-          )
-        ) {
-          completedMethods += value.name
-          val dependencySet =
-            benchmarkConfig.labelOutput.methodPredicateDependencies
-              .getOrElse(value.name, Set.empty[String])
-          if (dependencySet.diff(completedPredicates).isEmpty) {
-            finishedMethods += value.name
-          }
+        if (methodLabelCounts(
+              value.name
+            ) == benchmarkConfig.labelOutput.completeMethodCounts.getOrElse(
+              value.name,
+              0
+            )) {
+          finishedMethods += value.name
         }
       case Right(value) =>
         if (!predicateLabelCounts.contains(value.name)) {
@@ -125,15 +117,13 @@ class LabelPermutation(
         } else {
           predicateLabelCounts(value.name) += 1
         }
-        if (
-          predicateLabelCounts(
-            value.name
-          ) == benchmarkConfig.labelOutput.completePredicateCounts.getOrElse(
-            value.name,
-            0
-          )
-        ) {
-          updateFinishedPredicate(value.name)
+        if (predicateLabelCounts(
+              value.name
+            ) == benchmarkConfig.labelOutput.completePredicateCounts.getOrElse(
+              value.name,
+              0
+            )) {
+          finishedPredicates += value.name
         }
     }
   }
@@ -141,40 +131,8 @@ class LabelPermutation(
   def labels: Set[ASTLabel] = contents.toSet
   def indices: Set[Int] = orderedIndices.toSet
 
-  val completedMethods: mutable.Set[String] = mutable.Set.empty[String]
-  val completedPredicates: mutable.Set[String] = mutable.Set.empty[String]
   val finishedMethods: mutable.Set[String] = mutable.Set.empty[String]
   val finishedPredicates: mutable.Set[String] = mutable.Set.empty[String]
-
-  def updateFinishedPredicate(name: String): Unit = {
-    completedPredicates += name
-    val dependencySet =
-      benchmarkConfig.labelOutput.predicatePredicateDependencies
-        .getOrElse(name, Set.empty[String])
-    if (dependencySet.diff(completedPredicates).isEmpty) {
-      finishedPredicates += name
-    }
-
-    benchmarkConfig.labelOutput.predicatePredicateDependencies.foreach(pair => {
-      if (
-        !finishedPredicates.contains(pair._1) && completedPredicates
-          .contains(pair._1)
-      ) {
-        if (pair._2.diff(completedPredicates).isEmpty) {
-          finishedPredicates += pair._1
-        }
-      }
-    })
-    benchmarkConfig.labelOutput.methodPredicateDependencies.foreach(pair => {
-      if (
-        !finishedMethods
-          .contains(pair._1) && completedMethods
-          .contains(pair._1) && pair._2.diff(completedPredicates).isEmpty
-      ) {
-        finishedMethods += pair._1
-      }
-    })
-  }
 
   def methodIsFinished(method: Method): Boolean =
     finishedMethods.contains(method.name)
