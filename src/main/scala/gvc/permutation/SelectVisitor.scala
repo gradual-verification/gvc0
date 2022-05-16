@@ -17,14 +17,16 @@ import gvc.permutation.SpecType.SpecType
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
+case class BuiltExpression(componentCount: Int, expr: Option[Expression])
+
 class SelectVisitor(program: IR.Program)
     extends SpecVisitor[IR.Program, IR.Program] {
   private var predicates = mutable.ListBuffer[Predicate]()
   private var methods = mutable.ListBuffer[Method]()
   private var incompleteBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
   private var finishedBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
-  private val incompleteExpr = mutable.ListBuffer[Option[IR.Expression]]()
-  private val finishedExpr = mutable.ListBuffer[Option[IR.Expression]]()
+  private var incompleteExpr = mutable.ListBuffer[BuiltExpression]()
+  private var finishedExpr = mutable.ListBuffer[BuiltExpression]()
 
   private var permutation = Set[Int]()
   private var permutationMetadata: Option[LabelPermutation] = None
@@ -35,7 +37,8 @@ class SelectVisitor(program: IR.Program)
     methods = mutable.ListBuffer[Method]()
     incompleteBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
     finishedBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
-
+    incompleteExpr = mutable.ListBuffer[BuiltExpression]()
+    finishedExpr = mutable.ListBuffer[BuiltExpression]()
   }
 
   def visit(permutation: LabelPermutation): IR.Program = {
@@ -51,47 +54,35 @@ class SelectVisitor(program: IR.Program)
     super.visit(program)
   }
 
-  override def visitSpec(
+  override def enterSpec(expr: Option[Expression] = None): Unit = {
+    super.enterSpec()
+  }
+
+  override def visitSpecExpr(
       parent: Either[Method, Predicate],
       template: Expression,
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
-    super.visitSpec(parent, template, specType, exprType)
+    super.visitSpecExpr(parent, template, specType, exprType)
     template match {
-      case _: BoolLit => {
+      case _: BoolLit =>
         this.incompleteExpr.insert(0, mergeBinary(Some(template)))
-      }
-      case _ if this.permutation.contains(this.previous()) => {
+      case _ if this.permutation.contains(this.previousExpr()) =>
         this.incompleteExpr.insert(0, mergeBinary(Some(template)))
-      }
       case _ =>
     }
   }
 
-  override def visitSpec(
+  override def visitSpecOp(
       parent: Either[Method, Predicate],
       template: IR.Op,
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
-    super.visitSpec(parent, template, specType, exprType)
-    if (this.permutation.contains(this.previous())) {
+    super.visitSpecOp(parent, template, specType, exprType)
+    if (this.permutation.contains(this.previousExpr())) {
       this.incompleteBlocks.head += template.copy
-    }
-  }
-
-  def isComplete(method: Method): Boolean = {
-    permutationMetadata match {
-      case Some(value) => value.methodIsFinished(method)
-      case None        => false
-    }
-  }
-
-  def isComplete(predicate: Predicate): Boolean = {
-    permutationMetadata match {
-      case Some(value) => value.predicateIsFinished(predicate)
-      case None        => false
     }
   }
 
@@ -105,7 +96,7 @@ class SelectVisitor(program: IR.Program)
     program.copy(this.methods.toList, this.predicates.toList)
 
   override def collectAssertion(): Unit = {
-    val assertion = this.finishedExpr.remove(0)
+    val assertion = this.finishedExpr.remove(0).expr
     if (assertion.isDefined) {
       this.incompleteBlocks.head += new IR.Assert(
         assertion.get,
@@ -122,34 +113,48 @@ class SelectVisitor(program: IR.Program)
 
   override def collectWhile(whl: IR.While): Unit = {
     val builtInvariant = this.finishedExpr.remove(0)
-    val invariant = if (isComplete(whl.method)) {
-      builtInvariant match {
-        case Some(value) => value
-        case None        => throw new BenchmarkException("Missing conditional branch")
+    val invariant =
+      if (isComplete(Some(whl.invariant),
+                     builtInvariant.componentCount,
+                     whl.method)) {
+        builtInvariant.expr match {
+          case Some(value) => value
+          case None =>
+            throw new BenchmarkException("Missing conditional branch")
+        }
+      } else {
+        new IR.Imprecise(builtInvariant.expr)
       }
-    } else {
-      new IR.Imprecise(builtInvariant)
-    }
     val body = this.finishedBlocks.remove(0)
     this.incompleteBlocks.head += whl.copy(invariant, body.toList)
   }
 
   override def collectConditional(template: Conditional): Unit = {
-    val falseBranch =
-      this.finishedExpr.remove(0).getOrElse(new BoolLit(true))
-    val trueBranch =
-      this.finishedExpr.remove(0).getOrElse(new BoolLit(true))
+    val builtFalseBranch =
+      this.finishedExpr.remove(0)
+    val falseBranchExpr = builtFalseBranch.expr.getOrElse(new BoolLit(true))
+
+    val builtTrueBranch =
+      this.finishedExpr.remove(0)
+    val trueBranchExpr = builtTrueBranch.expr.getOrElse(new BoolLit(true))
+
     val resolvedConditional = Some(
       new IR.Conditional(
         template.condition,
-        trueBranch,
-        falseBranch
+        trueBranchExpr,
+        falseBranchExpr
       )
     )
-    this.incompleteExpr.insert(0, mergeBinary(resolvedConditional))
+
+    this.incompleteExpr.insert(
+      0,
+      mergeBinary(
+        resolvedConditional,
+        builtTrueBranch.componentCount + builtFalseBranch.componentCount))
   }
 
-  override def enterExpr(): Unit = this.incompleteExpr.insert(0, None)
+  override def enterExpr(): Unit =
+    this.incompleteExpr.insert(0, BuiltExpression(0, None))
 
   override def leaveExpr(): Unit =
     this.finishedExpr.insert(0, this.incompleteExpr.remove(0))
@@ -161,49 +166,59 @@ class SelectVisitor(program: IR.Program)
     this.finishedBlocks.insert(0, this.incompleteBlocks.remove(0))
 
   private def mergeBinary(
-      toAppend: Option[IR.Expression]
-  ): Option[IR.Expression] = {
-    val top = this.incompleteExpr.remove(0)
-    top match {
-      case Some(topExpr) => {
+      toAppend: Option[IR.Expression],
+      size: Int = 1
+  ): BuiltExpression = {
+    val builtTop = this.incompleteExpr.remove(0)
+    val top = builtTop.expr
+    val combined = top match {
+      case Some(topExpr) =>
         toAppend match {
-          case Some(app) => {
+          case Some(app) =>
             topExpr match {
               case binary: IR.Binary if binary.operator == BinaryOp.And =>
                 var tempNode: IR.Binary = binary
-                while (
-                  tempNode.left.isInstanceOf[IR.Binary] && tempNode.left
-                    .asInstanceOf[IR.Binary]
-                    .operator == BinaryOp.And
-                ) {
+                while (tempNode.left.isInstanceOf[IR.Binary] && tempNode.left
+                         .asInstanceOf[IR.Binary]
+                         .operator == BinaryOp.And) {
                   tempNode = tempNode.left.asInstanceOf[Binary]
                 }
                 tempNode.left = new IR.Binary(BinaryOp.And, app, tempNode.left)
                 top
               case _ => Some(new IR.Binary(IR.BinaryOp.And, app, topExpr))
             }
-          }
+
           case None => top
         }
-      }
       case None =>
         toAppend match {
           case Some(_) => toAppend
           case None    => None
         }
     }
+    BuiltExpression(builtTop.componentCount + size, combined)
   }
+
   override def enterPredicate(predicate: Predicate): Unit = {}
   override def leavePredicate(pred: Predicate): Unit = {
     val body = this.finishedExpr.remove(0)
-    val builtPredicate = if (this.isComplete(pred)) {
-      val finishedBody = body match {
+    val bodyIsComplete = body.expr match {
+      case Some(_) =>
+        this.permutationMetadata match {
+          case Some(meta) =>
+            meta.exprIsComplete(pred.expression, body.componentCount)
+          case None => false
+        }
+      case None => false
+    }
+    val builtPredicate = if (bodyIsComplete) {
+      val finishedBody = body.expr match {
         case Some(value) => value
         case None        => throw new BenchmarkException("Missing predicate body")
       }
       pred.copy(finishedBody)
     } else {
-      pred.copy(new IR.Imprecise(body))
+      pred.copy(new IR.Imprecise(body.expr))
     }
     this.predicates += builtPredicate
   }
@@ -213,26 +228,32 @@ class SelectVisitor(program: IR.Program)
   override def leaveMethod(method: Method): Unit = {
     val builtPostcondition = this.finishedExpr.remove(0)
     val builtPrecondition = this.finishedExpr.remove(0)
-    val postcondition = if (isComplete(method)) {
-      builtPostcondition match {
-        case Some(value) => Some(value)
-        case None        => throw new BenchmarkException("Missing postcondition")
+    val postcondition =
+      if (isComplete(method.postcondition,
+                     builtPostcondition.componentCount,
+                     method)) {
+        builtPostcondition.expr match {
+          case Some(value) => Some(value)
+          case None        => throw new BenchmarkException("Missing postcondition")
+        }
+      } else {
+        Some(
+          new IR.Imprecise(builtPostcondition.expr)
+        )
       }
-    } else {
-      Some(
-        new IR.Imprecise(builtPostcondition)
-      )
-    }
-    val precondition = if (isComplete(method)) {
-      builtPrecondition match {
-        case Some(value) => Some(value)
-        case None        => throw new BenchmarkException("Missing precondition")
+    val precondition =
+      if (isComplete(method.precondition,
+                     builtPrecondition.componentCount,
+                     method)) {
+        builtPrecondition.expr match {
+          case Some(value) => Some(value)
+          case None        => throw new BenchmarkException("Missing precondition")
+        }
+      } else {
+        Some(
+          new IR.Imprecise(builtPrecondition.expr)
+        )
       }
-    } else {
-      Some(
-        new IR.Imprecise(builtPrecondition)
-      )
-    }
 
     val body = this.finishedBlocks.remove(0)
     this.methods += method.copy(
@@ -240,5 +261,20 @@ class SelectVisitor(program: IR.Program)
       postcondition,
       body.toList
     )
+  }
+
+  def isComplete(template: Option[Expression],
+                 componentCount: Int,
+                 method: Method): Boolean = {
+    template match {
+      case Some(expression) =>
+        this.permutationMetadata match {
+          case Some(meta) =>
+            meta.exprIsComplete(expression, componentCount) && meta
+              .methodIsComplete(method)
+          case None => false
+        }
+      case None => false
+    }
   }
 }

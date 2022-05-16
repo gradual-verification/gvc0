@@ -16,29 +16,41 @@ object ExprType extends Enumeration {
 }
 
 abstract class SpecVisitor[I, O] {
+  var exprIndex = 0
   var specIndex = 0
   var currentContext: Option[Either[Method, Predicate]] = None
 
-  def reset(): Unit = specIndex = 0
-  def previous(): Int = this.specIndex - 1
-  def visitSpec(
+  def reset(): Unit = {
+    exprIndex = 0
+    specIndex = 0
+  }
+
+  def previousExpr(): Int = this.exprIndex - 1
+  def previousSpec(): Int = this.specIndex - 1
+
+  def visitSpecExpr(
       parent: Either[Method, Predicate],
       template: Expression,
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
     currentContext = Some(parent)
-    specIndex += 1
+    exprIndex += 1
   }
 
-  def visitSpec(
+  def visitSpecOp(
       parent: Either[Method, Predicate],
       template: IR.Op,
       specType: SpecType,
       exprType: ExprType
   ): Unit = {
     currentContext = Some(parent)
-    specIndex += 1
+    exprIndex += 1
+  }
+  def enterSpec(expr: Option[Expression] = None): Unit = {}
+
+  def leaveSpec(): Unit = {
+    this.specIndex += 1
   }
 
   def visitOp(parent: Either[Method, Predicate], template: IR.Op): Unit = {
@@ -86,31 +98,37 @@ class SpecTraversal[I, O] {
       visitor: SpecVisitor[I, O]
   ): Unit = {
     visitor.enterPredicate(predicate)
+    visitor.enterSpec(Some(predicate.expression))
     visitExpression(
       Right(predicate),
       SpecType.Predicate,
       Some(predicate.expression),
       visitor
     )
+    visitor.leaveSpec()
     visitor.leavePredicate(predicate)
   }
 
   private def visitMethod(method: Method, visitor: SpecVisitor[I, O]): Unit = {
     visitor.enterMethod(method)
 
+    visitor.enterSpec(method.precondition)
     visitExpression(
       Left(method),
       SpecType.Precondition,
       method.precondition,
       visitor
     )
+    visitor.leaveSpec()
 
+    visitor.enterSpec(method.postcondition)
     visitExpression(
       Left(method),
       SpecType.Postcondition,
       method.postcondition,
       visitor
     )
+    visitor.leaveSpec()
 
     visitBlock(
       method,
@@ -133,41 +151,49 @@ class SpecTraversal[I, O] {
       op match {
         case assert: IR.Assert =>
           if (assert.kind == IR.AssertKind.Specification) {
+            visitor.enterSpec(Some(assert.value))
             visitExpression(
               Left(context),
               SpecType.Assert,
               Some(assert.value),
               visitor
             )
+            visitor.leaveSpec()
             visitor.collectAssertion()
           } else {
             visitor.visitOp(Left(context), op)
           }
         case _: IR.Fold =>
-          visitor.visitSpec(
+          visitor.enterSpec()
+          visitor.visitSpecOp(
             Left(context),
             op,
             SpecType.Fold,
             ExprType.Predicate
           )
+          visitor.leaveSpec()
         case _: IR.Unfold =>
-          visitor.visitSpec(
+          visitor.enterSpec()
+          visitor.visitSpecOp(
             Left(context),
             op,
             SpecType.Unfold,
             ExprType.Predicate
           )
+          visitor.leaveSpec()
         case ifstmt: IR.If =>
           visitBlock(context, ifstmt.ifTrue, visitor)
           visitBlock(context, ifstmt.ifFalse, visitor)
           visitor.collectIf(ifstmt)
         case whl: IR.While =>
+          visitor.enterSpec(Some(whl.invariant))
           visitExpression(
             Left(context),
             SpecType.Invariant,
             Some(whl.invariant),
             visitor
           )
+          visitor.leaveSpec()
           visitBlock(context, whl.body, visitor)
           visitor.collectWhile(whl)
         case _ => visitor.visitOp(Left(context), op)
@@ -197,14 +223,14 @@ class SpecTraversal[I, O] {
       case Some(expr) =>
         expr match {
           case _: IR.Accessibility =>
-            visitor.visitSpec(
+            visitor.visitSpecExpr(
               context,
               expr,
               specType,
               ExprType.Accessibility
             )
           case _: IR.PredicateInstance =>
-            visitor.visitSpec(
+            visitor.visitSpecExpr(
               context,
               expr,
               specType,
@@ -236,7 +262,7 @@ class SpecTraversal[I, O] {
               buildExpression(context, specType, Some(binary.right), visitor)
               buildExpression(context, specType, Some(binary.left), visitor)
             } else {
-              visitor.visitSpec(
+              visitor.visitSpecExpr(
                 context,
                 expr,
                 specType,
@@ -244,7 +270,7 @@ class SpecTraversal[I, O] {
               )
             }
           case _ =>
-            visitor.visitSpec(
+            visitor.visitSpecExpr(
               context,
               expr,
               specType,

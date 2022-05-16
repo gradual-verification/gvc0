@@ -1,8 +1,7 @@
 package gvc.permutation
 import gvc.permutation.BenchConfig.BenchmarkConfig
 import gvc.permutation.SamplingHeuristic.SamplingHeuristic
-import gvc.transformer.IR.{Method, Predicate}
-
+import gvc.transformer.IR.{Expression, Method}
 import java.math.BigInteger
 import scala.collection.mutable
 object SamplingHeuristic extends Enumeration {
@@ -88,56 +87,40 @@ object LabelTools {
 class LabelPermutation(
     benchmarkConfig: BenchmarkConfig
 ) {
-  private val methodLabelCounts = mutable.Map[String, Int]()
-  private val predicateLabelCounts = mutable.Map[String, Int]()
   private val contents = mutable.TreeSet[ASTLabel]()(LabelOrdering)
   private val orderedIndices = mutable.ListBuffer[Int]()
-
+  private val foldUnfoldCounts = mutable.Map[Method, Int]()
   def addLabel(label: ASTLabel): Unit = {
     orderedIndices += label.exprIndex
     contents += label
     label.parent match {
       case Left(value) =>
-        if (!methodLabelCounts.contains(value.name)) {
-          methodLabelCounts += (value.name -> 1)
-        } else {
-          methodLabelCounts(value.name) += 1
+        label.specType match {
+          case gvc.permutation.SpecType.Fold |
+              gvc.permutation.SpecType.Unfold =>
+            if (foldUnfoldCounts.contains(value))
+              foldUnfoldCounts(value) += 1
+            else foldUnfoldCounts += value -> 1
+          case _ =>
         }
-        if (methodLabelCounts(
-              value.name
-            ) == benchmarkConfig.labelOutput.completeMethodCounts.getOrElse(
-              value.name,
-              0
-            )) {
-          finishedMethods += value.name
-        }
-      case Right(value) =>
-        if (!predicateLabelCounts.contains(value.name)) {
-          predicateLabelCounts += (value.name -> 1)
-        } else {
-          predicateLabelCounts(value.name) += 1
-        }
-        if (predicateLabelCounts(
-              value.name
-            ) == benchmarkConfig.labelOutput.completePredicateCounts.getOrElse(
-              value.name,
-              0
-            )) {
-          finishedPredicates += value.name
-        }
+      case Right(_) =>
     }
   }
-
   def labels: Set[ASTLabel] = contents.toSet
   def indices: Set[Int] = orderedIndices.toSet
 
-  val finishedMethods: mutable.Set[String] = mutable.Set.empty[String]
-  val finishedPredicates: mutable.Set[String] = mutable.Set.empty[String]
+  def exprIsComplete(template: Expression, componentCount: Int): Boolean =
+    benchmarkConfig.labelOutput.specsToSpecIndices
+      .contains(template) && benchmarkConfig.labelOutput.labelsPerSpecIndex(
+      benchmarkConfig.labelOutput
+        .specsToSpecIndices(template)) == componentCount
 
-  def methodIsFinished(method: Method): Boolean =
-    finishedMethods.contains(method.name)
-  def predicateIsFinished(predicate: Predicate): Boolean = {
-    finishedPredicates.contains(predicate.name)
+  def methodIsComplete(method: Method): Boolean = {
+    this.benchmarkConfig.labelOutput
+      .foldUnfoldCount(method) == 0 || (this.foldUnfoldCounts
+      .contains(method) &&
+    this.foldUnfoldCounts(method) == this.benchmarkConfig.labelOutput
+      .foldUnfoldCount(method))
   }
 }
 

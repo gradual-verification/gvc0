@@ -63,7 +63,8 @@ object IRTransformer {
     class StructValue(val field: IR.StructField) extends StructItem
 
     def defineDependency(declaration: ResolvedUseDeclaration): Unit = {
-      if (declaration.isLibrary && !ir.dependencies.exists(_.path == declaration.name)) {
+      if (declaration.isLibrary && !ir.dependencies.exists(
+            _.path == declaration.name)) {
         val dep = ir.addDependency(declaration.name, declaration.isLibrary)
         declaration.dependency match {
           case None => throw new TransformerException("Unresolved dependency")
@@ -249,9 +250,8 @@ object IRTransformer {
       def vars = parent.vars
 
       lazy val conditionalBlock = {
-        val cond = conditions.reduceLeft((x, y) =>
-          new IR.Binary(IR.BinaryOp.And, x, y)
-        )
+        val cond =
+          conditions.reduceLeft((x, y) => new IR.Binary(IR.BinaryOp.And, x, y))
         val ifOp = new IR.If(cond)
         parent += ifOp
         ifOp.ifTrue
@@ -302,8 +302,7 @@ object IRTransformer {
         case block: ResolvedBlock => {
           val vars = block.variableDefs
             .map(v =>
-              v.name -> scope.method.addVar(transformType(v.valueType), v.name)
-            )
+              v.name -> scope.method.addVar(transformType(v.valueType), v.name))
 
           val child = scope match {
             case scope: BlockScope =>
@@ -336,7 +335,10 @@ object IRTransformer {
           condScope.ops.foreach(scope += _)
 
           val ir =
-            new IR.While(cond, loop.invariant.map(transformSpec(_, scope)).getOrElse(new IR.Imprecise(None)))
+            new IR.While(cond,
+                         loop.invariant
+                           .map(transformSpec(_, scope))
+                           .getOrElse(new IR.Imprecise(None)))
           scope += ir
 
           val bodyScope = new BlockScope(scope.method, ir.body, scope.vars)
@@ -504,7 +506,7 @@ object IRTransformer {
       case acc: ResolvedAccessibility =>
         new IR.Accessibility(transformExpr(acc.field, scope) match {
           case member: IR.Member => member
-          case _                      => throw new TransformerException("Invalid acc() argument")
+          case _                 => throw new TransformerException("Invalid acc() argument")
         })
 
       case imp: ResolvedImprecision =>
@@ -593,12 +595,12 @@ object IRTransformer {
       case logical: ResolvedLogical => {
         val (left, leftImp) = transformSpec(logical.left, scope) match {
           case imp: IR.Imprecise => (imp.precise, true)
-          case other                  => (Some(other), false)
+          case other             => (Some(other), false)
         }
 
         val (right, rightImp) = transformSpec(logical.right, scope) match {
           case imp: IR.Imprecise => (imp.precise, true)
-          case other                  => (Some(other), false)
+          case other             => (Some(other), false)
         }
 
         if ((leftImp || rightImp) && logical.operation != LogicalOperation.And)
@@ -637,17 +639,15 @@ object IRTransformer {
 
     def invokeToValue(input: ResolvedInvoke, scope: Scope): IR.Var = {
       scope match {
-        case scope: MethodScope => {
+        case scope: MethodScope =>
           val callee = resolveMethod(input)
           val retType = callee.returnType.getOrElse(
             throw new TransformerException("Cannot use result of void method")
           )
-          val args = input.arguments.map(transformExpr(_, scope))
+          val args = filterArgs(input.arguments, scope, callee)
           val temp = scope.method.addVar(retType)
           scope += new IR.Invoke(callee, args, Some(temp))
           temp
-        }
-
         case _ =>
           throw new TransformerException(
             s"Invalid invoke: '${input.methodName}'"
@@ -661,14 +661,42 @@ object IRTransformer {
         scope: MethodScope
     ): Unit = {
       val method = resolveMethod(input)
-      val args = input.arguments.map(transformExpr(_, scope))
+      val args = filterArgs(input.arguments, scope, method)
       scope += new IR.Invoke(method, args, Some(target))
     }
 
     def invokeVoid(input: ResolvedInvoke, scope: Scope): Unit = {
       val method = resolveMethod(input)
-      val args = input.arguments.map(transformExpr(_, scope))
+      val args = filterArgs(input.arguments, scope, method)
       scope += new IR.Invoke(method, args, None)
+    }
+
+    def filterArgs(resolvedArgs: List[ResolvedExpression],
+                   scope: Scope,
+                   invoked: IR.MethodDefinition): List[IR.Expression] = {
+      val zipped = resolvedArgs zip invoked.parameters
+      zipped.map(argPair => {
+        transformExpr(argPair._1, scope) match {
+          case lit: IR.NullLit =>
+            /* Note that reference type variables default to NULL, so no assignment is necessary.
+             * Using a variable instead of the "NULL" literal allows for runtime checks to be
+             * generated for the precondition of a function with a NULL literal passed as a parameter,
+             * avoiding the need to generate expressions of the form "NULL->"
+             */
+            scope match {
+              case methodScope: MethodScope =>
+                val valueType = argPair._2.valueType match {
+                  case Some(value) => value
+                  case None =>
+                    throw new TransformerException(
+                      "Undefined parameter value type.")
+                }
+                methodScope.method.addVar(valueType)
+              case _: PredicateScope => lit
+            }
+          case expr: IR.Expression => expr
+        }
+      })
     }
 
     def resolveMethod(invoke: ResolvedInvoke): IR.MethodDefinition =
