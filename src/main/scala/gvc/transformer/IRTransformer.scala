@@ -644,7 +644,7 @@ object IRTransformer {
           val retType = callee.returnType.getOrElse(
             throw new TransformerException("Cannot use result of void method")
           )
-          val args = filterArgs(input.arguments, scope, callee)
+          val args = input.arguments.map(arg => transformExpr(arg, scope))
           val temp = scope.method.addVar(retType)
           scope += new IR.Invoke(callee, args, Some(temp))
           temp
@@ -661,42 +661,14 @@ object IRTransformer {
         scope: MethodScope
     ): Unit = {
       val method = resolveMethod(input)
-      val args = filterArgs(input.arguments, scope, method)
+      val args = input.arguments.map(arg => transformExpr(arg, scope))
       scope += new IR.Invoke(method, args, Some(target))
     }
 
     def invokeVoid(input: ResolvedInvoke, scope: Scope): Unit = {
       val method = resolveMethod(input)
-      val args = filterArgs(input.arguments, scope, method)
+      val args = input.arguments.map(arg => transformExpr(arg, scope))
       scope += new IR.Invoke(method, args, None)
-    }
-
-    def filterArgs(resolvedArgs: List[ResolvedExpression],
-                   scope: Scope,
-                   invoked: IR.MethodDefinition): List[IR.Expression] = {
-      val zipped = resolvedArgs zip invoked.parameters
-      zipped.map(argPair => {
-        transformExpr(argPair._1, scope) match {
-          case lit: IR.NullLit =>
-            /* Note that reference type variables default to NULL, so no assignment is necessary.
-             * Using a variable instead of the "NULL" literal allows for runtime checks to be
-             * generated for the precondition of a function with a NULL literal passed as a parameter,
-             * avoiding the need to generate expressions of the form "NULL->"
-             */
-            scope match {
-              case methodScope: MethodScope =>
-                val valueType = argPair._2.valueType match {
-                  case Some(value) => value
-                  case None =>
-                    throw new TransformerException(
-                      "Undefined parameter value type.")
-                }
-                methodScope.method.addVar(valueType)
-              case _: PredicateScope => lit
-            }
-          case expr: IR.Expression => expr
-        }
-      })
     }
 
     def resolveMethod(invoke: ResolvedInvoke): IR.MethodDefinition =

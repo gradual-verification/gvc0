@@ -38,12 +38,12 @@ abstract class SpecificationContext {
         new IR.Unary(unary.operator, convertExpression(unary.operand))
 
       case cond: IR.Conditional =>
-        new IR.Conditional(
-          convertExpression(cond.condition),
-          convertExpression(cond.ifTrue),
-          convertExpression(cond.ifFalse))
+        new IR.Conditional(convertExpression(cond.condition),
+                           convertExpression(cond.ifTrue),
+                           convertExpression(cond.ifFalse))
 
-      case _: IR.Accessibility | _: IR.Imprecise | _: IR.ArrayMember | _: IR.PredicateInstance =>
+      case _: IR.Accessibility | _: IR.Imprecise | _: IR.ArrayMember |
+          _: IR.PredicateInstance =>
         throw new WeaverException(
           "Invalid expression; cannot convert to new context."
         )
@@ -60,35 +60,56 @@ object ValueContext extends SpecificationContext {
   def convertVar(source: IR.Var): IR.Expression = source
 }
 
-class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Var]) extends SpecificationContext {
+class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Var])
+    extends SpecificationContext {
   def convertResult: IR.Expression =
     throw new WeaverException(s"Invalid \result expression in '${pred.name}'")
 
   def convertVar(source: IR.Var): IR.Expression =
     params.getOrElse(
       source,
-      throw new WeaverException(s"Could not find variable '${source.name}' in '${pred.name}'")
+      throw new WeaverException(
+        s"Could not find variable '${source.name}' in '${pred.name}'")
     )
 }
 
 class ReturnContext(returnValue: IR.Expression) extends SpecificationContext {
   def convertVar(source: IR.Var): IR.Expression =
     source
-  
+
   def convertResult: IR.Expression =
     returnValue
 }
 
 // A context implementation that maps parameters to their actual values using
 // the arguments specified at a given call site
-class CallSiteContext(call: IR.Invoke, caller: IR.Method) extends SpecificationContext {
+// If 'NULL' is passed as a parameter, it is replaced with a temporary variable to avoid
+// generating runtime checks or permission tracking operations with dereferences of the form 'NULL->'
+class CallSiteContext(call: IR.Invoke, caller: IR.Method)
+    extends SpecificationContext {
   val variableMapping: Map[IR.Var, IR.Expression] =
-    (call.callee.parameters zip call.arguments).toMap
+    (call.callee.parameters zip call.arguments)
+      .map(pair => {
+        pair._2 match {
+          case _: IR.NullLit =>
+            val validValueType = pair._1.valueType match {
+              case Some(value) => value
+              case None =>
+                throw new WeaverException(
+                  s"Couldn't resolve parameter value type for parameter ${pair._1.name} of method ${call.callee.name}")
+            }
+            (pair._1, caller.addVar(validValueType))
+          case _ => pair
+        }
+      })
+      .toMap
 
   def convertVar(source: IR.Var): IR.Expression =
-    variableMapping.getOrElse(source, throw new WeaverException(
-      s"Could not find variable '${source.name} at call site of '${call.callee.name}'"
-    ))
+    variableMapping.getOrElse(
+      source,
+      throw new WeaverException(
+        s"Could not find variable '${source.name} at call site of '${call.callee.name}'"
+      ))
 
   def convertResult: IR.Expression = call.target.getOrElse {
     call.callee.returnType match {
@@ -96,7 +117,9 @@ class CallSiteContext(call: IR.Invoke, caller: IR.Method) extends SpecificationC
         val target = caller.addVar(returnType)
         call.target = Some(target)
         target
-      case None => throw new WeaverException(s"Invalid \result expression for void '${call.callee.name}'")
+      case None =>
+        throw new WeaverException(
+          s"Invalid \result expression for void '${call.callee.name}'")
     }
   }
 }

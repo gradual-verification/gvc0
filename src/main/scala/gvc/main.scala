@@ -126,8 +126,7 @@ object Main extends App {
               b.branchInfo
                 .map { case BranchCond(branch, _, _) => branch }
                 .map(c => "(" + c.toString() + ")")
-                .mkString(" && ")}: ${b.checks.toString()}"
-          )
+                .mkString(" && ")}: ${b.checks.toString()}")
           .mkString("\n")
       )
     }
@@ -154,6 +153,7 @@ object Main extends App {
       )
     IRTransformer.transform(resolved)
   }
+
   case class VerifiedOutput(
       silver: Program,
       c0Source: String,
@@ -162,8 +162,7 @@ object Main extends App {
 
   case class ProfilingInfo(nConjuncts: Int, nConjunctsEliminated: Int)
 
-  class VerifierException(message: String)
-      extends Exception(message)
+  class VerifierException(message: String) extends Exception(message)
 
   def verify(
       inputSource: String,

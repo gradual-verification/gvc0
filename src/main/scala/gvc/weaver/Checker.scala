@@ -72,9 +72,9 @@ object Checker {
       at match {
         case LoopStart(op: IR.While) => ops(None) ++=: op.body
         case LoopEnd(op: IR.While)   => op.body ++= ops(None)
-        case Pre(op)              => op.insertBefore(ops(None))
-        case Post(op)             => op.insertAfter(ops(None))
-        case MethodPre            => ops(None) ++=: method.body
+        case Pre(op)                 => op.insertBefore(ops(None))
+        case Post(op)                => op.insertAfter(ops(None))
+        case MethodPre               => ops(None) ++=: method.body
         case MethodPost =>
           methodData.returns.foreach(e => e.insertBefore(ops(e.value)))
           if (methodData.hasImplicitReturn) {
@@ -90,20 +90,24 @@ object Checker {
       c -> flag
     }.toMap
 
-    def foldConditionList(conds: List[Condition], op: IR.BinaryOp): IR.Expression = {
-      conds.foldLeft[Option[IR.Expression]](None) {
-        case (Some(expr), cond) =>
-          Some(new IR.Binary(op, expr, getCondition(cond)))
-        case (None, cond) => Some(getCondition(cond))
-      }.getOrElse(throw new WeaverException("Invalid empty condition list"))
+    def foldConditionList(conds: List[Condition],
+                          op: IR.BinaryOp): IR.Expression = {
+      conds
+        .foldLeft[Option[IR.Expression]](None) {
+          case (Some(expr), cond) =>
+            Some(new IR.Binary(op, expr, getCondition(cond)))
+          case (None, cond) => Some(getCondition(cond))
+        }
+        .getOrElse(throw new WeaverException("Invalid empty condition list"))
     }
 
     def getCondition(cond: Condition): IR.Expression = cond match {
       case ImmediateCondition(expr) => expr.toIR(program, checkMethod, None)
-      case cond: TrackedCondition => conditionVars(cond)
-      case NotCondition(value) => new IR.Unary(IR.UnaryOp.Not, getCondition(value))
+      case cond: TrackedCondition   => conditionVars(cond)
+      case NotCondition(value) =>
+        new IR.Unary(IR.UnaryOp.Not, getCondition(value))
       case AndCondition(values) => foldConditionList(values, IR.BinaryOp.And)
-      case OrCondition(values) => foldConditionList(values, IR.BinaryOp.Or)
+      case OrCondition(values)  => foldConditionList(values, IR.BinaryOp.Or)
     }
 
     val initializeOps = mutable.ListBuffer[IR.Op]()
@@ -160,57 +164,63 @@ object Checker {
     // if block.
     val context = CheckContext(program, checkMethod, implementation, runtime)
     for ((loc, checkData) <- groupChecks(methodData.checks)) {
-      insertAt(loc, retVal => {
-        val ops = mutable.ListBuffer[IR.Op]()
+      insertAt(
+        loc,
+        retVal => {
+          val ops = mutable.ListBuffer[IR.Op]()
 
-        // Create a temporary owned fields instance when it is required
-        var temporaryOwnedFields: Option[IR.Var] = None
-        def getTemporaryOwnedFields(): IR.Var = temporaryOwnedFields.getOrElse {
-          val tempVar = context.method.method.addVar(
-            context.runtime.ownedFieldsRef,
-            CheckRuntime.Names.temporaryOwnedFields
-          )
-          temporaryOwnedFields = Some(tempVar)
-          tempVar
+          // Create a temporary owned fields instance when it is required
+          var temporaryOwnedFields: Option[IR.Var] = None
+          def getTemporaryOwnedFields(): IR.Var =
+            temporaryOwnedFields.getOrElse {
+              val tempVar = context.method.method.addVar(
+                context.runtime.ownedFieldsRef,
+                CheckRuntime.Names.temporaryOwnedFields
+              )
+              temporaryOwnedFields = Some(tempVar)
+              tempVar
+            }
+
+          for ((cond, checks) <- checkData) {
+            val condition = cond.map(getCondition(_))
+            ops ++= implementChecks(
+              condition,
+              checks.map(_.check),
+              retVal,
+              getPrimaryOwnedFields,
+              getTemporaryOwnedFields,
+              instanceCounter,
+              context
+            )
+          }
+
+          // Prepend op to initialize owned fields if it is required
+          temporaryOwnedFields.foreach { tempOwned =>
+            new IR.Invoke(
+              context.runtime.initOwnedFields,
+              List(instanceCounter),
+              Some(tempOwned)
+            ) +=: ops
+          }
+
+          ops
         }
-
-        for ((cond, checks) <- checkData) {
-          val condition = cond.map(getCondition(_))
-          ops ++= implementChecks(
-            condition,
-            checks.map(_.check),
-            retVal,
-            getPrimaryOwnedFields,
-            getTemporaryOwnedFields,
-            instanceCounter,
-            context
-          )
-        }
-
-        // Prepend op to initialize owned fields if it is required
-        temporaryOwnedFields.foreach { tempOwned =>
-          new IR.Invoke(
-            context.runtime.initOwnedFields,
-            List(instanceCounter),
-            Some(tempOwned)
-          ) +=: ops
-        }
-
-        ops
-      })
+      )
     }
 
     val needsToTrackPrecisePerms =
       primaryOwnedFields.isDefined || methodData.bodyContainsImprecision ||
-        methodData.calls.exists(c => (
-          c.ir.callee.isInstanceOf[IR.Method] &&
-          (programData.methods(c.ir.callee.name).callStyle match {
-            case ImpreciseCallStyle | PrecisePreCallStyle => true
-            case _                                        => false
-          })
-        ))
-    if(needsToTrackPrecisePerms && methodData.callStyle == PreciseCallStyle){
-      if(methodData.callStyle == PreciseCallStyle) {
+        methodData.calls.exists(
+          c =>
+            (
+              c.ir.callee.isInstanceOf[IR.Method] &&
+                (programData.methods(c.ir.callee.name).callStyle match {
+                  case ImpreciseCallStyle | PrecisePreCallStyle => true
+                  case _                                        => false
+                })
+          ))
+    if (needsToTrackPrecisePerms && methodData.callStyle == PreciseCallStyle) {
+      if (methodData.callStyle == PreciseCallStyle) {
         initializeOps ++= methodData.method.precondition.toSeq.flatMap(
           implementation.translate(
             AddMode,
@@ -332,10 +342,14 @@ object Checker {
     methodData.conditions
       .groupBy(_.location)
       .foreach {
-        case (loc, conds) => insertAt(loc, retVal => {
-          conds.map(c => new IR.Assign(conditionVars(c), c.value.toIR(program, checkMethod, retVal)))
-        })
-    }
+        case (loc, conds) =>
+          insertAt(loc, retVal => {
+            conds.map(
+              c =>
+                new IR.Assign(conditionVars(c),
+                              c.value.toIR(program, checkMethod, retVal)))
+          })
+      }
 
     // Finally, add all the initialization ops to the beginning
     initializeOps ++=: method.body
@@ -350,10 +364,11 @@ object Checker {
   ): Unit = {
     for (alloc <- allocations) {
       alloc match {
-        case alloc: IR.AllocStruct => primaryOwnedFields match {
-          case Some(primary) => implementation.trackAllocation(alloc, primary)
-          case None => implementation.idAllocation(alloc, instanceCounter)
-        }
+        case alloc: IR.AllocStruct =>
+          primaryOwnedFields match {
+            case Some(primary) => implementation.trackAllocation(alloc, primary)
+            case None          => implementation.idAllocation(alloc, instanceCounter)
+          }
         case _ =>
           throw new WeaverException(
             "Tracking is only currently supported for struct allocations."
@@ -374,7 +389,10 @@ object Checker {
       case _: FieldAccessibilityCheck =>
         (VerifyMode, fields.primaryOwnedFields())
     }
-    context.implementation.translateFieldPermission(mode, field, perms, ValueContext)
+    context.implementation.translateFieldPermission(mode,
+                                                    field,
+                                                    perms,
+                                                    ValueContext)
   }
 
   def implementPredicateCheck(
@@ -393,7 +411,10 @@ object Checker {
       case _: PredicateAccessibilityCheck =>
         (VerifyMode, fields.primaryOwnedFields())
     }
-    context.implementation.translatePredicateInstance(mode, instance, perms, ValueContext)
+    context.implementation.translatePredicateInstance(mode,
+                                                      instance,
+                                                      perms,
+                                                      ValueContext)
   }
 
   case class FieldCollection(
@@ -469,13 +490,18 @@ object Checker {
     }
   }
 
-  def groupChecks(items: List[RuntimeCheck]): List[(Location, List[(Option[Condition], List[RuntimeCheck])])] = {
-    items.groupBy(_.location)
+  def groupChecks(items: List[RuntimeCheck])
+    : List[(Location, List[(Option[Condition], List[RuntimeCheck])])] = {
+    items
+      .groupBy(_.location)
       .toList
-      .map { case (loc, checks) =>
-        val groups = groupConditions(checks)
-        val sorted = orderChecks(groups)
-        (loc, groupAdjacentConditions(sorted).map { case (cond, checks) => (cond, checks) })
+      .map {
+        case (loc, checks) =>
+          val groups = groupConditions(checks)
+          val sorted = orderChecks(groups)
+          (loc, groupAdjacentConditions(sorted).map {
+            case (cond, checks) => (cond, checks)
+          })
       }
   }
 
@@ -497,36 +523,37 @@ object Checker {
   // Groups conditions in a stable-sort manner (the first items in each group are in order, etc.),
   // but allows ordering changes
   def groupConditions(items: List[RuntimeCheck]): List[RuntimeCheck] = {
-    val map = mutable.LinkedHashMap[Option[Condition], mutable.ListBuffer[RuntimeCheck]]()
+    val map = mutable
+      .LinkedHashMap[Option[Condition], mutable.ListBuffer[RuntimeCheck]]()
     for (check <- items) {
       val list = map.getOrElseUpdate(check.when, mutable.ListBuffer())
       list += check
     }
 
-    map.flatMap { case (_, checks) => checks }
-      .toList
+    map.flatMap { case (_, checks) => checks }.toList
   }
 
   def orderChecks(checks: List[RuntimeCheck]) =
-    checks.sortBy(c => c.check match {
-      case acc: FieldAccessibilityCheck => nesting(acc.field)
-      case _ => Int.MaxValue
+    checks.sortBy(c =>
+      c.check match {
+        case acc: FieldAccessibilityCheck => nesting(acc.field)
+        case _                            => Int.MaxValue
     })(Ordering.Int)
 
   def nesting(expr: CheckExpression): Int = expr match {
     case b: CheckExpression.Binary =>
       Math.max(nesting(b.left), nesting(b.right)) + 1
     case c: CheckExpression.Cond =>
-      Math.max(nesting(c.cond), Math.max(nesting(c.ifTrue), nesting(c.ifFalse))) + 1
+      Math
+        .max(nesting(c.cond), Math.max(nesting(c.ifTrue), nesting(c.ifFalse))) + 1
     case d: CheckExpression.Deref =>
       nesting(d.operand) + 1
     case f: CheckExpression.Field =>
       nesting(f.root) + 1
     case u: CheckExpression.Unary =>
       nesting(u.operand) + 1
-    case _: CheckExpression.Literal
-      | _: CheckExpression.Var
-      | CheckExpression.Result
-      | _: CheckExpression.ResultVar => 1
+    case _: CheckExpression.Literal | _: CheckExpression.Var |
+        CheckExpression.Result | _: CheckExpression.ResultVar =>
+      1
   }
 }
