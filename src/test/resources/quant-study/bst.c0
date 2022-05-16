@@ -442,7 +442,7 @@ int main()
     struct Node* t1 = create_tree(stressCaptured);
 
     int i = 0;
-    while(i < stressCaptured)
+    while(0 <= i && i < stressCaptured)
     //@loop_invariant 0 <= i && i <= stressCaptured;
     {
         int r = rand(seed);
@@ -455,7 +455,7 @@ int main()
     }
 
     int j = 0;
-    while(j < stressCaptured)
+    while(0 <= j && j < stressCaptured)
     //@loop_invariant 0 <= j && j <= stressCaptured;
     {
         int r = rand(seed);

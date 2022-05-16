@@ -34,9 +34,7 @@ class Sampler(benchConfig: BenchmarkConfig) {
   }
   private def sampleRandom(
       orderedList: List[ASTLabel]
-  ): List[ASTLabel] = {
-    scala.util.Random.shuffle(orderedList)
-  }
+  ): List[ASTLabel] = scala.util.Random.shuffle(orderedList)
 }
 
 object LabelTools {

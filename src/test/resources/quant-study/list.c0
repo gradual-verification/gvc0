@@ -271,7 +271,7 @@ int main()
   int stress = 0;
   struct Node *l = create_list(3);
   int i = 0;
-  while(i < stress)
+  while(0 <= i && i < stress)
   //@loop_invariant 0 <= i && i <= stress;
   {
     l = list_insert(l, 1);

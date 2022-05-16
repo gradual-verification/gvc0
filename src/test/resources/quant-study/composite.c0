@@ -322,11 +322,10 @@ int main()
 {
   int stress = 0;
 
-  int stressCaptured = stress;
+  int stressCaptured = stress + ((stress/2) * 2);
   int seed = 1;
   struct Node *node = create_tree();
   int i = 0;
-  stressCaptured = stressCaptured + ((stressCaptured / 2)*2);
   while(i < stressCaptured)
   //@loop_invariant 0 <= i && i <= stressCaptured && tree(node);
   {
