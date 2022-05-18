@@ -3,11 +3,12 @@ package gvc.permutation
 import gvc.CC0Wrapper.Performance
 import gvc.Main.ProfilingInfo
 import gvc.permutation.BenchConfig.BenchmarkOutputFiles
+
 import java.io.FileWriter
+import java.math.BigInteger
 import java.nio.file.{Files, Path}
 import java.util.Date
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 
 object Extensions {
   def c0(basename: Object): String = basename.toString + ".c0"
@@ -159,15 +160,10 @@ object CSVIO {
 
   def generateMetadataColumnEntry(
       id: String,
-      template: Set[ASTLabel],
-      permutation: Set[ASTLabel]
+      permutation: LabelPermutation
   ): List[String] = {
-    val entry = ListBuffer[String](id)
-    template.foreach(label => {
-      val toAppend = (if (permutation.contains(label)) 1 else 0).toString
-      entry += toAppend
-    })
-    entry.toList
+    List(id) ++ permutation.specStatusList.map(_.toString) ++ permutation.imprecisionStatusList
+      .map(_.toString)
   }
 }
 
@@ -198,15 +194,13 @@ class MetadataCSVPrinter(
     permWriter.write(index.toString + "," + permID.toString(16) + '\n')
     permWriter.flush()
   }
-
   def logPermutation(
       id: String,
-      permutation: Set[ASTLabel]
+      permutation: LabelPermutation
   ): Unit = {
     val entry =
       CSVIO.generateMetadataColumnEntry(
         id,
-        template.toSet,
         permutation
       )
     metaWriter.write(entry.mkString(",") + '\n')
@@ -214,7 +208,7 @@ class MetadataCSVPrinter(
   }
 
   def logStep(
-      id: String,
+      id: BigInteger,
       pathIndex: Int,
       levelIndex: Int,
       componentAdded: Option[ASTLabel]
@@ -224,7 +218,8 @@ class MetadataCSVPrinter(
       case None        => "NA"
     }
     mappingWriter.write(
-      List(id, pathIndex, levelIndex, labelText).mkString(",") + '\n'
+      List(id.toString(16), pathIndex, levelIndex, labelText)
+        .mkString(",") + '\n'
     )
     mappingWriter.flush()
   }

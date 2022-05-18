@@ -67,12 +67,6 @@ object Bench {
     val benchConfig =
       BenchConfig.resolveBenchmarkConfig(source, librarySearchDirs, config)
 
-    Output.info(
-      s"Saved ${benchConfig.prior.visitedPermutations.size} permutations from previous runs."
-    )
-    Output.info(
-      s"Saved ${benchConfig.prior.visitedPaths.size} paths from previous runs."
-    )
     if (!config.benchmarkSkipVerification) {
       val timeout = config.timeout match {
         case Some(value) => value.toString + "s"
@@ -88,6 +82,7 @@ object Bench {
         else
           s" with ${Output.blue(iterations.toString)} iteration" +
             (if (iterations > 1) "s" else "") + " per permutation"
+
       Output.info(
         s"Benchmarking $pathDesc$iterDesc for ${blue(
           file
@@ -125,10 +120,8 @@ object Bench {
       outputFiles: OutputFileCollection,
       benchmarkConfig: BenchmarkConfig
   ): Unit = {
-
     val alreadySampled: mutable.Set[BigInteger] =
       mutable.Set[BigInteger]()
-    var previousID: Option[String] = None
     val maxPaths = config.benchmarkPaths.getOrElse(1)
     val csv =
       new MetadataCSVPrinter(
@@ -159,7 +152,7 @@ object Bench {
 
     def generateBaseline(
         ir: IR.Program,
-        id: String,
+        id: BigInteger,
         labels: List[ASTLabel],
         destDir: Path,
         onlyFraming: Boolean = false
@@ -173,15 +166,84 @@ object Bench {
         )
       dumpPermutation(
         destDir,
-        c0(id),
+        c0(id.toString(16)),
         labels,
         dynamicSource
       )
     }
-    val bottomID =
-      LabelTools
-        .createID(benchmarkConfig.labelOutput.labels, Set.empty)
-        .toString(16)
+
+    def verifyPermutation(visitor: SelectVisitor,
+                          id: BigInteger,
+                          currentPermutation: LabelPermutation): Unit = {
+
+      val idString = id.toString(16)
+      csv.logPermutation(idString, currentPermutation)
+      val builtPermutation =
+        visitor.visit(currentPermutation)
+      val sourceText =
+        IRPrinter.print(builtPermutation, includeSpecs = true)
+      dumpPermutation(
+        benchmarkConfig.files.perms,
+        c0(idString),
+        currentPermutation.labels.toList,
+        sourceText
+      )
+      try {
+        val verifiedPermutation = config.timeout match {
+          case Some(value) =>
+            Timeout.runWithTimeout(value)(
+              verify(sourceText, outputFiles, config)
+            )
+          case None => Some(verify(sourceText, outputFiles, config))
+        }
+        verifiedPermutation match {
+          case Some(vPerm) =>
+            dumpPermutation(
+              benchmarkConfig.files.verifiedPerms,
+              c0(idString),
+              currentPermutation.labels.toList,
+              vPerm.c0Source
+            )
+            csv.logConjuncts(idString, vPerm.profiling)
+            if (!config.disableBaseline) {
+              val builtDynamic = new SelectVisitor(benchmarkConfig.ir)
+                .visit(currentPermutation)
+              generateBaseline(
+                builtDynamic,
+                id,
+                currentPermutation.labels.toList,
+                benchmarkConfig.files.dynamicPerms.get
+              )
+              val builtFraming = new SelectVisitor(benchmarkConfig.ir)
+                .visit(currentPermutation)
+              generateBaseline(
+                builtFraming,
+                id,
+                currentPermutation.labels.toList,
+                benchmarkConfig.files.framingPerms.get,
+                onlyFraming = true
+              )
+            }
+          case None =>
+        }
+      } catch {
+        case ex: VerificationException =>
+          progress.error()
+          err.log(idString, 1, ex.message)
+        case _: TimeoutException =>
+          progress.timeout()
+          val message =
+            s"\n\n ---[Timeout after ${config.timeout.get} ms]---\n"
+          println(message)
+          err.log(
+            idString,
+            exitCode = 1,
+            message
+          )
+      }
+    }
+
+    val bottomID = new LabelPermutation(benchmarkConfig).id
     val outputBottom =
       benchmarkConfig.files.perms.resolve(c0(bottomID))
     val outputBottomVerified =
@@ -197,120 +259,59 @@ object Bench {
       outputBottomText
     )
     csv.logPermutation(
-      bottomID,
-      Set.empty
+      bottomID.toString(16),
+      new LabelPermutation(benchmarkConfig)
     )
+    val visitor = new SelectVisitor(benchmarkConfig.ir)
 
-    val offset = benchmarkConfig.prior.visitedPaths.size
-    for (sampleIndex <- offset until maxPaths + offset) {
+    for (pathIndex <- 0 until maxPaths) {
       val sampleToPermute =
         sampler.sample(SamplingHeuristic.Random)
       csv.logPath(
-        sampleIndex,
+        pathIndex,
         benchmarkConfig.labelOutput.labels,
         sampleToPermute
       )
-
       val summary = LabelTools.appendPathComment("", sampleToPermute)
       val summaryDestination =
         benchmarkConfig.files.pathDescriptions.resolve(
-          txt(sampleIndex.toString)
+          txt(pathIndex.toString)
         )
       Files.writeString(summaryDestination, summary)
 
-      csv.logStep(bottomID, sampleIndex, 0, None)
+      csv.logStep(bottomID, pathIndex, 0, None)
       val currentPermutation = new LabelPermutation(benchmarkConfig)
+
       for (labelIndex <- sampleToPermute.indices) {
-        val visitor = new SelectVisitor(benchmarkConfig.ir)
         currentPermutation.addLabel(sampleToPermute(labelIndex))
-        val id =
-          LabelTools.createID(
-            benchmarkConfig.labelOutput.labels,
-            currentPermutation.labels
-          )
-
-        val idString = id.toString(16)
-
+        val id = currentPermutation.id
         if (!alreadySampled.contains(id)) {
-          csv.logPermutation(idString, currentPermutation.labels)
-
-          val builtPermutation =
-            visitor.visit(currentPermutation)
-          val sourceText =
-            IRPrinter.print(builtPermutation, includeSpecs = true)
-          dumpPermutation(
-            benchmarkConfig.files.perms,
-            c0(idString),
-            currentPermutation.labels.toList,
-            sourceText
-          )
-          try {
-            val verifiedPermutation = config.timeout match {
-              case Some(value) =>
-                Timeout.runWithTimeout(value)(
-                  verify(sourceText, outputFiles, config)
-                )
-              case None => Some(verify(sourceText, outputFiles, config))
-            }
-            verifiedPermutation match {
-              case Some(vPerm) =>
-                dumpPermutation(
-                  benchmarkConfig.files.verifiedPerms,
-                  c0(idString),
-                  currentPermutation.labels.toList,
-                  vPerm.c0Source
-                )
-                csv.logConjuncts(idString, vPerm.profiling)
-                if (!config.disableBaseline) {
-                  val builtDynamic = new SelectVisitor(benchmarkConfig.ir)
-                    .visit(currentPermutation)
-                  generateBaseline(
-                    builtDynamic,
-                    idString,
-                    currentPermutation.labels.toList,
-                    benchmarkConfig.files.dynamicPerms.get
-                  )
-                  val builtFraming = new SelectVisitor(benchmarkConfig.ir)
-                    .visit(currentPermutation)
-                  generateBaseline(
-                    builtFraming,
-                    idString,
-                    currentPermutation.labels.toList,
-                    benchmarkConfig.files.framingPerms.get,
-                    onlyFraming = true
-                  )
-                }
-              case None =>
-            }
-          } catch {
-            case ex: VerificationException =>
-              progress.error()
-              err.log(idString, 1, ex.message)
-            case _: TimeoutException =>
-              progress.timeout()
-              val message =
-                s"\n\n ---[Timeout after ${config.timeout.get} ms]---\n"
-              println(message)
-              err.log(
-                idString,
-                exitCode = 1,
-                message
-              )
-          }
+          verifyPermutation(visitor, id, currentPermutation)
           alreadySampled += id
           progress.incrementUnique()
         } else {
           progress.increment()
         }
         csv.logStep(
-          idString,
-          sampleIndex,
+          id,
+          pathIndex,
           labelIndex + 1,
           Some(sampleToPermute(labelIndex))
         )
-        previousID = Some(idString)
       }
+      currentPermutation.markAllComplete()
+      val id = currentPermutation.id
+      if (!alreadySampled.contains(id)) {
+        verifyPermutation(visitor, id, currentPermutation)
+      }
+      csv.logStep(
+        id,
+        pathIndex,
+        benchmarkConfig.labelOutput.labels.length + 1,
+        None
+      )
     }
+
     if (!config.disableBaseline) {
       val templateCopyDynamic =
         new SelectVisitor(benchmarkConfig.ir).visitEmpty()
@@ -399,56 +400,51 @@ object Bench {
   ): Unit = {
     val id = Extensions.remove(in.getFileName.toString)
     val sourceString = Files.readString(in)
-    val stepsRequired =
-      printer.findMissingWorkloads(id, benchConfig.workload.stepList)
 
-    if (stepsRequired.nonEmpty) {
-
-      if (!isInjectable(sourceString)) {
-        throw new BenchmarkException(
-          s"The file ${in.getFileName} doesn't include an assignment of the form 'int stress = ...'."
-        )
-      }
-
-      val source = injectStress(sourceString)
-
-      Main.writeFile(
-        benchConfig.files.tempC0File.toAbsolutePath.toString,
-        source
+    if (!isInjectable(sourceString)) {
+      throw new BenchmarkException(
+        s"The file ${in.getFileName} doesn't include an assignment of the form 'int stress = ...'."
       )
-      try {
-        CapturedExecution.compile(
-          benchConfig.files.tempC0File,
+    }
+
+    val source = injectStress(sourceString)
+
+    Main.writeFile(
+      benchConfig.files.tempC0File.toAbsolutePath.toString,
+      source
+    )
+    try {
+      CapturedExecution.compile(
+        benchConfig.files.tempC0File,
+        benchConfig.files.tempBinaryFile,
+        benchConfig.rootConfig
+      )
+
+      for (workload <- benchConfig.workload.stepList) {
+        val perf = CapturedExecution.exec_timed(
           benchConfig.files.tempBinaryFile,
-          benchConfig.rootConfig
+          benchConfig.workload.iterations,
+          List(s"--stress $workload")
         )
-
-        for (workload <- stepsRequired) {
-          val perf = CapturedExecution.exec_timed(
-            benchConfig.files.tempBinaryFile,
-            benchConfig.workload.iterations,
-            List(s"--stress $workload")
-          )
-          printer.logID(id, workload, perf)
-        }
-
-      } catch {
-        case c0: CapturedOutputException =>
-          c0 match {
-            case cc0: CC0CompilationException =>
-              cc0.logMessage(id, logging.cc0)
-              progressTracker match {
-                case Some(value) => value.cc0Error()
-                case None        =>
-              }
-            case exec: ExecutionException =>
-              exec.logMessage(id, logging.exec)
-              progressTracker match {
-                case Some(value) => value.execError()
-                case None        =>
-              }
-          }
+        printer.logID(id, workload, perf)
       }
+
+    } catch {
+      case c0: CapturedOutputException =>
+        c0 match {
+          case cc0: CC0CompilationException =>
+            cc0.logMessage(id, logging.cc0)
+            progressTracker match {
+              case Some(value) => value.cc0Error()
+              case None        =>
+            }
+          case exec: ExecutionException =>
+            exec.logMessage(id, logging.exec)
+            progressTracker match {
+              case Some(value) => value.execError()
+              case None        =>
+            }
+        }
     }
     progressTracker match {
       case Some(value) => value.increment()

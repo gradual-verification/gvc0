@@ -39,6 +39,8 @@ class SelectVisitor(program: IR.Program)
     finishedBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
     incompleteExpr = mutable.ListBuffer[BuiltExpression]()
     finishedExpr = mutable.ListBuffer[BuiltExpression]()
+    permutation = Set.empty[Int]
+    permutationMetadata = None
   }
 
   def visit(permutation: LabelPermutation): IR.Program = {

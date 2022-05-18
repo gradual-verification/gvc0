@@ -1,7 +1,9 @@
 package gvc.permutation
+import gvc.permutation.Bench.BenchmarkException
 import gvc.permutation.BenchConfig.BenchmarkConfig
 import gvc.permutation.SamplingHeuristic.SamplingHeuristic
 import gvc.transformer.IR.{Expression, Method}
+
 import java.math.BigInteger
 import scala.collection.mutable
 object SamplingHeuristic extends Enumeration {
@@ -13,7 +15,7 @@ case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
 class Sampler(benchConfig: BenchmarkConfig) {
   util.Random.setSeed(41L)
   private val prevSamples: mutable.Set[BigInteger] =
-    mutable.Set[BigInteger]().union(benchConfig.prior.visitedPaths)
+    mutable.Set[BigInteger]()
   def sample(
       heuristic: SamplingHeuristic
   ): List[ASTLabel] = {
@@ -49,20 +51,6 @@ object LabelTools {
     new BigInteger(hash, 16)
   }
 
-  def createID(
-      template: List[ASTLabel],
-      permutation: Set[ASTLabel]
-  ): BigInteger = {
-    new BigInteger(
-      template
-        .map(label => {
-          (if (permutation.contains(label)) 1 else 0).toString
-        })
-        .foldRight("")(_ + _),
-      2
-    )
-  }
-
   def parseID(input: String): Option[BigInteger] = {
     if (input.matches("[0-9A-Fa-f]+")) {
       Some(new BigInteger(input, 16))
@@ -88,6 +76,8 @@ class LabelPermutation(
   private val contents = mutable.TreeSet[ASTLabel]()(LabelOrdering)
   private val orderedIndices = mutable.ListBuffer[Int]()
   private val foldUnfoldCounts = mutable.Map[Method, Int]()
+  private val completedImpreciseExpressions = mutable.Set[Int]()
+  private var completedExpressions = mutable.Set[Int]()
   def addLabel(label: ASTLabel): Unit = {
     orderedIndices += label.exprIndex
     contents += label
@@ -107,11 +97,49 @@ class LabelPermutation(
   def labels: Set[ASTLabel] = contents.toSet
   def indices: Set[Int] = orderedIndices.toSet
 
-  def exprIsComplete(template: Expression, componentCount: Int): Boolean =
-    benchmarkConfig.labelOutput.specsToSpecIndices
+  def imprecisionStatusList: List[Int] = {
+    benchmarkConfig.labelOutput.specsToSpecIndices.values.toList.sorted
+      .map(index => {
+        (if (completedExpressions.contains(index)) 1 else 0)
+      })
+  }
+
+  def specStatusList: List[Int] = {
+    benchmarkConfig.labelOutput.labels
+      .map(label => {
+        (if (labels.contains(label)) 1 else 0)
+      })
+  }
+
+  def exprIsComplete(template: Expression, componentCount: Int): Boolean = {
+    val condition = benchmarkConfig.labelOutput.specsToSpecIndices
       .contains(template) && benchmarkConfig.labelOutput.labelsPerSpecIndex(
       benchmarkConfig.labelOutput
         .specsToSpecIndices(template)) == componentCount
+
+    if (!benchmarkConfig.labelOutput.specsToSpecIndices.contains(template)) {
+      throw new BenchmarkException(
+        "Cannot generate permutations of an expression that wasn't present in the original compiled IR.")
+    }
+
+    val templateIndex =
+      benchmarkConfig.labelOutput.specsToSpecIndices(template)
+
+    if (condition) {
+      if (completedImpreciseExpressions.contains(templateIndex)) {
+        completedImpreciseExpressions.remove(templateIndex)
+        completedExpressions += templateIndex
+        false
+      } else if (completedExpressions.contains(templateIndex)) {
+        true
+      } else {
+        completedImpreciseExpressions += templateIndex
+        false
+      }
+    } else {
+      false
+    }
+  }
 
   def methodIsComplete(method: Method): Boolean = {
     this.benchmarkConfig.labelOutput
@@ -119,6 +147,20 @@ class LabelPermutation(
       .contains(method) &&
     this.foldUnfoldCounts(method) == this.benchmarkConfig.labelOutput
       .foldUnfoldCount(method))
+  }
+
+  def markAllComplete(): Unit = {
+    completedExpressions =
+      completedExpressions.union(completedImpreciseExpressions)
+  }
+
+  def id: BigInteger = {
+    val specsPresent = specStatusList.foldRight("")(_.toString + _)
+    val imprecisionPresent = imprecisionStatusList.foldRight("")(_.toString + _)
+    new BigInteger(
+      specsPresent + imprecisionPresent,
+      2
+    )
   }
 }
 

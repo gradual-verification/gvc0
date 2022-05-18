@@ -29,7 +29,7 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
     if (currentPerm == perPath) {
       currentPath += 1
     }
-    if (currentPerm > perPath) {
+    if (currentPerm > (perPath + 1)) {
       currentPerm %= perPath
     }
     update()
