@@ -15,14 +15,18 @@ import sys.process._
 object CapturedExecution {
 
   def compile(input: Path, binary: Path, config: Config): CommandOutput = {
-    val cc0Options = CC0Options(
+    val cc0Options =        CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
       output = Some(binary.toString),
       includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
-      compilerArgs = List("")
     )
-    val compileOutput = CC0Wrapper.exec_output(input.toString, cc0Options)
+    if(System.getProperty("mrj.version") != null) {
+      // the upper bound on nested brackets is lower for clang than for gcc, leading to compilation failures.
+      // cc0 is hardcoded to use gcc, but "gcc" is an alias for clang in mac os
+      cc0Options.compilerArgs = List("-fbracket-depth=1024")
+    }
+    val compileOutput = CC0Wrapper.exec_output(input.toAbsolutePath.toString, cc0Options)
     if (compileOutput.exitCode != 0) {
       throw new CC0CompilationException(compileOutput)
     } else {

@@ -15,7 +15,7 @@ case class CC0Options(
     libraries: List[String] = Nil,
     includeDirs: List[String] = Nil,
     execArgs: List[String] = Nil,
-    compilerArgs: List[String] = Nil,
+    var compilerArgs: List[String] = Nil,
     warnings: List[String] = Nil,
     dumpAST: Boolean = false,
     output: Option[String] = None,
@@ -77,7 +77,6 @@ object CC0Wrapper {
     val os = new ByteArrayOutputStream
     val command = formatCommand(sourceFile, options)
     val exitCode = (command #> os).!
-
     os.close()
     CommandOutput(exitCode, os.toString("UTF-8"))
   }
@@ -97,6 +96,8 @@ object CC0Wrapper {
 
     Seq(
       Seq(options.compilerPath),
+      options.inputFiles.flatMap(value => Seq(value)),
+      Seq(sourceFile),
       flag("--verbose", options.verbose),
       flag("--dyn-check", options.dynCheck),
       flag("--no-purity-check", !options.purityCheck),
@@ -115,8 +116,6 @@ object CC0Wrapper {
       flag("--warn", options.warn),
       flag("--exec", options.exec),
       flag("--only-typecheck", options.onlyTypecheck),
-      options.inputFiles.flatMap(value => Seq(value)),
-      Seq(sourceFile)
     ).flatten.toList
   }
 }
