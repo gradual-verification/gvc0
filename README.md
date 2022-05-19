@@ -3,7 +3,7 @@
 TODO: Get a better name
 
 ## Setup
-Clone the gradual verification forks of [Silver](https://github.com/gradual-verification/silver-gv) and [Silicon](https://github.com/gradual-verification/silver-gv).
+Clone the gradual verification forks of [Silver](https://github.com/gradual-verification/silver-gv) and [Silicon](https://github.com/gradual-verification/silicon-gv).
 
 Add a symlink to Silver within the Silicon directory
 ```
@@ -17,6 +17,7 @@ ln -s ../silicon-gv silicon
 ```
 Install [z3](https://github.com/Z3Prover/z3/releases) and set the Z3_PATH environment variable to the location of the executable.
 
+In order to run gradually verified programs, you will also need to install [cc0](https://bitbucket.org/c0-lang/docs/wiki/Downloads), a compiler for c0.
 
 ## Running
 
@@ -33,8 +34,10 @@ where OPTION is
   -o <file>  --output=<file>  Place the executable output into <file>
   -v         --only-verify    Stop after static verification
   -s         --save-files     Save the intermediate files produced (IR, Silver, C0, and C)
-  -x         --exec           Execute the compiled file"""
+  -x         --exec           Execute the compiled file
 ```
+
+As described above, the last option, executing the compiled file, requires first installing [cc0](https://bitbucket.org/c0-lang/docs/wiki/Downloads).
 
 ## Testing
 
