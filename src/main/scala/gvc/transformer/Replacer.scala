@@ -5,7 +5,7 @@ object Replacer {
 
   def replace(block: IR.Block, m: Mapping): Unit =
     block.foreach(replace(_, m))
-  
+
   def replace(op: IR.Op, m: Mapping): Unit = {
     replaceShallow(op, m)
 
@@ -64,6 +64,7 @@ object Replacer {
     }
     case loop: IR.While => {
       loop.condition = replace(loop.condition, m)
+      loop.invariant = replace(loop.invariant, m)
     }
   }
 
@@ -71,29 +72,40 @@ object Replacer {
   // Note that this could cause an infinite loop if a cycle of mappings occurred
   // (i.e. v1 -> v2 -> v1)
   def replace(v: IR.Var, m: Mapping): IR.Var = m.get(v) match {
-    case None => v
+    case None            => v
     case Some(mappedVar) => replace(mappedVar, m)
   }
 
   def replace(member: IR.Member, m: Mapping): IR.Member = member match {
-    case field: IR.FieldMember => new IR.FieldMember(replace(field.root, m), field.field)
-    case deref: IR.DereferenceMember => new IR.DereferenceMember(replace(deref.root, m))
-    case array: IR.ArrayMember => new IR.ArrayMember(replace(array.root, m), array.index) // TODO: index
+    case field: IR.FieldMember =>
+      new IR.FieldMember(replace(field.root, m), field.field)
+    case deref: IR.DereferenceMember =>
+      new IR.DereferenceMember(replace(deref.root, m))
+    case array: IR.ArrayMember =>
+      new IR.ArrayMember(replace(array.root, m), array.index) // TODO: index
   }
 
   def replace(pred: IR.PredicateInstance, m: Mapping): IR.PredicateInstance =
     new IR.PredicateInstance(pred.predicate, pred.arguments.map(replace(_, m)))
 
   def replace(expr: IR.Expression, m: Mapping): IR.Expression = expr match {
-    case v: IR.Var => replace(v, m)
-    case member: IR.Member => replace(member, m)
-    case acc: IR.Accessibility => new IR.Accessibility(replace(acc.member, m))
+    case v: IR.Var                  => replace(v, m)
+    case member: IR.Member          => replace(member, m)
+    case acc: IR.Accessibility      => new IR.Accessibility(replace(acc.member, m))
     case pred: IR.PredicateInstance => replace(pred, m)
-    case result: IR.Result => result
-    case imprecise: IR.Imprecise => new IR.Imprecise(imprecise.precise.map(replace(_, m)))
+    case result: IR.Result          => result
+    case imprecise: IR.Imprecise =>
+      new IR.Imprecise(imprecise.precise.map(replace(_, m)))
     case literal: IR.Literal => literal
-    case cond: IR.Conditional => new IR.Conditional(replace(cond.condition, m), replace(cond.ifTrue, m), replace(cond.ifFalse, m))
-    case binary: IR.Binary => new IR.Binary(binary.operator, replace(binary.left, m), replace(binary.right, m))
-    case unary: IR.Unary => new IR.Unary(unary.operator, replace(unary.operand, m))
+    case cond: IR.Conditional =>
+      new IR.Conditional(replace(cond.condition, m),
+                         replace(cond.ifTrue, m),
+                         replace(cond.ifFalse, m))
+    case binary: IR.Binary =>
+      new IR.Binary(binary.operator,
+                    replace(binary.left, m),
+                    replace(binary.right, m))
+    case unary: IR.Unary =>
+      new IR.Unary(unary.operator, replace(unary.operand, m))
   }
 }
