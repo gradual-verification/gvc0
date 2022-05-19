@@ -1,0 +1,250 @@
+/*
+m.list_insert.5.inv.default.26.60
+m.list_insert.4.unfold.pred_inst.20.54
+m.appendLemmaLoopBody.2.post.default.7.35
+m.main.5.inv.default.38.81
+m.list_insert.4.unfold.pred_inst.33.75
+m.list_insert.4.unfold.pred_inst.27.69
+m.list_insert.3.fold.pred_inst.22.56
+p.sortedSegHelper.6.pred.acc.41.91
+m.create_list.3.fold.pred_inst.16.50
+p.sortedSeg.6.pred.pred_inst.40.84
+m.appendLemmaAfterLoopBody.2.post.acc.1.14
+m.appendLemmaAfterLoopBody.1.pre.acc.0.8
+m.list_insert.3.fold.pred_inst.28.70
+m.appendLemmaAfterLoopBody.1.pre.default.0.5
+m.list_insert.5.inv.default.26.62
+m.appendLemmaAfterLoopBody.1.pre.acc.0.4
+p.sortedSegHelper.6.pred.default.41.88
+m.appendLemmaAfterLoopBody.1.pre.acc.0.7
+m.appendLemmaLoopBody.1.pre.acc.6.31
+m.appendLemmaLoopBody.1.pre.acc.6.30
+p.sortedSeg.6.pred.acc.40.85
+p.sorted.6.pred.pred_inst.39.82
+m.main.1.pre.default.36.78
+m.appendLemmaLoopBody.2.post.default.7.37
+m.list_insert.5.inv.acc.26.64
+m.list_insert.3.fold.pred_inst.23.57
+m.appendLemmaLoopBody.1.pre.default.6.21
+m.appendLemmaAfterLoopBody.1.pre.default.0.0
+m.main.2.post.default.37.79
+m.appendLemmaLoopBody.1.pre.default.6.32
+m.appendLemmaLoopBody.3.fold.pred_inst.9.43
+m.appendLemmaLoopBody.2.post.pred_inst.7.36
+m.appendLemmaLoopBody.1.pre.default.6.23
+m.list_insert.3.fold.pred_inst.34.76
+m.appendLemmaLoopBody.1.pre.acc.6.24
+m.list_insert.5.inv.acc.26.67
+p.sortedSegHelper.6.pred.acc.41.92
+m.appendLemmaLoopBody.4.unfold.pred_inst.10.44
+m.appendLemmaAfterLoopBody.2.post.acc.1.15
+m.appendLemmaLoopBody.4.unfold.pred_inst.8.42
+m.create_list.3.fold.pred_inst.14.48
+m.list_insert.5.inv.acc.26.68
+m.appendLemmaAfterLoopBody.1.pre.default.0.10
+m.list_insert.5.inv.pred_inst.26.61
+m.appendLemmaAfterLoopBody.1.pre.default.0.2
+m.appendLemmaAfterLoopBody.1.pre.acc.0.3
+p.sortedSegHelper.6.pred.default.41.90
+m.list_insert.4.unfold.pred_inst.24.58
+m.list_insert.1.pre.pred_inst.17.51
+m.appendLemmaLoopBody.1.pre.acc.6.25
+m.appendLemmaAfterLoopBody.1.pre.default.0.6
+m.appendLemmaAfterLoopBody.2.post.pred_inst.1.16
+m.appendLemmaAfterLoopBody.1.pre.pred_inst.0.1
+m.appendLemmaAfterLoopBody.2.post.default.1.12
+m.create_list.3.fold.pred_inst.15.49
+m.appendLemmaLoopBody.2.post.pred_inst.7.41
+m.list_insert.3.fold.pred_inst.32.74
+m.appendLemmaLoopBody.1.pre.pred_inst.6.34
+m.appendLemmaLoopBody.2.post.default.7.38
+p.sortedSegHelper.6.pred.pred_inst.41.89
+p.sortedSeg.6.pred.acc.40.86
+m.list_insert.3.fold.pred_inst.35.77
+m.appendLemmaLoopBody.2.post.acc.7.39
+m.appendLemmaAfterLoopBody.4.unfold.pred_inst.4.19
+m.appendLemmaLoopBody.1.pre.default.6.29
+m.create_list.1.pre.default.12.46
+m.appendLemmaAfterLoopBody.1.pre.default.0.9
+p.sortedSegHelper.6.pred.default.41.87
+m.appendLemmaAfterLoopBody.3.fold.pred_inst.3.18
+m.list_insert.4.unfold.pred_inst.19.53
+p.sortedSeg.6.pred.default.40.83
+m.appendLemmaAfterLoopBody.3.fold.pred_inst.5.20
+m.list_insert.3.fold.pred_inst.25.59
+m.list_insert.3.fold.pred_inst.21.55
+m.list_insert.5.inv.pred_inst.26.66
+m.appendLemmaLoopBody.1.pre.pred_inst.6.27
+m.create_list.2.post.pred_inst.13.47
+m.appendLemmaLoopBody.2.post.acc.7.40
+m.appendLemmaLoopBody.1.pre.default.6.26
+m.main.5.inv.default.38.80
+m.appendLemmaLoopBody.1.pre.pred_inst.6.22
+m.list_insert.3.fold.pred_inst.29.71
+m.appendLemmaAfterLoopBody.4.unfold.pred_inst.2.17
+m.appendLemmaAfterLoopBody.2.post.default.1.13
+m.list_insert.3.fold.pred_inst.31.73
+m.list_insert.5.inv.acc.26.63
+*/
+struct Node;
+
+struct Node
+{
+  int val;
+  struct Node* next;
+};
+
+//@predicate sorted(struct Node* list);
+//@predicate sortedSeg(struct Node* start, struct Node* end, int endVal);
+//@predicate sortedSegHelper(struct Node* start, struct Node* end, int prev, int endVal);
+
+//@predicate sorted(struct Node* list) = sortedSeg(list, NULL, -1);
+//@predicate sortedSeg(struct Node* start, struct Node* end, int endVal) = start == end ? true : acc(start->val) && acc(start->next) && sortedSegHelper(start->next, end, start->val, endVal);
+//@predicate sortedSegHelper(struct Node* start, struct Node* end, int prev, int endVal) = start == end ? end == NULL ? true : endVal >= prev : acc(start->val) && acc(start->next) && start->val >= prev && sortedSegHelper(start->next, end, start->val, endVal);
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal);
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal);
+struct Node* create_list(int val);
+struct Node* list_insert(struct Node* list, int val);
+int main();
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal)
+  //@requires ? && (b == c ? bVal == cVal : true) && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal) && (b == c ? true : acc(b->val) && acc(b->next) && b->val == bVal && sortedSegHelper(b->next, c, b->val, cVal));
+  //@ensures sortedSegHelper(a, c, aPrev, cVal) && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal);
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+      //@unfold sortedSegHelper(a, b, aPrev, bVal);
+      //@fold sortedSegHelper(a, c, aPrev, cVal);
+    }
+    else
+    {
+      //@unfold sortedSegHelper(a, b, aPrev, bVal);
+      appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal);
+      //@fold sortedSegHelper(a, c, aPrev, cVal);
+    }
+  }
+}
+
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal)
+  //@requires ? && sortedSegHelper(a, b, aPrev, bVal) && (b == c ? bVal == cVal : true) && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal && sortedSegHelper(c->next, NULL, c->val, -1)) && (b == c ? true : acc(b->val) && acc(b->next) && b->val == bVal && sortedSegHelper(b->next, c, b->val, cVal));
+  //@ensures ? && sortedSegHelper(a, c, aPrev, cVal) && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal && c->val >= cPrev && sortedSegHelper(c->next, NULL, c->val, -1));
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+      //@unfold sortedSegHelper(a, b, aPrev, bVal);
+      //@fold sortedSegHelper(a, c, aPrev, cVal);
+    }
+    else
+    {
+      //@unfold sortedSegHelper(a, b, aPrev, bVal);
+      appendLemmaLoopBody(a->next, b, c, a->val, cPrev, bVal, cVal);
+    }
+  }
+}
+
+struct Node* create_list(int val)
+  //@requires true;
+  //@ensures sorted(\result);
+{
+  struct Node* n = NULL;
+  n = alloc(struct Node);
+  n->val = val;
+  n->next = NULL;
+  //@fold sortedSegHelper(n->next, NULL, n->val, -1);
+  //@fold sortedSeg(n, NULL, -1);
+  //@fold sorted(n);
+  return n;
+}
+
+struct Node* list_insert(struct Node* list, int val)
+  //@requires ? && sorted(list);
+  //@ensures ?;
+{
+  struct Node* n = NULL;
+  struct Node* curr = NULL;
+  struct Node* tmp = NULL;
+  struct Node* prev = NULL;
+  //@unfold sorted(list);
+  //@unfold sortedSeg(list, NULL, -1);
+  if (list == NULL || val <= list->val)
+  {
+    n = alloc(struct Node);
+    n->val = val;
+    n->next = list;
+    //@fold sortedSegHelper(n->next, NULL, n->val, -1);
+    //@fold sortedSeg(n, NULL, -1);
+    //@fold sorted(n);
+    return n;
+  }
+  else
+  {
+    curr = list;
+    //@unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
+    //@fold sortedSeg(list, curr, curr->val);
+    while (curr->next != NULL && curr->next->val < val)
+      //@loop_invariant ? && acc(curr->val) && acc(curr->next) && sortedSeg(list, curr, curr->val) && (curr->next == NULL ? true : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val && sortedSegHelper(curr->next->next, NULL, curr->next->val, -1));
+    {
+      prev = curr;
+      curr = prev->next;
+      //@unfold sortedSeg(list, prev, prev->val);
+      //@fold sortedSegHelper(prev->next, curr, prev->val, curr->val);
+      if (list == prev)
+      {
+      }
+      else
+      {
+        appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val);
+      }
+      //@fold sortedSeg(list, curr, curr->val);
+    }
+    tmp = alloc(struct Node);
+    tmp->val = val;
+    tmp->next = curr->next;
+    curr->next = tmp;
+    //@fold sortedSegHelper(tmp->next, NULL, tmp->val, -1);
+    //@fold sortedSegHelper(curr->next, NULL, curr->val, -1);
+    //@unfold sortedSeg(list, curr, curr->val);
+    if (list == curr)
+    {
+    }
+    else
+    {
+      appendLemmaAfterLoopBody(list->next, curr, NULL, list->val, curr->val, -1);
+    }
+    //@fold sortedSeg(list, NULL, -1);
+    //@fold sorted(list);
+    return list;
+  }
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  int stress = 0;
+  struct Node* l = NULL;
+  int i = 0;
+  struct Node* l1 = NULL;
+  stress = 0;
+  l = create_list(3);
+  i = 0;
+  while (0 <= i && i < stress)
+    //@loop_invariant 0 <= i && i <= stress;
+  {
+    l1 = list_insert(l, 1);
+    i = i + 1;
+    l = l1;
+  }
+  return 0;
+}
