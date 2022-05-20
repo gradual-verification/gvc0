@@ -58,6 +58,11 @@ object BenchConfig {
       tempBinaryFile: Path
   )
 
+  private def deleteMultiple(locations: Path*): Unit =
+    locations.foreach(p => {
+      Files.deleteIfExists(p)
+    })
+
   private def resolveOutputFiles(
       inputSource: String,
       config: Config
@@ -107,6 +112,9 @@ object BenchConfig {
     val performance = root.resolve(Names.performance)
     val dynamicPerformance = root.resolve(Names.dynamicPerformance)
     val framingPerformance = root.resolve(Names.framingPerformance)
+    if(config.benchmarkSkipVerification){
+      deleteMultiple(performance, dynamicPerformance, framingPerformance)
+    }
 
     val logs = root.resolve(Names.logs)
     Files.createDirectories(logs)
@@ -114,15 +122,18 @@ object BenchConfig {
     val compileLog = logs.resolve(Names.compilationLogs)
     val dynamicCompileLog = logs.resolve(Names.dynamicCompilationLogs)
     val framingCompileLog = logs.resolve(Names.framingCompilationLogs)
+    val exec = logs.resolve(Names.execLogs)
+    val dynamicExecLog = logs.resolve(Names.dynamicExecLogs)
+    val framingExecLog = logs.resolve(Names.framingExecLogs)
+    deleteMultiple(compileLog, dynamicCompileLog, framingCompileLog, verifyLog, exec, dynamicExecLog, framingExecLog)
 
     val levels = root.resolve(Names.levels)
     val metadata = root.resolve(Names.metadata)
     val permMap = root.resolve(csv(Names.perms))
     val conjunctMap = root.resolve(Names.conjuncts)
-
-    val exec = logs.resolve(Names.execLogs)
-    val dynamicExec = logs.resolve(Names.dynamicExecLogs)
-    val framingExec = logs.resolve(Names.framingExecLogs)
+    if(!config.benchmarkSkipVerification){
+      deleteMultiple(levels, metadata, permMap, conjunctMap)
+    }
 
     val tempC0File = Files.createTempFile("", Names.tempC0File)
     val tempBinaryFile = Files.createTempFile("", Names.tempBinaryFile)
@@ -137,7 +148,7 @@ object BenchConfig {
       compilationLogs = compileLog,
       dynamicCompilationLogs = dynamicCompileLog,
       execLogs = exec,
-      dynamicExecLogs = dynamicExec,
+      dynamicExecLogs = dynamicExecLog,
       performance = performance,
       dynamicPerformance = dynamicPerformance,
       levels = levels,
@@ -146,7 +157,7 @@ object BenchConfig {
       source = existingSource,
       permMap = permMap,
       conjunctMap = conjunctMap,
-      framingExecLogs = framingExec,
+      framingExecLogs = framingExecLog,
       framingCompilationLogs = framingCompileLog,
       framingPerms = framingPerms,
       framingPerformance = framingPerformance,
