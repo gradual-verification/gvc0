@@ -43,6 +43,13 @@ A limitation is that code position information is not yet passed to the back-end
 
 How do you run a `.vpr` file through the verifier?  First, set the environmental variable `Z3_EXE` to the location of z3 (this is in addition to the Z3_PATH variable mentioned above).  Change to `../silicon-gv`.  Finally, run `sbt "run <path-to-vpr-file>"`.
 
+## Limitations
+
+The current implementation has a number of limitations:
+ * No support for strings.
+ * Conditional expressions are supported in logical formulas (in place of ||, so that the condition tells you which branch is true).  But conditional expressions are not supported in program text.
+ * A return statement within an if statement will only work correctly with verification if there is no code following the if statement.
+
 ## Testing
 
 A number of tests use resource files for the input and expected output. When modifying the output, it can become cumbersome to manually edit these files. Instead, you can overwrite all expected output files with by running the following command in an `sbt` shell:
