@@ -28,20 +28,6 @@ class Sampler(benchConfig: BenchmarkConfig) {
       .diff(specImprecisionLabels.values.toSet)
       .toList
 
-  private def canContainImprecision(st: SpecType): Boolean = {
-    st != SpecType.Fold && st != SpecType.Unfold && st != SpecType.Assert
-  }
-
-  private val impreciseSpecificationContexts: Map[Method, Set[Int]] =
-    componentLabels
-      .filter(p => p.parent.isLeft)
-      .groupBy(p => p.parent.left.get)
-      .map(pair => {
-        pair._1 -> pair._2
-          .filter(p => canContainImprecision(p.specType))
-          .map(_.specIndex)
-          .toSet
-      })
   case class ImprecisionRemovalPoint(specIndex: Int, insertionIndex: Int)
 
   def findInsertionPoints(
