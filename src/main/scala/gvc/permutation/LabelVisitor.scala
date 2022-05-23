@@ -35,7 +35,7 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
     startingIndex = 0
   }
 
-  def printCounts(labels: List[ASTLabel]) = {
+  def printCounts(labels: List[ASTLabel]): Unit = {
     Output.info("Specification component counts: ")
 
     val folds = labels.filter(_.specType == SpecType.Fold)
@@ -59,17 +59,27 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
 
   private def componentTypeCounts(labels: List[ASTLabel]): String = {
     val pred_inst = labels.count(_.exprType == ExprType.Predicate)
-    val bool_expr = labels.count(_.exprType == ExprType.Default)
+    val bool_expr = labels.count(_.exprType == ExprType.Boolean)
     val acc = labels.count(_.exprType == ExprType.Accessibility)
     List(acc, pred_inst, bool_expr).mkString("/")
   }
 
-  override def enterSpec(expr: Option[Expression] = None): Unit = {
-    super.enterSpec(expr)
+  override def enterSpec(parent: Either[Method, Predicate],
+                         template: Option[Expression] = None,
+                         specType: SpecType): Unit = {
+    super.enterSpec(parent, template, specType)
     this.startingIndex = this.exprIndex
-    expr match {
+    template match {
       case Some(value) =>
         this.specsToSpecIndices += (value -> this.specIndex)
+        specType match {
+          case SpecType.Fold | SpecType.Unfold | SpecType.Assert => {}
+          case _ =>
+            this.addLabel(parent,
+                          specType,
+                          ExprType.Imprecision,
+                          exprIndex = -1)
+        }
       case None =>
     }
   }
@@ -79,7 +89,7 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
     labelsPerSpecIndex(this.previousSpec()) =
       if (this.previousSpec() == 0) this.exprIndex
       else
-        (this.exprIndex) - this.startingIndex
+        this.exprIndex - this.startingIndex
   }
 
   override def visitSpecExpr(
@@ -103,7 +113,7 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
     parent match {
       case Left(value) =>
         template match {
-          case (_: IR.Fold | _: IR.Unfold) =>
+          case _: IR.Fold | _: IR.Unfold =>
             if (this.foldUnfoldCount.contains(value))
               this.foldUnfoldCount(value) += 1
             else
@@ -117,13 +127,11 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   def addLabel(
       parent: Either[Method, Predicate],
       specType: SpecType,
-      exprType: ExprType
+      exprType: ExprType,
+      exprIndex: Int = this.previousExpr(),
   ): Unit = {
-    labelSet += new ASTLabel(parent,
-                             specType,
-                             exprType,
-                             this.previousExpr(),
-                             this.specIndex)
+    labelSet +=
+      new ASTLabel(parent, specType, exprType, this.specIndex, exprIndex)
   }
 
   override def visitOp(
@@ -132,7 +140,9 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   ): Unit = {}
 
   override def collectOutput(): LabelOutput = {
-    if (this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != this.labelSet.size) {
+    val imprecisionOffset =
+      this.labelSet.count(p => p.exprType == ExprType.Imprecision)
+    if (this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != (this.labelSet.size - imprecisionOffset)) {
       throw new Exception(
         s"Total expression counts for each spec index don't equal the number of labels generated.")
     }
@@ -175,8 +185,8 @@ class ASTLabel(
     val parent: Either[Method, Predicate],
     val specType: SpecType,
     val exprType: ExprType,
-    val exprIndex: Int,
     val specIndex: Int,
+    val exprIndex: Int
 ) {
   val hash: String = {
     val name = parent match {
@@ -195,13 +205,13 @@ class ASTLabel(
     val exprTypeName = exprType match {
       case gvc.permutation.ExprType.Accessibility => "acc"
       case gvc.permutation.ExprType.Predicate     => "pred_inst"
-      case gvc.permutation.ExprType.Default       => "default"
+      case gvc.permutation.ExprType.Boolean       => "bool"
+      case gvc.permutation.ExprType.Imprecision   => "imp"
     }
     List(name, specType.id, specTypeName, exprTypeName, specIndex, exprIndex)
       .mkString(".")
   }
 }
-
 object LabelOrdering extends Ordering[ASTLabel] {
   override def compare(
       x: ASTLabel,

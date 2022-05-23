@@ -2,7 +2,8 @@ package gvc.permutation
 import gvc.permutation.Bench.BenchmarkException
 import gvc.permutation.BenchConfig.BenchmarkConfig
 import gvc.permutation.SamplingHeuristic.SamplingHeuristic
-import gvc.transformer.IR.{Expression, Method}
+import gvc.permutation.SpecType.SpecType
+import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
 import scala.collection.mutable
@@ -13,30 +14,170 @@ object SamplingHeuristic extends Enumeration {
 case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
 
 class Sampler(benchConfig: BenchmarkConfig) {
-  util.Random.setSeed(41L)
   private val prevSamples: mutable.Set[BigInteger] =
     mutable.Set[BigInteger]()
+
+  private val specImprecisionLabels = benchConfig.labelOutput.labels
+    .filter(p => p.exprType == ExprType.Imprecision)
+    .map(label => {
+      label.specIndex -> label
+    })
+    .toMap
+  private val componentLabels =
+    benchConfig.labelOutput.labels.toSet
+      .diff(specImprecisionLabels.values.toSet)
+      .toList
+
+  private def canContainImprecision(st: SpecType): Boolean = {
+    st != SpecType.Fold && st != SpecType.Unfold && st != SpecType.Assert
+  }
+
+  private val impreciseSpecificationContexts: Map[Method, Set[Int]] =
+    componentLabels
+      .filter(p => p.parent.isLeft)
+      .groupBy(p => p.parent.left.get)
+      .map(pair => {
+        pair._1 -> pair._2
+          .filter(p => canContainImprecision(p.specType))
+          .map(_.specIndex)
+          .toSet
+      })
+  case class ImprecisionRemovalPoint(specIndex: Int, insertionIndex: Int)
+
+  def findInsertionPoints(
+      listOfComponents: List[ASTLabel]
+  ): Map[Int, Int] = {
+    val lastComponentWithSpecIndexAt = mutable.Map[Int, Int]()
+    val lastFoldUnfoldForMethod = mutable.Map[Method, Int]()
+    val specIndexToContext = mutable.Map[Int, Either[Method, Predicate]]()
+    for (index <- listOfComponents.indices) {
+      val label = listOfComponents(index)
+      label.specType match {
+        case gvc.permutation.SpecType.Fold | gvc.permutation.SpecType.Unfold =>
+          label.parent match {
+            case Left(method) => lastFoldUnfoldForMethod += (method -> index)
+            case Right(pred) =>
+              throw new BenchmarkException(
+                s"A fold or unfold was associated with the body of the predicate ${pred.name}")
+          }
+        case gvc.permutation.SpecType.Assert =>
+        case _ =>
+          specIndexToContext += (label.specIndex -> label.parent)
+          lastComponentWithSpecIndexAt += (label.specIndex -> index)
+      }
+    }
+    lastComponentWithSpecIndexAt
+      .map(pair => {
+        val context = specIndexToContext(pair._1)
+        context match {
+          case Left(value) =>
+            val methodCompletedAt = lastFoldUnfoldForMethod.getOrElse(value, 0)
+            (pair._1, math.max(pair._2, methodCompletedAt))
+          case Right(_) => pair
+        }
+      })
+      .toMap
+  }
+  /*
+  def findInsertionPoints(
+      componentPermutation: List[ASTLabel]): List[ImprecisionRemovalPoint] = {
+    val specCompletenessCounts = mutable.Map[Int, Int]()
+    val methodCompletenessCounts = mutable.Map[Method, Int]()
+    val completedAtIndex = mutable.Map[Int, Int]()
+
+    def isComplete(specIndex: Int,
+                   context: Either[Method, Predicate]): Boolean = {
+      val componentsPresent = specCompletenessCounts.getOrElse(specIndex, 0) == benchConfig.labelOutput
+        .labelsPerSpecIndex(specIndex)
+      val contextCompleted = context match {
+        case Left(value) =>
+          methodCompletenessCounts.getOrElse(value, 0) == benchConfig.labelOutput.foldUnfoldCount
+            .getOrElse(value, 0)
+        case Right(_) => true
+      }
+      componentsPresent && contextCompleted
+    }
+
+    def getRandomIndex(lowerBound: Int): Int = {
+      lowerBound + Math
+        .floor(
+          (componentPermutation.length - lowerBound) * scala.util.Random
+            .nextFloat())
+        .toInt
+    }
+
+    for (index <- componentPermutation.indices) {
+      val label = componentPermutation(index)
+      label.specType match {
+        case gvc.permutation.SpecType.Fold | gvc.permutation.SpecType.Unfold =>
+          label.parent match {
+            case Left(value) =>
+              methodCompletenessCounts += value -> (methodCompletenessCounts
+                .getOrElse(value, 0) + 1)
+              val completedByContext =
+                impreciseSpecificationContexts(value).filter(specIndex =>
+                  isComplete(specIndex, Left(value)))
+              completedByContext.foreach(specIndex => {
+                completedAtIndex += specIndex -> (index + 1)
+              })
+            case Right(_) =>
+              throw new BenchmarkException(
+                "Invalid association between fold/unfold and predicate body.")
+          }
+        case SpecType.Assert =>
+        case _ =>
+          specCompletenessCounts += label.specIndex -> (specCompletenessCounts
+            .getOrElse(label.specIndex, 0) + 1)
+          if (isComplete(label.specIndex, label.parent)) {
+            completedAtIndex += label.specIndex -> (index + 1)
+          }
+      }
+    }
+    completedAtIndex.toList
+      .sortWith((l, r) => {
+        l._2 < r._2
+      })
+      .zipWithIndex
+      .map(tuple => {
+        ImprecisionRemovalPoint(tuple._1._1, tuple._1._2 + tuple._2)
+      })
+
+  }*/
   def sample(
       heuristic: SamplingHeuristic
   ): List[ASTLabel] = {
-    heuristic match {
-      case SamplingHeuristic.Random =>
-        var sampled = sampleRandom(benchConfig.labelOutput.labels)
-        var hashCode =
-          LabelTools.hashPath(benchConfig.labelOutput.labels, sampled)
-        while (prevSamples.contains(hashCode)) {
-          sampled = sampleRandom(benchConfig.labelOutput.labels)
-          hashCode =
-            LabelTools.hashPath(benchConfig.labelOutput.labels, sampled)
-        }
-        prevSamples += hashCode
-        sampled
-      case _ => throw new LabelException("Invalid sampling heuristic.")
+    def getSample: List[ASTLabel] = {
+      heuristic match {
+        case SamplingHeuristic.Random => sampleRandom
+        case _                        => throw new LabelException("Invalid sampling heuristic.")
+      }
     }
+    var sampled = getSample
+    var hashCode =
+      LabelTools.hashPath(benchConfig.labelOutput.labels, sampled)
+    while (prevSamples.contains(hashCode)) {
+      sampled = getSample
+      hashCode = LabelTools.hashPath(benchConfig.labelOutput.labels, sampled)
+    }
+    prevSamples += hashCode
+    sampled
   }
-  private def sampleRandom(
-      orderedList: List[ASTLabel]
-  ): List[ASTLabel] = scala.util.Random.shuffle(orderedList)
+  private def sampleRandom: List[ASTLabel] = {
+    util.Random.setSeed(41L)
+    val sample = mutable.ListBuffer.empty ++ scala.util.Random
+      .shuffle(this.componentLabels)
+    val pointMapping = findInsertionPoints(sample.toList)
+    val sortedTuples = pointMapping.toList
+      .sortWith((pair1, pair2) => {
+        pair1._2 < pair2._2
+      })
+      .zipWithIndex
+    sortedTuples.foreach(point => {
+      sample.insert(point._1._2 + point._2 + 1,
+                    specImprecisionLabels(point._1._1))
+    })
+    sample.toList
+  }
 }
 
 object LabelTools {
@@ -76,8 +217,8 @@ class LabelPermutation(
   private val contents = mutable.TreeSet[ASTLabel]()(LabelOrdering)
   private val orderedIndices = mutable.ListBuffer[Int]()
   private val foldUnfoldCounts = mutable.Map[Method, Int]()
-  private val completedImpreciseExpressions = mutable.Set[Int]()
-  private var completedExpressions = mutable.Set[Int]()
+  val completedExpressions = mutable.Set[Int]()
+
   def addLabel(label: ASTLabel): Unit = {
     orderedIndices += label.exprIndex
     contents += label
@@ -86,12 +227,15 @@ class LabelPermutation(
         label.specType match {
           case gvc.permutation.SpecType.Fold |
               gvc.permutation.SpecType.Unfold =>
-            if (foldUnfoldCounts.contains(value))
-              foldUnfoldCounts(value) += 1
-            else foldUnfoldCounts += value -> 1
+            foldUnfoldCounts += value -> (foldUnfoldCounts.getOrElse(value, 0) + 1)
           case _ =>
         }
       case Right(_) =>
+    }
+    label.exprType match {
+      case gvc.permutation.ExprType.Imprecision =>
+        completedExpressions += label.specIndex
+      case _ =>
     }
   }
   def labels: Set[ASTLabel] = contents.toSet
@@ -100,59 +244,22 @@ class LabelPermutation(
   def imprecisionStatusList: List[Int] = {
     benchmarkConfig.labelOutput.specsToSpecIndices.values.toList.sorted
       .map(index => {
-        (if (completedExpressions.contains(index)) 1 else 0)
+        if (completedExpressions.contains(index)) 1 else 0
       })
   }
 
   def specStatusList: List[Int] = {
     benchmarkConfig.labelOutput.labels
       .map(label => {
-        (if (labels.contains(label)) 1 else 0)
+        if (labels.contains(label)) 1 else 0
       })
   }
 
-  def exprIsComplete(template: Expression, componentCount: Int): Boolean = {
-    val condition = benchmarkConfig.labelOutput.specsToSpecIndices
-      .contains(template) && benchmarkConfig.labelOutput.labelsPerSpecIndex(
-      benchmarkConfig.labelOutput
-        .specsToSpecIndices(template)) == componentCount
-
-    if (!benchmarkConfig.labelOutput.specsToSpecIndices.contains(template)) {
-      throw new BenchmarkException(
-        "Cannot generate permutations of an expression that wasn't present in the original compiled IR.")
-    }
-
-    val templateIndex =
-      benchmarkConfig.labelOutput.specsToSpecIndices(template)
-
-    if (condition) {
-      if (completedImpreciseExpressions.contains(templateIndex)) {
-        completedImpreciseExpressions.remove(templateIndex)
-        completedExpressions += templateIndex
-        false
-      } else if (completedExpressions.contains(templateIndex)) {
-        true
-      } else {
-        completedImpreciseExpressions += templateIndex
-        false
-      }
-    } else {
-      false
-    }
-  }
-
-  def methodIsComplete(method: Method): Boolean = {
-    this.benchmarkConfig.labelOutput
-      .foldUnfoldCount(method) == 0 || (this.foldUnfoldCounts
-      .contains(method) &&
-    this.foldUnfoldCounts(method) == this.benchmarkConfig.labelOutput
-      .foldUnfoldCount(method))
-  }
-
-  def markAllComplete(): Unit = {
-    completedExpressions =
-      completedExpressions.union(completedImpreciseExpressions)
-  }
+  def exprIsComplete(template: Expression): Boolean =
+    completedExpressions.nonEmpty &&
+      benchmarkConfig.labelOutput.specsToSpecIndices
+        .contains(template) && completedExpressions.contains(
+      benchmarkConfig.labelOutput.specsToSpecIndices(template))
 
   def id: BigInteger = {
     val specsPresent = specStatusList.foldRight("")(_.toString + _)

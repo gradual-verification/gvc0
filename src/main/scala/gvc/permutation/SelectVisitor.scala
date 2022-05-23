@@ -56,8 +56,10 @@ class SelectVisitor(program: IR.Program)
     super.visit(program)
   }
 
-  override def enterSpec(expr: Option[Expression] = None): Unit = {
-    super.enterSpec()
+  override def enterSpec(parent: Either[Method, Predicate],
+                         template: Option[Expression] = None,
+                         specType: SpecType): Unit = {
+    super.enterSpec(parent, template, specType)
   }
 
   override def visitSpecExpr(
@@ -116,9 +118,7 @@ class SelectVisitor(program: IR.Program)
   override def collectWhile(whl: IR.While): Unit = {
     val builtInvariant = this.finishedExpr.remove(0)
     val invariant =
-      if (isComplete(Some(whl.invariant),
-                     builtInvariant.componentCount,
-                     whl.method)) {
+      if (isComplete(Some(whl.invariant))) {
         builtInvariant.expr match {
           case Some(value) => value
           case None =>
@@ -208,7 +208,7 @@ class SelectVisitor(program: IR.Program)
       case Some(_) =>
         this.permutationMetadata match {
           case Some(meta) =>
-            meta.exprIsComplete(pred.expression, body.componentCount)
+            meta.exprIsComplete(pred.expression)
           case None => false
         }
       case None => false
@@ -231,9 +231,7 @@ class SelectVisitor(program: IR.Program)
     val builtPostcondition = this.finishedExpr.remove(0)
     val builtPrecondition = this.finishedExpr.remove(0)
     val postcondition =
-      if (isComplete(method.postcondition,
-                     builtPostcondition.componentCount,
-                     method)) {
+      if (isComplete(method.postcondition)) {
         builtPostcondition.expr match {
           case Some(value) => Some(value)
           case None        => throw new BenchmarkException("Missing postcondition")
@@ -244,9 +242,7 @@ class SelectVisitor(program: IR.Program)
         )
       }
     val precondition =
-      if (isComplete(method.precondition,
-                     builtPrecondition.componentCount,
-                     method)) {
+      if (isComplete(method.precondition)) {
         builtPrecondition.expr match {
           case Some(value) => Some(value)
           case None        => throw new BenchmarkException("Missing precondition")
@@ -265,15 +261,12 @@ class SelectVisitor(program: IR.Program)
     )
   }
 
-  def isComplete(template: Option[Expression],
-                 componentCount: Int,
-                 method: Method): Boolean = {
+  def isComplete(template: Option[Expression]): Boolean = {
     template match {
       case Some(expression) =>
         this.permutationMetadata match {
           case Some(meta) =>
-            meta.exprIsComplete(expression, componentCount) && meta
-              .methodIsComplete(method)
+            meta.exprIsComplete(expression)
           case None => false
         }
       case None => false

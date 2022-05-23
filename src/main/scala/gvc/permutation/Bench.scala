@@ -299,17 +299,6 @@ object Bench {
           Some(sampleToPermute(labelIndex))
         )
       }
-      currentPermutation.markAllComplete()
-      val id = currentPermutation.id
-      if (!alreadySampled.contains(id)) {
-        verifyPermutation(visitor, id, currentPermutation)
-      }
-      csv.logStep(
-        id,
-        pathIndex,
-        benchmarkConfig.labelOutput.labels.length + 1,
-        None
-      )
     }
 
     if (!config.disableBaseline) {

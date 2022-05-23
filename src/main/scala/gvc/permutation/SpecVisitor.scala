@@ -12,7 +12,7 @@ object SpecType extends Enumeration {
 
 object ExprType extends Enumeration {
   type ExprType = Value
-  val Accessibility, Predicate, Default = Value
+  val Accessibility, Predicate, Boolean, Imprecision = Value
 }
 
 abstract class SpecVisitor[I, O] {
@@ -47,7 +47,9 @@ abstract class SpecVisitor[I, O] {
     currentContext = Some(parent)
     exprIndex += 1
   }
-  def enterSpec(expr: Option[Expression] = None): Unit = {}
+  def enterSpec(parent: Either[Method, Predicate],
+                template: Option[Expression] = None,
+                specType: SpecType): Unit = {}
 
   def leaveSpec(): Unit = {
     this.specIndex += 1
@@ -98,7 +100,9 @@ class SpecTraversal[I, O] {
       visitor: SpecVisitor[I, O]
   ): Unit = {
     visitor.enterPredicate(predicate)
-    visitor.enterSpec(Some(predicate.expression))
+    visitor.enterSpec(Right(predicate),
+                      Some(predicate.expression),
+                      SpecType.Predicate)
     visitExpression(
       Right(predicate),
       SpecType.Predicate,
@@ -112,7 +116,7 @@ class SpecTraversal[I, O] {
   private def visitMethod(method: Method, visitor: SpecVisitor[I, O]): Unit = {
     visitor.enterMethod(method)
 
-    visitor.enterSpec(method.precondition)
+    visitor.enterSpec(Left(method), method.precondition, SpecType.Precondition)
     visitExpression(
       Left(method),
       SpecType.Precondition,
@@ -120,8 +124,9 @@ class SpecTraversal[I, O] {
       visitor
     )
     visitor.leaveSpec()
-
-    visitor.enterSpec(method.postcondition)
+    visitor.enterSpec(Left(method),
+                      method.postcondition,
+                      SpecType.Postcondition)
     visitExpression(
       Left(method),
       SpecType.Postcondition,
@@ -151,7 +156,9 @@ class SpecTraversal[I, O] {
       op match {
         case assert: IR.Assert =>
           if (assert.kind == IR.AssertKind.Specification) {
-            visitor.enterSpec(Some(assert.value))
+            visitor.enterSpec(Left(context),
+                              Some(assert.value),
+                              SpecType.Assert)
             visitExpression(
               Left(context),
               SpecType.Assert,
@@ -164,7 +171,7 @@ class SpecTraversal[I, O] {
             visitor.visitOp(Left(context), op)
           }
         case _: IR.Fold =>
-          visitor.enterSpec()
+          visitor.enterSpec(Left(context), None, SpecType.Fold)
           visitor.visitSpecOp(
             Left(context),
             op,
@@ -173,7 +180,7 @@ class SpecTraversal[I, O] {
           )
           visitor.leaveSpec()
         case _: IR.Unfold =>
-          visitor.enterSpec()
+          visitor.enterSpec(Left(context), None, SpecType.Unfold)
           visitor.visitSpecOp(
             Left(context),
             op,
@@ -186,7 +193,9 @@ class SpecTraversal[I, O] {
           visitBlock(context, ifstmt.ifFalse, visitor)
           visitor.collectIf(ifstmt)
         case whl: IR.While =>
-          visitor.enterSpec(Some(whl.invariant))
+          visitor.enterSpec(Left(context),
+                            Some(whl.invariant),
+                            SpecType.Invariant)
           visitExpression(
             Left(context),
             SpecType.Invariant,
@@ -266,7 +275,7 @@ class SpecTraversal[I, O] {
                 context,
                 expr,
                 specType,
-                exprType = ExprType.Default
+                exprType = ExprType.Boolean
               )
             }
           case _ =>
@@ -274,7 +283,7 @@ class SpecTraversal[I, O] {
               context,
               expr,
               specType,
-              exprType = ExprType.Default
+              exprType = ExprType.Boolean
             )
         }
       case None =>
