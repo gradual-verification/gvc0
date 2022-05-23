@@ -26,7 +26,7 @@ class SelectVisitor(program: IR.Program)
   private var incompleteBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
   private var finishedBlocks = mutable.ListBuffer[mutable.ListBuffer[Op]]()
   private var incompleteExpr = mutable.ListBuffer[BuiltExpression]()
-  private var finishedExpr = mutable.ListBuffer[BuiltExpression]()
+  var finishedExpr = mutable.ListBuffer[BuiltExpression]()
 
   private var permutation = Set[Int]()
   private var permutationMetadata: Option[LabelPermutation] = None
@@ -223,6 +223,9 @@ class SelectVisitor(program: IR.Program)
       pred.copy(new IR.Imprecise(body.expr))
     }
     this.predicates += builtPredicate
+    if (finishedExpr.nonEmpty) {
+      throw new Exception("Not all expressions processed!")
+    }
   }
 
   override def enterMethod(method: Method): Unit = {}
@@ -259,6 +262,9 @@ class SelectVisitor(program: IR.Program)
       postcondition,
       body.toList
     )
+    if (finishedExpr.nonEmpty) {
+      throw new Exception("Not all expressions processed!")
+    }
   }
 
   def isComplete(template: Option[Expression]): Boolean = {

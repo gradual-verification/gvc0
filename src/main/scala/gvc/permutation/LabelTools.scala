@@ -78,71 +78,7 @@ class Sampler(benchConfig: BenchmarkConfig) {
       })
       .toMap
   }
-  /*
-  def findInsertionPoints(
-      componentPermutation: List[ASTLabel]): List[ImprecisionRemovalPoint] = {
-    val specCompletenessCounts = mutable.Map[Int, Int]()
-    val methodCompletenessCounts = mutable.Map[Method, Int]()
-    val completedAtIndex = mutable.Map[Int, Int]()
 
-    def isComplete(specIndex: Int,
-                   context: Either[Method, Predicate]): Boolean = {
-      val componentsPresent = specCompletenessCounts.getOrElse(specIndex, 0) == benchConfig.labelOutput
-        .labelsPerSpecIndex(specIndex)
-      val contextCompleted = context match {
-        case Left(value) =>
-          methodCompletenessCounts.getOrElse(value, 0) == benchConfig.labelOutput.foldUnfoldCount
-            .getOrElse(value, 0)
-        case Right(_) => true
-      }
-      componentsPresent && contextCompleted
-    }
-
-    def getRandomIndex(lowerBound: Int): Int = {
-      lowerBound + Math
-        .floor(
-          (componentPermutation.length - lowerBound) * scala.util.Random
-            .nextFloat())
-        .toInt
-    }
-
-    for (index <- componentPermutation.indices) {
-      val label = componentPermutation(index)
-      label.specType match {
-        case gvc.permutation.SpecType.Fold | gvc.permutation.SpecType.Unfold =>
-          label.parent match {
-            case Left(value) =>
-              methodCompletenessCounts += value -> (methodCompletenessCounts
-                .getOrElse(value, 0) + 1)
-              val completedByContext =
-                impreciseSpecificationContexts(value).filter(specIndex =>
-                  isComplete(specIndex, Left(value)))
-              completedByContext.foreach(specIndex => {
-                completedAtIndex += specIndex -> (index + 1)
-              })
-            case Right(_) =>
-              throw new BenchmarkException(
-                "Invalid association between fold/unfold and predicate body.")
-          }
-        case SpecType.Assert =>
-        case _ =>
-          specCompletenessCounts += label.specIndex -> (specCompletenessCounts
-            .getOrElse(label.specIndex, 0) + 1)
-          if (isComplete(label.specIndex, label.parent)) {
-            completedAtIndex += label.specIndex -> (index + 1)
-          }
-      }
-    }
-    completedAtIndex.toList
-      .sortWith((l, r) => {
-        l._2 < r._2
-      })
-      .zipWithIndex
-      .map(tuple => {
-        ImprecisionRemovalPoint(tuple._1._1, tuple._1._2 + tuple._2)
-      })
-
-  }*/
   def sample(
       heuristic: SamplingHeuristic
   ): List[ASTLabel] = {
@@ -163,7 +99,6 @@ class Sampler(benchConfig: BenchmarkConfig) {
     sampled
   }
   private def sampleRandom: List[ASTLabel] = {
-    util.Random.setSeed(41L)
     val sample = mutable.ListBuffer.empty ++ scala.util.Random
       .shuffle(this.componentLabels)
     val pointMapping = findInsertionPoints(sample.toList)

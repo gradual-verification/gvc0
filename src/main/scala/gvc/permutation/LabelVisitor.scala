@@ -15,16 +15,19 @@ case class LabelOutput(
 )
 
 class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
+
   private var labelsPerSpecIndex: mutable.Map[Int, Int] =
     mutable.Map[Int, Int]()
   private var specsToSpecIndices: mutable.Map[Expression, Int] =
     mutable.Map[Expression, Int]()
   private var foldUnfoldCount: mutable.Map[Method, Int] =
     mutable.Map[Method, Int]()
-
   private var labelSet = mutable.ListBuffer[ASTLabel]()
-
   private var startingIndex = 0
+
+  //inserted for testing purposes to ensure that loop invariants have unique IDs
+  private var loopInvariantIDs = mutable.Map[Expression, Int]()
+  private var assertionIDs = mutable.Map[Expression, Int]()
 
   override def reset(): Unit = {
     super.reset()
@@ -32,6 +35,8 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
     foldUnfoldCount = mutable.Map[Method, Int]()
     specsToSpecIndices = mutable.Map[Expression, Int]()
     labelsPerSpecIndex = mutable.Map[Int, Int]()
+    loopInvariantIDs = mutable.Map[Expression, Int]()
+    assertionIDs = mutable.Map[Expression, Int]()
     startingIndex = 0
   }
 

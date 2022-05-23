@@ -115,7 +115,6 @@ class SpecTraversal[I, O] {
 
   private def visitMethod(method: Method, visitor: SpecVisitor[I, O]): Unit = {
     visitor.enterMethod(method)
-
     visitor.enterSpec(Left(method), method.precondition, SpecType.Precondition)
     visitExpression(
       Left(method),
@@ -124,9 +123,11 @@ class SpecTraversal[I, O] {
       visitor
     )
     visitor.leaveSpec()
+
     visitor.enterSpec(Left(method),
                       method.postcondition,
                       SpecType.Postcondition)
+
     visitExpression(
       Left(method),
       SpecType.Postcondition,
@@ -165,8 +166,8 @@ class SpecTraversal[I, O] {
               Some(assert.value),
               visitor
             )
-            visitor.leaveSpec()
             visitor.collectAssertion()
+            visitor.leaveSpec()
           } else {
             visitor.visitOp(Left(context), op)
           }
