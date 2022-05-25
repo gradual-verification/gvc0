@@ -2,7 +2,7 @@ package gvc.specs.permutation
 import gvc.Config
 import gvc.permutation._
 import gvc.specs._
-import gvc.transformer.IR
+import gvc.transformer.{IR, IRPrinter}
 import gvc.transformer.IR.{Method, Predicate}
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuite
@@ -23,7 +23,8 @@ class PermutationSpec extends FixtureAnyFunSuite {
             Config(compileBenchmark = Some(tempDir.toString))
           )
         val sampler = new Sampler(benchConfig)
-        for (_ <- 0 until 4) {
+
+        for (_ <- 0 until 8) {
           val sampleToPermute =
             sampler.sample(SamplingHeuristic.Random)
           val selector = new SelectVisitor(benchConfig.ir)
@@ -52,6 +53,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
                 .isEmpty
             )
           }
+
         }
         TestUtils.deleteDirectory(tempDir)
       }
@@ -110,6 +112,34 @@ class PermutationSpec extends FixtureAnyFunSuite {
       }
   }
 
+  test("The top specification is fully precise") {
+    _ => {
+      for (input <- TestUtils.groupResources("quant-study")) {
+        val tempDir = Files.createTempDirectory("gvc0-imprecision-spec")
+        val benchConfig = BenchConfig.resolveBenchmarkConfig(
+          input(".c0").read(),
+          List("src/main/resources/"),
+          Config(compileBenchmark = Some(tempDir.toString))
+        )
+        val baseline = IRPrinter.print(benchConfig.ir, includeSpecs = true)
+        val sampler = new Sampler(benchConfig)
+        for (_ <- 0 until 8) {
+          val sampleToPermute =
+            sampler.sample(SamplingHeuristic.Random)
+          val selector = new SelectVisitor(benchConfig.ir)
+          val labelPermutation = new LabelPermutation(benchConfig)
+          for (labelIndex <- sampleToPermute.indices) {
+            labelPermutation.addLabel(sampleToPermute(labelIndex))
+          }
+
+          val top = selector.visit(labelPermutation)
+
+          val topPrinted = IRPrinter.print(top, includeSpecs = true)
+          assert(topPrinted.diff(baseline).isEmpty)
+        }
+      }
+    }
+  }
   test("Imprecision removal components are inserted in the correct positions.") {
     _ =>
       for (input <- TestUtils.groupResources("quant-study")) {
@@ -120,7 +150,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
           Config(compileBenchmark = Some(tempDir.toString))
         )
         val sampler = new Sampler(benchConfig)
-        for (_ <- 0 until 3) {
+        for (_ <- 0 until 8) {
           val ordering = sampler.sample(SamplingHeuristic.Random)
           val lastComponents = mutable.Map[Int, (ASTLabel, Int)]()
           val methodCompletionCounts = mutable.Map[IR.Method, Int]()

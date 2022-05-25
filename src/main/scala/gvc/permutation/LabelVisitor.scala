@@ -25,18 +25,12 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   private var labelSet = mutable.ListBuffer[ASTLabel]()
   private var startingIndex = 0
 
-  //inserted for testing purposes to ensure that loop invariants have unique IDs
-  private var loopInvariantIDs = mutable.Map[Expression, Int]()
-  private var assertionIDs = mutable.Map[Expression, Int]()
-
   override def reset(): Unit = {
     super.reset()
     labelSet = mutable.ListBuffer[ASTLabel]()
     foldUnfoldCount = mutable.Map[Method, Int]()
     specsToSpecIndices = mutable.Map[Expression, Int]()
     labelsPerSpecIndex = mutable.Map[Int, Int]()
-    loopInvariantIDs = mutable.Map[Expression, Int]()
-    assertionIDs = mutable.Map[Expression, Int]()
     startingIndex = 0
   }
 
