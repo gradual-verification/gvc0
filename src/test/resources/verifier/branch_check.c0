@@ -118,7 +118,8 @@ void testWhile2(int x, int y)
 }
 */
 
-// Should succeed since imprecise invariant with run-time check for x <= 1
+// Should fail since precise precondition to loop & static failure in loop body
+/*
 void testWhile3(int x, int y)
 //@requires true;
 {
@@ -129,6 +130,7 @@ void testWhile3(int x, int y)
      x = x - 1;
   }
 }
+*/
 
 // Should fail since precise
 /*
@@ -143,6 +145,32 @@ void testWhile4(int x, int y)
   }
 }
 */
+
+// Should succeed; loop inv satisfies assert
+void testWhile5(int x, int y)
+//@requires true;
+{
+  while (x > 1)
+    //@loop_invariant ? && true;
+  {
+     x = x - 1;
+  }
+  
+  //@assert y == 3;
+}
+
+// Should succeed; precondition satisfies assert
+void testWhile6(int x, int y)
+//@requires ? && true;
+{
+  while (x > 1)
+    //@loop_invariant true;
+  {
+     x = x - 1;
+  }
+  
+  //@assert y == 3;
+}
 
 int main()
 {
