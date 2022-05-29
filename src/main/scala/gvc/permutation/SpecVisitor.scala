@@ -12,7 +12,7 @@ object SpecType extends Enumeration {
 
 object ExprType extends Enumeration {
   type ExprType = Value
-  val Accessibility, Predicate, Boolean, Imprecision = Value
+  val Accessibility, Predicate, Boolean, Imprecision, Absent = Value
 }
 
 abstract class SpecVisitor[I, O] {

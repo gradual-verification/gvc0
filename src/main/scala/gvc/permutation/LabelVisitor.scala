@@ -80,6 +80,7 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
                           exprIndex = -1)
         }
       case None =>
+        this.addLabel(parent, specType, ExprType.Absent, exprIndex = -1);
     }
   }
 
@@ -139,9 +140,10 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   ): Unit = {}
 
   override def collectOutput(): LabelOutput = {
-    val imprecisionOffset =
-      this.labelSet.count(p => p.exprType == ExprType.Imprecision)
-    if (this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != (this.labelSet.size - imprecisionOffset)) {
+    val uncountedOffset =
+      this.labelSet.count(p =>
+        p.exprType == ExprType.Imprecision || p.exprType == ExprType.Absent)
+    if (this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != (this.labelSet.size - uncountedOffset)) {
       throw new Exception(
         s"Total expression counts for each spec index don't equal the number of labels generated.")
     }
@@ -206,6 +208,7 @@ class ASTLabel(
       case gvc.permutation.ExprType.Predicate     => "pred_inst"
       case gvc.permutation.ExprType.Boolean       => "bool"
       case gvc.permutation.ExprType.Imprecision   => "imp"
+      case gvc.permutation.ExprType.Absent        => "abs"
     }
     List(name, specType.id, specTypeName, exprTypeName, specIndex, exprIndex)
       .mkString(".")

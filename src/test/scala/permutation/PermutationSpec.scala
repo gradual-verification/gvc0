@@ -7,7 +7,7 @@ import gvc.transformer.IR.{Method, Predicate}
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuite
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable
 
 class PermutationSpec extends FixtureAnyFunSuite {
@@ -47,6 +47,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
             val builtPermutation = selector.visit(labelPermutation)
 
             val builtLabels = auxLabeller.visit(builtPermutation)
+
             assert(
               labelSet(builtLabels.labels)
                 .diff(labelSet(labelPermutation.labels.toList))
@@ -112,8 +113,8 @@ class PermutationSpec extends FixtureAnyFunSuite {
       }
   }
 
-  test("The top specification is fully precise") {
-    _ => {
+  test("The top specification is fully precise") { _ =>
+    {
       for (input <- TestUtils.groupResources("quant-study")) {
         val tempDir = Files.createTempDirectory("gvc0-imprecision-spec")
         val benchConfig = BenchConfig.resolveBenchmarkConfig(

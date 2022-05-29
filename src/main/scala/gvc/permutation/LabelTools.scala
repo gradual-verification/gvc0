@@ -26,6 +26,7 @@ class Sampler(benchConfig: BenchmarkConfig) {
   private val componentLabels =
     benchConfig.labelOutput.labels.toSet
       .diff(specImprecisionLabels.values.toSet)
+      .filter(p => p.exprType != ExprType.Absent)
       .toList
 
   case class ImprecisionRemovalPoint(specIndex: Int, insertionIndex: Int)

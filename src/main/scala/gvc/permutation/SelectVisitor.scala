@@ -240,9 +240,12 @@ class SelectVisitor(program: IR.Program)
           case None        => throw new BenchmarkException("Missing postcondition")
         }
       } else {
-        Some(
-          new IR.Imprecise(builtPostcondition.expr)
-        )
+        if (method.postcondition.nonEmpty)
+          Some(
+            new IR.Imprecise(builtPostcondition.expr)
+          )
+        else
+          None
       }
     val precondition =
       if (isComplete(method.precondition)) {
@@ -251,9 +254,12 @@ class SelectVisitor(program: IR.Program)
           case None        => throw new BenchmarkException("Missing precondition")
         }
       } else {
-        Some(
-          new IR.Imprecise(builtPrecondition.expr)
-        )
+        if (method.precondition.nonEmpty)
+          Some(
+            new IR.Imprecise(builtPrecondition.expr)
+          )
+        else
+          None
       }
 
     val body = this.finishedBlocks.remove(0)
