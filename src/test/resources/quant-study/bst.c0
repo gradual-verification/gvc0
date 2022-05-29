@@ -455,7 +455,7 @@ int main()
     }
 
     int j = 0;
-    while(0 <= j && j < stressCaptured)
+    while(j < stressCaptured)
     //@loop_invariant 0 <= j && j <= stressCaptured;
     {
         int r = rand(seed);
