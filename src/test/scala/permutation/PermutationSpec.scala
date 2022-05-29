@@ -7,7 +7,7 @@ import gvc.transformer.IR.{Method, Predicate}
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuite
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files}
 import scala.collection.mutable
 
 class PermutationSpec extends FixtureAnyFunSuite {
