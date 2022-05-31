@@ -29,6 +29,9 @@ case class OutputFileCollection(
 )
 
 object Main extends App {
+  val defaultLibraryDirectory =
+    Paths.get("src/main/resources").toAbsolutePath.toString + '/'
+
   val cmdConfig = Config.fromCommandLineArgs(args.toList)
   cmdConfig.validate()
   run(cmdConfig)
@@ -54,7 +57,7 @@ object Main extends App {
 
     val inputSource = readFile(config.sourceFile.get)
     val linkedLibraries =
-      config.linkedLibraries
+      config.linkedLibraries ++ List(defaultLibraryDirectory)
     config.mode match {
       case Config.StressMode =>
         val startTime = Calendar.getInstance().getTime()
@@ -169,9 +172,8 @@ object Main extends App {
     val ir =
       generateIR(
         inputSource,
-        config.linkedLibraries
+        config.linkedLibraries ++ List(defaultLibraryDirectory)
       )
-
     if (config.dump.contains(Config.DumpIR))
       dump(IRPrinter.print(ir, includeSpecs = true))
     else if (config.saveFiles)
@@ -232,13 +234,13 @@ object Main extends App {
     // TODO: Figure out how we can use the actual resource
     // Since it is bundled in the JAR we have to extract it and put it somewhere
 
+
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = List()
+      includeDirs = List(defaultLibraryDirectory)
     )
-
     // Always write the intermediate C0 file, but then delete it
     // if not saving intermediate files
     writeFile(fileNames.c0FileName, verifiedSource)

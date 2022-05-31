@@ -38,10 +38,7 @@ case class CC0Options(
 )
 
 object CC0Wrapper {
-  private val bundledResourcesDirectory = Paths
-    .get(ClassLoader.getSystemResource(".").getPath)
-    .toAbsolutePath
-    .toString + "/"
+  private val bundledResourcesDirectory = Paths.get("src/main/resources").toAbsolutePath.toString + '/'
   class CC0Exception(val message: String) extends RuntimeException {
     override def getMessage: String = message
   }

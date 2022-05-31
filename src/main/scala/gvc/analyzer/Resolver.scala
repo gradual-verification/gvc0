@@ -947,15 +947,8 @@ object Resolver {
       lib: String,
       searchPaths: List[String]
   ): Option[Path] = {
-    try {
-      Some(Paths.get(ClassLoader.getSystemResource(lib + ".h0").getPath))
-    } catch {
-      case e: Throwable => {
-        searchPaths
-          .map(Paths.get(_).resolve(lib + ".h0"))
-          .find(Files.exists(_))
-      }
-    }
+    searchPaths.map(Paths.get(_).resolve(lib + ".h0"))
+      .find(Files.exists(_))
   }
 
   def resolveProgram(
