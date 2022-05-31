@@ -142,7 +142,7 @@ struct Node *rightRotate(struct Node *y, int xlh, int xrh, int yrh)
 
 	x->rightHeight = max(xrh+1, yrh+1);
     //@ fold right(x, xlh, xrh, yrh);
-	
+
 	// Return new root
 	return x;
 }
@@ -341,7 +341,7 @@ int main()
 	//@ fold avlh(root, 0);
     int i = 0;
     while(i < stress)
-    //@loop_invariant 0 <= i && i <= stress;
+    //@loop_invariant 0 <= i && i <= stress && acc(hp->height) && avlh(root, hp->height);
     {
         int r = rand(seed);
         seed = r;
