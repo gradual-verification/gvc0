@@ -75,3 +75,6 @@ study/benchmarks
 temp.c0
 a.out
 *.sh
+*.xml.bz2
+*.zip
+*.results.default*.txt
