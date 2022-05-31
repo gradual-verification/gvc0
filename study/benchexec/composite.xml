@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!DOCTYPE benchmark PUBLIC "+//IDN sosy-lab.org//DTD BenchExec benchmark 2.3//EN" "https://www.sosy-lab.org/benchexec/benchmark-2.3.dtd">
+<!-- Example file for benchmark definition for BenchExec. -->
+<benchmark tool="gvc0"
+           displayName="Composite"
+           memlimit="6GB"
+           cpuCores="2"
+>
+    <!-- <rundefinition> defines a tool configuration to benchmark (can appear multiple times). -->
+    <rundefinition name="default">
+        <!-- <option> defines command-line arguments (can appear multiple times). -->
+        <option name="--benchmark">./study/benchmarks/composite</option>
+        <option name="--only-exec"></option>
+        <option name="--w-step=">2</option>
+        <option name="--w-upper=">32</option>
+        <option name="--iter=">7</option>
+    </rundefinition>
+    <!-- <tasks> defines a set of tasks (can appear multiple times). -->
+    <tasks name="">
+        <includesfile>./src/test/resources/quant-study/composite.c0</includesfile>
+    </tasks>
+    <resultfiles>.</resultfiles>
+</benchmark>
