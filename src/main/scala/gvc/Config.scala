@@ -113,8 +113,8 @@ object Config {
                |                --s-only-dynamic               Only stress test fully dynamic verification.
                |                --s-only-framing               Only stress test dynamic verification for framing.
                |                --s-only-unverified            Only stress test the original program, without runtime checks.
-               |                --w-step=<n>                   Specify the step size of the stress factor from 0 to the upper bound.
-               |                --w-upper=<n>                  Specify the upper bound on the stress factor.
+               |  -ws <n>       --w-step=<n>                   Specify the step size of the stress factor from 0 to the upper bound.
+               |  -wu <n>       --w-upper=<n>                  Specify the upper bound on the stress factor.
                |                --w-list=<n,...>            Specify a list of stress levels to execute."""
 
   private val dumpArg = raw"--dump=(.+)".r
@@ -229,10 +229,20 @@ object Config {
             mode = BenchmarkMode
           )
         )
+      case "-ws" :: f :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkWStep = Some(f.toInt))
+        )
       case stepSize(f) :: tail =>
         fromCommandLineArgs(
           tail,
           current.copy(benchmarkWStep = Some(f.toInt))
+        )
+      case "-wu" :: f :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(benchmarkWUpper = Some(f.toInt))
         )
       case upperBound(f) :: tail =>
         fromCommandLineArgs(
