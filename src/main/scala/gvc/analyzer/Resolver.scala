@@ -87,9 +87,9 @@ case class Scope(
   def declarePredicate(predicate: ResolvedPredicateDeclaration): Scope = {
     if (predicateDeclarations.contains(predicate.name)) this
     else
-      copy(predicateDeclarations =
-        predicateDeclarations + (predicate.name -> predicate)
-      )
+      copy(
+        predicateDeclarations =
+          predicateDeclarations + (predicate.name -> predicate))
   }
 
   def definePredicate(predicate: ResolvedPredicateDefinition): Scope = {
@@ -97,9 +97,9 @@ case class Scope(
       errors.error(predicate, s"'${predicate.name}' is already defined")
       this
     } else {
-      copy(predicateDefinitions =
-        predicateDefinitions + (predicate.name -> predicate)
-      )
+      copy(
+        predicateDefinitions =
+          predicateDefinitions + (predicate.name -> predicate))
     }
   }
 
@@ -130,7 +130,7 @@ case class Scope(
   }
 
   def declareLibrary(path: Path, library: ResolvedProgram): Scope =
-    copy(libraries = libraries + (path -> library)) 
+    copy(libraries = libraries + (path -> library))
 }
 
 object Resolver {
@@ -827,8 +827,7 @@ object Resolver {
     }
     val invariant = combineBooleans(
       loopInvariants.map(spec =>
-        resolveExpression(spec.value, scope, SpecificationContext)
-      )
+        resolveExpression(spec.value, scope, SpecificationContext))
     )
     val otherSpecs =
       stmt.specifications.filterNot(_.isInstanceOf[LoopInvariantSpecification])
@@ -837,8 +836,7 @@ object Resolver {
 
   def resolveMethodArguments(args: List[MemberDefinition], scope: Scope) =
     args.map(arg =>
-      ResolvedVariable(arg, arg.id.name, resolveType(arg.valueType, scope))
-    )
+      ResolvedVariable(arg, arg.id.name, resolveType(arg.valueType, scope)))
 
   def resolveMethodDeclaration(
       input: MethodDefinition,
@@ -949,14 +947,21 @@ object Resolver {
       lib: String,
       searchPaths: List[String]
   ): Option[Path] = {
-    searchPaths.map(Paths.get(_).resolve(lib + ".h0"))
-      .find(Files.exists(_))
+    try {
+      Some(Paths.get(ClassLoader.getSystemResource(lib + ".h0").getPath))
+    } catch {
+      case e: Throwable => {
+        searchPaths
+          .map(Paths.get(_).resolve(lib + ".h0"))
+          .find(Files.exists(_))
+      }
+    }
   }
 
   def resolveProgram(
-    defs: List[Definition],
-    librarySearchPaths: List[String],
-    errors: ErrorSink
+      defs: List[Definition],
+      librarySearchPaths: List[String],
+      errors: ErrorSink
   ): ResolvedProgram = {
     val scope = Scope(
       variables = Map.empty,
@@ -975,9 +980,9 @@ object Resolver {
   }
 
   def resolveProgram(
-    program: List[Definition],
-    librarySearchPaths: List[String],
-    initialScope: Scope
+      program: List[Definition],
+      librarySearchPaths: List[String],
+      initialScope: Scope
   ): (Scope, ResolvedProgram) = {
     val methodDeclarations = ListBuffer[ResolvedMethodDeclaration]()
     val methodDefinitions = ListBuffer[ResolvedMethodDefinition]()
@@ -991,46 +996,54 @@ object Resolver {
     for (definition <- program) {
       definition match {
         case u: UseDeclaration => {
-          val library = if (u.isLibrary) Some(u.path.value) else {
-            scope.errors.error(u, "Local imports are not implemented")
-            None
-          }
+          val library =
+            if (u.isLibrary) Some(u.path.value)
+            else {
+              scope.errors.error(u, "Local imports are not implemented")
+              None
+            }
 
           val path = library.flatMap(lib => {
             resolveLibraryPath(lib, librarySearchPaths).orElse({
-                scope.errors.error(u, s"Unable to find library ${u.path.raw}")
-                None
+              scope.errors.error(u, s"Unable to find library ${u.path.raw}")
+              None
             })
           })
 
-          val resolved = path.flatMap(path => scope.libraries.get(path).orElse {
-            val source =
-              try {
-                Some(Files.readString(path))
-              } catch {
-                case e: IOException =>
-                  scope.errors.error(u, s"Could not read file '$path'")
-                  None
-              }
+          val resolved = path.flatMap(path =>
+            scope.libraries.get(path).orElse {
+              val source =
+                try {
+                  Some(Files.readString(path))
+                } catch {
+                  case e: IOException =>
+                    scope.errors.error(u, s"Could not read file '$path'")
+                    None
+                }
 
-            val parsed = source.flatMap(source => {
-              Parser.parseProgram(source) match {
-                case Success(value, _) => Some(value)
-                case fail: Failure =>
-                  val error = fail.trace().longAggregateMsg
-                  scope.errors.error(u, s"Parsing error while parsing '$path':\n$error")
-                  None
-              }
-            })
+              val parsed = source.flatMap(source => {
+                Parser.parseProgram(source) match {
+                  case Success(value, _) => Some(value)
+                  case fail: Failure =>
+                    val error = fail.trace().longAggregateMsg
+                    scope.errors
+                      .error(u, s"Parsing error while parsing '$path':\n$error")
+                    None
+                }
+              })
 
-            parsed.map(parsed => {
-              val (s, p) = resolveProgram(parsed, librarySearchPaths, scope)
-              scope = s.declareLibrary(path, p)
-              p
-            })
+              parsed.map(parsed => {
+                val (s, p) = resolveProgram(parsed, librarySearchPaths, scope)
+                scope = s.declareLibrary(path, p)
+                p
+              })
           })
 
-          dependencies += ResolvedUseDeclaration(u, u.path.value, u.isLibrary, path, resolved)
+          dependencies += ResolvedUseDeclaration(u,
+                                                 u.path.value,
+                                                 u.isLibrary,
+                                                 path,
+                                                 resolved)
         }
 
         case t: TypeDefinition => {
@@ -1073,14 +1086,15 @@ object Resolver {
       }
     }
 
-    (scope, ResolvedProgram(
-      methodDeclarations = methodDeclarations.toList,
-      methodDefinitions = methodDefinitions.toList,
-      predicateDeclarations = predicateDeclarations.toList,
-      predicateDefinitions = predicateDefinitions.toList,
-      structDefinitions = structDefinitions.toList,
-      types = types.toList,
-      dependencies = dependencies.toList
-    ))
+    (scope,
+     ResolvedProgram(
+       methodDeclarations = methodDeclarations.toList,
+       methodDefinitions = methodDefinitions.toList,
+       predicateDeclarations = predicateDeclarations.toList,
+       predicateDefinitions = predicateDefinitions.toList,
+       structDefinitions = structDefinitions.toList,
+       types = types.toList,
+       dependencies = dependencies.toList
+     ))
   }
 }
