@@ -1,6 +1,7 @@
 package gvc
 
 import java.io.ByteArrayOutputStream
+import java.nio.file.Paths
 import sys.process._
 import scala.language.postfixOps
 
@@ -37,7 +38,10 @@ case class CC0Options(
 )
 
 object CC0Wrapper {
-
+  private val bundledResourcesDirectory = Paths
+    .get(ClassLoader.getSystemResource(".").getPath)
+    .toAbsolutePath
+    .toString + "/"
   class CC0Exception(val message: String) extends RuntimeException {
     override def getMessage: String = message
   }
@@ -89,8 +93,7 @@ object CC0Wrapper {
       if (flag) Seq(arg) else Seq.empty
     def values(arg: String, values: Seq[String]): Seq[String] =
       values.flatMap(value =>
-        if (arg.startsWith("--")) Seq(s"$arg=$value") else Seq(arg, value)
-      )
+        if (arg.startsWith("--")) Seq(s"$arg=$value") else Seq(arg, value))
     def value(arg: String, value: Option[String]): Seq[String] =
       values(arg, value.toSeq)
 
@@ -102,7 +105,7 @@ object CC0Wrapper {
       flag("--dyn-check", options.dynCheck),
       flag("--no-purity-check", !options.purityCheck),
       values("--library", options.libraries),
-      values("-L", options.includeDirs),
+      values("-L", options.includeDirs ++ List(bundledResourcesDirectory)),
       values("-a", options.execArgs),
       value("--standard", options.standard),
       flag("--no-log", !options.log),
