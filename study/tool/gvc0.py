@@ -9,7 +9,7 @@ class Tool(benchexec.tools.template.BaseTool):
         return "gvc0"
     def cmdline(self, executable, options, task, propertyfile, rlimits):
         print(task)
-        return ["java", "-Xss15m", "-jar",
+        return [
             executable,
         ] + options + task
     def version(self, executable):

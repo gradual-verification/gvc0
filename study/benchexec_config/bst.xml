@@ -11,13 +11,13 @@
         <!-- <option> defines command-line arguments (can appear multiple times). -->
         <option name="-b">./benchmarks/bst</option>
         <option name="--only-exec"></option>
-        <option name="-ws=">4</option>
-        <option name="-wu=">64</option>
+        <option name="-ws">4</option>
+        <option name="-wu">64</option>
         <option name="-i">7</option>
     </rundefinition>
     <!-- <tasks> defines a set of tasks (can appear multiple times). -->
     <tasks name="default-task">
         <include>../../src/test/resources/quant-study/bst.c0</include>
     </tasks>
-    <resultfiles>../benchmarks/bst/</resultfiles>
+    <resultfiles>./benchmarks/bst/</resultfiles>
 </benchmark>
