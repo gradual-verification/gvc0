@@ -59,7 +59,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
         TestUtils.deleteDirectory(tempDir)
       }
   }
-  test("Spec IDs are contiguous") { _ =>
+  test("Spec IDs and Expr IDs are contiguous and unique") { _ =>
     for (input <- TestUtils.groupResources("quant-study")) {
       val tempDir = Files.createTempDirectory("gvc0-imprecision-spec")
       val benchConfig = BenchConfig.resolveBenchmarkConfig(
@@ -68,15 +68,26 @@ class PermutationSpec extends FixtureAnyFunSuite {
         Config(compileBenchmark = Some(tempDir.toString))
       )
 
-      val specIndices =
-        benchConfig.labelOutput.labels.map(l => l.specIndex).toSet
-      val maxIndex = specIndices.max
-      for (index <- 0 until maxIndex)
+      val specIndices = mutable.Set[Int]()
+      val exprIndices = mutable.Set[Int]()
+      benchConfig.labelOutput.labels.foreach(l => {
+        specIndices += l.specIndex
+        assert(!exprIndices.contains(l.exprIndex) || l.exprIndex == -1)
+        exprIndices += l.exprIndex
+      })
+
+      val maxSpecIndex = specIndices.max
+      for (index <- 0 until maxSpecIndex)
         assert(specIndices.contains(index))
+
+      val maxExprIndex = exprIndices.max
+      for (index <- 0 until maxExprIndex)
+        assert(exprIndices.contains(index))
     }
   }
 
-  test("Each precondition, postcondition, and predicate body has a unique ID") {
+
+    test("Each precondition, postcondition, and predicate body has a unique ID") {
     _ =>
       val preconditions = mutable.Map[Method, Int]()
       val postconditions = mutable.Map[Method, Int]()
