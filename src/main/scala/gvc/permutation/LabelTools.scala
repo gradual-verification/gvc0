@@ -16,6 +16,8 @@ class Sampler(benchConfig: BenchmarkConfig) {
   private val prevSamples: mutable.Set[BigInteger] =
     mutable.Set[BigInteger]()
 
+  def numSampled:Int = prevSamples.size
+
   private val specImprecisionLabels = benchConfig.labelOutput.labels
     .filter(p => p.exprType == ExprType.Imprecision)
     .map(label => {
@@ -73,10 +75,14 @@ class Sampler(benchConfig: BenchmarkConfig) {
       heuristic: SamplingHeuristic
   ): List[ASTLabel] = {
     def getSample: List[ASTLabel] = {
-      heuristic match {
+      val sampled = heuristic match {
         case SamplingHeuristic.Random => sampleRandom
         case _                        => throw new LabelException("Invalid sampling heuristic.")
       }
+      if(sampled.size != benchConfig.labelOutput.labels.size){
+        throw new BenchmarkException("Size of permutation doesn't match size of template.")
+      }
+      sampled
     }
     var sampled = getSample
     var hashCode =

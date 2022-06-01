@@ -19,7 +19,7 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
     extends ProgressTracker("Verifying") {
   private var timeouts = 0
   private var failures = 0
-  private var currentPath = 0
+  var currentPath = 0
   private var currentPerm = 0
   private var allPerms = 0
   private var unique = 0

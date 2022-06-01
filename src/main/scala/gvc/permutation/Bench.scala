@@ -130,6 +130,7 @@ object Bench {
       )
     val err = new ErrorCSVPrinter(benchmarkConfig.files.verifyLogs)
     val sampler = new Sampler(benchmarkConfig)
+
     val progress =
       new VerificationTracker(
         benchmarkConfig.labelOutput.labels.length,
@@ -267,6 +268,7 @@ object Bench {
     for (pathIndex <- 0 until maxPaths) {
       val sampleToPermute =
         sampler.sample(SamplingHeuristic.Random)
+
       csv.logPath(
         pathIndex,
         benchmarkConfig.labelOutput.labels,
@@ -286,9 +288,9 @@ object Bench {
         currentPermutation.addLabel(sampleToPermute(labelIndex))
         val id = currentPermutation.id
         if (!alreadySampled.contains(id)) {
+          progress.incrementUnique()
           verifyPermutation(visitor, id, currentPermutation)
           alreadySampled += id
-          progress.incrementUnique()
         } else {
           progress.increment()
         }
@@ -300,7 +302,9 @@ object Bench {
         )
       }
     }
-
+    if(sampler.numSampled != maxPaths){
+      throw new BenchmarkException("Failed to sample the requested quantity of paths; " +sampler.numSampled + "!=" + maxPaths)
+    }
     if (!config.disableBaseline) {
       val templateCopyDynamic =
         new SelectVisitor(benchmarkConfig.ir).visitEmpty()

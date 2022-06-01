@@ -79,8 +79,9 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
                           ExprType.Imprecision,
                           exprIndex = -1)
         }
-      case None =>
+      case None if specType == SpecType.Precondition || specType == SpecType.Postcondition =>
         this.addLabel(parent, specType, ExprType.Absent, exprIndex = -1);
+      case _ => {}
     }
   }
 
