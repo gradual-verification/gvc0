@@ -2,7 +2,6 @@ package gvc.permutation
 import gvc.permutation.Bench.BenchmarkException
 import gvc.permutation.BenchConfig.BenchmarkConfig
 import gvc.permutation.SamplingHeuristic.SamplingHeuristic
-import gvc.permutation.SpecType.SpecType
 import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
@@ -56,12 +55,16 @@ class Sampler(benchConfig: BenchmarkConfig) {
     lastComponentWithSpecIndexAt
       .map(pair => {
         val context = specIndexToContext(pair._1)
-        context match {
+        val firstValidIndex = (context match {
           case Left(value) =>
             val methodCompletedAt = lastFoldUnfoldForMethod.getOrElse(value, 0)
-            (pair._1, math.max(pair._2, methodCompletedAt))
-          case Right(_) => pair
-        }
+            math.max(pair._2, methodCompletedAt)
+          case Right(_) => pair._2
+        }) + 1
+        val randomOffset: Int = Math
+          .floor((listOfComponents.length - firstValidIndex) * Math.random())
+          .toInt
+        (pair._1, firstValidIndex + randomOffset)
       })
       .toMap
   }
@@ -95,8 +98,7 @@ class Sampler(benchConfig: BenchmarkConfig) {
       })
       .zipWithIndex
     sortedTuples.foreach(point => {
-      sample.insert(point._1._2 + point._2 + 1,
-                    specImprecisionLabels(point._1._1))
+      sample.insert(point._1._2 + point._2, specImprecisionLabels(point._1._1))
     })
     sample.toList
   }
