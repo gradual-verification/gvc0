@@ -113,7 +113,8 @@ object CapturedExecution {
   def stdev(values: List[Long], mean: BigDecimal): BigDecimal = {
     if (values.length > 1) {
       val collected = values.map(v => v - mean).map(m => m * m).sum / (values.length - 1)
-      collected.underlying().sqrt(MathContext.DECIMAL128)
+      val square_rooted = BigDecimal(collected.underlying().sqrt(MathContext.DECIMAL128))
+      square_rooted.setScale(2, BigDecimal.RoundingMode.HALF_EVEN)
     } else 0
   }
 
