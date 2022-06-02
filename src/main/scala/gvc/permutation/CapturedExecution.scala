@@ -6,10 +6,10 @@ import gvc.CC0Wrapper.CommandOutput
 import gvc.CC0Wrapper.Performance
 import gvc.Config
 
+import java.math.MathContext
 import java.nio.file.Path
 import java.nio.file.Paths
 import scala.collection.mutable
-
 import sys.process._
 
 object CapturedExecution {
@@ -68,33 +68,53 @@ object CapturedExecution {
         throw new ExecutionException(CommandOutput(exitCode, capture))
       }
     }
+    val ninety_fifth = percentile(timings.toList, .95)
+    val fifth = percentile(timings.toList, .5)
     val med = median(timings.toList)
-    val mean = timings.sum / timings.length
+    val sum = BigDecimal(timings.sum)
+    val mean = sum / timings.length
+
     val max = timings.max
     val min = timings.min
     val std = stdev(timings.toList, mean)
-    new Performance(med, mean, std, min, max)
+    new Performance(ninety_fifth, fifth, med, mean, std, min, max)
   }
 
-  def median(values: List[Long]): Long = {
+  def percentile(values: List[Long], percentile: Double):BigDecimal = {
+    val proportion = BigDecimal(percentile)*(values.size-1)
+    if(proportion < 1)
+      values.head
+    else if(proportion >= values.size)
+      values.last
+    else{
+      val fractional = proportion - proportion.toBigInt().toInt
+      val sorted_list = values.sortWith((a, b) => {
+        a < b
+      })
+      val base = sorted_list(proportion.toBigInt().toInt)
+      val max = sorted_list(proportion.toBigInt().toInt+1)
+      val diff = (max - base)*fractional
+      base + diff
+    }
+  }
+
+  def median(values: List[Long]): BigDecimal = {
     val lst = values.sorted
     if (lst.length % 2 == 0) {
       val l = lst(lst.length / 2)
       val r = lst(lst.length / 2 - 1)
-      (l + r) / 2
+      val max= BigDecimal(l + r)
+      max / 2
     } else {
       lst(lst.length / 2)
     }
   }
 
-  def stdev(values: List[Long], mean: Long): Long = {
-    if (values.length > 1)
-      Math
-        .sqrt(
-          values.map(_ - mean).map(m => m * m).sum / (values.length - 1)
-        )
-        .toLong
-    else 0
+  def stdev(values: List[Long], mean: BigDecimal): BigDecimal = {
+    if (values.length > 1) {
+      val collected = values.map(v => v - mean).map(m => m * m).sum / (values.length - 1)
+      collected.underlying().sqrt(MathContext.DECIMAL128)
+    } else 0
   }
 
   class CapturedOutputException(output: CommandOutput) extends Exception {

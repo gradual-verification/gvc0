@@ -60,14 +60,16 @@ object CC0Wrapper {
   )
 
   class Performance(
-      median: Long,
-      mean: Long,
-      stdev: Long,
+                   p95:BigDecimal,
+                   p5: BigDecimal,
+      median: BigDecimal,
+      mean: BigDecimal,
+      stdev: BigDecimal,
       min: Long,
       max: Long
   ) {
     override def toString: String = {
-      s"$median,$mean,$stdev,$min,$max"
+      s"$p95,$p5,$median,$mean,$stdev,$min,$max"
     }
   }
 

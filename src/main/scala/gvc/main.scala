@@ -3,6 +3,7 @@ package gvc
 import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
+import gvc.permutation.CapturedExecution.{median, percentile}
 import gvc.transformer._
 import gvc.permutation.{Bench, Output, Stress, Timeout}
 import gvc.weaver.Weaver
@@ -31,7 +32,6 @@ case class OutputFileCollection(
 object Main extends App {
   val defaultLibraryDirectory =
     Paths.get("src/main/resources").toAbsolutePath.toString + '/'
-
   val cmdConfig = Config.fromCommandLineArgs(args.toList)
   cmdConfig.validate()
   run(cmdConfig)

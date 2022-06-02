@@ -26,7 +26,7 @@ object Extensions {
 
 object Columns {
   val performanceColumnNames: List[String] =
-    List("stress", "iter", "median", "mean", "stdev", "min", "max")
+    List("stress", "iter", "95th", "5th", "median", "mean", "stdev", "min", "max")
   val mappingColumnNames: List[String] =
     List("id", "path_id", "level_id", "component_added")
   val pathColumnNames: List[String] =
