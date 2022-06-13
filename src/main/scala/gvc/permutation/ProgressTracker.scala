@@ -16,13 +16,13 @@ abstract class ProgressTracker(activity: String) {
 
   def formatTime(millis: Long): String = {
     if (millis < 1000 * 60) {
-      s"${Math.round(millis / 1000)} sec"
+      s"${Math.round(millis / 1000 * 100) / 100} sec"
     } else if (millis < 1000 * 60 * 60) {
-      s"${Math.round(millis / (1000 * 60))} min"
+      s"${Math.round((millis / (1000 * 60)) * 100) / 100} min"
     } else if (millis < 1000 * 60 * 60 * 24) {
-      s"${Math.round(millis / (1000 * 60 * 60))} hr"
+      s"${Math.round(millis / (1000 * 60 * 60) * 100) / 100} hr"
     } else {
-      s"${Math.round(millis / (1000 * 60 * 60 * 24))} days"
+      s"${Math.round(millis / (1000 * 60 * 60 * 24) * 100) / 100} days"
     }
   }
 }
