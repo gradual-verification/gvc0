@@ -58,7 +58,7 @@ class StaticCSVPrinter(benchConfig: BenchmarkConfig) extends {
   private val translationWriter =
     new FileWriter(benchConfig.files.translationPerformance.toString, true)
   private val verificationWriter =
-    new FileWriter(benchConfig.files.instrumentationPerformance.toString, true)
+    new FileWriter(benchConfig.files.verificationPerformance.toString, true)
   private val instrumentationWriter =
     new FileWriter(benchConfig.files.instrumentationPerformance.toString, true)
   val writers: List[FileWriter] =
