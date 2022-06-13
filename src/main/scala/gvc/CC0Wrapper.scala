@@ -52,6 +52,7 @@ object CC0Wrapper {
   }
 
   case class CommandOutput(exitCode: Int, output: String)
+  case class TimedCommandOutput(exitCode: Int, output: String, perf: Performance)
 
   case class ExecutionOutput(
       exitCode: Int,
@@ -68,6 +69,7 @@ object CC0Wrapper {
       min: Long,
       max: Long
   ) {
+    val med = median
     override def toString: String = {
       s"$p95,$p5,$median,$mean,$stdev,$min,$max"
     }
@@ -84,7 +86,7 @@ object CC0Wrapper {
     CommandOutput(exitCode, os.toString("UTF-8"))
   }
 
-  private def formatCommand(
+  def formatCommand(
       sourceFile: String,
       options: CC0Options
   ): List[String] = {

@@ -1,15 +1,15 @@
 package gvc.permutation
-import gvc.Main.verify
 import gvc.permutation.BenchConfig.BenchmarkConfig
-import gvc.permutation.CapturedExecution.{
+import gvc.permutation.Extensions.{c0, csv, log, out, txt}
+import gvc.permutation.Output.blue
+import gvc.permutation.Timing.{
   CC0CompilationException,
   CapturedOutputException,
   ExecutionException
 }
-import gvc.permutation.Extensions.{c0, csv, log, out, txt}
-import gvc.permutation.Output.blue
-import gvc.transformer.{IRPrinter, IR}
+import gvc.transformer.{IR, IRPrinter}
 import gvc.{Config, Main, OutputFileCollection, VerificationException}
+
 import java.math.BigInteger
 import java.nio.file.{Files, Path}
 import scala.collection.mutable
@@ -33,9 +33,19 @@ object Bench {
     //
     val pathDesc = "path_desc"
 
-    val performance: String = csv("perf")
-    val dynamicPerformance: String = csv("perf_full_dynamic")
-    val framingPerformance: String = csv("perf_only_framing")
+    val performance: String = csv("dyn_perf_gradual")
+    val dynamicPerformance: String = csv("dyn_perf_full_dynamic")
+    val framingPerformance: String = csv("dyn_perf_only_framing")
+    val verificationPerformance: String = csv("verification_perf")
+    val instrumentationPerformance: String = csv("instrumentation_perf")
+    val compilationPerformanceGradual: String = csv("compilation_perf_gradual")
+    val compilationPerformanceDynamic: String = csv(
+      "compilation_perf_full_dynamic"
+    )
+    val compilationPerformanceFraming: String = csv(
+      "compilation_perf_only_framing"
+    )
+    val translationPerformance: String = csv("translation_perf")
 
     val levels: String = csv("levels")
     val metadata: String = csv("metadata")
@@ -120,15 +130,20 @@ object Bench {
       outputFiles: OutputFileCollection,
       benchmarkConfig: BenchmarkConfig
   ): Unit = {
+
     val alreadySampled: mutable.Set[BigInteger] =
       mutable.Set[BigInteger]()
     val maxPaths = config.benchmarkPaths.getOrElse(1)
-    val csv =
+    val metaCSV =
       new MetadataCSVPrinter(
         benchmarkConfig.files,
         benchmarkConfig.labelOutput.labels
       )
+    val staticCSV =
+      new StaticCSVPrinter(benchmarkConfig)
+
     val err = new ErrorCSVPrinter(benchmarkConfig.files.verifyLogs)
+
     val sampler = new Sampler(benchmarkConfig)
 
     val progress =
@@ -173,12 +188,14 @@ object Bench {
       )
     }
 
-    def verifyPermutation(visitor: SelectVisitor,
-                          id: BigInteger,
-                          currentPermutation: LabelPermutation): Unit = {
+    def verifyPermutation(
+        visitor: SelectVisitor,
+        id: BigInteger,
+        currentPermutation: LabelPermutation
+    ): Unit = {
 
       val idString = id.toString(16)
-      csv.logPermutation(idString, currentPermutation)
+      metaCSV.logPermutation(idString, currentPermutation)
       val builtPermutation =
         visitor.visit(currentPermutation)
       val sourceText =
@@ -193,19 +210,22 @@ object Bench {
         val verifiedPermutation = config.timeout match {
           case Some(value) =>
             Timeout.runWithTimeout(value)(
-              verify(sourceText, outputFiles, config)
+              Timing.verifyTimed(sourceText, outputFiles, benchmarkConfig)
             )
-          case None => Some(verify(sourceText, outputFiles, config))
+          case None =>
+            Some(Timing.verifyTimed(sourceText, outputFiles, benchmarkConfig))
         }
         verifiedPermutation match {
-          case Some(vPerm) =>
+          case Some(verifierOutput) =>
+            staticCSV.log(idString, verifierOutput)
+            val info = verifierOutput.output
             dumpPermutation(
               benchmarkConfig.files.verifiedPerms,
               c0(idString),
               currentPermutation.labels.toList,
-              vPerm.c0Source
+              info.c0Source
             )
-            csv.logConjuncts(idString, vPerm.profiling)
+            metaCSV.logConjuncts(idString, info.profiling)
             if (!config.disableBaseline) {
               val builtDynamic = new SelectVisitor(benchmarkConfig.ir)
                 .visit(currentPermutation)
@@ -230,7 +250,7 @@ object Bench {
       } catch {
         case ex: VerificationException =>
           progress.error()
-          err.log(idString, 1, ex.message)
+          err.log(idString, exitCode = 1, ex.message)
         case _: TimeoutException =>
           progress.timeout()
           val message =
@@ -259,7 +279,7 @@ object Bench {
       outputBottomVerified.toString,
       outputBottomText
     )
-    csv.logPermutation(
+    metaCSV.logPermutation(
       bottomID.toString(16),
       new LabelPermutation(benchmarkConfig)
     )
@@ -269,7 +289,7 @@ object Bench {
       val sampleToPermute =
         sampler.sample(SamplingHeuristic.Random)
 
-      csv.logPath(
+      metaCSV.logPath(
         pathIndex,
         benchmarkConfig.labelOutput.labels,
         sampleToPermute
@@ -281,7 +301,7 @@ object Bench {
         )
       Files.writeString(summaryDestination, summary)
 
-      csv.logStep(bottomID, pathIndex, 0, None)
+      metaCSV.logStep(bottomID, pathIndex, 0, None)
       val currentPermutation = new LabelPermutation(benchmarkConfig)
 
       for (labelIndex <- sampleToPermute.indices) {
@@ -294,7 +314,7 @@ object Bench {
         } else {
           progress.increment()
         }
-        csv.logStep(
+        metaCSV.logStep(
           id,
           pathIndex,
           labelIndex + 1,
@@ -302,8 +322,10 @@ object Bench {
         )
       }
     }
-    if(sampler.numSampled != maxPaths){
-      throw new BenchmarkException("Failed to sample the requested quantity of paths; " +sampler.numSampled + "!=" + maxPaths)
+    if (sampler.numSampled != maxPaths) {
+      throw new BenchmarkException(
+        "Failed to sample the requested quantity of paths; " + sampler.numSampled + "!=" + maxPaths
+      )
     }
     if (!config.disableBaseline) {
       val templateCopyDynamic =
@@ -324,7 +346,8 @@ object Bench {
         onlyFraming = true
       )
     }
-    csv.close()
+    metaCSV.close()
+    staticCSV.close()
     err.close()
   }
   sealed trait Stress
@@ -340,9 +363,10 @@ object Bench {
     val errCC0 = new ErrorCSVPrinter(benchmarkConfig.files.compilationLogs)
     val errExec = new ErrorCSVPrinter(benchmarkConfig.files.execLogs)
 
-    val printer = new PerformanceCSVPrinter(
+    val printer = new DynamicCSVPrinter(
+      benchmarkConfig,
       benchmarkConfig.files.performance,
-      benchmarkConfig.workload.iterations
+      benchmarkConfig.files.compilationPerformanceGradual
     )
 
     markDirectory(
@@ -354,10 +378,12 @@ object Bench {
     )
 
     if (!config.disableBaseline) {
-      val framingPrinter = new PerformanceCSVPrinter(
+      val framingPrinter = new DynamicCSVPrinter(
+        benchmarkConfig,
         benchmarkConfig.files.framingPerformance,
-        benchmarkConfig.workload.iterations
+        benchmarkConfig.files.compilationPerformanceFraming
       )
+
       markDirectory(
         benchmarkConfig.files.framingPerms.get,
         framingPrinter,
@@ -366,10 +392,12 @@ object Bench {
         ErrorLogging(errCC0, errExec)
       )
 
-      val dynamicPrinter = new PerformanceCSVPrinter(
+      val dynamicPrinter = new DynamicCSVPrinter(
+        benchmarkConfig,
         benchmarkConfig.files.dynamicPerformance,
-        benchmarkConfig.workload.iterations
+        benchmarkConfig.files.compilationPerformanceDynamic
       )
+
       markDirectory(
         benchmarkConfig.files.dynamicPerms.get,
         dynamicPrinter,
@@ -386,7 +414,7 @@ object Bench {
 
   def markFile(
       in: Path,
-      printer: PerformanceCSVPrinter,
+      printer: DynamicCSVPrinter,
       benchConfig: BenchmarkConfig,
       progressTracker: Option[ExecutionTracker] = None,
       logging: ErrorLogging
@@ -407,19 +435,20 @@ object Bench {
       source
     )
     try {
-      CapturedExecution.compile(
+      val perfComp = Timing.compileTimed(
         benchConfig.files.tempC0File,
         benchConfig.files.tempBinaryFile,
-        benchConfig.rootConfig
+        benchConfig
       )
 
+      printer.logCompilation(id, perfComp)
       for (workload <- benchConfig.workload.stepList) {
-        val perf = CapturedExecution.exec_timed(
+        val perf = Timing.execTimed(
           benchConfig.files.tempBinaryFile,
           benchConfig.workload.iterations,
           List(s"--stress $workload")
         )
-        printer.logID(id, workload, perf)
+        printer.logExecution(id, workload, perf)
       }
 
     } catch {
@@ -447,7 +476,7 @@ object Bench {
 
   def markDirectory(
       in: Path,
-      printer: PerformanceCSVPrinter,
+      printer: DynamicCSVPrinter,
       benchConfig: BenchmarkConfig,
       verificationType: ExecutionType,
       logging: ErrorLogging

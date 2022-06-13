@@ -78,3 +78,6 @@ a.out
 *.xml.bz2
 *.zip
 *.results.default*.txt
+
+*.RData
+*.Rhistory

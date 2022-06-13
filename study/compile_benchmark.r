@@ -2,6 +2,7 @@ library(dplyr)
 library(readr)
 library(ggplot2)
 library(tidyr)
+options(dplyr.summarise.inform = FALSE)
 
 # this script compiles all data produced by each of the three benchmark programs to produce the following files
 # a single function, compile, processes all data for a single benchmark program. Adding a new benchmark program
@@ -57,22 +58,44 @@ create_summary_row <- function(data, stressLevel, prefix) {
     rows_lt_dyn <- subset %>% filter(diff_grad < 0)
     rows_gt_dyn <- subset %>% filter(diff_grad > 0)
 
+    group_counts <- subset %>% group_by(path_id) %>% summarize(num_per_path = n())
+    group_count <- group_counts$num_per_path %>% unique()
+
+    percent_improved_grad_per_path <- subset %>%
+        group_by(path_id) %>%
+        filter(diff_grad < 0) %>%
+        summarize(path_id, percent_steps_lt_dyn=n()/group_count[1] * 100) %>%
+        distinct()
+
+    steps_impr_mean <- round(mean(percent_improved_grad_per_path$percent_steps_lt_dyn), 1)
+    steps_impr_max <- round(max(percent_improved_grad_per_path$percent_steps_lt_dyn), 1)
+    steps_impr_min <- round(min(percent_improved_grad_per_path$percent_steps_lt_dyn), 1)
+    steps_impr_sd <- round(sd(percent_improved_grad_per_path$percent_steps_lt_dyn), 1)
+
+    percent_paths_complete <- nrow(percent_improved_grad_per_path %>% filter(percent_steps_lt_dyn == 100))/nrow(percent_improved_grad_per_path) * 100
+
+
     steps_lt_dyn <- round(nrow(rows_lt_dyn)/nrow(subset) * 100, 1)
     steps_gt_dyn <- round(nrow(rows_gt_dyn)/nrow(subset) * 100, 1)
 
     pdiff_grad_mean <- round(mean(subset$percent_diff_grad), 1)
-
     pdiff_grad_max <- round(max(subset$percent_diff_grad), 1)
+    print(pdiff_grad_max)
     pdiff_grad_min <- round(min(subset$percent_diff_grad), 1)
     pdiff_grad_sd <- round(sd(subset$percent_diff_grad), 1)
     c(
         prefix,
-        steps_lt_dyn,
-        steps_gt_dyn, 
-        pdiff_grad_mean, 
+        stressLevel,
+        pdiff_grad_mean,
+        pdiff_grad_sd,
         pdiff_grad_max, 
-        pdiff_grad_min, 
-        pdiff_grad_sd
+        pdiff_grad_min,
+
+        steps_impr_mean,
+        steps_impr_sd,
+        steps_impr_max,
+        steps_impr_min,
+        percent_paths_complete
     )
 }
 
@@ -110,13 +133,13 @@ compile <- function(dir, stressLevels) {
             show_col_types = FALSE
         )
 
-    # metadata.csv maps permutation IDs to flags indicating which specification components are present in each permutation
-    meta_path <- file.path(dir, "metadata.csv")
-    meta <- read_csv(
-            meta_path,
-            show_col_types = FALSE
-        ) %>%
-        select(where(not_all_na))
+#     metadata.csv maps permutation IDs to flags indicating which specification components are present in each permutation
+#    meta_path <- file.path(dir, "metadata.csv")
+#    meta <- read_csv(
+#            meta_path,
+#            show_col_types = FALSE
+#        ) %>%
+#       select(where(not_all_na))
 
     # a mapping from permutation IDs to profiling data from the verifier (conjuncts total, conjuncts eliminated)
     conj_path <- file.path(dir, "conjuncts.csv")
@@ -144,6 +167,7 @@ compile <- function(dir, stressLevels) {
             median,
             verification
         )
+    perf_lattice$median <- perf_lattice$median / 10 ** 9
 
     # a mapping from permutation IDs to summary statistics on their execution time at each specified workload value
     # for the dynamic verification baseline
@@ -163,6 +187,7 @@ compile <- function(dir, stressLevels) {
             median,
             verification
         )
+    full_dynamic_lattice$median <- full_dynamic_lattice$median / 10 ** 9
 
     # a mapping from permutation IDs to summary statistics on their execution time at each specified workload value
     # for the "only framing" baseline
@@ -182,6 +207,7 @@ compile <- function(dir, stressLevels) {
             median,
             verification
         )
+    only_framing_lattice$median <- only_framing_lattice$median / 10 ** 9
 
     #DATA - [99th percentile jumps and decreases]
     # we calculate the 99th percentile changes in runtime, both increases and decreases, to determine which specification
@@ -319,13 +345,13 @@ compile <- function(dir, stressLevels) {
     only_framing_joined <- inner_join(
         only_framing_lattice,
         path_classifications,
-        by = c("stress", "path_id") 
-    }
+        by = c("stress", "path_id")
+    )
+
     all <- bind_rows(perf_joined, full_dynamic_joined, only_framing_joined)
 
     # for the concatenated data, format time in milliseconds, specify the given benchmark program in an "example" column,
     # select only rows with the highest stress level, and format the level ID as a percentage toward a complete specification.
-    all$median <- all$median / 10 ** 6
     all["example"] <- basename(dir)
     max_stress <- max(all$stress)
     all <- all %>% filter(stress == max_stress)
@@ -379,9 +405,9 @@ compile <- function(dir, stressLevels) {
         )
 }
 
-compile("./results/bst", c(16, 32, 64))
+compile("./results/bst", c(8, 16, 32))
 compile("./results/list", c(32, 64, 128))
-compile("./results/composite", c(8, 16, 32))
+compile("./results/composite", c(4, 8, 16))
 
 pg <- perf_global %>% write.csv(
         file.path("results/perf.csv"),
@@ -393,7 +419,7 @@ pvcs <- vcs_global %>% write.csv(
         row.names = FALSE
 )
 
-colnames(table_global) <- c("example", "<", ">", "mean", "max", "min", "sd")
+colnames(table_global) <- c("example", "workload", "mean_time", "sd_time", "max_time", "min_time", "mean_impr", "sd_impr", "max_impr", "min_impr", "complete_impr")
 ptbl <- table_global %>% write.csv(
         file.path("results/table.csv"),
         row.names = FALSE

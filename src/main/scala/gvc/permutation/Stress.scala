@@ -1,12 +1,8 @@
 package gvc.permutation
 
 import gvc.CC0Wrapper.Performance
-import gvc.permutation.CapturedExecution.{
-  CC0CompilationException,
-  ExecutionException,
-  compile_and_exec
-}
-import gvc.transformer.{IRPrinter, IR}
+import gvc.permutation.Timing.{CC0CompilationException, ExecutionException}
+import gvc.transformer.{IR, IRPrinter}
 import gvc.{Config, Main, OutputFileCollection}
 
 import java.io.FileWriter
@@ -148,14 +144,14 @@ object Stress {
         val printedSource = IRPrinter.print(ir, includeSpecs = false)
         Files.writeString(outputFiles.tempC0, printedSource)
         try {
-          val perf = compile_and_exec(
+          /*
+          val perf = compileAndExec(
             outputFiles.tempC0,
             outputFiles.tempBinary,
-            config.benchmarkIterations.getOrElse(1),
             List(),
             config
-          )
-          logPerformance(performanceOutput, i, iter, perf)
+          )*
+          logPerformance(performanceOutput, i, iter, perf._2)*/
         } catch {
           case _: CC0CompilationException => progress.cc0Error()
           case _: ExecutionException      => progress.execError()

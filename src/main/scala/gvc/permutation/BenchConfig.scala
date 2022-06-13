@@ -27,35 +27,41 @@ object BenchConfig {
   )
 
   case class BenchmarkOutputFiles(
-      root: Path,
-      perms: Path,
-      verifiedPerms: Path,
-      pathDescriptions: Path,
-      dynamicPerms: Option[Path],
-      framingPerms: Option[Path],
-      logs: Path,
-      verifyLogs: Path,
-      //
-      compilationLogs: Path,
-      dynamicCompilationLogs: Path,
-      framingCompilationLogs: Path,
-      //
-      execLogs: Path,
-      dynamicExecLogs: Path,
-      framingExecLogs: Path,
-      //
-      performance: Path,
-      dynamicPerformance: Path,
-      framingPerformance: Path,
-      //
-      levels: Path,
-      metadata: Path,
-      source: Path,
-      permMap: Path,
-      conjunctMap: Path,
-      //
-      tempC0File: Path,
-      tempBinaryFile: Path
+                                   root: Path,
+                                   perms: Path,
+                                   verifiedPerms: Path,
+                                   pathDescriptions: Path,
+                                   dynamicPerms: Option[Path],
+                                   framingPerms: Option[Path],
+                                   logs: Path,
+                                   verifyLogs: Path,
+                                   //
+                                   compilationLogs: Path,
+                                   dynamicCompilationLogs: Path,
+                                   framingCompilationLogs: Path,
+                                   //
+                                   execLogs: Path,
+                                   dynamicExecLogs: Path,
+                                   framingExecLogs: Path,
+                                   //
+                                   performance: Path,
+                                   dynamicPerformance: Path,
+                                   framingPerformance: Path,
+                                   verificationPerformance: Path,
+                                   instrumentationPerformance: Path,
+                                   translationPerformance: Path,
+                                   compilationPerformanceGradual: Path,
+                                   compilationPerformanceDynamic: Path,
+                                   compilationPerformanceFraming: Path,
+                                   //
+                                   levels: Path,
+                                   metadata: Path,
+                                   source: Path,
+                                   permMap: Path,
+                                   conjunctMap: Path,
+                                   //
+                                   tempC0File: Path,
+                                   tempBinaryFile: Path
   )
 
   private def deleteMultiple(locations: Path*): Unit =
@@ -112,8 +118,21 @@ object BenchConfig {
     val performance = root.resolve(Names.performance)
     val dynamicPerformance = root.resolve(Names.dynamicPerformance)
     val framingPerformance = root.resolve(Names.framingPerformance)
+    val instrumentationPerformance = root.resolve(Names.instrumentationPerformance)
+    val verificationPerformance = root.resolve(Names.verificationPerformance)
+
+    val compilationPerformanceGradual = root.resolve(Names.compilationPerformanceGradual)
+    val compilationPerformanceDynamic = root.resolve(Names.compilationPerformanceDynamic)
+    val compilationPerformanceFraming = root.resolve(Names.compilationPerformanceFraming)
+
+    val translationPerformance = root.resolve(Names.translationPerformance)
+
     if(config.benchmarkSkipVerification){
-      deleteMultiple(performance, dynamicPerformance, framingPerformance)
+      deleteMultiple(performance, dynamicPerformance, framingPerformance, compilationPerformanceFraming, compilationPerformanceDynamic, compilationPerformanceGradual)
+    }else if(config.onlyVerify){
+      deleteMultiple(verificationPerformance, instrumentationPerformance)
+    }else{
+      deleteMultiple(performance, dynamicPerformance, framingPerformance, verificationPerformance, instrumentationPerformance, performance, dynamicPerformance, framingPerformance, compilationPerformanceFraming, compilationPerformanceDynamic, compilationPerformanceGradual)
     }
 
     val logs = root.resolve(Names.logs)
@@ -162,7 +181,13 @@ object BenchConfig {
       framingPerms = framingPerms,
       framingPerformance = framingPerformance,
       tempC0File = tempC0File,
-      tempBinaryFile = tempBinaryFile
+      tempBinaryFile = tempBinaryFile,
+      verificationPerformance = verificationPerformance,
+      instrumentationPerformance = instrumentationPerformance,
+      compilationPerformanceGradual = compilationPerformanceGradual,
+      compilationPerformanceDynamic= compilationPerformanceDynamic,
+      compilationPerformanceFraming = compilationPerformanceFraming,
+      translationPerformance = translationPerformance
     )
   }
 

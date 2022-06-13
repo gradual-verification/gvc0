@@ -3,9 +3,8 @@ package gvc
 import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
-import gvc.permutation.CapturedExecution.{median, percentile}
 import gvc.transformer._
-import gvc.permutation.{Bench, Output, Stress, Timeout}
+import gvc.permutation.{Bench, Output, Timeout}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -60,13 +59,15 @@ object Main extends App {
       config.linkedLibraries ++ List(defaultLibraryDirectory)
     config.mode match {
       case Config.StressMode =>
+      /*
         val startTime = Calendar.getInstance().getTime()
         Output.info(startTime.toString)
         Stress.test(inputSource, config, fileNames, linkedLibraries)
         val stopTime = Calendar.getInstance().getTime()
         val difference = stopTime.getTime - startTime.getTime
         Output.info(stopTime.toString)
-        Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(difference)}")
+        Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(difference)}")*/
+
       case Config.BenchmarkMode =>
         val startTime = Calendar.getInstance().getTime()
         Output.info(startTime.toString)
@@ -126,7 +127,8 @@ object Main extends App {
               b.branchInfo
                 .map { case BranchCond(branch, _, _) => branch }
                 .map(c => "(" + c.toString() + ")")
-                .mkString(" && ")}: ${b.checks.toString()}")
+                .mkString(" && ")}: ${b.checks.toString()}"
+          )
           .mkString("\n")
       )
     }
@@ -157,7 +159,14 @@ object Main extends App {
   case class VerifiedOutput(
       silver: Program,
       c0Source: String,
-      profiling: ProfilingInfo
+      profiling: ProfilingInfo,
+      timing: VerifierTiming
+  )
+
+  case class VerifierTiming(
+      translation: Long,
+      verification: Long,
+      instrumentation: Long
   )
 
   case class ProfilingInfo(nConjuncts: Int, nConjunctsEliminated: Int)
@@ -169,18 +178,6 @@ object Main extends App {
       fileNames: OutputFileCollection,
       config: Config
   ): VerifiedOutput = {
-    val ir =
-      generateIR(
-        inputSource,
-        config.linkedLibraries ++ List(defaultLibraryDirectory)
-      )
-    if (config.dump.contains(Config.DumpIR))
-      dump(IRPrinter.print(ir, includeSpecs = true))
-    else if (config.saveFiles)
-      writeFile(
-        fileNames.irFileName,
-        IRPrinter.print(ir, includeSpecs = true)
-      )
 
     val reporter = viper.silver.reporter.StdIOReporter()
     val z3Exe = Config.resolveToolPath("z3", "Z3_EXE")
@@ -189,16 +186,32 @@ object Main extends App {
       reporter,
       Seq()
     )
-
     profilingInfo.reset
     runtimeChecks.reset
-    silicon.start()
 
+    val translationStart = System.nanoTime()
+    val ir =
+      generateIR(
+        inputSource,
+        config.linkedLibraries ++ List(defaultLibraryDirectory)
+      )
     val silver = IRSilver.toSilver(ir)
+    val translationStop = System.nanoTime()
+    val translationTime = translationStop - translationStart
+
+    if (config.dump.contains(Config.DumpIR))
+      dump(IRPrinter.print(ir, includeSpecs = true))
+    else if (config.saveFiles)
+      writeFile(
+        fileNames.irFileName,
+        IRPrinter.print(ir, includeSpecs = true)
+      )
     if (config.dump.contains(Config.DumpSilver)) dump(silver.program.toString())
     else if (config.saveFiles)
       writeFile(fileNames.silverFileName, silver.program.toString())
 
+    val verificationStart = System.nanoTime()
+    silicon.start()
     silicon.verify(silver.program) match {
       case verifier.Success => ()
       case verifier.Failure(errors) =>
@@ -206,11 +219,16 @@ object Main extends App {
         silicon.stop()
         throw VerificationException(message)
     }
-
     silicon.stop()
+    val verificationStop = System.nanoTime()
+    val verificationTime = verificationStop - verificationStart
+
     if (config.onlyVerify && config.compileBenchmark.isEmpty) sys.exit(0)
 
+    val weavingStart = System.nanoTime()
     Weaver.weave(ir, silver)
+    val weavingStop = System.nanoTime()
+    val weavingTime = weavingStop - weavingStart
 
     val c0Source = IRPrinter.print(ir, includeSpecs = false)
     if (config.dump.contains(Config.DumpC0))
@@ -221,6 +239,11 @@ object Main extends App {
       ProfilingInfo(
         profilingInfo.getTotalConjuncts,
         profilingInfo.getEliminatedConjuncts
+      ),
+      VerifierTiming(
+        translationTime,
+        verificationTime,
+        weavingTime
       )
     )
   }
@@ -233,7 +256,6 @@ object Main extends App {
 
     // TODO: Figure out how we can use the actual resource
     // Since it is bundled in the JAR we have to extract it and put it somewhere
-
 
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),

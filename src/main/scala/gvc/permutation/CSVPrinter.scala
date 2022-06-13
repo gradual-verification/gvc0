@@ -2,13 +2,13 @@ package gvc.permutation
 
 import gvc.CC0Wrapper.Performance
 import gvc.Main.ProfilingInfo
-import gvc.permutation.BenchConfig.BenchmarkOutputFiles
+import gvc.permutation.BenchConfig.{BenchmarkConfig, BenchmarkOutputFiles}
+import gvc.permutation.Timing.TimedVerification
 
 import java.io.FileWriter
 import java.math.BigInteger
 import java.nio.file.{Files, Path}
 import java.util.Date
-import scala.collection.mutable
 
 object Extensions {
   def c0(basename: Object): String = basename.toString + ".c0"
@@ -25,13 +25,17 @@ object Extensions {
 }
 
 object Columns {
+  val timingStatColumnNames: List[String] =
+    List("iter", "95th", "5th", "median", "mean", "stdev", "min", "max")
   val performanceColumnNames: List[String] =
-    List("stress", "iter", "95th", "5th", "median", "mean", "stdev", "min", "max")
+    List("stress") ++ timingStatColumnNames
   val mappingColumnNames: List[String] =
     List("id", "path_id", "level_id", "component_added")
   val pathColumnNames: List[String] =
     List("id", "path_hash")
   val conjunctColumnNames: List[String] =
+    List("id", "conjuncts_total", "conjuncts_elim")
+  val staticTimingColumnNames: List[String] =
     List("id", "conjuncts_total", "conjuncts_elim")
   def metadataColumnNames(template: List[ASTLabel]): List[String] =
     List("id") ++ template.map(_.hash)
@@ -39,6 +43,7 @@ object Columns {
 
 class ErrorCSVPrinter(file: Path) {
   val writer = new FileWriter(file.toString, true)
+
   def formatSection(name: String, exitCode: Int): String =
     s"-----[ Error in $name, Exit: $exitCode, Time ${new Date().toString} ]-----\n"
   def log(name: String, exitCode: Int, err: String): Unit = {
@@ -48,68 +53,77 @@ class ErrorCSVPrinter(file: Path) {
   def close(): Unit = writer.close()
 }
 
-class PerformanceCSVPrinter(out: Path, iterations: Int) {
-  var table: mutable.Map[String, mutable.Set[Int]] =
-    generatePerformanceTable(
-      out
+abstract class PerformanceCSVPrinter {
+
+  val writers: List[FileWriter]
+  writers.foreach(l => {
+    l.write((List("id") ++ Columns.timingStatColumnNames).mkString(",") + '\n')
+    l.flush()
+  })
+  def close(): Unit = {
+    writers.foreach(_.close())
+  }
+}
+
+class StaticCSVPrinter(benchConfig: BenchmarkConfig)
+    extends PerformanceCSVPrinter {
+  private val translationWriter =
+    new FileWriter(benchConfig.files.translationPerformance.toString, true)
+  private val verificationWriter =
+    new FileWriter(benchConfig.files.instrumentationPerformance.toString, true)
+  private val instrumentationWriter =
+    new FileWriter(benchConfig.files.instrumentationPerformance.toString, true)
+  val writers: List[FileWriter] =
+    List(translationWriter, verificationWriter, instrumentationWriter)
+
+  def log(
+      id: String,
+      perf: TimedVerification
+  ): Unit = {
+    (writers zip List(
+      perf.translation,
+      perf.verification,
+      perf.instrumentation
+    )).foreach(t => {
+      t._1.write(
+        List(id, benchConfig.workload.iterations.toString)
+          .mkString(",") + "," + t._2.toString() + '\n'
+      )
+      t._1.flush()
+    })
+  }
+}
+
+class DynamicCSVPrinter(
+    benchConfig: BenchmarkConfig,
+    compilation: Path,
+    execution: Path
+) extends PerformanceCSVPrinter {
+  var compilationWriter = new FileWriter(compilation.toString, true)
+  var executionWriter = new FileWriter(execution.toString, true)
+  val writers: List[FileWriter] = List(compilationWriter, executionWriter)
+
+  def logCompilation(
+      id: String,
+      perf: Performance
+  ): Unit = {
+    compilationWriter.write(
+      id + "," + perf.toString() + '\n'
     )
-  var writer = new FileWriter(out.toString, true)
-  writer.write(
-    (List("id") ++ Columns.performanceColumnNames).mkString(",") + '\n'
-  )
-  writer.flush()
-
-  def close(): Unit = writer.close()
-
-  def findMissingWorkloads(
-      id: String,
-      requested: List[Int]
-  ): List[Int] = {
-    if (table.contains(id)) {
-      requested.toSet.diff(table(id)).toList
-    } else {
-      requested
-    }
+    compilationWriter.flush()
   }
 
-  private def generatePerformanceTable(
-      path: Path
-  ): mutable.Map[String, mutable.Set[Int]] = {
-    val mapping = mutable.Map[String, mutable.Set[Int]]()
-    val entries: List[List[String]] =
-      CSVIO.readEntries(path, List("id") ++ Columns.performanceColumnNames)
-
-    def update(id: String, stress: Int): Unit = {
-      if (mapping.contains(id)) {
-        mapping(id) += stress
-      } else {
-        mapping += id -> mutable.Set(stress)
-      }
-    }
-    entries
-      .map(entry => (LabelTools.parseID(entry.head), entry(1)))
-      .filter(pair => pair._1.isDefined && pair._2.matches("[0-9]+"))
-      .foreach(pair => update(pair._1.get.toString(16), pair._2.toInt))
-    mapping
-  }
-
-  def exists(
-      id: String,
-      stress: Int
-  ): Boolean = {
-    table.contains(id) && table(id).contains(stress)
-  }
-
-  def logID(
+  def logExecution(
       id: String,
       stress: Int,
       perf: Performance
   ): Unit = {
-    writer.write(
-      List(id, stress.toString, iterations.toString).mkString(",") + "," + perf
+    executionWriter.write(
+      List(id, stress.toString, benchConfig.workload.iterations.toString)
+        .mkString(",") + "," + perf
         .toString() + '\n'
     )
-    writer.flush()
+    executionWriter.flush()
   }
 }
 
@@ -162,7 +176,9 @@ object CSVIO {
       id: String,
       permutation: LabelPermutation
   ): List[String] = {
-    List(id) ++ permutation.specStatusList.map(_.toString) ++ permutation.imprecisionStatusList
+    List(id) ++ permutation.specStatusList.map(
+      _.toString
+    ) ++ permutation.imprecisionStatusList
       .map(_.toString)
   }
 }
@@ -172,16 +188,27 @@ class MetadataCSVPrinter(
     template: List[ASTLabel]
 ) {
   val metaWriter = new FileWriter(files.metadata.toString, true)
-  val mappingWriter = new FileWriter(files.levels.toString, true)
-  val permWriter = new FileWriter(files.permMap.toString, true)
-  val conjunctWriter = new FileWriter(files.conjunctMap.toString, true)
   val metadataColumnNames: String =
     Columns.metadataColumnNames(template).mkString(",") + '\n'
+  metaWriter.write(metadataColumnNames)
+  metaWriter.flush()
+
+  val mappingWriter = new FileWriter(files.levels.toString, true)
+  mappingWriter.write(Columns.mappingColumnNames.mkString(",") + '\n')
+  mappingWriter.flush()
+
+  val pathWriter = new FileWriter(files.permMap.toString, true)
+  pathWriter.write(Columns.pathColumnNames.mkString(",") + '\n')
+  pathWriter.flush()
+
+  val conjunctWriter = new FileWriter(files.conjunctMap.toString, true)
+  conjunctWriter.write(Columns.conjunctColumnNames.mkString(",") + '\n')
+  conjunctWriter.flush()
 
   def close(): Unit = {
     metaWriter.close()
     mappingWriter.close()
-    permWriter.close()
+    pathWriter.close()
     conjunctWriter.close()
   }
 
@@ -191,8 +218,8 @@ class MetadataCSVPrinter(
       permutation: List[ASTLabel]
   ): Unit = {
     val permID = LabelTools.hashPath(template, permutation)
-    permWriter.write(index.toString + "," + permID.toString(16) + '\n')
-    permWriter.flush()
+    pathWriter.write(index.toString + "," + permID.toString(16) + '\n')
+    pathWriter.flush()
   }
   def logPermutation(
       id: String,
