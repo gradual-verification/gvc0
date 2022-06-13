@@ -13,6 +13,18 @@ abstract class ProgressTracker(activity: String) {
     if (top == 0)
       top
     else { Math.ceil(top / bot * 100) }
+
+  def formatTime(millis: Long): String = {
+    if (millis < 1000 * 60) {
+      s"${Math.round(millis / 1000)} sec"
+    } else if (millis < 1000 * 60 * 60) {
+      s"${Math.round(millis / (1000 * 60))} min"
+    } else if (millis < 1000 * 60 * 60 * 24) {
+      s"${Math.round(millis / (1000 * 60 * 60))} hr"
+    } else {
+      s"${Math.round(millis / (1000 * 60 * 60 * 24))} days"
+    }
+  }
 }
 
 class VerificationTracker(perPath: Int, maxPaths: Int)
@@ -23,7 +35,15 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
   private var currentPerm = 0
   private var allPerms = 0
   private var unique = 0
+  private var startTime = System.currentTimeMillis()
+  private var averagePerStep: Long = 0
   override def increment(): Unit = {
+    val elapsed = System.currentTimeMillis() - startTime
+    if (averagePerStep == 0) {
+      averagePerStep = elapsed
+    } else {
+      averagePerStep = (averagePerStep + elapsed) / 2
+    }
     currentPerm += 1
     allPerms += 1
     if (currentPerm == perPath) {
@@ -34,6 +54,7 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
     }
     update()
     if (currentPath == maxPaths) println("\n")
+    startTime = System.currentTimeMillis()
   }
 
   def incrementUnique(): Unit = {
@@ -59,6 +80,8 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
     val success: String =
       if (successValue.toInt == 100) Output.green(s"$successValue%")
       else Output.yellow(s"$successValue%")
+    val toCompletion =
+      ((perPath - currentPerm + ((maxPaths - currentPath) * perPath)) * averagePerStep)
     super.toString() + List(
       s"Path: ${Output.blue(s"$currentPath/$maxPaths")}",
       s"Step: ${Output.blue(s"$currentPerm/$perPath")}",
@@ -66,7 +89,8 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
       s"Unique Programs: ${Output.blue(s"$unique")}",
       s"Success Overall: $success",
       s"Failures: ${failureColor(failures.toString)}",
-      s"Timeouts: ${timeoutColor(timeouts.toString)}"
+      s"Timeouts: ${timeoutColor(timeouts.toString)}",
+      s"ETC: ${super.formatTime(toCompletion)}"
     ).foldLeft("")(_ + " — " + _)
   }
 }
@@ -91,6 +115,9 @@ class ExecutionTracker(maxPrograms: Int, execType: ExecutionType)
   private var progress = 0
   private var cc0Failures = 0
   private var execFailures = 0
+
+  private var startTime = System.currentTimeMillis()
+  private var averagePerStep: Long = 0
   update()
 
   def cc0Error(): Unit = {
@@ -100,8 +127,15 @@ class ExecutionTracker(maxPrograms: Int, execType: ExecutionType)
     execFailures += 1
   }
   override def increment(): Unit = {
+    val elapsed = System.currentTimeMillis() - startTime
+    if (averagePerStep == 0) {
+      averagePerStep = elapsed
+    } else {
+      averagePerStep = (averagePerStep + elapsed) / 2
+    }
     progress += 1
     update()
+    startTime = System.currentTimeMillis()
   }
 
   override def toString: String = {
@@ -114,13 +148,17 @@ class ExecutionTracker(maxPrograms: Int, execType: ExecutionType)
     val success: String =
       if (successValue.toInt == 100) Output.green(s"$successValue%")
       else Output.yellow(s"$successValue%")
+
+    val toCompletion = ((maxPrograms - progress) * averagePerStep)
     super.toString() + List(
       s"[ ${Output.purple(s"${execType.name}")} ]",
       s"Program: ${Output.blue(s"$progress/$maxPrograms")}",
       s"Success: ${success}",
       s"CC0 Failures: ${cc0FailureColor(cc0Failures.toString)}",
       s"Execution Failures: ${execFailureColor(execFailures.toString)}",
+      s"ETC: ${super.formatTime(toCompletion)}",
       if (progress == maxPrograms) "\n" else ""
     ).foldLeft("")(_ + " — " + _)
   }
+
 }
