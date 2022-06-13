@@ -53,20 +53,8 @@ class ErrorCSVPrinter(file: Path) {
   def close(): Unit = writer.close()
 }
 
-abstract class PerformanceCSVPrinter {
+class StaticCSVPrinter(benchConfig: BenchmarkConfig) extends {
 
-  val writers: List[FileWriter]
-  writers.foreach(l => {
-    l.write((List("id") ++ Columns.timingStatColumnNames).mkString(",") + '\n')
-    l.flush()
-  })
-  def close(): Unit = {
-    writers.foreach(_.close())
-  }
-}
-
-class StaticCSVPrinter(benchConfig: BenchmarkConfig)
-    extends PerformanceCSVPrinter {
   private val translationWriter =
     new FileWriter(benchConfig.files.translationPerformance.toString, true)
   private val verificationWriter =
@@ -75,6 +63,14 @@ class StaticCSVPrinter(benchConfig: BenchmarkConfig)
     new FileWriter(benchConfig.files.instrumentationPerformance.toString, true)
   val writers: List[FileWriter] =
     List(translationWriter, verificationWriter, instrumentationWriter)
+
+  writers.foreach(l => {
+    l.write((List("id") ++ Columns.timingStatColumnNames).mkString(",") + '\n')
+    l.flush()
+  })
+  def close(): Unit = {
+    writers.foreach(_.close())
+  }
 
   def log(
       id: String,
@@ -98,11 +94,18 @@ class DynamicCSVPrinter(
     benchConfig: BenchmarkConfig,
     compilation: Path,
     execution: Path
-) extends PerformanceCSVPrinter {
+) {
   var compilationWriter = new FileWriter(compilation.toString, true)
   var executionWriter = new FileWriter(execution.toString, true)
   val writers: List[FileWriter] = List(compilationWriter, executionWriter)
 
+  writers.foreach(l => {
+    l.write((List("id") ++ Columns.timingStatColumnNames).mkString(",") + '\n')
+    l.flush()
+  })
+  def close(): Unit = {
+    writers.foreach(_.close())
+  }
   def logCompilation(
       id: String,
       perf: Performance
