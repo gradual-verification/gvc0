@@ -27,41 +27,41 @@ object BenchConfig {
   )
 
   case class BenchmarkOutputFiles(
-                                   root: Path,
-                                   perms: Path,
-                                   verifiedPerms: Path,
-                                   pathDescriptions: Path,
-                                   dynamicPerms: Option[Path],
-                                   framingPerms: Option[Path],
-                                   logs: Path,
-                                   verifyLogs: Path,
-                                   //
-                                   compilationLogs: Path,
-                                   dynamicCompilationLogs: Path,
-                                   framingCompilationLogs: Path,
-                                   //
-                                   execLogs: Path,
-                                   dynamicExecLogs: Path,
-                                   framingExecLogs: Path,
-                                   //
-                                   performance: Path,
-                                   dynamicPerformance: Path,
-                                   framingPerformance: Path,
-                                   verificationPerformance: Path,
-                                   instrumentationPerformance: Path,
-                                   translationPerformance: Path,
-                                   compilationPerformanceGradual: Path,
-                                   compilationPerformanceDynamic: Path,
-                                   compilationPerformanceFraming: Path,
-                                   //
-                                   levels: Path,
-                                   metadata: Path,
-                                   source: Path,
-                                   permMap: Path,
-                                   conjunctMap: Path,
-                                   //
-                                   tempC0File: Path,
-                                   tempBinaryFile: Path
+      root: Path,
+      perms: Path,
+      verifiedPerms: Path,
+      pathDescriptions: Path,
+      dynamicPerms: Option[Path],
+      framingPerms: Option[Path],
+      logs: Path,
+      verifyLogs: Path,
+      //
+      compilationLogs: Path,
+      dynamicCompilationLogs: Path,
+      framingCompilationLogs: Path,
+      //
+      execLogs: Path,
+      dynamicExecLogs: Path,
+      framingExecLogs: Path,
+      //
+      performance: Path,
+      dynamicPerformance: Path,
+      framingPerformance: Path,
+      verificationPerformance: Path,
+      instrumentationPerformance: Path,
+      translationPerformance: Path,
+      compilationPerformanceGradual: Path,
+      compilationPerformanceDynamic: Path,
+      compilationPerformanceFraming: Path,
+      //
+      levels: Path,
+      metadata: Path,
+      source: Path,
+      permMap: Path,
+      conjunctMap: Path,
+      //
+      tempC0File: Path,
+      tempBinaryFile: Path
   )
 
   private def deleteMultiple(locations: Path*): Unit =
@@ -118,21 +118,44 @@ object BenchConfig {
     val performance = root.resolve(Names.performance)
     val dynamicPerformance = root.resolve(Names.dynamicPerformance)
     val framingPerformance = root.resolve(Names.framingPerformance)
-    val instrumentationPerformance = root.resolve(Names.instrumentationPerformance)
+    val instrumentationPerformance =
+      root.resolve(Names.instrumentationPerformance)
     val verificationPerformance = root.resolve(Names.verificationPerformance)
 
-    val compilationPerformanceGradual = root.resolve(Names.compilationPerformanceGradual)
-    val compilationPerformanceDynamic = root.resolve(Names.compilationPerformanceDynamic)
-    val compilationPerformanceFraming = root.resolve(Names.compilationPerformanceFraming)
+    val compilationPerformanceGradual =
+      root.resolve(Names.compilationPerformanceGradual)
+    val compilationPerformanceDynamic =
+      root.resolve(Names.compilationPerformanceDynamic)
+    val compilationPerformanceFraming =
+      root.resolve(Names.compilationPerformanceFraming)
 
     val translationPerformance = root.resolve(Names.translationPerformance)
 
-    if(config.benchmarkSkipVerification){
-      deleteMultiple(performance, dynamicPerformance, framingPerformance, compilationPerformanceFraming, compilationPerformanceDynamic, compilationPerformanceGradual)
-    }else if(config.onlyVerify){
+    if (config.onlyExec) {
+      deleteMultiple(
+        performance,
+        dynamicPerformance,
+        framingPerformance,
+        compilationPerformanceFraming,
+        compilationPerformanceDynamic,
+        compilationPerformanceGradual
+      )
+    } else if (config.onlyVerify) {
       deleteMultiple(verificationPerformance, instrumentationPerformance)
-    }else{
-      deleteMultiple(performance, dynamicPerformance, framingPerformance, verificationPerformance, instrumentationPerformance, performance, dynamicPerformance, framingPerformance, compilationPerformanceFraming, compilationPerformanceDynamic, compilationPerformanceGradual)
+    } else {
+      deleteMultiple(
+        performance,
+        dynamicPerformance,
+        framingPerformance,
+        verificationPerformance,
+        instrumentationPerformance,
+        performance,
+        dynamicPerformance,
+        framingPerformance,
+        compilationPerformanceFraming,
+        compilationPerformanceDynamic,
+        compilationPerformanceGradual
+      )
     }
 
     val logs = root.resolve(Names.logs)
@@ -144,13 +167,21 @@ object BenchConfig {
     val exec = logs.resolve(Names.execLogs)
     val dynamicExecLog = logs.resolve(Names.dynamicExecLogs)
     val framingExecLog = logs.resolve(Names.framingExecLogs)
-    deleteMultiple(compileLog, dynamicCompileLog, framingCompileLog, verifyLog, exec, dynamicExecLog, framingExecLog)
+    deleteMultiple(
+      compileLog,
+      dynamicCompileLog,
+      framingCompileLog,
+      verifyLog,
+      exec,
+      dynamicExecLog,
+      framingExecLog
+    )
 
     val levels = root.resolve(Names.levels)
     val metadata = root.resolve(Names.metadata)
     val permMap = root.resolve(csv(Names.perms))
     val conjunctMap = root.resolve(Names.conjuncts)
-    if(!config.benchmarkSkipVerification){
+    if (!config.onlyExec) {
       deleteMultiple(levels, metadata, permMap, conjunctMap)
     }
 
@@ -185,7 +216,7 @@ object BenchConfig {
       verificationPerformance = verificationPerformance,
       instrumentationPerformance = instrumentationPerformance,
       compilationPerformanceGradual = compilationPerformanceGradual,
-      compilationPerformanceDynamic= compilationPerformanceDynamic,
+      compilationPerformanceDynamic = compilationPerformanceDynamic,
       compilationPerformanceFraming = compilationPerformanceFraming,
       translationPerformance = translationPerformance
     )

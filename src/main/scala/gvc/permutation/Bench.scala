@@ -77,7 +77,7 @@ object Bench {
     val benchConfig =
       BenchConfig.resolveBenchmarkConfig(source, librarySearchDirs, config)
 
-    if (!config.benchmarkSkipVerification) {
+    if (!config.onlyExec && !config.onlyCompile) {
       val timeout = config.timeout match {
         case Some(value) => value.toString + "s"
         case None        => "infinite"
@@ -365,8 +365,8 @@ object Bench {
 
     val printer = new DynamicCSVPrinter(
       benchmarkConfig,
-      benchmarkConfig.files.performance,
-      benchmarkConfig.files.compilationPerformanceGradual
+      benchmarkConfig.files.compilationPerformanceGradual,
+      benchmarkConfig.files.performance
     )
 
     markDirectory(
@@ -376,12 +376,13 @@ object Bench {
       ExecutionType.Gradual,
       ErrorLogging(errCC0, errExec)
     )
+    printer.close()
 
     if (!config.disableBaseline) {
       val framingPrinter = new DynamicCSVPrinter(
         benchmarkConfig,
-        benchmarkConfig.files.framingPerformance,
-        benchmarkConfig.files.compilationPerformanceFraming
+        benchmarkConfig.files.compilationPerformanceFraming,
+        benchmarkConfig.files.framingPerformance
       )
 
       markDirectory(
@@ -392,10 +393,12 @@ object Bench {
         ErrorLogging(errCC0, errExec)
       )
 
+      framingPrinter.close()
+
       val dynamicPrinter = new DynamicCSVPrinter(
         benchmarkConfig,
-        benchmarkConfig.files.dynamicPerformance,
-        benchmarkConfig.files.compilationPerformanceDynamic
+        benchmarkConfig.files.compilationPerformanceDynamic,
+        benchmarkConfig.files.dynamicPerformance
       )
 
       markDirectory(
@@ -405,6 +408,8 @@ object Bench {
         ExecutionType.FullDynamic,
         ErrorLogging(errCC0, errExec)
       )
+
+      dynamicPrinter.close()
     }
     if (Files.exists(benchmarkConfig.files.tempC0File))
       Files.delete(benchmarkConfig.files.tempC0File)
@@ -440,17 +445,18 @@ object Bench {
         benchConfig.files.tempBinaryFile,
         benchConfig
       )
-
       printer.logCompilation(id, perfComp)
-      for (workload <- benchConfig.workload.stepList) {
-        val perf = Timing.execTimed(
-          benchConfig.files.tempBinaryFile,
-          benchConfig.workload.iterations,
-          List(s"--stress $workload")
-        )
-        printer.logExecution(id, workload, perf)
-      }
 
+      if (!benchConfig.rootConfig.onlyCompile) {
+        for (workload <- benchConfig.workload.stepList) {
+          val perf = Timing.execTimed(
+            benchConfig.files.tempBinaryFile,
+            benchConfig.workload.iterations,
+            List(s"--stress $workload")
+          )
+          printer.logExecution(id, workload, perf)
+        }
+      }
     } catch {
       case c0: CapturedOutputException =>
         c0 match {

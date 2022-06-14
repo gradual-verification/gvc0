@@ -21,12 +21,13 @@ case class Config(
     benchmarkWUpper: Option[Int] = None,
     benchmarkIterations: Option[Int] = None,
     benchmarkWList: Option[List[Int]] = None,
-    benchmarkSkipVerification: Boolean = false,
+    onlyExec: Boolean = false,
     benchmarkStressMode: Option[ExecutionType] = None,
     disableBaseline: Boolean = false,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
+    onlyCompile: Boolean = false,
     sourceFile: Option[String] = None,
     linkedLibraries: List[String] = List.empty
 ) {
@@ -182,7 +183,12 @@ object Config {
       case "--only-exec" :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(benchmarkSkipVerification = true)
+          current.copy(onlyExec = true)
+        )
+      case "--only-compile" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(onlyCompile = true)
         )
       case specifyIncrements(t) :: tail =>
         fromCommandLineArgs(
