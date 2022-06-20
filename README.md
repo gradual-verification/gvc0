@@ -58,6 +58,12 @@ A number of tests use resource files for the input and expected output. When mod
 
 Note that you will need to manually verify any modified files before committing to ensure that the new output is correct.
 
+### Types of tests 
+- **Unit tests**: (Such as `ParserSpec.scala`) Explicitly test a function by calling it, asserting output, etc.
+- **Integration tests**: (Executed by `IntegrationSpecs.scala`) Run an input file through the parser, IR, and weaver, but without running the verifier. Files in `fp-basic`, `cases`, `ir` and `viper` folders are run in this manner. These test input `.c0` files can optionally have corresponding `.vpr` or `.ir.c0` files that are used to assert the output of the Silver code or the IR code, respectively. *should be renamed to indicate that verifier tests are the actual integration tests*
+- **Baseline tests**: (In the `baseline` folder, executed by `BaselineSpec.scala`) Used to check the baseline dynamic verification code; takes `.c0` files as input and optional `.baseline.c0` files to assert output. The name *baseline* refers to a baseline level of verification.
+- **Verifier tests**:  (In `verifier` and `quant-study` folder, executed by `CompilerSpec.scala`) Extends integration tests to run the verifier on the file and feeding that result to the weaver, run the C0 compiler on the weaver output, and then run the program, making sure it exits with code 0.
+
 ## Architecture
 
 See the [architecture docs](docs/).
