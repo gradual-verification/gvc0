@@ -1,3 +1,3 @@
-package gvc.permutation class Database {
+package gvc.permutation
 
-}
+class BenchmarkDatabase {}
