@@ -1,8 +1,8 @@
-package gvc.permutation
-import gvc.permutation.BenchConfig.BenchmarkConfig
-import gvc.permutation.Extensions.{c0, csv, log, out, txt}
-import gvc.permutation.Output.blue
-import gvc.permutation.Timing.{
+package gvc.benchmarking
+import gvc.benchmarking.BenchConfig.BenchmarkConfig
+import gvc.benchmarking.Extensions.{c0, csv, log, out, txt}
+import gvc.benchmarking.Output.blue
+import gvc.benchmarking.Timing.{
   CC0CompilationException,
   CapturedOutputException,
   ExecutionException

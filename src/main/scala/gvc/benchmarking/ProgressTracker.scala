@@ -1,4 +1,4 @@
-package gvc.permutation
+package gvc.benchmarking
 
 abstract class ProgressTracker(activity: String) {
   def increment(): Unit

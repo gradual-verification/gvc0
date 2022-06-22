@@ -1,5 +1,5 @@
 package gvc
-import gvc.permutation.ExecutionType
+import gvc.benchmarking.ExecutionType
 
 import java.nio.file.{Files, Paths}
 import java.io.File

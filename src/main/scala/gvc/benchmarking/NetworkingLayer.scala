@@ -1,5 +1,5 @@
-package gvc.permutation
-import gvc.permutation.NetworkingUtilities.{
+package gvc.benchmarking
+import gvc.benchmarking.NetworkingUtilities.{
   ClientIdentification,
   Message,
   parseMessage

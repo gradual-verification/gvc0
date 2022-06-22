@@ -1,9 +1,9 @@
-package gvc.permutation
+package gvc.benchmarking
 
 import gvc.{CC0Options, CC0Wrapper, Config, OutputFileCollection}
 import gvc.CC0Wrapper.{CommandOutput, Performance}
 import gvc.Main.{VerifiedOutput, verify}
-import gvc.permutation.BenchConfig.BenchmarkConfig
+import gvc.benchmarking.BenchConfig.BenchmarkConfig
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.concurrent.duration._

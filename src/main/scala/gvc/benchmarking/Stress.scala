@@ -1,7 +1,7 @@
-package gvc.permutation
+package gvc.benchmarking
 
 import gvc.CC0Wrapper.Performance
-import gvc.permutation.Timing.{CC0CompilationException, ExecutionException}
+import gvc.benchmarking.Timing.{CC0CompilationException, ExecutionException}
 import gvc.transformer.{IR, IRPrinter}
 import gvc.{Config, Main, OutputFileCollection}
 

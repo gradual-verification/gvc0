@@ -1,8 +1,8 @@
-package gvc.permutation
+package gvc.benchmarking
 
 import gvc.{Config, Main}
-import gvc.permutation.Bench.Names
-import gvc.permutation.Extensions.csv
+import gvc.benchmarking.Bench.Names
+import gvc.benchmarking.Extensions.csv
 import gvc.transformer.IR
 
 import java.net.{JarURLConnection, URL}

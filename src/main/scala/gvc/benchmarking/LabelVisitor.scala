@@ -1,9 +1,9 @@
-package gvc.permutation
+package gvc.benchmarking
 
 import gvc.transformer.IR
 import gvc.transformer.IR.{Expression, Method, Predicate}
-import gvc.permutation.ExprType.ExprType
-import gvc.permutation.SpecType.SpecType
+import gvc.benchmarking.ExprType.ExprType
+import gvc.benchmarking.SpecType.SpecType
 
 import scala.collection.mutable
 
@@ -63,9 +63,11 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
     List(acc, pred_inst, bool_expr).mkString("/")
   }
 
-  override def enterSpec(parent: Either[Method, Predicate],
-                         template: Option[Expression] = None,
-                         specType: SpecType): Unit = {
+  override def enterSpec(
+      parent: Either[Method, Predicate],
+      template: Option[Expression] = None,
+      specType: SpecType
+  ): Unit = {
     super.enterSpec(parent, template, specType)
     this.startingIndex = this.exprIndex
     template match {
@@ -74,12 +76,15 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
         specType match {
           case SpecType.Fold | SpecType.Unfold | SpecType.Assert => {}
           case _ =>
-            this.addLabel(parent,
-                          specType,
-                          ExprType.Imprecision,
-                          exprIndex = -1)
+            this.addLabel(
+              parent,
+              specType,
+              ExprType.Imprecision,
+              exprIndex = -1
+            )
         }
-      case None if specType == SpecType.Precondition || specType == SpecType.Postcondition =>
+      case None
+          if specType == SpecType.Precondition || specType == SpecType.Postcondition =>
         this.addLabel(parent, specType, ExprType.Absent, exprIndex = -1);
       case _ => {}
     }
@@ -129,7 +134,7 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
       parent: Either[Method, Predicate],
       specType: SpecType,
       exprType: ExprType,
-      exprIndex: Int = this.previousExpr(),
+      exprIndex: Int = this.previousExpr()
   ): Unit = {
     labelSet +=
       new ASTLabel(parent, specType, exprType, this.specIndex, exprIndex)
@@ -143,10 +148,14 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   override def collectOutput(): LabelOutput = {
     val uncountedOffset =
       this.labelSet.count(p =>
-        p.exprType == ExprType.Imprecision || p.exprType == ExprType.Absent)
-    if (this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != (this.labelSet.size - uncountedOffset)) {
+        p.exprType == ExprType.Imprecision || p.exprType == ExprType.Absent
+      )
+    if (
+      this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != (this.labelSet.size - uncountedOffset)
+    ) {
       throw new Exception(
-        s"Total expression counts for each spec index don't equal the number of labels generated.")
+        s"Total expression counts for each spec index don't equal the number of labels generated."
+      )
     }
     LabelOutput(
       labelSet.toList,
@@ -205,11 +214,11 @@ class ASTLabel(
       case SpecType.Invariant     => "inv"
     }
     val exprTypeName = exprType match {
-      case gvc.permutation.ExprType.Accessibility => "acc"
-      case gvc.permutation.ExprType.Predicate     => "pred_inst"
-      case gvc.permutation.ExprType.Boolean       => "bool"
-      case gvc.permutation.ExprType.Imprecision   => "imp"
-      case gvc.permutation.ExprType.Absent        => "abs"
+      case gvc.benchmarking.ExprType.Accessibility => "acc"
+      case gvc.benchmarking.ExprType.Predicate     => "pred_inst"
+      case gvc.benchmarking.ExprType.Boolean       => "bool"
+      case gvc.benchmarking.ExprType.Imprecision   => "imp"
+      case gvc.benchmarking.ExprType.Absent        => "abs"
     }
     List(name, specType.id, specTypeName, exprTypeName, specIndex, exprIndex)
       .mkString(".")

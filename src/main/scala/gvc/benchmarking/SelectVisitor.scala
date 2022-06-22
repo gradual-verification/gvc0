@@ -1,5 +1,5 @@
-package gvc.permutation
-import gvc.permutation.Bench.BenchmarkException
+package gvc.benchmarking
+import gvc.benchmarking.Bench.BenchmarkException
 import gvc.transformer.IR
 import gvc.transformer.IR.{
   Binary,
@@ -11,8 +11,8 @@ import gvc.transformer.IR.{
   Op,
   Predicate
 }
-import gvc.permutation.ExprType.ExprType
-import gvc.permutation.SpecType.SpecType
+import gvc.benchmarking.ExprType.ExprType
+import gvc.benchmarking.SpecType.SpecType
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -56,9 +56,11 @@ class SelectVisitor(program: IR.Program)
     super.visit(program)
   }
 
-  override def enterSpec(parent: Either[Method, Predicate],
-                         template: Option[Expression] = None,
-                         specType: SpecType): Unit = {
+  override def enterSpec(
+      parent: Either[Method, Predicate],
+      template: Option[Expression] = None,
+      specType: SpecType
+  ): Unit = {
     super.enterSpec(parent, template, specType)
   }
 
@@ -152,7 +154,9 @@ class SelectVisitor(program: IR.Program)
       0,
       mergeBinary(
         resolvedConditional,
-        builtTrueBranch.componentCount + builtFalseBranch.componentCount))
+        builtTrueBranch.componentCount + builtFalseBranch.componentCount
+      )
+    )
   }
 
   override def enterExpr(): Unit =
@@ -180,9 +184,11 @@ class SelectVisitor(program: IR.Program)
             topExpr match {
               case binary: IR.Binary if binary.operator == BinaryOp.And =>
                 var tempNode: IR.Binary = binary
-                while (tempNode.left.isInstanceOf[IR.Binary] && tempNode.left
-                         .asInstanceOf[IR.Binary]
-                         .operator == BinaryOp.And) {
+                while (
+                  tempNode.left.isInstanceOf[IR.Binary] && tempNode.left
+                    .asInstanceOf[IR.Binary]
+                    .operator == BinaryOp.And
+                ) {
                   tempNode = tempNode.left.asInstanceOf[Binary]
                 }
                 tempNode.left = new IR.Binary(BinaryOp.And, app, tempNode.left)
