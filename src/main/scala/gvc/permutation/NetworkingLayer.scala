@@ -31,7 +31,7 @@ class ClientNetworkingLayer(
     port: Int,
     host: String,
     hostPort: Int,
-    handleJob: Message => (),
+    handleJob: (Message) => Unit,
     id: ClientIdentification
 ) extends Thread {
   private val connection = new Socket(host, hostPort)
@@ -63,8 +63,8 @@ class ClientNetworkingLayer(
 class ServerNetworkingLayer(
     port: Int,
     threads: Int = 8,
-    onCompletion: Message => (),
-    onFailure: Message => ()
+    onCompletion: Message => Unit,
+    onFailure: Message => Unit
 ) extends Thread {
   private val serverSocket = new ServerSocket(port)
   private val pool = Executors.newFixedThreadPool(threads)
@@ -112,8 +112,8 @@ class ServerNetworkingLayer(
 
   class MessageHandlerThread(
       socket: Socket,
-      onCompletion: Message => (),
-      onFailure: Message => ()
+      onCompletion: Message => Unit,
+      onFailure: Message => Unit
   ) extends Thread {
     override def run(): Unit = {
       while (!this.isInterrupted) {
