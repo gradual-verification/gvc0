@@ -127,7 +127,7 @@ object LabelTools {
   }
 
   def parseID(input: String): Option[BigInteger] = {
-    if (input.matches("[0-9A-Fa-f]+")) {
+    if (input.matches(hexRegex)) {
       Some(new BigInteger(input, 16))
     } else {
       None
