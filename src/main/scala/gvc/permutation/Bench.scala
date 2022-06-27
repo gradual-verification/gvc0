@@ -33,11 +33,13 @@ object Bench {
     //
     val pathDesc = "path_desc"
 
-    val performance: String = csv("dyn_perf_gradual")
-    val dynamicPerformance: String = csv("dyn_perf_full_dynamic")
-    val framingPerformance: String = csv("dyn_perf_only_framing")
+    val executionPerformanceGradual: String = csv("dyn_perf_gradual")
+    val executionPerformanceDynamic: String = csv("dyn_perf_full_dynamic")
+    val executionPerformanceFraming: String = csv("dyn_perf_only_framing")
+
     val verificationPerformance: String = csv("verification_perf")
     val instrumentationPerformance: String = csv("instrumentation_perf")
+
     val compilationPerformanceGradual: String = csv("compilation_perf_gradual")
     val compilationPerformanceDynamic: String = csv(
       "compilation_perf_full_dynamic"
@@ -365,8 +367,7 @@ object Bench {
 
     val printer = new DynamicCSVPrinter(
       benchmarkConfig,
-      benchmarkConfig.files.compilationPerformanceGradual,
-      benchmarkConfig.files.performance
+      ExecutionType.Gradual
     )
 
     markDirectory(
@@ -381,8 +382,7 @@ object Bench {
     if (!config.disableBaseline) {
       val framingPrinter = new DynamicCSVPrinter(
         benchmarkConfig,
-        benchmarkConfig.files.compilationPerformanceFraming,
-        benchmarkConfig.files.framingPerformance
+        ExecutionType.FramingOnly
       )
 
       markDirectory(
@@ -397,8 +397,7 @@ object Bench {
 
       val dynamicPrinter = new DynamicCSVPrinter(
         benchmarkConfig,
-        benchmarkConfig.files.compilationPerformanceDynamic,
-        benchmarkConfig.files.dynamicPerformance
+        ExecutionType.FullDynamic
       )
 
       markDirectory(

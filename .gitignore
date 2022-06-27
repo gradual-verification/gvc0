@@ -81,3 +81,7 @@ a.out
 
 *.RData
 *.Rhistory
+
+study/results
+study/results-archive
+study/results-original

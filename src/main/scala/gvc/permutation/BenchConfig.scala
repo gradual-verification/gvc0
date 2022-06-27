@@ -44,15 +44,17 @@ object BenchConfig {
       dynamicExecLogs: Path,
       framingExecLogs: Path,
       //
-      performance: Path,
-      dynamicPerformance: Path,
-      framingPerformance: Path,
       verificationPerformance: Path,
       instrumentationPerformance: Path,
       translationPerformance: Path,
+      //
       compilationPerformanceGradual: Path,
       compilationPerformanceDynamic: Path,
       compilationPerformanceFraming: Path,
+      //
+      executionPerformanceGradual: Path,
+      executionPerformanceDynamic: Path,
+      executionPerformanceFraming: Path,
       //
       levels: Path,
       metadata: Path,
@@ -115,9 +117,13 @@ object BenchConfig {
     val pathDescriptions = root.resolve(Names.pathDesc)
     Files.createDirectories(pathDescriptions)
 
-    val performance = root.resolve(Names.performance)
-    val dynamicPerformance = root.resolve(Names.dynamicPerformance)
-    val framingPerformance = root.resolve(Names.framingPerformance)
+    val executionPerformanceGradual =
+      root.resolve(Names.executionPerformanceGradual)
+    val executionPerformanceDynamic =
+      root.resolve(Names.executionPerformanceDynamic)
+    val executionPerformanceFraming =
+      root.resolve(Names.executionPerformanceFraming)
+
     val instrumentationPerformance =
       root.resolve(Names.instrumentationPerformance)
     val verificationPerformance = root.resolve(Names.verificationPerformance)
@@ -133,9 +139,9 @@ object BenchConfig {
 
     if (config.onlyExec) {
       deleteMultiple(
-        performance,
-        dynamicPerformance,
-        framingPerformance,
+        executionPerformanceGradual,
+        executionPerformanceDynamic,
+        executionPerformanceFraming,
         compilationPerformanceFraming,
         compilationPerformanceDynamic,
         compilationPerformanceGradual
@@ -144,14 +150,11 @@ object BenchConfig {
       deleteMultiple(verificationPerformance, instrumentationPerformance)
     } else {
       deleteMultiple(
-        performance,
-        dynamicPerformance,
-        framingPerformance,
+        executionPerformanceGradual,
+        executionPerformanceDynamic,
+        executionPerformanceFraming,
         verificationPerformance,
         instrumentationPerformance,
-        performance,
-        dynamicPerformance,
-        framingPerformance,
         compilationPerformanceFraming,
         compilationPerformanceDynamic,
         compilationPerformanceGradual
@@ -199,8 +202,6 @@ object BenchConfig {
       dynamicCompilationLogs = dynamicCompileLog,
       execLogs = exec,
       dynamicExecLogs = dynamicExecLog,
-      performance = performance,
-      dynamicPerformance = dynamicPerformance,
       levels = levels,
       metadata = metadata,
       pathDescriptions = pathDescriptions,
@@ -210,14 +211,19 @@ object BenchConfig {
       framingExecLogs = framingExecLog,
       framingCompilationLogs = framingCompileLog,
       framingPerms = framingPerms,
-      framingPerformance = framingPerformance,
       tempC0File = tempC0File,
       tempBinaryFile = tempBinaryFile,
       verificationPerformance = verificationPerformance,
       instrumentationPerformance = instrumentationPerformance,
+      //
       compilationPerformanceGradual = compilationPerformanceGradual,
       compilationPerformanceDynamic = compilationPerformanceDynamic,
       compilationPerformanceFraming = compilationPerformanceFraming,
+      //
+      executionPerformanceGradual = executionPerformanceGradual,
+      executionPerformanceDynamic = executionPerformanceDynamic,
+      executionPerformanceFraming = executionPerformanceFraming,
+      //
       translationPerformance = translationPerformance
     )
   }
