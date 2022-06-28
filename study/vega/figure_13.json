@@ -1,0 +1,57 @@
+{
+  "title": {
+    "text": "95th Percentile Increases in Run-time Overhead",
+    "fontSize": 14
+  },
+  "width": 200,
+  "height": 200,
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "data": {
+    "url": "https://gist.githubusercontent.com/icmccorm/2674826b14d2d1a8c388fe57debd6661/raw/32407bd839f74916cfbff0cf7c42a1919f5d5862/jumps_popl.csv"
+  },
+  "mark": "bar",
+  "transform": [
+    {
+      "filter": {
+        "field": "classification",
+        "equal": "max"
+      }
+    },
+    {
+      "calculate": "{'assert': 'Assert', 'fold': 'Fold', 'inv':'Loop Inv.', 'post':'Postcond.', 'pre':'Precond.', 'pred':'Pred. Body', 'unfold':'Unfold'}[datum.context_type]",
+      "as": "Location Added Within Specification"
+    }
+  ],
+  "encoding": {
+    "x": {
+      "field": "Location Added Within Specification",
+      "axis": {
+        "labelFontSize": 12,
+        "titleFontSize": 12
+      }
+    },
+    "y": {
+      "aggregate": "count",
+      "field": "component_type",
+      "axis": {
+        "title": "Count of Specification Elements",
+        "labelFontSize": 12,
+        "titleFontSize": 12
+      }
+    },
+    "color": {
+      "field": "component_type",
+      "scale": {
+        "range": [
+          "#33A02C",
+          "#de2d26",
+          "#6a3d9a"
+        ]
+      },
+      "legend": null
+    },
+    "xOffset": {
+      "datum": "context_type"
+    }
+  }
+}
