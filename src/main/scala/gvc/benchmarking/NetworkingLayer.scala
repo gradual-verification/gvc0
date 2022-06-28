@@ -58,6 +58,8 @@ class ClientNetworkingLayer(
           case None =>
         }
       }
+    } catch {
+      case _: Throwable => {}
     }
   }
 }

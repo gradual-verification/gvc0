@@ -16,6 +16,6 @@ object ExternalConfig {
 
   def createFromJSON(configPath: Path): Unit = {
     val contents = Main.readFile(configPath.toFile.toString)
-    val json = JSON.parseFull()
+
   }
 }

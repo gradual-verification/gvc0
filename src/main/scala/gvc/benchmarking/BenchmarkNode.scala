@@ -10,7 +10,7 @@ class BenchmarkNode {
     // repeatedly waits and tries to connect to the specified server IP/port
     // done in a while loop forever.
   }
-
+  /*
   //passed as the handleJob parameter to ClientNetworkingLayer
   def runBenchmark(request: Message): Message = {
     //Run in a loop:
@@ -24,5 +24,5 @@ class BenchmarkNode {
     // execute
 
     //(this will probably be handled in NetworkingLayer.scala): send a response back to the IP and Port # with all data.
-  }
+  }*/
 }
