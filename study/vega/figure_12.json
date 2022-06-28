@@ -7,7 +7,7 @@
   "width": 200,
   "height": 200,
   "data": {
-    "url": "https://gist.githubusercontent.com/icmccorm/fe8f56b7428d820ade5054bbc2ae7794/raw/f80fa68d13f6d9b9ed28cc0973b03fa05ca391d9/vcs.csv"
+    "url": "https://gist.githubusercontent.com/icmccorm/9ca4c8f3a4c72a6ca46d52b4e380abf8/raw/5e77e848ce9491d6784e50dc18ecfc5d0e410087/vcs_popl.csv"
   },
   "transform": [
     {
@@ -62,7 +62,7 @@
         },
         "y": {
           "aggregate": "mean",
-          "field": "% VCs",
+          "field": "VCs",
           "type": "quantitative"
         },
         "color": {

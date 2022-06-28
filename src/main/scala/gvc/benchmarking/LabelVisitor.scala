@@ -60,7 +60,8 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
     val pred_inst = labels.count(_.exprType == ExprType.Predicate)
     val bool_expr = labels.count(_.exprType == ExprType.Boolean)
     val acc = labels.count(_.exprType == ExprType.Accessibility)
-    List(acc, pred_inst, bool_expr).mkString("/")
+    val imp = labels.count(_.exprType == ExprType.Imprecision)
+    List(acc, pred_inst, bool_expr, imp).mkString("/")
   }
 
   override def enterSpec(

@@ -92,17 +92,42 @@ class StaticCSVPrinter(benchConfig: BenchmarkConfig) extends {
 
 class DynamicCSVPrinter(
     benchConfig: BenchmarkConfig,
-    compilation: Path,
-    execution: Path
+    execType: ExecutionType
 ) {
-  var compilationWriter = new FileWriter(compilation.toString, true)
-  var executionWriter = new FileWriter(execution.toString, true)
-  val writers: List[FileWriter] = List(compilationWriter, executionWriter)
 
-  writers.foreach(l => {
-    l.write((List("id") ++ Columns.timingStatColumnNames).mkString(",") + '\n')
-    l.flush()
-  })
+  var compilationWriter = new FileWriter(
+    (execType match {
+      case ExecutionType.Gradual =>
+        benchConfig.files.compilationPerformanceGradual
+      case ExecutionType.FullDynamic =>
+        benchConfig.files.compilationPerformanceDynamic
+      case ExecutionType.FramingOnly =>
+        benchConfig.files.compilationPerformanceFraming
+      case _ => "./compilation_perf.csv"
+    }).toString,
+    true
+  )
+  var executionWriter = new FileWriter(
+    (execType match {
+      case ExecutionType.Gradual =>
+        benchConfig.files.executionPerformanceGradual
+      case ExecutionType.FullDynamic =>
+        benchConfig.files.executionPerformanceDynamic
+      case ExecutionType.FramingOnly =>
+        benchConfig.files.executionPerformanceFraming
+      case _ => "./dyn_perf.csv"
+    }).toString,
+    true
+  )
+
+  val writers: List[FileWriter] = List(compilationWriter, executionWriter)
+  compilationWriter.write(
+    (List("id") ++ Columns.timingStatColumnNames).mkString(",") + '\n'
+  )
+  executionWriter.write(
+    (List("id") ++ Columns.performanceColumnNames).mkString(",") + '\n'
+  )
+
   def close(): Unit = {
     writers.foreach(_.close())
   }
