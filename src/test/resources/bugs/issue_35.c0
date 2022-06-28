@@ -1,0 +1,41 @@
+// ERROR GV does not track heap location values/snapshots for information added to the path condition 
+//       optimistically in a produce. This creates more run-time checks than necessary beacuse there is no 
+//       heap chunk connecting a fresh symbolic value and the imprecise assertion.
+
+struct Test {
+  int f;
+  int g;
+};
+
+void assignTest(struct Test *x)
+//@requires ? && x->f == 2;
+//@ensures ? && x->f == 2;
+{
+  x->f = 2;
+  x->g = 1;
+}
+
+// void test(struct Test x)
+// {
+//   if (x.f == 2) return assignTest(x);
+//   else if (x.g == 1) return 0;
+// }
+
+void assignTest2(struct Test *x)
+//@requires ? && x->f == 2;
+//@ensures ? && x->f == 2;
+{
+  x->g = 1;
+}
+
+void assignTest3(struct Test *x)
+//@requires ? && acc(x->f) && x->f == 2;
+//@ensures ? && x->f == 2;
+{
+  x->g = 1;
+}
+
+int main()
+{
+  return 0;
+}
