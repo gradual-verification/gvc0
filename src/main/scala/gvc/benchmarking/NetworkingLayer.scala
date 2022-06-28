@@ -31,7 +31,7 @@ class ClientNetworkingLayer(
     port: Int,
     host: String,
     hostPort: Int,
-    handleJob: (Message) => Unit,
+    handleJob: (Message) => Message,
     id: ClientIdentification
 ) extends Thread {
   private val connection = new Socket(host, hostPort)
@@ -45,19 +45,20 @@ class ClientNetworkingLayer(
         val jobRequest = dis.readAllBytes()
         val parsedJob = parseMessage(jobRequest)
         parsedJob match {
-          case Some(value) => handleJob(value)
-          case None        =>
+          case Some(value) => {
+            val result = handleJob(value)
+            val os = new DataOutputStream(connection.getOutputStream)
+            val concatenated =
+              BigInt
+                .int2bigInt(result.jobID)
+                .toByteArray ++ result.serializedContents
+            os.write(concatenated)
+            os.flush()
+          }
+          case None =>
         }
       }
     }
-  }
-  // TODO: extract from fnc to not have to call `sendResult` in `BenchmarkServer.scala`
-  def sendResult(res: Message): Unit = {
-    val os = new DataOutputStream(connection.getOutputStream)
-    val concatenated =
-      BigInt.int2bigInt(res.jobID).toByteArray ++ res.serializedContents
-    os.write(concatenated)
-    os.flush()
   }
 }
 
@@ -96,7 +97,7 @@ class ServerNetworkingLayer(
     import java.util.concurrent.TimeUnit
     pool.shutdown() // Disable new tasks from being submitted
     try // Wait a while for existing tasks to terminate
-      if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
+    if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
       pool.shutdownNow // Cancel currently executing tasks
 
       // Wait a while for tasks to respond to being cancelled
