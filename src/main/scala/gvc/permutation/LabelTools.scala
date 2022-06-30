@@ -13,10 +13,13 @@ object SamplingHeuristic extends Enumeration {
 case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
 
 class Sampler(benchConfig: BenchmarkConfig) {
+  private val rand = new scala.util.Random()
+  rand.setSeed(411414114)
+
   private val prevSamples: mutable.Set[BigInteger] =
     mutable.Set[BigInteger]()
 
-  def numSampled:Int = prevSamples.size
+  def numSampled: Int = prevSamples.size
 
   private val specImprecisionLabels = benchConfig.labelOutput.labels
     .filter(p => p.exprType == ExprType.Imprecision)
@@ -46,7 +49,8 @@ class Sampler(benchConfig: BenchmarkConfig) {
             case Left(method) => lastFoldUnfoldForMethod += (method -> index)
             case Right(pred) =>
               throw new BenchmarkException(
-                s"A fold or unfold was associated with the body of the predicate ${pred.name}")
+                s"A fold or unfold was associated with the body of the predicate ${pred.name}"
+              )
           }
         case gvc.permutation.SpecType.Assert =>
         case _ =>
@@ -64,7 +68,9 @@ class Sampler(benchConfig: BenchmarkConfig) {
           case Right(_) => pair._2
         }) + 1
         val randomOffset: Int = Math
-          .floor((listOfComponents.length - firstValidIndex) * Math.random())
+          .floor(
+            (listOfComponents.length - firstValidIndex) * this.rand.nextDouble()
+          )
           .toInt
         (pair._1, firstValidIndex + randomOffset)
       })
@@ -79,8 +85,10 @@ class Sampler(benchConfig: BenchmarkConfig) {
         case SamplingHeuristic.Random => sampleRandom
         case _                        => throw new LabelException("Invalid sampling heuristic.")
       }
-      if(sampled.size != benchConfig.labelOutput.labels.size){
-        throw new BenchmarkException("Size of permutation doesn't match size of template.")
+      if (sampled.size != benchConfig.labelOutput.labels.size) {
+        throw new BenchmarkException(
+          "Size of permutation doesn't match size of template."
+        )
       }
       sampled
     }
@@ -95,8 +103,8 @@ class Sampler(benchConfig: BenchmarkConfig) {
     sampled
   }
   private def sampleRandom: List[ASTLabel] = {
-    val sample = mutable.ListBuffer.empty ++ scala.util.Random
-      .shuffle(this.componentLabels)
+    val sample =
+      mutable.ListBuffer.empty ++ this.rand.shuffle(this.componentLabels)
     val pointMapping = findInsertionPoints(sample.toList)
     val sortedTuples = pointMapping.toList
       .sortWith((pair1, pair2) => {
@@ -157,7 +165,10 @@ class LabelPermutation(
         label.specType match {
           case gvc.permutation.SpecType.Fold |
               gvc.permutation.SpecType.Unfold =>
-            foldUnfoldCounts += value -> (foldUnfoldCounts.getOrElse(value, 0) + 1)
+            foldUnfoldCounts += value -> (foldUnfoldCounts.getOrElse(
+              value,
+              0
+            ) + 1)
           case _ =>
         }
       case Right(_) =>
@@ -189,7 +200,8 @@ class LabelPermutation(
     completedExpressions.nonEmpty &&
       benchmarkConfig.labelOutput.specsToSpecIndices
         .contains(template) && completedExpressions.contains(
-      benchmarkConfig.labelOutput.specsToSpecIndices(template))
+        benchmarkConfig.labelOutput.specsToSpecIndices(template)
+      )
 
   def id: BigInteger = {
     val specsPresent = specStatusList.foldRight("")(_.toString + _)
