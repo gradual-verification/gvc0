@@ -263,7 +263,7 @@ object Checker {
                     )
                   )
                 )
-
+                /*
                 // Convert postcondition into calls to addAcc
                 call.ir.insertAfter(
                   callee.postcondition.toSeq.flatMap(
@@ -274,7 +274,7 @@ object Checker {
                       context
                     )
                   )
-                )
+                )*/
               }
             }
 
