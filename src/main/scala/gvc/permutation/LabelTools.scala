@@ -1,4 +1,5 @@
 package gvc.permutation
+
 import gvc.permutation.Bench.BenchmarkException
 import gvc.permutation.BenchConfig.BenchmarkConfig
 import gvc.permutation.SamplingHeuristic.SamplingHeuristic
@@ -6,17 +7,22 @@ import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
 import scala.collection.mutable
+import scala.util.Random
+
 object SamplingHeuristic extends Enumeration {
   type SamplingHeuristic = Value
   val Random, None = Value
 }
+
 case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
 
 class Sampler(benchConfig: BenchmarkConfig) {
+  private val rand = new Random()
+  rand.setSeed(411414114)
   private val prevSamples: mutable.Set[BigInteger] =
     mutable.Set[BigInteger]()
 
-  def numSampled:Int = prevSamples.size
+  def numSampled: Int = prevSamples.size
 
   private val specImprecisionLabels = benchConfig.labelOutput.labels
     .filter(p => p.exprType == ExprType.Imprecision)
@@ -64,7 +70,8 @@ class Sampler(benchConfig: BenchmarkConfig) {
           case Right(_) => pair._2
         }) + 1
         val randomOffset: Int = Math
-          .floor((listOfComponents.length - firstValidIndex) * Math.random())
+          .floor((listOfComponents.length - firstValidIndex) * this.rand
+            .nextDouble())
           .toInt
         (pair._1, firstValidIndex + randomOffset)
       })
@@ -79,11 +86,13 @@ class Sampler(benchConfig: BenchmarkConfig) {
         case SamplingHeuristic.Random => sampleRandom
         case _                        => throw new LabelException("Invalid sampling heuristic.")
       }
-      if(sampled.size != benchConfig.labelOutput.labels.size){
-        throw new BenchmarkException("Size of permutation doesn't match size of template.")
+      if (sampled.size != benchConfig.labelOutput.labels.size) {
+        throw new BenchmarkException(
+          "Size of permutation doesn't match size of template.")
       }
       sampled
     }
+
     var sampled = getSample
     var hashCode =
       LabelTools.hashPath(benchConfig.labelOutput.labels, sampled)
@@ -94,8 +103,9 @@ class Sampler(benchConfig: BenchmarkConfig) {
     prevSamples += hashCode
     sampled
   }
+
   private def sampleRandom: List[ASTLabel] = {
-    val sample = mutable.ListBuffer.empty ++ scala.util.Random
+    val sample = mutable.ListBuffer.empty ++ this.rand
       .shuffle(this.componentLabels)
     val pointMapping = findInsertionPoints(sample.toList)
     val sortedTuples = pointMapping.toList
@@ -168,7 +178,9 @@ class LabelPermutation(
       case _ =>
     }
   }
+
   def labels: Set[ASTLabel] = contents.toSet
+
   def indices: Set[Int] = orderedIndices.toSet
 
   def imprecisionStatusList: List[Int] = {
