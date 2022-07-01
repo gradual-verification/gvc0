@@ -12,19 +12,33 @@ import viper.silicon.state.BranchCond
 
 object Collector {
   sealed trait Location
-  sealed trait AtOp extends Location { val op: IR.Op }
+
+  sealed trait AtOp extends Location {
+    val op: IR.Op
+  }
+
   case class Pre(override val op: IR.Op) extends AtOp
+
   case class Post(override val op: IR.Op) extends AtOp
+
   case class LoopStart(override val op: IR.Op) extends AtOp
+
   case class LoopEnd(override val op: IR.Op) extends AtOp
+
   case object MethodPre extends Location
+
   case object MethodPost extends Location
 
   sealed trait Condition
+
   case class NotCondition(value: Condition) extends Condition
+
   case class AndCondition(values: List[Condition]) extends Condition
+
   case class OrCondition(values: List[Condition]) extends Condition
+
   case class ImmediateCondition(value: CheckExpression) extends Condition
+
   case class TrackedCondition(
       location: Location,
       value: CheckExpression
@@ -34,6 +48,7 @@ object Collector {
       check: Check,
       when: Option[Condition]
   )
+
   case class RuntimeCheck(
       location: Location,
       check: Check,
@@ -41,9 +56,13 @@ object Collector {
   )
 
   sealed trait CallStyle
+
   case object PreciseCallStyle extends CallStyle
+
   case object PrecisePreCallStyle extends CallStyle
+
   case object ImpreciseCallStyle extends CallStyle
+
   case object MainCallStyle extends CallStyle
 
   class CollectedMethod(
@@ -100,15 +119,24 @@ object Collector {
   }
 
   private sealed trait ViperLocation
+
   private object ViperLocation {
     case object Value extends ViperLocation
+
     case object PreInvoke extends ViperLocation
+
     case object PostInvoke extends ViperLocation
+
     case object PreLoop extends ViperLocation
+
     case object PostLoop extends ViperLocation
+
     case object Fold extends ViperLocation
+
     case object Unfold extends ViperLocation
+
     case object InvariantLoopStart extends ViperLocation
+
     case object InvariantLoopEnd extends ViperLocation
 
     def loop(loopPosition: LoopPosition): ViperLocation = loopPosition match {
@@ -709,6 +737,7 @@ object Collector {
       checkedSpecificationLocations = needsFullPermissionChecking.toSet
     )
   }
+
   // TODO: Factor this out
   def traversePermissions(
       spec: IR.Expression,
@@ -860,14 +889,15 @@ object Collector {
       case None => false
     }
 
-  def getCallstyle(irMethod: IR.Method) =
+  def getCallstyle(irMethod: IR.Method): CallStyle =
     if (irMethod.name == "main")
       MainCallStyle
     else if (isImprecise(irMethod.precondition))
       ImpreciseCallStyle
     else if (isImprecise(irMethod.postcondition))
       PrecisePreCallStyle
-    else PreciseCallStyle
+    else
+      PreciseCallStyle
 
   // Changes an expression from an IR expression into a CheckExpression. If an argument lookup
   // mapping is given, it will use this mapping to resolve variables. Otherwise, it will assume
