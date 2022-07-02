@@ -34,7 +34,7 @@ object Timing {
     val verifierTimings = ListBuffer[Long]()
     val weaverTimings = ListBuffer[Long]()
 
-    for (_ <- 0 until config.workload.iterations) {
+    for (_ <- 0 until 1) {
       val out = verify(inputSource, fileNames, config.rootConfig)
       val perf = out.timing
       translationTimings += perf.translation
