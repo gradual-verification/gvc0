@@ -7,7 +7,6 @@ import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
 import scala.collection.mutable
-import scala.util.Random
 
 object SamplingHeuristic extends Enumeration {
   type SamplingHeuristic = Value
@@ -17,8 +16,8 @@ object SamplingHeuristic extends Enumeration {
 case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
 
 class Sampler(benchConfig: BenchmarkConfig) {
-  private val rand = new Random()
-  rand.setSeed(411414114)
+  private val rng = new scala.util.Random
+  rng.setSeed(41141441)
   private val prevSamples: mutable.Set[BigInteger] =
     mutable.Set[BigInteger]()
 
@@ -70,8 +69,8 @@ class Sampler(benchConfig: BenchmarkConfig) {
           case Right(_) => pair._2
         }) + 1
         val randomOffset: Int = Math
-          .floor((listOfComponents.length - firstValidIndex) * this.rand
-            .nextDouble())
+          .floor(
+            (listOfComponents.length - firstValidIndex) * this.rng.nextFloat())
           .toInt
         (pair._1, firstValidIndex + randomOffset)
       })
@@ -105,7 +104,7 @@ class Sampler(benchConfig: BenchmarkConfig) {
   }
 
   private def sampleRandom: List[ASTLabel] = {
-    val sample = mutable.ListBuffer.empty ++ this.rand
+    val sample = mutable.ListBuffer.empty ++ this.rng
       .shuffle(this.componentLabels)
     val pointMapping = findInsertionPoints(sample.toList)
     val sortedTuples = pointMapping.toList
