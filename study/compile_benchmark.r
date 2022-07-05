@@ -51,6 +51,8 @@ unpack_context <- function(df, type, example) {
     return(df)
 }
 
+
+
 # for the summary statistics table, extract each relevant statistic and create a vector for a given row
 create_summary_row <- function(data, stressLevel, prefix) {
     subset <- data %>% filter(stress == stressLevel)
@@ -151,7 +153,7 @@ compile <- function(dir, stressLevels) {
 
     # a mapping from permutation IDs to summary statistics on their execution time at each specified workload value
     # for gradually verified, partial specifications
-    perf_path <- file.path(dir, "perf.csv")
+    perf_path <- file.path(dir, "dyn_perf_gradual.csv")
     perf <- read_csv(perf_path, show_col_types = FALSE) %>% clean("gradual")
     perf_lattice <- inner_join(
             levels,
@@ -171,7 +173,7 @@ compile <- function(dir, stressLevels) {
 
     # a mapping from permutation IDs to summary statistics on their execution time at each specified workload value
     # for the dynamic verification baseline
-    full_dynamic_path <- file.path(dir, "perf_full_dynamic.csv")
+    full_dynamic_path <- file.path(dir, "dyn_perf_full_dynamic.csv")
     full_dynamic <- read_csv(full_dynamic_path, show_col_types = FALSE) %>%
         clean("dynamic")
     full_dynamic_lattice <- inner_join(
@@ -191,7 +193,7 @@ compile <- function(dir, stressLevels) {
 
     # a mapping from permutation IDs to summary statistics on their execution time at each specified workload value
     # for the "only framing" baseline
-    only_framing_path <- file.path(dir, "perf_only_framing.csv")
+    only_framing_path <- file.path(dir, "dyn_perf_only_framing.csv")
     only_framing <- read_csv(only_framing_path, show_col_types = FALSE) %>%
         clean("framing")
     only_framing_lattice <- inner_join(
@@ -405,27 +407,32 @@ compile <- function(dir, stressLevels) {
         )
 }
 
-compile("./results/bst", c(8, 16, 32))
-compile("./results/list", c(32, 64, 128))
-compile("./results/composite", c(4, 8, 16))
+args = commandArgs(trailingOnly=TRUE)
+if (length(args)==0) {
+  stop("A directory containing result directories for bst, list, and composite must be supplied.", call.=FALSE)
+}
+dir <- args[1]
+compile(file.path(dir, "bst"), c(8, 16, 32))
+compile(file.path(dir, "list"), c(32, 64, 128))
+compile(file.path(dir, "composite"), c(4, 8, 16))
 
 pg <- perf_global %>% write.csv(
-        file.path("results/perf.csv"),
+        file.path(dir, "perf.csv"),
         row.names = FALSE
 )
 
 pvcs <- vcs_global %>% write.csv(
-        file.path("results/vcs.csv"),
+        file.path(dir, "vcs.csv"),
         row.names = FALSE
 )
 
 colnames(table_global) <- c("example", "workload", "mean_time", "sd_time", "max_time", "min_time", "mean_impr", "sd_impr", "max_impr", "min_impr", "complete_impr")
 ptbl <- table_global %>% write.csv(
-        file.path("results/table.csv"),
+        file.path(dir, "table.csv"),
         row.names = FALSE
 )
 
 pjumps <- jumps_global %>% write.csv(
-        file.path("results/jumps.csv"),
+        file.path(dir, "jumps.csv"),
         row.names = FALSE
 )

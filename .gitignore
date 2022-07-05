@@ -85,3 +85,7 @@ a.out
 study/results
 study/results-archive
 study/results-original
+study/results-popl
+study/aws/archives
+study/aws/local
+study/aws/remote
