@@ -1,8 +1,8 @@
-package gvc.permutation
+package gvc.benchmarking
 
-import gvc.permutation.Bench.BenchmarkException
-import gvc.permutation.BenchConfig.BenchmarkConfig
-import gvc.permutation.SamplingHeuristic.SamplingHeuristic
+import gvc.benchmarking.Bench.BenchmarkException
+import gvc.benchmarking.BenchConfig.BenchmarkConfig
+import gvc.benchmarking.SamplingHeuristic.SamplingHeuristic
 import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
@@ -47,14 +47,16 @@ class Sampler(benchConfig: BenchmarkConfig) {
     for (index <- listOfComponents.indices) {
       val label = listOfComponents(index)
       label.specType match {
-        case gvc.permutation.SpecType.Fold | gvc.permutation.SpecType.Unfold =>
+        case gvc.benchmarking.SpecType.Fold |
+            gvc.benchmarking.SpecType.Unfold =>
           label.parent match {
             case Left(method) => lastFoldUnfoldForMethod += (method -> index)
             case Right(pred) =>
               throw new BenchmarkException(
-                s"A fold or unfold was associated with the body of the predicate ${pred.name}")
+                s"A fold or unfold was associated with the body of the predicate ${pred.name}"
+              )
           }
-        case gvc.permutation.SpecType.Assert =>
+        case gvc.benchmarking.SpecType.Assert =>
         case _ =>
           specIndexToContext += (label.specIndex -> label.parent)
           lastComponentWithSpecIndexAt += (label.specIndex -> index)
@@ -133,7 +135,7 @@ object LabelTools {
   }
 
   def parseID(input: String): Option[BigInteger] = {
-    if (input.matches("[0-9A-Fa-f]+")) {
+    if (input.matches(hexRegex)) {
       Some(new BigInteger(input, 16))
     } else {
       None
@@ -165,15 +167,18 @@ class LabelPermutation(
     label.parent match {
       case Left(value) =>
         label.specType match {
-          case gvc.permutation.SpecType.Fold |
-              gvc.permutation.SpecType.Unfold =>
-            foldUnfoldCounts += value -> (foldUnfoldCounts.getOrElse(value, 0) + 1)
+          case gvc.benchmarking.SpecType.Fold |
+              gvc.benchmarking.SpecType.Unfold =>
+            foldUnfoldCounts += value -> (foldUnfoldCounts.getOrElse(
+              value,
+              0
+            ) + 1)
           case _ =>
         }
       case Right(_) =>
     }
     label.exprType match {
-      case gvc.permutation.ExprType.Imprecision =>
+      case gvc.benchmarking.ExprType.Imprecision =>
         completedExpressions += label.specIndex
       case _ =>
     }
@@ -201,7 +206,8 @@ class LabelPermutation(
     completedExpressions.nonEmpty &&
       benchmarkConfig.labelOutput.specsToSpecIndices
         .contains(template) && completedExpressions.contains(
-      benchmarkConfig.labelOutput.specsToSpecIndices(template))
+      benchmarkConfig.labelOutput.specsToSpecIndices(template)
+    )
 
   def id: BigInteger = {
     val specsPresent = specStatusList.foldRight("")(_.toString + _)

@@ -1,9 +1,9 @@
-package gvc.permutation
+package gvc.benchmarking
 
 import gvc.CC0Wrapper.Performance
 import gvc.Main.ProfilingInfo
-import gvc.permutation.BenchConfig.{BenchmarkConfig, BenchmarkOutputFiles}
-import gvc.permutation.Timing.TimedVerification
+import gvc.benchmarking.BenchConfig.{BenchmarkConfig, BenchmarkOutputFiles}
+import gvc.benchmarking.Timing.TimedVerification
 
 import java.io.FileWriter
 import java.math.BigInteger

@@ -1,4 +1,4 @@
-package gvc.permutation
+package gvc.benchmarking
 import gvc.transformer.IR
 import gvc.weaver._
 object BaselineChecker {

@@ -1,8 +1,8 @@
-package gvc.permutation
+package gvc.benchmarking
 import gvc.transformer.IR
 import gvc.transformer.IR.{Block, Expression, Method, Predicate}
-import gvc.permutation.ExprType.ExprType
-import gvc.permutation.SpecType.SpecType
+import gvc.benchmarking.ExprType.ExprType
+import gvc.benchmarking.SpecType.SpecType
 
 object SpecType extends Enumeration {
   type SpecType = Value
@@ -47,9 +47,11 @@ abstract class SpecVisitor[I, O] {
     currentContext = Some(parent)
     exprIndex += 1
   }
-  def enterSpec(parent: Either[Method, Predicate],
-                template: Option[Expression] = None,
-                specType: SpecType): Unit = {}
+  def enterSpec(
+      parent: Either[Method, Predicate],
+      template: Option[Expression] = None,
+      specType: SpecType
+  ): Unit = {}
 
   def leaveSpec(): Unit = {
     this.specIndex += 1
@@ -100,9 +102,11 @@ class SpecTraversal[I, O] {
       visitor: SpecVisitor[I, O]
   ): Unit = {
     visitor.enterPredicate(predicate)
-    visitor.enterSpec(Right(predicate),
-                      Some(predicate.expression),
-                      SpecType.Predicate)
+    visitor.enterSpec(
+      Right(predicate),
+      Some(predicate.expression),
+      SpecType.Predicate
+    )
     visitExpression(
       Right(predicate),
       SpecType.Predicate,
@@ -124,9 +128,11 @@ class SpecTraversal[I, O] {
     )
     visitor.leaveSpec()
 
-    visitor.enterSpec(Left(method),
-                      method.postcondition,
-                      SpecType.Postcondition)
+    visitor.enterSpec(
+      Left(method),
+      method.postcondition,
+      SpecType.Postcondition
+    )
 
     visitExpression(
       Left(method),
@@ -157,9 +163,11 @@ class SpecTraversal[I, O] {
       op match {
         case assert: IR.Assert =>
           if (assert.kind == IR.AssertKind.Specification) {
-            visitor.enterSpec(Left(context),
-                              Some(assert.value),
-                              SpecType.Assert)
+            visitor.enterSpec(
+              Left(context),
+              Some(assert.value),
+              SpecType.Assert
+            )
             visitExpression(
               Left(context),
               SpecType.Assert,
@@ -194,9 +202,11 @@ class SpecTraversal[I, O] {
           visitBlock(context, ifstmt.ifFalse, visitor)
           visitor.collectIf(ifstmt)
         case whl: IR.While =>
-          visitor.enterSpec(Left(context),
-                            Some(whl.invariant),
-                            SpecType.Invariant)
+          visitor.enterSpec(
+            Left(context),
+            Some(whl.invariant),
+            SpecType.Invariant
+          )
           visitExpression(
             Left(context),
             SpecType.Invariant,

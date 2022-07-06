@@ -1,13 +1,26 @@
-package gvc.permutation
+package gvc.benchmarking
 
 import gvc.{Config, Main}
-import gvc.permutation.Bench.Names
-import gvc.permutation.Extensions.csv
+import gvc.benchmarking.Bench.Names
+import gvc.benchmarking.Extensions.csv
 import gvc.transformer.IR
 
+import java.net.{JarURLConnection, URL}
 import java.nio.file.{Files, Path, Paths}
 
 object BenchConfig {
+
+  //https://stackoverflow.com/questions/38204059/how-to-obtain-a-package-version-from-the-jars-manifest-using-the-getimplementa
+  def getVersionID(): Option[String] = {
+    val className = getClass.getSimpleName + ".class"
+    val classPath = getClass.getResource(className).toString
+    if (!classPath.startsWith("jar")) return None
+    val url = new URL(classPath)
+    val jarConnection = url.openConnection.asInstanceOf[JarURLConnection]
+    val manifest = jarConnection.getManifest
+    val attributes = manifest.getMainAttributes
+    Some(attributes.getValue("Implementation-Version"))
+  }
 
   case class BenchmarkConfig(
       files: BenchmarkOutputFiles,

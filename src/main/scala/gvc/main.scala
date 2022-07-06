@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.permutation.{Bench, Output, Timeout}
+import gvc.benchmarking.{Bench, BenchConfig, Output, Timeout}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -32,8 +32,10 @@ object Main extends App {
   val defaultLibraryDirectory =
     Paths.get("src/main/resources").toAbsolutePath.toString + '/'
   val cmdConfig = Config.fromCommandLineArgs(args.toList)
+
   cmdConfig.validate()
   run(cmdConfig)
+
   def run(config: Config): Unit = {
     val sourceFile = config.sourceFile.get
     val baseName =

@@ -1,9 +1,9 @@
-package gvc.permutation
+package gvc.benchmarking
 
 import gvc.transformer.IR
 import gvc.transformer.IR.{Expression, Method, Predicate}
-import gvc.permutation.ExprType.ExprType
-import gvc.permutation.SpecType.SpecType
+import gvc.benchmarking.ExprType.ExprType
+import gvc.benchmarking.SpecType.SpecType
 
 import scala.collection.mutable
 
@@ -215,11 +215,11 @@ class ASTLabel(
       case SpecType.Invariant     => "inv"
     }
     val exprTypeName = exprType match {
-      case gvc.permutation.ExprType.Accessibility => "acc"
-      case gvc.permutation.ExprType.Predicate     => "pred_inst"
-      case gvc.permutation.ExprType.Boolean       => "bool"
-      case gvc.permutation.ExprType.Imprecision   => "imp"
-      case gvc.permutation.ExprType.Absent        => "abs"
+      case gvc.benchmarking.ExprType.Accessibility => "acc"
+      case gvc.benchmarking.ExprType.Predicate     => "pred_inst"
+      case gvc.benchmarking.ExprType.Boolean       => "bool"
+      case gvc.benchmarking.ExprType.Imprecision   => "imp"
+      case gvc.benchmarking.ExprType.Absent        => "abs"
     }
     List(name, specType.id, specTypeName, exprTypeName, specIndex, exprIndex)
       .mkString(".")

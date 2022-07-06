@@ -1,4 +1,4 @@
-package gvc.permutation
+package gvc.benchmarking
 
 object Output {
   private val errorHeader = s"[${red("x")}] —"
