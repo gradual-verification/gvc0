@@ -82,10 +82,7 @@ a.out
 *.RData
 *.Rhistory
 
-study/results
-study/results-archive
-study/results-original
-study/results-popl
+study/results*
 study/aws/archives
 study/aws/local
 study/aws/remote

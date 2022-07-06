@@ -413,8 +413,8 @@ if (length(args)==0) {
 }
 dir <- args[1]
 compile(file.path(dir, "bst"), c(8, 16, 32))
-compile(file.path(dir, "list"), c(32, 64, 128))
-compile(file.path(dir, "composite"), c(4, 8, 16))
+#compile(file.path(dir, "list"), c(32, 64, 128))
+#compile(file.path(dir, "composite"), c(4, 8, 16))
 
 pg <- perf_global %>% write.csv(
         file.path(dir, "perf.csv"),
