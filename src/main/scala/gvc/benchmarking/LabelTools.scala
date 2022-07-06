@@ -7,7 +7,6 @@ import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
 import scala.collection.mutable
-import scala.util.Random
 
 object SamplingHeuristic extends Enumeration {
   type SamplingHeuristic = Value

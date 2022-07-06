@@ -1,5 +1,7 @@
 package gvc.benchmarking
 
+import gvc.benchmarking.ExprType.ExprType
+import gvc.benchmarking.SpecType.SpecType
 import gvc.transformer.IR
 import gvc.transformer.IR.{Expression, Method, Predicate}
 

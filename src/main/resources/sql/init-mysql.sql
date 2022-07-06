@@ -4,7 +4,7 @@ USE gvc0;
 CREATE TABLE IF NOT EXISTS programs
 (
     id           SERIAL,
-    program_hash VARCHAR(255) UNIQUE NOT NULLa,
+    program_hash VARCHAR(255) UNIQUE NOT NULL,
     program_date DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );

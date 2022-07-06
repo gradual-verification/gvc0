@@ -1,4 +1,5 @@
 package gvc.benchmarking
+
 import gvc.transformer.IR
 import gvc.transformer.IR.{Block, Expression, Method, Predicate}
 import gvc.benchmarking.ExprType.ExprType
@@ -58,21 +59,9 @@ abstract class SpecVisitor[I, O] {
     exprIndex += 1
   }
 
-  <<<<<<< Updated upstream: src / main / scala / gvc / benchmarking / SpecVisitor.scala
-
-  def enterSpec(
-      parent: Either[Method, Predicate],
-      template: Option[Expression] = None,
-      specType: SpecType
-  ): Unit = {}
-
-  =======
-
   def enterSpec(parent: Either[Method, Predicate],
                 template: Option[Expression] = None,
                 specType: SpecType): Unit = {}
-
-  >>>>>>> Stashed changes: src / main / scala / gvc / permutation / SpecVisitor.scala
 
   def leaveSpec(): Unit = {
     this.specIndex += 1

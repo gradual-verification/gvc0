@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.benchmarking.{Bench, BenchConfig, Output, Timeout}
+import gvc.benchmarking.{Bench, Output, Timeout}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -129,8 +129,7 @@ object Main extends App {
               b.branchInfo
                 .map { case BranchCond(branch, _, _) => branch }
                 .map(c => "(" + c.toString() + ")")
-                .mkString(" && ")}: ${b.checks.toString()}"
-          )
+                .mkString(" && ")}: ${b.checks.toString()}")
           .mkString("\n")
       )
     }
@@ -285,4 +284,5 @@ object Main extends App {
     }
   }
 }
+
 case class VerificationException(message: String) extends Exception(message)
