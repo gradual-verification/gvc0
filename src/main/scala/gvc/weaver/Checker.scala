@@ -1,4 +1,5 @@
 package gvc.weaver
+
 import gvc.transformer.{IR, SilverVarId}
 import Collector._
 import scala.collection.mutable
@@ -38,6 +39,7 @@ object Checker {
   }
 
   def insert(program: Collector.CollectedProgram): Unit = {
+
     val runtime = CheckRuntime.addToIR(program.program)
 
     // Add the _id field to each struct
@@ -59,7 +61,7 @@ object Checker {
       programData: CollectedProgram,
       methodData: CollectedMethod,
       runtime: CheckRuntime,
-      implementation: CheckImplementation
+      implementation: CheckImplementation,
   ): Unit = {
     val program = programData.program
     val method = methodData.method
@@ -112,51 +114,56 @@ object Checker {
 
     val initializeOps = mutable.ListBuffer[IR.Op]()
 
-    var (primaryOwnedFields, instanceCounter) = methodData.callStyle match {
-      case MainCallStyle => {
-        val instanceCounter =
-          method.addVar(
-            new IR.PointerType(IR.IntType),
-            CheckRuntime.Names.instanceCounter
-          )
-        initializeOps += new IR.AllocValue(IR.IntType, instanceCounter)
-        (None, instanceCounter)
+    var (primaryOwnedFields, instanceCounter): (Option[IR.Var],
+                                                Option[IR.Expression]) =
+      methodData.callStyle match {
+        case MainCallStyle => {
+          val instanceCounter =
+            method.addVar(
+              new IR.PointerType(IR.IntType),
+              CheckRuntime.Names.instanceCounter
+            )
+          initializeOps += new IR.AllocValue(IR.IntType, instanceCounter)
+          (None, Some(instanceCounter))
+        }
+
+        case PreciseCallStyle
+            if !programData.imprecisionPresent && !programData.requiresFieldAccessCheck => {
+          (None, None)
+        }
+
+        case PreciseCallStyle | ImpreciseCallStyle | PrecisePreCallStyle => {
+          val ownedFields: IR.Var =
+            method.addParameter(
+              runtime.ownedFieldsRef,
+              CheckRuntime.Names.primaryOwnedFields
+            )
+          val instanceCounter =
+            new IR.FieldMember(ownedFields, runtime.ownedFieldInstanceCounter)
+          (Some(ownedFields), Some(instanceCounter))
+        }
       }
 
-      case PreciseCallStyle => {
-        val instanceCounter =
-          method.addParameter(
-            new IR.PointerType(IR.IntType),
-            CheckRuntime.Names.instanceCounter
-          )
-        (None, instanceCounter)
-      }
-
-      case ImpreciseCallStyle | PrecisePreCallStyle => {
-        val ownedFields: IR.Var =
-          method.addParameter(
+    def getPrimaryOwnedFields(): IR.Var = primaryOwnedFields.getOrElse {
+      instanceCounter match {
+        case Some(counter) => {
+          val ownedFields = method.addVar(
             runtime.ownedFieldsRef,
             CheckRuntime.Names.primaryOwnedFields
           )
-        val instanceCounter =
-          new IR.FieldMember(ownedFields, runtime.ownedFieldInstanceCounter)
-        (Some(ownedFields), instanceCounter)
+          primaryOwnedFields = Some(ownedFields)
+
+          initializeOps += new IR.Invoke(
+            runtime.initOwnedFields,
+            List(counter),
+            primaryOwnedFields
+          )
+          ownedFields
+        }
+        case None =>
+          throw new WeaverException(
+            "OwnedFields initialization occurring outside of main.")
       }
-    }
-
-    def getPrimaryOwnedFields(): IR.Var = primaryOwnedFields.getOrElse {
-      val ownedFields = method.addVar(
-        runtime.ownedFieldsRef,
-        CheckRuntime.Names.primaryOwnedFields
-      )
-      primaryOwnedFields = Some(ownedFields)
-
-      initializeOps += new IR.Invoke(
-        runtime.initOwnedFields,
-        List(instanceCounter),
-        primaryOwnedFields
-      )
-      ownedFields
     }
 
     // Insert the runtime checks
@@ -171,6 +178,7 @@ object Checker {
 
           // Create a temporary owned fields instance when it is required
           var temporaryOwnedFields: Option[IR.Var] = None
+
           def getTemporaryOwnedFields(): IR.Var =
             temporaryOwnedFields.getOrElse {
               val tempVar = context.method.method.addVar(
@@ -194,43 +202,26 @@ object Checker {
             )
           }
 
-          // Prepend op to initialize owned fields if it is required
-          temporaryOwnedFields.foreach { tempOwned =>
-            new IR.Invoke(
-              context.runtime.initOwnedFields,
-              List(instanceCounter),
-              Some(tempOwned)
-            ) +=: ops
+          instanceCounter match {
+            case Some(counter) =>
+              temporaryOwnedFields.foreach { tempOwned =>
+                new IR.Invoke(
+                  context.runtime.initOwnedFields,
+                  List(counter),
+                  Some(tempOwned)
+                ) +=: ops
+              }
+            case None => {
+              throw new WeaverException(
+                "Unable to resolve instance counter for runtime check.")
+            }
           }
-
+          // Prepend op to initialize owned fields if it is required
           ops
         }
       )
     }
 
-    val needsToTrackPrecisePerms =
-      primaryOwnedFields.isDefined || methodData.bodyContainsImprecision ||
-        methodData.calls.exists(
-          c =>
-            (
-              c.ir.callee.isInstanceOf[IR.Method] &&
-                (programData.methods(c.ir.callee.name).callStyle match {
-                  case ImpreciseCallStyle | PrecisePreCallStyle => true
-                  case _                                        => false
-                })
-          ))
-    if (needsToTrackPrecisePerms && methodData.callStyle == PreciseCallStyle) {
-      if (methodData.callStyle == PreciseCallStyle) {
-        initializeOps ++= methodData.method.precondition.toSeq.flatMap(
-          implementation.translate(
-            AddMode,
-            _,
-            getPrimaryOwnedFields,
-            ValueContext
-          )
-        )
-      }
-    }
     // Update the call sites to add any required parameters
     for (call <- methodData.calls) {
       call.ir.callee match {
@@ -240,89 +231,13 @@ object Checker {
           calleeData.callStyle match {
             // No parameters can be added to a main method
             case MainCallStyle => ()
-
             // Imprecise methods always get the primary owned fields instance directly
-            case ImpreciseCallStyle =>
+            case ImpreciseCallStyle | PrecisePreCallStyle =>
               call.ir.arguments :+= getPrimaryOwnedFields()
-
-            case PreciseCallStyle => {
-              // Always pass the instance counter
-              call.ir.arguments :+= instanceCounter
-
-              // If we need to track precise permissons, add the code at the call site
-              if (needsToTrackPrecisePerms) {
-                // Convert precondition into calls to removeAcc
-                val context = new CallSiteContext(call.ir, method)
-                call.ir.insertBefore(
-                  callee.precondition.toSeq.flatMap(
-                    implementation.translate(
-                      RemoveMode,
-                      _,
-                      getPrimaryOwnedFields,
-                      context
-                    )
-                  )
-                )
-
-                // Convert postcondition into calls to addAcc
-                call.ir.insertAfter(
-                  callee.postcondition.toSeq.flatMap(
-                    implementation.translate(
-                      AddMode,
-                      _,
-                      getPrimaryOwnedFields,
-                      context
-                    )
-                  )
-                )
-              }
-            }
-
-            // For precise-pre/imprecise-post, create a temporary set of permissions, add the
-            // permissions from the precondition, call the method, and add the temporary set to the
-            // primary set
-            case PrecisePreCallStyle => {
-              val tempSet = method.addVar(
-                runtime.ownedFieldsRef,
-                CheckRuntime.Names.temporaryOwnedFields
-              )
-
-              val createTemp = new IR.Invoke(
-                runtime.initOwnedFields,
-                List(instanceCounter),
-                Some(tempSet)
-              )
-
-              val context = new CallSiteContext(call.ir, method)
-
-              val addPermsToTemp = callee.precondition.toSeq
-                .flatMap(
-                  implementation.translate(AddMode, _, tempSet, context)
-                )
-                .toList
-              val removePermsFromPrimary = callee.precondition.toSeq
-                .flatMap(
-                  implementation.translate(
-                    RemoveMode,
-                    _,
-                    getPrimaryOwnedFields,
-                    context
-                  )
-                )
-                .toList
-
-              call.ir.insertBefore(
-                createTemp :: addPermsToTemp ++ removePermsFromPrimary
-              )
-              call.ir.arguments :+= tempSet
-              call.ir.insertAfter(
-                new IR.Invoke(
-                  runtime.join,
-                  List(getPrimaryOwnedFields, tempSet),
-                  None
-                )
-              )
-            }
+            case PreciseCallStyle
+                if programData.imprecisionPresent || programData.requiresFieldAccessCheck =>
+              call.ir.arguments :+= getPrimaryOwnedFields()
+            case _ =>
           }
       }
     }
@@ -357,7 +272,7 @@ object Checker {
 
   def addAllocationTracking(
       primaryOwnedFields: Option[IR.Var],
-      instanceCounter: IR.Expression,
+      instanceCounter: Option[IR.Expression],
       allocations: List[IR.Op],
       implementation: CheckImplementation,
       runtime: CheckRuntime
@@ -367,7 +282,12 @@ object Checker {
         case alloc: IR.AllocStruct =>
           primaryOwnedFields match {
             case Some(primary) => implementation.trackAllocation(alloc, primary)
-            case None          => implementation.idAllocation(alloc, instanceCounter)
+            case None =>
+              instanceCounter match {
+                case Some(counter) =>
+                  implementation.idAllocation(alloc, counter)
+                case None =>
+              }
           }
         case _ =>
           throw new WeaverException(
@@ -465,7 +385,7 @@ object Checker {
       returnValue: Option[IR.Expression],
       getPrimaryOwnedFields: () => IR.Var,
       getTemporaryOwnedFields: () => IR.Var,
-      instanceCounter: IR.Expression,
+      instanceCounter: Option[IR.Expression],
       context: CheckContext
   ): Seq[IR.Op] = {
     // Collect all the ops for the check

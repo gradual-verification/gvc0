@@ -1,4 +1,5 @@
 package gvc.permutation
+
 import gvc.permutation.BenchConfig.BenchmarkConfig
 import gvc.permutation.Extensions.{c0, csv, log, out, txt}
 import gvc.permutation.Output.blue
@@ -20,9 +21,12 @@ object Bench {
   val arbitraryStressDeclaration: Regex = "(int )?(stress = [0-9]+;)".r
   val correctStressDeclaration: Regex =
     "(int[ ]+main\\(\\s*\\)\\s\\{[\\s\\S]*\n\\s*int stress = [0-9]+;)".r
+
   class BenchmarkException(message: String) extends Exception(message)
+
   val readStress =
     "int readStress() {int* value = alloc(int); args_int(\"--stress\", value); args_t input = args_parse(); printint(*value); return *value;}\n"
+
   object Names {
     val conjuncts: String = csv("conjuncts")
     //
@@ -352,9 +356,13 @@ object Bench {
     staticCSV.close()
     err.close()
   }
+
   sealed trait Stress
+
   case class StressList(levels: List[Int]) extends Stress
+
   case class StressScaling(stepSize: Int, upperBound: Int) extends Stress
+
   case class ErrorLogging(cc0: ErrorCSVPrinter, exec: ErrorCSVPrinter)
 
   def markExecution(
@@ -507,6 +515,7 @@ object Bench {
       arbitraryStressDeclaration.replaceAllIn(withStressDeclaration, "")
     "#use <conio>\n#use <args>\n" + removedAdditionalAssignments
   }
+
   def isInjectable(source: String): Boolean = {
     correctStressDeclaration
       .findAllMatchIn(source)

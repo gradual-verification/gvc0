@@ -6,6 +6,7 @@ import gvc.permutation.Extensions.csv
 import gvc.transformer.IR
 
 import java.nio.file.{Files, Path, Paths}
+import scala.reflect.io.Directory
 
 object BenchConfig {
 
@@ -77,8 +78,11 @@ object BenchConfig {
   ): BenchmarkOutputFiles = {
     val dir = config.compileBenchmark.get
     val disableBaseline = config.disableBaseline
-
     val root = Paths.get(dir)
+    if (!config.onlyExec) {
+      val directory = new Directory(root.toFile)
+      directory.deleteRecursively()
+    }
     Files.createDirectories(root)
 
     val existingSource = root.resolve(Names.source)
@@ -253,7 +257,7 @@ object BenchConfig {
     val ir = Main.generateIR(source, librarySearchPaths)
     val labeler = new LabelVisitor()
     val labels = labeler.visit(ir)
-    labeler.printCounts(labels.labels)
+    //labeler.printCounts(labels.labels)
     val files = resolveOutputFiles(source, config)
     val work = resolveWorkload(config)
     BenchmarkConfig(
