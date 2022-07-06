@@ -2,8 +2,6 @@ package gvc.benchmarking
 
 import gvc.transformer.IR
 import gvc.transformer.IR.{Expression, Method, Predicate}
-import gvc.benchmarking.ExprType.ExprType
-import gvc.benchmarking.SpecType.SpecType
 
 import scala.collection.mutable
 
@@ -133,8 +131,8 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
 
   def addLabel(
       parent: Either[Method, Predicate],
-      specType: SpecType,
-      exprType: ExprType,
+      specType: SpecType.SpecType,
+      exprType: ExprType.ExprType,
       exprIndex: Int = this.previousExpr()
   ): Unit = {
     labelSet +=
@@ -149,11 +147,8 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   override def collectOutput(): LabelOutput = {
     val uncountedOffset =
       this.labelSet.count(p =>
-        p.exprType == ExprType.Imprecision || p.exprType == ExprType.Absent
-      )
-    if (
-      this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != (this.labelSet.size - uncountedOffset)
-    ) {
+        p.exprType == ExprType.Imprecision || p.exprType == ExprType.Absent)
+    if (this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != (this.labelSet.size - uncountedOffset)) {
       throw new Exception(
         s"Total expression counts for each spec index don't equal the number of labels generated."
       )
@@ -205,26 +200,11 @@ class ASTLabel(
       case Left(value)  => "m." + value.name
       case Right(value) => "p." + value.name
     }
-    val specTypeName = specType match {
-      case SpecType.Postcondition => "post"
-      case SpecType.Assert        => "assert"
-      case SpecType.Precondition  => "pre"
-      case SpecType.Unfold        => "unfold"
-      case SpecType.Fold          => "fold"
-      case SpecType.Predicate     => "pred"
-      case SpecType.Invariant     => "inv"
-    }
-    val exprTypeName = exprType match {
-      case gvc.benchmarking.ExprType.Accessibility => "acc"
-      case gvc.benchmarking.ExprType.Predicate     => "pred_inst"
-      case gvc.benchmarking.ExprType.Boolean       => "bool"
-      case gvc.benchmarking.ExprType.Imprecision   => "imp"
-      case gvc.benchmarking.ExprType.Absent        => "abs"
-    }
-    List(name, specType.id, specTypeName, exprTypeName, specIndex, exprIndex)
+    List(name, specType, exprType, specIndex, exprIndex)
       .mkString(".")
   }
 }
+
 object LabelOrdering extends Ordering[ASTLabel] {
   override def compare(
       x: ASTLabel,

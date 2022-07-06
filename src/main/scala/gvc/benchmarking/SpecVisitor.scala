@@ -4,15 +4,24 @@ import gvc.transformer.IR.{Block, Expression, Method, Predicate}
 import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.SpecType.SpecType
 
-object SpecType extends Enumeration {
-  type SpecType = Value
-  val Assert, Precondition, Postcondition, Fold, Unfold, Invariant, Predicate =
-    Value
+object SpecType {
+  type SpecType = String
+  val Assert = "assert"
+  val Precondition = "pre"
+  val Postcondition = "post"
+  val Fold = "fold"
+  val Unfold = "unfold"
+  val Invariant = "inv"
+  val Predicate = "pred"
 }
 
-object ExprType extends Enumeration {
-  type ExprType = Value
-  val Accessibility, Predicate, Boolean, Imprecision, Absent = Value
+object ExprType {
+  type ExprType = String
+  val Accessibility = "acc"
+  val Predicate = "pred"
+  val Boolean = "bool"
+  val Imprecision = "rem_imp"
+  val Absent = "abs"
 }
 
 abstract class SpecVisitor[I, O] {
@@ -26,6 +35,7 @@ abstract class SpecVisitor[I, O] {
   }
 
   def previousExpr(): Int = this.exprIndex - 1
+
   def previousSpec(): Int = this.specIndex - 1
 
   def visitSpecExpr(
@@ -47,11 +57,22 @@ abstract class SpecVisitor[I, O] {
     currentContext = Some(parent)
     exprIndex += 1
   }
+
+  <<<<<<< Updated upstream: src / main / scala / gvc / benchmarking / SpecVisitor.scala
+
   def enterSpec(
       parent: Either[Method, Predicate],
       template: Option[Expression] = None,
       specType: SpecType
   ): Unit = {}
+
+  =======
+
+  def enterSpec(parent: Either[Method, Predicate],
+                template: Option[Expression] = None,
+                specType: SpecType): Unit = {}
+
+  >>>>>>> Stashed changes: src / main / scala / gvc / permutation / SpecVisitor.scala
 
   def leaveSpec(): Unit = {
     this.specIndex += 1
@@ -69,19 +90,27 @@ abstract class SpecVisitor[I, O] {
   }
 
   def collectAssertion(): Unit
+
   def collectIf(stmt: IR.If): Unit
+
   def collectConditional(cond: IR.Conditional): Unit
+
   def collectWhile(whl: IR.While): Unit
 
   def enterExpr(): Unit
+
   def leaveExpr(): Unit
+
   def enterBlock(): Unit
+
   def leaveBlock(): Unit
 
   def leavePredicate(predicate: Predicate): Unit
+
   def enterPredicate(predicate: Predicate): Unit
 
   def leaveMethod(method: Method): Unit
+
   def enterMethod(method: Method): Unit
 
   def collectOutput(): O

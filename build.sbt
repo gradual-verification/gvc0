@@ -8,8 +8,9 @@ lazy val gvc = (project in file("."))
     libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.9" % Test,
     libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.3.3",
     libraryDependencies += "org.tpolecat" %% "doobie-core" % "1.0.0-RC1",
-    libraryDependencies += "org.tpolecat" %% "doobie-postgres" % "1.0.0-RC1", // Postgres driver 42.3.1 + type mappings.
-    libraryDependencies += "io.spray" %% "spray-json" % "1.3.6",
+    libraryDependencies += "org.tpolecat" %% "doobie-h2" % "1.0.0-RC1", // H2 driver 1.4.199 + type mappings.
+    libraryDependencies += "org.tpolecat" %% "doobie-hikari" % "1.0.0-RC1", // HikariCP transactor.
+    libraryDependencies += "org.tpolecat" %% "doobie-scalatest" % "1.0.0-RC1" % "test", // ScalaTest support for typechecking statements.
     Test / testOptions +=
       Tests.Argument(
         TestFrameworks.ScalaTest,
