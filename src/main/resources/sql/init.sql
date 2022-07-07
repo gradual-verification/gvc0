@@ -42,10 +42,11 @@ CREATE TABLE IF NOT EXISTS paths
 );
 CREATE TABLE IF NOT EXISTS steps
 (
+    id       SERIAL,
     perm_id  BIGINT UNSIGNED NOT NULL,
     path_id  BIGINT UNSIGNED NOT NULL,
     level_id BIGINT UNSIGNED NOT NULL,
-    PRIMARY KEY (perm_id, path_id),
+    PRIMARY KEY (id, perm_id, path_id, level_id),
     FOREIGN KEY (perm_id) REFERENCES permutations (id),
     FOREIGN KEY (path_id) REFERENCES paths (id)
 );

@@ -22,14 +22,19 @@ object ModeMeasured {
 }
 
 object DAO {
-  /*def syncExamplePrograms(hashes: Map[Path, String]): Map[Path, Program] = {
-    hashes.foreach(hash => {})
-  }*/
   //def syncLabels(program: Program, labels: List[ASTLabel]): Map[ASTLabel, Long]
   //def syncHardware(): Hardware
   //def syncVerifierVersion(): Version
-
 }
+
+/*
+def insert2(name: String, age: Option[Short]): ConnectionIO[Person] =
+  for {
+    _  <- sql"insert into person (name, age) values ($name, $age)".update.run
+    id <- sql"select lastval()".query[Long].unique
+    p  <- sql"select id, name, age from person where id = $id".query[Person].unique
+  } yield p
+ */
 
 object Queries {
   case class Hardware(id: Long, hardwareName: String, dateAdded: String)
@@ -39,10 +44,15 @@ object Queries {
       .query[Hardware]
       .option
 
-  def addHardware(name: String): ConnectionIO[Option[Hardware]] =
-    sql"INSERT INTO hardware (hardware_name) VALUES ($name);"
-      .query[Hardware]
-      .option
+  def addHardware(name: String): ConnectionIO[Option[Hardware]] = {
+    for {
+      _ <- sql"INSERT INTO hardware (hardware_name) VALUES ($name);".update.run
+      id <- sql"select LASTVAL()".query[Long].unique
+      h <- sql"SELECT id, hardware_name, hardware_date FROM hardware WHERE id = $id;"
+        .query[Hardware]
+        .option
+    } yield h
+  }
 
   case class Version(id: Long, versionName: String, dateAdded: String)
 
@@ -51,18 +61,27 @@ object Queries {
       .query[Version]
       .option
 
-  def addVersion(name: String): ConnectionIO[Option[Version]] =
-    sql"INSERT INTO versions (version_name) VALUES ($name);"
-      .query[Version]
-      .option
+  def addVersion(name: String): ConnectionIO[Option[Version]] = {
+    for {
+      _ <- sql"INSERT INTO versions (version_name) VALUES ($name);".update.run
+      id <- sql"select LASTVAL()".query[Long].unique
+      v <- sql"SELECT id, version_name, version_date FROM versions WHERE id = $id;"
+        .query[Version]
+        .option
+    } yield v
+  }
 
   case class Program(id: Long, hash: String, dateAdded: String)
 
   def addProgram(filename: java.nio.file.Path,
                  hash: String): ConnectionIO[Option[Program]] = {
-    sql"INSERT INTO programs (src_filename, src_hash) VALUES (${filename.getFileName.toString}, $hash)"
-      .query[Program]
-      .option
+    for {
+      _ <- sql"INSERT INTO programs (src_filename, src_hash) VALUES (${filename.getFileName.toString}, $hash)".update.run
+      id <- sql"select LASTVAL()".query[Long].unique
+      v <- sql"SELECT id, src_filename, src_hash FROM programs WHERE id = $id;"
+        .query[Program]
+        .option
+    } yield v
   }
 
   case class Component(id: Long,
@@ -78,13 +97,18 @@ object Queries {
                    specType: SpecType,
                    exprType: ExprType,
                    specIndex: Long,
-                   exprIndex: Long): ConnectionIO[Option[Component]] =
-    sql"""INSERT INTO components 
+                   exprIndex: Long): ConnectionIO[Option[Component]] = {
+    for {
+      _ <- sql"""INSERT INTO components
              (program_id, fn_name, spec_type, spec_index, expr_type, expr_index)
          VALUES 
-             (${program.id}, $functionName, $specType, $specIndex, $exprType, $exprIndex);"""
-      .query[Component]
-      .option
+             (${program.id}, $functionName, $specType, $specIndex, $exprType, $exprIndex);""".update.run
+      id <- sql"select LASTVAL()".query[Long].unique
+      c <- sql"SELECT (program_id, fn_name, spec_type, spec_index, expr_type, expr_index) FROM components WHERE id = $id;"
+        .query[Component]
+        .option
+    } yield c
+  }
 
   case class Permutation(id: Long,
                          programID: Long,
@@ -95,27 +119,42 @@ object Queries {
 
   def addPermutation(
       program: Program,
-      permutationHash: String): ConnectionIO[Option[Permutation]] =
-    sql"INSERT INTO permutations (program_id, permutation_hash) VALUES (${program.id}, $permutationHash);"
-      .query[Permutation]
-      .option
+      permutationHash: String): ConnectionIO[Option[Permutation]] = {
+    for {
+      _ <- sql"INSERT INTO permutations (program_id, permutation_hash) VALUES (${program.id}, $permutationHash);".update.run
+      id <- sql"select LASTVAL()".query[Long].unique
+      c <- sql"SELECT (id, program_id, permutation_hash) FROM permutations WHERE id = $id;"
+        .query[Permutation]
+        .option
+    } yield c
+  }
 
   case class Step(pathID: Long, permutationID: Long, levelID: Long)
 
   def addStep(perm: Permutation,
               path: Path,
-              levelID: Long): ConnectionIO[Option[Permutation]] =
-    sql"INSERT INTO steps (perm_id, path_id, level_id) VALUES (${perm.id}, ${path.id}, $levelID);"
-      .query[Permutation]
-      .option
+              levelID: Long): ConnectionIO[Option[Step]] = {
+    for {
+      _ <- sql"INSERT INTO steps (perm_id, path_id, level_id) VALUES (${perm.id}, ${path.id}, $levelID);".update.run
+      id <- sql"select LASTVAL()".query[Long].unique
+      s <- sql"SELECT (id, perm_id, path_id, level_id) FROM steps WHERE id = $id;"
+        .query[Step]
+        .option
+    } yield s
+  }
 
   case class Path(id: Long, hash: String, programID: Long)
 
-  def addPath(hash: String,
-              programID: Long): ConnectionIO[Option[Permutation]] =
-    sql"INSERT INTO paths (path_hash, program_id) VALUES ($hash, $programID);"
-      .query[Permutation]
-      .option
+  def addPath(hash: String, programID: Long): ConnectionIO[Option[Path]] = {
+
+    for {
+      _ <- sql"INSERT INTO paths (path_hash, program_id) VALUES ($hash, $programID);".update.run
+      id <- sql"select LASTVAL()".query[Long].unique
+      p <- sql"SELECT (id, path_hash, program_id) FROM paths WHERE id = $id;"
+        .query[Path]
+        .option
+    } yield p
+  }
 
   case class Conjuncts(id: Long,
                        permutationID: Long,
@@ -129,11 +168,11 @@ object Queries {
       hardware: Hardware,
       permutation: Permutation,
       profiling: ProfilingInfo): ConnectionIO[Option[Conjuncts]] = {
-    sql"""INSERT INTO conjuncts 
+    sql"""
+        INSERT INTO conjuncts 
             (perm_id, version_id, hardware_id, conj_total, conj_eliminated) 
-        VALUES (${permutation.id}, ${version.id}, ${hardware.id}, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});"""
-      .query[Conjuncts]
-      .option
+        VALUES (${permutation.id}, ${version.id}, ${hardware.id}, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});
+    """.query[Conjuncts].option
   }
 
   case class Performance(id: Long,
@@ -192,6 +231,7 @@ object Queries {
                  );
        """.query[Performance].option
   }
+
 }
 
 object MySQLConnection {
