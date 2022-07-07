@@ -1,4 +1,5 @@
 package gvc
+
 import gvc.benchmarking.ExecutionType
 
 import java.nio.file.{Files, Paths}
@@ -6,6 +7,7 @@ import java.io.File
 import scala.annotation.tailrec
 
 sealed trait DumpType
+
 sealed trait Mode
 
 case class Config(
@@ -51,33 +53,23 @@ case class Config(
         Some(
           s"Benchmarking (--benchmark) must be enabled to use --disable-baseline."
         )
-      else if (
-        benchmarkPaths.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
-      )
+      else if (benchmarkPaths.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty)
         Some(
           s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -p or --paths."
         )
-      else if (
-        benchmarkWStep.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
-      )
+      else if (benchmarkWStep.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty)
         Some(
           s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --step"
         )
-      else if (
-        benchmarkWUpper.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
-      )
+      else if (benchmarkWUpper.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty)
         Some(
           s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --upper."
         )
-      else if (
-        benchmarkIterations.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
-      )
+      else if (benchmarkIterations.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty)
         Some(
           s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -i/--iter."
         )
-      else if (
-        (benchmarkWStep.isDefined || benchmarkWUpper.isDefined) && benchmarkWList.isDefined
-      )
+      else if ((benchmarkWStep.isDefined || benchmarkWUpper.isDefined) && benchmarkWList.isDefined)
         Some(
           s"Either provide a list of specific stress levels (--w-list), or set a step size (--w-step) and/or upper bound (--w-upper)."
         )
@@ -88,35 +80,58 @@ case class Config(
 
 object Config {
   case object DumpIR extends DumpType
+
   case object DumpSilver extends DumpType
+
   case object DumpC0 extends DumpType
+
   case object StressMode extends Mode
+
   case object BenchmarkMode extends Mode
+
   case object DefaultMode extends Mode
 
-  val help = """Usage: gvc0 [OPTION...] SOURCEFILE
-               |where OPTION is
-               |  -h            --help                         Give short usage message and exit
-               |  -d <type>     --dump=<type>                  Print the generated code and exit, where <type> specifies
-               |                                               the type of code to print: ir, silver, c0
-               |  -o <file>     --output=<file>                Place the executable output into <file>
-               |  -v            --only-verify                  Stop after static verification
-               |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
-               |  -x            --exec                         Execute the compiled file
-               |  -b <dir>      --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
-               |                --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
-               |                --disable-baseline             Speedup benchmark generation by skipping the baseline.
-               |                --only-exec                    For benchmark directories that already exist, skip verification entirely and execute the programs that are present. 
-               |                --iter=<n>                     Specify the number of iterations for execution.
-               |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
-               |  
-               |                --stress=<dir>                 Perform a stress test of full dynamic verification, comparing performance against the unverified source program.
-               |                --s-only-dynamic               Only stress test fully dynamic verification.
-               |                --s-only-framing               Only stress test dynamic verification for framing.
-               |                --s-only-unverified            Only stress test the original program, without runtime checks.
-               |  -ws <n>       --w-step=<n>                   Specify the step size of the stress factor from 0 to the upper bound.
-               |  -wu <n>       --w-upper=<n>                  Specify the upper bound on the stress factor.
-               |                --w-list=<n,...>            Specify a list of stress levels to execute."""
+  case object Executor extends Mode
+
+  case object Populator extends Mode
+
+  val help =
+    """Usage: gvc0 [OPTION...] SOURCEFILE
+      |where OPTION is
+      |  -h            --help                         Give short usage message and exit
+      |  -d <type>     --dump=<type>                  Print the generated code and exit, where <type> specifies
+      |                                               the type of code to print: ir, silver, c0
+      |  -o <file>     --output=<file>                Place the executable output into <file>
+      |  -v            --only-verify                  Stop after static verification
+      |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
+      |  -x            --exec                         Execute the compiled file
+      |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
+      |
+      |   ---[Benchmarking]---
+      |  -b <dir>      --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
+      |                --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
+      |                --disable-baseline             Speedup benchmark generation by skipping the baseline.
+      |                --only-exec                    For benchmark directories that already exist, skip verification entirely and execute the programs that are present. 
+      |                --iter=<n>                     Specify the number of iterations for execution.
+      |  
+      |                --stress=<dir>                 Perform a stress test of full dynamic verification, comparing performance against the unverified source program.
+      |                --s-only-dynamic               Only stress test fully dynamic verification.
+      |                --s-only-framing               Only stress test dynamic verification for framing.
+      |                --s-only-unverified            Only stress test the original program, without runtime checks.
+      |  -ws <n>       --w-step=<n>                   Specify the step size of the stress factor from 0 to the upper bound.
+      |  -wu <n>       --w-upper=<n>                  Specify the upper bound on the stress factor.
+      |                --w-list=<n,...>               Specify a list of stress levels to execute.
+      |
+      |---[Populating Benchmarking Database]---
+      |                --populate=<dir>               Populate the database with permutations of the provided set of sample programs.                   
+      |                --p-upper=<n>                  Set a maximum number of unique, unverified paths to add to the database.
+      |                
+      |---[Parallel Execution]---
+      |                --parallelize=<file>           Specify a benchmarking configuration file.
+      |
+      |    
+      |                
+      |                """
 
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r

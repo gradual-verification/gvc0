@@ -5,10 +5,10 @@ import gvc.{Config, Main}
 import java.net.{JarURLConnection, URL}
 import java.nio.file.{Files, Path}
 
-class BenchmarkPopulator {
+object BenchmarkPopulator {
   private val BASELINE_QUANTITY = 1024
 
-  def generateBenchmarks(sourceDir: Path): Unit = {}
+  def populate(config: Config): Unit = {}
 
   def syncProgram(filename: Path, config: Config): Unit = {
     val sourceText = Files.readString(filename)

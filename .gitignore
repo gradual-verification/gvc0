@@ -81,6 +81,7 @@ a.out
 
 *.RData
 *.Rhistory
+study/data
 study/results*
 study/aws/archives
 study/aws/local

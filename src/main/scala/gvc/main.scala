@@ -4,7 +4,7 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.benchmarking.{Bench, Output, Timeout}
+import gvc.benchmarking.{Bench, BenchmarkExecutor, BenchmarkPopulator, Output}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -17,8 +17,6 @@ import java.io.IOException
 import sys.process._
 import scala.language.postfixOps
 import viper.silicon.state.BranchCond
-
-import java.util.Calendar
 
 case class OutputFileCollection(
     baseName: String,
@@ -71,21 +69,28 @@ object Main extends App {
         Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(difference)}")*/
 
       case Config.BenchmarkMode =>
-        val startTime = Calendar.getInstance().getTime()
-        Output.info(startTime.toString)
-        Bench.mark(
-          inputSource,
-          config,
-          fileNames,
-          linkedLibraries
-        )
-        val stopTime = Calendar.getInstance().getTime()
-        val difference = stopTime.getTime - startTime.getTime
-        Output.info(stopTime.toString)
-        Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(difference)}")
+        Output.printTiming(() => {
+          Bench.mark(
+            inputSource,
+            config,
+            fileNames,
+            linkedLibraries
+          )
+        })
+
+      case Config.Executor => {
+        BenchmarkExecutor.execute(config)
+      }
+
+      case Config.Populator => {
+        BenchmarkPopulator.populate(config)
+      }
+
       case Config.DefaultMode =>
-        val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
-        execute(verifiedOutput.c0Source, fileNames)
+        Output.printTiming(() => {
+          val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+          execute(verifiedOutput.c0Source, fileNames)
+        })
     }
   }
 

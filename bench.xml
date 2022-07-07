@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<benchmark>
+    <id>
+        <version>1.0</version>
+        <hardware>m1-macbook-pro</hardware>
+    </id>
+    <io>
+        <source></source>
+        <sources>./src/test/resources/quant-study/</sources>
+        <output>./data</output>
+    </io>
+    <workload>
+        <stress>
+            <list>0,16</list>
+            <singular>16</singular>
+            <bounded>
+                <lower>2</lower>
+                <upper>15</upper>
+                <step>2</step>
+            </bounded>
+        </stress>
+        <paths>10</paths>
+        <iterations>10</iterations>
+    </workload>
+    <verification_only/>
+    <execution_only/>
+    <framing_only/>
+    <dynamic_only/>
+</benchmark>
+
+
