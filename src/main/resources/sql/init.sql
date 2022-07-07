@@ -4,34 +4,52 @@ USE gvc0;
 CREATE TABLE IF NOT EXISTS programs
 (
     id           SERIAL,
-    program_hash VARCHAR(255) UNIQUE NOT NULL,
+    src_filename VARCHAR(255)        NOT NULL,
+    src_hash     VARCHAR(255) UNIQUE NOT NULL,
     program_date DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 CREATE TABLE IF NOT EXISTS components
 (
     id             SERIAL,
+    program_id     BIGINT UNSIGNED                                                 NOT NULL,
     fn_name        VARCHAR(255)                                                    NOT NULL,
     spec_type      ENUM ('post', 'assert', 'pre', 'unfold', 'fold', 'pred', 'inv') NOT NULL,
-    expr_type      ENUM ('acc', 'pred_inst', 'bool', 'rem_imp')                    NOT NULL,
-    spec_id        BIGINT UNSIGNED                                                 NOT NULL,
     spec_index     BIGINT UNSIGNED                                                 NOT NULL,
+    expr_type      ENUM ('acc', 'pred_inst', 'bool', 'rem_imp')                    NOT NULL,
     expr_index     BIGINT UNSIGNED                                                 NOT NULL,
     component_date DATETIME                                                        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 CREATE TABLE IF NOT EXISTS permutations
 (
     id               SERIAL,
     program_id       BIGINT UNSIGNED NOT NULL,
-    path_id          BIGINT UNSIGNED NOT NULL,
-    level_id         BIGINT UNSIGNED NOT NULL,
-    component_id     BIGINT UNSIGNED NOT NULL,
+    permutation_hash TEXT            NOT NULL,
     permutation_date DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    FOREIGN KEY (component_id) REFERENCES components (id),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
+CREATE TABLE IF NOT EXISTS paths
+(
+    id           SERIAL,
+    path_hash    TEXT            NOT NULL,
+    program_id   BIGINT UNSIGNED NOT NULL,
+    component_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (id, program_id),
+    FOREIGN KEY (program_id) REFERENCES programs (id)
+);
+CREATE TABLE IF NOT EXISTS steps
+(
+    perm_id  BIGINT UNSIGNED NOT NULL,
+    path_id  BIGINT UNSIGNED NOT NULL,
+    level_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (perm_id, path_id),
+    FOREIGN KEY (perm_id) REFERENCES permutations (id),
+    FOREIGN KEY (path_id) REFERENCES paths (id)
+);
+
 CREATE TABLE IF NOT EXISTS versions
 (
     id           SERIAL,
@@ -51,8 +69,9 @@ CREATE TABLE IF NOT EXISTS conjuncts
     id              SERIAL,
     perm_id         BIGINT UNSIGNED NOT NULL,
     version_id      BIGINT UNSIGNED NOT NULL,
-    conj_total      INT             NOT NULL,
-    conj_eliminated INT             NOT NULL,
+    hardware_id     BIGINT UNSIGNED NOT NULL,
+    conj_total      BIGINT UNSIGNED NOT NULL,
+    conj_eliminated BIGINT UNSIGNED NOT NULL,
     conj_date       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     FOREIGN KEY (perm_id) REFERENCES permutations (id),

@@ -4,12 +4,11 @@ import doobie._
 import doobie.implicits._
 import cats.effect.IO
 import doobie.util.transactor
+import gvc.Main.ProfilingInfo
 import gvc.benchmarking.Bench.BenchmarkException
 import gvc.benchmarking.ExprType.ExprType
-import gvc.benchmarking.Queries.Program
+import gvc.benchmarking.ModeMeasured.ModeMeasured
 import gvc.benchmarking.SpecType.SpecType
-
-import java.nio.file.Path
 
 object ModeMeasured {
   type ModeMeasured = String
@@ -59,15 +58,12 @@ object Queries {
 
   case class Program(id: Long, hash: String, dateAdded: String)
 
-  def getProgram(hash: String): ConnectionIO[Option[Program]] =
-    sql"SELECT id, program_hash, program_date FROM programs WHERE program_hash = $hash;"
+  def addProgram(filename: java.nio.file.Path,
+                 hash: String): ConnectionIO[Option[Program]] = {
+    sql"INSERT INTO programs (src_filename, src_hash) VALUES (${filename.getFileName.toString}, $hash)"
       .query[Program]
       .option
-
-  def addProgram(hash: String): ConnectionIO[Option[Program]] =
-    sql"INSERT INTO programs (program_hash) VALUES ($hash)"
-      .query[Program]
-      .option
+  }
 
   case class Component(id: Long,
                        functionName: String,
@@ -77,16 +73,16 @@ object Queries {
                        exprIndex: Long,
                        dateAdded: String)
 
-  def addComponent(programID: Long,
+  def addComponent(program: Program,
                    functionName: String,
                    specType: SpecType,
                    exprType: ExprType,
                    specIndex: Long,
                    exprIndex: Long): ConnectionIO[Option[Component]] =
     sql"""INSERT INTO components 
-             (spec_id, fn_name, spec_type, spec_index, expr_type, expr_index) 
+             (program_id, fn_name, spec_type, spec_index, expr_type, expr_index)
          VALUES 
-             ($programID, $functionName, $specType, $specIndex, $exprType, $exprIndex);"""
+             (${program.id}, $functionName, $specType, $specIndex, $exprType, $exprIndex);"""
       .query[Component]
       .option
 
@@ -97,14 +93,105 @@ object Queries {
                          componentID: Long,
                          dateAdded: String)
 
-  def addPermutation(programID: Long,
-                     pathID: Long,
-                     levelID: Long,
-                     componentID: Long): ConnectionIO[Option[Permutation]] =
-    sql"INSERT INTO permutations (program_id, path_id, level_id, component_id) VALUES ($programID, $pathID, $levelID, $componentID);"
+  def addPermutation(
+      program: Program,
+      permutationHash: String): ConnectionIO[Option[Permutation]] =
+    sql"INSERT INTO permutations (program_id, permutation_hash) VALUES (${program.id}, $permutationHash);"
       .query[Permutation]
       .option
 
+  case class Step(pathID: Long, permutationID: Long, levelID: Long)
+
+  def addStep(perm: Permutation,
+              path: Path,
+              levelID: Long): ConnectionIO[Option[Permutation]] =
+    sql"INSERT INTO steps (perm_id, path_id, level_id) VALUES (${perm.id}, ${path.id}, $levelID);"
+      .query[Permutation]
+      .option
+
+  case class Path(id: Long, hash: String, programID: Long)
+
+  def addPath(hash: String,
+              programID: Long): ConnectionIO[Option[Permutation]] =
+    sql"INSERT INTO paths (path_hash, program_id) VALUES ($hash, $programID);"
+      .query[Permutation]
+      .option
+
+  case class Conjuncts(id: Long,
+                       permutationID: Long,
+                       versionID: Long,
+                       total: Long,
+                       eliminated: Long,
+                       date: String)
+
+  def addConjuncts(
+      version: Version,
+      hardware: Hardware,
+      permutation: Permutation,
+      profiling: ProfilingInfo): ConnectionIO[Option[Conjuncts]] = {
+    sql"""INSERT INTO conjuncts 
+            (perm_id, version_id, hardware_id, conj_total, conj_eliminated) 
+        VALUES (${permutation.id}, ${version.id}, ${hardware.id}, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});"""
+      .query[Conjuncts]
+      .option
+  }
+
+  case class Performance(id: Long,
+                         programID: Long,
+                         versionID: Long,
+                         hardwareID: Long,
+                         performanceDate: String,
+                         modeMeasured: String,
+                         stress: Int,
+                         iter: Int,
+                         ninetyFifth: BigDecimal,
+                         fifth: BigDecimal,
+                         median: BigDecimal,
+                         mean: BigDecimal,
+                         stdev: BigDecimal,
+                         minimum: BigDecimal,
+                         maximum: BigDecimal)
+
+  def addPerformance(
+      pg: Program,
+      version: Version,
+      hardware: Hardware,
+      modeMeasured: ModeMeasured,
+      stress: Option[Int],
+      iter: Int,
+      perf: gvc.CC0Wrapper.Performance): ConnectionIO[Option[Performance]] = {
+    sql"""INSERT INTO performance (
+                program_id,
+                version_id, 
+                hw_id, 
+                mode_measured, 
+                stress, 
+                iter, 
+                ninety_fifth, 
+                fifth, 
+                median, 
+                mean, 
+                stdev, 
+                minimum, 
+                maximum
+            )
+         VALUES (
+                 ${pg.id}, 
+                 ${version.id}, 
+                 ${hardware.id}, 
+                 $modeMeasured, 
+                 ${stress.getOrElse(0)}, 
+                 $iter, 
+                 ${perf.ninetyFifth}, 
+                 ${perf.fifth}, 
+                 ${perf.median}, 
+                 ${perf.mean}, 
+                 ${perf.stdev}, 
+                 ${perf.minimum}, 
+                 ${perf.maximum}
+                 );
+       """.query[Performance].option
+  }
 }
 
 object MySQLConnection {
