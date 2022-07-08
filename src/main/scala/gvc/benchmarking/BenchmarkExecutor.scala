@@ -3,6 +3,7 @@ package gvc.benchmarking
 import gvc.Config
 
 object BenchmarkExecutor {
+
   def execute(config: Config): Unit = {
     /*
    *   Assume we have a version string and a hardware string identifying our current platform, and a directory of example programs.
@@ -33,4 +34,14 @@ object BenchmarkExecutor {
    *          To create this "combined query," we'll need to write each of the individual queries anyway, so feel free to follow steps 1-3 as written for now.
    * */
   }
+
+  /**
+  *
+  * @param config
+     1. Grab a program from the database that doesn't have performance results for the current HWID and VID
+     2. Insert a placeholder result for that program: If another node has already inserted the result,
+          Query will fail
+     3. If fail then go to step one
+  */
+
 }
