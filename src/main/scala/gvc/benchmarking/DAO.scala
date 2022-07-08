@@ -47,7 +47,7 @@ object Queries {
   def addHardware(name: String): ConnectionIO[Option[Hardware]] = {
     for {
       _ <- sql"INSERT INTO hardware (hardware_name) VALUES ($name);".update.run
-      id <- sql"select LASTVAL()".query[Long].unique
+      id <- sql"select LAST_INSERT_ID()".query[Long].unique
       h <- sql"SELECT id, hardware_name, hardware_date FROM hardware WHERE id = $id;"
         .query[Hardware]
         .option
@@ -64,7 +64,7 @@ object Queries {
   def addVersion(name: String): ConnectionIO[Option[Version]] = {
     for {
       _ <- sql"INSERT INTO versions (version_name) VALUES ($name);".update.run
-      id <- sql"select LASTVAL()".query[Long].unique
+      id <- sql"select LAST_INSERT_ID()".query[Long].unique
       v <- sql"SELECT id, version_name, version_date FROM versions WHERE id = $id;"
         .query[Version]
         .option
@@ -77,7 +77,7 @@ object Queries {
                  hash: String): ConnectionIO[Option[Program]] = {
     for {
       _ <- sql"INSERT INTO programs (src_filename, src_hash) VALUES (${filename.getFileName.toString}, $hash)".update.run
-      id <- sql"select LASTVAL()".query[Long].unique
+      id <- sql"select LAST_INSERT_ID()".query[Long].unique
       v <- sql"SELECT id, src_filename, src_hash FROM programs WHERE id = $id;"
         .query[Program]
         .option
@@ -103,7 +103,7 @@ object Queries {
              (program_id, fn_name, spec_type, spec_index, expr_type, expr_index)
          VALUES 
              (${program.id}, $functionName, $specType, $specIndex, $exprType, $exprIndex);""".update.run
-      id <- sql"select LASTVAL()".query[Long].unique
+      id <- sql"select LAST_INSERT_ID()".query[Long].unique
       c <- sql"SELECT (program_id, fn_name, spec_type, spec_index, expr_type, expr_index) FROM components WHERE id = $id;"
         .query[Component]
         .option
@@ -122,7 +122,7 @@ object Queries {
       permutationHash: String): ConnectionIO[Option[Permutation]] = {
     for {
       _ <- sql"INSERT INTO permutations (program_id, permutation_hash) VALUES (${program.id}, $permutationHash);".update.run
-      id <- sql"select LASTVAL()".query[Long].unique
+      id <- sql"select LAST_INSERT_ID()".query[Long].unique
       c <- sql"SELECT (id, program_id, permutation_hash) FROM permutations WHERE id = $id;"
         .query[Permutation]
         .option
@@ -136,7 +136,7 @@ object Queries {
               levelID: Long): ConnectionIO[Option[Step]] = {
     for {
       _ <- sql"INSERT INTO steps (perm_id, path_id, level_id) VALUES (${perm.id}, ${path.id}, $levelID);".update.run
-      id <- sql"select LASTVAL()".query[Long].unique
+      id <- sql"select LAST_INSERT_ID()".query[Long].unique
       s <- sql"SELECT (id, perm_id, path_id, level_id) FROM steps WHERE id = $id;"
         .query[Step]
         .option
@@ -149,7 +149,7 @@ object Queries {
 
     for {
       _ <- sql"INSERT INTO paths (path_hash, program_id) VALUES ($hash, $programID);".update.run
-      id <- sql"select LASTVAL()".query[Long].unique
+      id <- sql"select LAST_INSERT_ID()".query[Long].unique
       p <- sql"SELECT (id, path_hash, program_id) FROM paths WHERE id = $id;"
         .query[Path]
         .option
