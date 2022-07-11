@@ -5,10 +5,16 @@ import doobie.implicits._
 import cats.effect.IO
 import doobie.util.transactor
 import gvc.Main.ProfilingInfo
-import gvc.benchmarking.Bench.BenchmarkException
+
+import doobie._
+import doobie.implicits._
+import gvc.benchmarking.BenchmarkSequential.BenchmarkException
 import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.ModeMeasured.ModeMeasured
 import gvc.benchmarking.SpecType.SpecType
+import cats.effect.unsafe.implicits.global
+
+class DBException(message: String) extends Exception(message)
 
 object ModeMeasured {
   type ModeMeasured = String
@@ -21,40 +27,105 @@ object ModeMeasured {
   val ExecutionDynamic = "exec_dynamic"
 }
 
-object DAO {
-  //def syncLabels(program: Program, labels: List[ASTLabel]): Map[ASTLabel, Long]
-  //def syncHardware(): Hardware
-  //def syncVerifierVersion(): Version
-}
+case class Hardware(id: Long, hardwareName: String, dateAdded: String)
 
-/*
-def insert2(name: String, age: Option[Short]): ConnectionIO[Person] =
-  for {
-    _  <- sql"insert into person (name, age) values ($name, $age)".update.run
-    id <- sql"select lastval()".query[Long].unique
-    p  <- sql"select id, name, age from person where id = $id".query[Person].unique
-  } yield p
- */
+case class Version(id: Long, versionName: String, dateAdded: String)
 
-object Queries {
-  case class Hardware(id: Long, hardwareName: String, dateAdded: String)
+case class Program(id: Long, hash: String, dateAdded: String, numLabels: Long)
 
-  def getHardware(name: String): ConnectionIO[Option[Hardware]] =
+case class Permutation(id: Long,
+                       programID: Long,
+                       pathID: Long,
+                       levelID: Long,
+                       componentID: Long,
+                       dateAdded: String)
+
+case class Step(pathID: Long, permutationID: Long, levelID: Long)
+
+case class Conjuncts(id: Long,
+                     permutationID: Long,
+                     versionID: Long,
+                     total: Long,
+                     eliminated: Long,
+                     date: String)
+
+case class Component(id: Long,
+                     functionName: String,
+                     specType: SpecType,
+                     exprType: ExprType,
+                     specIndex: Long,
+                     exprIndex: Long,
+                     dateAdded: String)
+
+case class ProgramPath(id: Long, hash: String, programID: Long)
+
+case class StoredPerformance(id: Long,
+                             programID: Long,
+                             versionID: Long,
+                             hardwareID: Long,
+                             performanceDate: String,
+                             modeMeasured: String,
+                             stress: Int,
+                             iter: Int,
+                             ninetyFifth: BigDecimal,
+                             fifth: BigDecimal,
+                             median: BigDecimal,
+                             mean: BigDecimal,
+                             stdev: BigDecimal,
+                             minimum: BigDecimal,
+                             maximum: BigDecimal)
+
+class Queries {
+
+  private val DB_DRIVER = "com.mysql.cj.jdbc.Driver"
+
+  private val DB_URL = sys.env.get("GVC0_DB_URL") match {
+    case Some(value) => value
+    case None =>
+      throw new BenchmarkException(
+        "Unable to resolve $GVC0_DB_URL from environment."
+      )
+  }
+  private val DB_USER = sys.env.get("GVC0_DB_USER") match {
+    case Some(value) => value
+    case None =>
+      throw new BenchmarkException(
+        "Unable to resolve $GVC0_DB_USER from environment."
+      )
+  }
+  private val DB_PASS = sys.env.get("GVC0_DB_PASS") match {
+    case Some(value) => value
+    case None =>
+      throw new BenchmarkException(
+        "Unable to resolve $GVC0_DB_PASS from environment."
+      )
+  }
+
+  val xa: transactor.Transactor.Aux[IO, Unit] =
+    Transactor.fromDriverManager[IO](
+      DB_DRIVER, // driver classname
+      DB_URL, //"jdbc:mysql://localhost:3306/", // connect URL (driver-specific)
+      DB_USER, // user
+      DB_PASS // password
+    )
+
+  def getHardware(name: String): Option[Hardware] =
     sql"SELECT id, hardware_name, hardware_date FROM hardware WHERE hardware_name = $name;"
       .query[Hardware]
       .option
+      .transact(xa)
+      .unsafeRunSync()
 
-  def addHardware(name: String): ConnectionIO[Option[Hardware]] = {
-    for {
+  def addHardware(name: String): Option[Hardware] = {
+    val constructed = for {
       _ <- sql"INSERT INTO hardware (hardware_name) VALUES ($name);".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
       h <- sql"SELECT id, hardware_name, hardware_date FROM hardware WHERE id = $id;"
         .query[Hardware]
         .option
     } yield h
+    xa.trans.apply(constructed).unsafeRunSync()
   }
-
-  case class Version(id: Long, versionName: String, dateAdded: String)
 
   def getVersion(name: String): ConnectionIO[Option[Version]] =
     sql"SELECT id, version_name, version_date FROM versions WHERE version_name = $name;"
@@ -71,26 +142,33 @@ object Queries {
     } yield v
   }
 
-  case class Program(id: Long, hash: String, dateAdded: String)
-
-  def addProgram(filename: java.nio.file.Path,
-                 hash: String): ConnectionIO[Option[Program]] = {
-    for {
-      _ <- sql"INSERT INTO programs (src_filename, src_hash) VALUES (${filename.getFileName.toString}, $hash)".update.run
+  def addOrResolveProgram(filename: java.nio.file.Path,
+                          hash: String,
+                          numLabels: Long): Program = {
+    val addition = for {
+      _ <- sql"INSERT INTO programs (src_filename, src_hash, num_labels) VALUES (${filename.getFileName.toString}, $hash, $numLabels)".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
-      v <- sql"SELECT id, src_filename, src_hash FROM programs WHERE id = $id;"
+      v <- sql"SELECT id FROM programs WHERE id = $id;"
         .query[Program]
         .option
     } yield v
+    xa.trans.apply(addition).unsafeRunSync() match {
+      case Some(value) => value
+      case None =>
+        val resolution =
+          sql"SELECT id FROM programs WHERE src_filename = ${filename.getFileName.toString} AND src_hash = $hash AND num_labels = $numLabels"
+            .query[Program]
+            .option
+            .transact(xa)
+            .unsafeRunSync()
+        resolution match {
+          case Some(v: Program) => v
+          case None =>
+            throw new DBException(
+              s"Failed to update or resolve program ${filename.toAbsolutePath.toString}")
+        }
+    }
   }
-
-  case class Component(id: Long,
-                       functionName: String,
-                       specType: SpecType,
-                       exprType: ExprType,
-                       specIndex: Long,
-                       exprIndex: Long,
-                       dateAdded: String)
 
   def addComponent(program: Program,
                    functionName: String,
@@ -108,14 +186,8 @@ object Queries {
         .query[Component]
         .option
     } yield c
-  }
 
-  case class Permutation(id: Long,
-                         programID: Long,
-                         pathID: Long,
-                         levelID: Long,
-                         componentID: Long,
-                         dateAdded: String)
+  }
 
   def addPermutation(
       program: Program,
@@ -129,10 +201,8 @@ object Queries {
     } yield c
   }
 
-  case class Step(pathID: Long, permutationID: Long, levelID: Long)
-
   def addStep(perm: Permutation,
-              path: Path,
+              path: ProgramPath,
               levelID: Long): ConnectionIO[Option[Step]] = {
     for {
       _ <- sql"INSERT INTO steps (perm_id, path_id, level_id) VALUES (${perm.id}, ${path.id}, $levelID);".update.run
@@ -143,25 +213,17 @@ object Queries {
     } yield s
   }
 
-  case class Path(id: Long, hash: String, programID: Long)
-
-  def addPath(hash: String, programID: Long): ConnectionIO[Option[Path]] = {
+  def addPath(hash: String,
+              programID: Long): ConnectionIO[Option[ProgramPath]] = {
 
     for {
       _ <- sql"INSERT INTO paths (path_hash, program_id) VALUES ($hash, $programID);".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
       p <- sql"SELECT (id, path_hash, program_id) FROM paths WHERE id = $id;"
-        .query[Path]
+        .query[ProgramPath]
         .option
     } yield p
   }
-
-  case class Conjuncts(id: Long,
-                       permutationID: Long,
-                       versionID: Long,
-                       total: Long,
-                       eliminated: Long,
-                       date: String)
 
   def addConjuncts(
       version: Version,
@@ -175,30 +237,14 @@ object Queries {
     """.query[Conjuncts].option
   }
 
-  case class Performance(id: Long,
-                         programID: Long,
-                         versionID: Long,
-                         hardwareID: Long,
-                         performanceDate: String,
-                         modeMeasured: String,
-                         stress: Int,
-                         iter: Int,
-                         ninetyFifth: BigDecimal,
-                         fifth: BigDecimal,
-                         median: BigDecimal,
-                         mean: BigDecimal,
-                         stdev: BigDecimal,
-                         minimum: BigDecimal,
-                         maximum: BigDecimal)
-
-  def addPerformance(
-      pg: Program,
-      version: Version,
-      hardware: Hardware,
-      modeMeasured: ModeMeasured,
-      stress: Option[Int],
-      iter: Int,
-      perf: gvc.CC0Wrapper.Performance): ConnectionIO[Option[Performance]] = {
+  def addPerformance(pg: Program,
+                     version: Version,
+                     hardware: Hardware,
+                     modeMeasured: ModeMeasured,
+                     stress: Option[Int],
+                     iter: Int,
+                     perf: gvc.CC0Wrapper.Performance)
+    : ConnectionIO[Option[StoredPerformance]] = {
     sql"""INSERT INTO performance (
                 program_id,
                 version_id, 
@@ -229,44 +275,6 @@ object Queries {
                  ${perf.minimum}, 
                  ${perf.maximum}
                  );
-       """.query[Performance].option
+       """.query[StoredPerformance].option
   }
-
-}
-
-object MySQLConnection {
-
-  private val DB_DRIVER = "com.mysql.cj.jdbc.Driver"
-
-  private val DB_URL = sys.env.get("GVC0_DB_URL") match {
-    case Some(value) => value
-    case None =>
-      throw new BenchmarkException(
-        "Unable to resolve $GVC0_DB_URL from environment."
-      )
-  }
-
-  private val DB_USER = sys.env.get("GVC0_DB_USER") match {
-    case Some(value) => value
-    case None =>
-      throw new BenchmarkException(
-        "Unable to resolve $GVC0_DB_USER from environment."
-      )
-  }
-
-  private val DB_PASS = sys.env.get("GVC0_DB_PASS") match {
-    case Some(value) => value
-    case None =>
-      throw new BenchmarkException(
-        "Unable to resolve $GVC0_DB_PASS from environment."
-      )
-  }
-
-  val xa: transactor.Transactor.Aux[IO, Unit] =
-    Transactor.fromDriverManager[IO](
-      DB_DRIVER, // driver classname
-      DB_URL, //"jdbc:mysql://localhost:3306/", // connect URL (driver-specific)
-      DB_USER, // user
-      DB_PASS // password
-    )
 }

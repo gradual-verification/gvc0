@@ -1,5 +1,5 @@
 package gvc.benchmarking
-import gvc.benchmarking.BenchConfig.BenchmarkConfig
+
 import gvc.benchmarking.Extensions.{c0, csv, log, out, txt}
 import gvc.benchmarking.Output.blue
 import gvc.benchmarking.Timing.{
@@ -8,7 +8,7 @@ import gvc.benchmarking.Timing.{
   ExecutionException
 }
 import gvc.transformer.{IR, IRPrinter}
-import gvc.{Config, Main, OutputFileCollection, VerificationException}
+import gvc.{Config, Main, VerificationException}
 
 import java.math.BigInteger
 import java.nio.file.{Files, Path}
@@ -16,13 +16,16 @@ import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.util.matching.Regex
 
-object Bench {
+object BenchmarkSequential {
   val arbitraryStressDeclaration: Regex = "(int )?(stress = [0-9]+;)".r
   val correctStressDeclaration: Regex =
     "(int[ ]+main\\(\\s*\\)\\s\\{[\\s\\S]*\n\\s*int stress = [0-9]+;)".r
+
   class BenchmarkException(message: String) extends Exception(message)
+
   val readStress =
     "int readStress() {int* value = alloc(int); args_int(\"--stress\", value); args_t input = args_parse(); printint(*value); return *value;}\n"
+
   object Names {
     val conjuncts: String = csv("conjuncts")
     //
@@ -70,25 +73,21 @@ object Bench {
   }
 
   def mark(
-      source: String,
       config: Config,
-      outputFiles: OutputFileCollection,
+      benchmarkConfig: SequentialConfig,
       librarySearchDirs: List[String]
   ): Unit = {
-    val file = c0(outputFiles.baseName)
-    val benchConfig =
-      BenchConfig.resolveBenchmarkConfig(source, librarySearchDirs, config)
-
+    val file = c0(benchmarkConfig.io.source.getFileName)
     if (!config.onlyExec && !config.onlyCompile) {
       val timeout = config.timeout match {
         case Some(value) => value.toString + "s"
         case None        => "infinite"
       }
-      val paths = benchConfig.workload.nPaths
+      val paths = benchmarkConfig.workload.nPaths
       val pathDesc =
         s"${Output.blue(paths.toString)} path" +
           (if (paths > 1) "s" else "")
-      val iterations = benchConfig.workload.iterations
+      val iterations = benchmarkConfig.workload.iterations
       val iterDesc =
         if (config.onlyVerify) ""
         else
@@ -98,25 +97,27 @@ object Bench {
       Output.info(
         s"Benchmarking $pathDesc$iterDesc for ${blue(
           file
-        )}, timeout ${blue(timeout)}, output to ${blue(benchConfig.files.root.toString)}"
+        )}, timeout ${blue(timeout)}, output to ${blue(benchmarkConfig.io.root.toString)}"
       )
 
       def booleanToStatus(a: Boolean): String =
         if (a) Output.green("enabled") else Output.red("disabled")
 
       Output.info(
-        s"Baseline ${booleanToStatus(!config.disableBaseline)}, execution ${booleanToStatus(!config.onlyVerify)}"
+        s"Baseline ${booleanToStatus(!benchmarkConfig.modifiers.disableBaseline)}, execution ${booleanToStatus(
+          !config.onlyVerify)}"
       )
 
       markVerification(
         config,
-        outputFiles,
-        benchConfig
+        benchmarkConfig,
+        librarySearchDirs
       )
+
       println(s"${Output.formatSuccess("Verification completed.")}")
     }
     if (!config.onlyVerify) {
-      markExecution(config, benchConfig)
+      markExecution(config, benchmarkConfig)
       print(
         s"\n\n${Output.formatSuccess("Compilation & Execution completed.")}\n"
       )
@@ -129,28 +130,34 @@ object Bench {
 
   def markVerification(
       config: Config,
-      outputFiles: OutputFileCollection,
-      benchmarkConfig: BenchmarkConfig
+      benchmarkConfig: SequentialConfig,
+      includeDirs: List[String]
   ): Unit = {
+
+    val readSource = Files.readString(benchmarkConfig.io.source)
+    val ir = Main.generateIR(readSource, includeDirs)
+    val labelOutput = new LabelVisitor().visit(ir)
+    val outputFileCollection =
+      Main.getOutputCollection(benchmarkConfig.io.source.toFile.getName)
 
     val alreadySampled: mutable.Set[BigInteger] =
       mutable.Set[BigInteger]()
-    val maxPaths = config.benchmarkPaths.getOrElse(1)
+    val maxPaths = benchmarkConfig.workload.nPaths
     val metaCSV =
       new MetadataCSVPrinter(
-        benchmarkConfig.files,
-        benchmarkConfig.labelOutput.labels
+        benchmarkConfig.io,
+        labelOutput.labels
       )
     val staticCSV =
       new StaticCSVPrinter(benchmarkConfig)
 
-    val err = new ErrorCSVPrinter(benchmarkConfig.files.verifyLogs)
+    val err = new ErrorCSVPrinter(benchmarkConfig.io.verifyLogs)
 
-    val sampler = new Sampler(benchmarkConfig)
+    val sampler = new Sampler(labelOutput)
 
     val progress =
       new VerificationTracker(
-        benchmarkConfig.labelOutput.labels.length,
+        labelOutput.labels.length,
         maxPaths
       )
 
@@ -203,7 +210,7 @@ object Bench {
       val sourceText =
         IRPrinter.print(builtPermutation, includeSpecs = true)
       dumpPermutation(
-        benchmarkConfig.files.perms,
+        benchmarkConfig.io.perms,
         c0(idString),
         currentPermutation.labels.toList,
         sourceText
@@ -212,38 +219,40 @@ object Bench {
         val verifiedPermutation = config.timeout match {
           case Some(value) =>
             Timeout.runWithTimeout(value)(
-              Timing.verifyTimed(sourceText, outputFiles, benchmarkConfig)
+              Timing.verifyTimed(sourceText, outputFileCollection, config)
             )
           case None =>
-            Some(Timing.verifyTimed(sourceText, outputFiles, benchmarkConfig))
+            Some(
+              Timing
+                .verifyTimed(sourceText, outputFileCollection, config))
         }
         verifiedPermutation match {
           case Some(verifierOutput) =>
             staticCSV.log(idString, verifierOutput)
             val info = verifierOutput.output
             dumpPermutation(
-              benchmarkConfig.files.verifiedPerms,
+              benchmarkConfig.io.verifiedPerms,
               c0(idString),
               currentPermutation.labels.toList,
               info.c0Source
             )
             metaCSV.logConjuncts(idString, info.profiling)
-            if (!config.disableBaseline) {
-              val builtDynamic = new SelectVisitor(benchmarkConfig.ir)
+            if (benchmarkConfig.modifiers.disableBaseline) {
+              val builtDynamic = new SelectVisitor(ir)
                 .visit(currentPermutation)
               generateBaseline(
                 builtDynamic,
                 id,
                 currentPermutation.labels.toList,
-                benchmarkConfig.files.dynamicPerms.get
+                benchmarkConfig.io.dynamicPerms.get
               )
-              val builtFraming = new SelectVisitor(benchmarkConfig.ir)
+              val builtFraming = new SelectVisitor(ir)
                 .visit(currentPermutation)
               generateBaseline(
                 builtFraming,
                 id,
                 currentPermutation.labels.toList,
-                benchmarkConfig.files.framingPerms.get,
+                benchmarkConfig.io.framingPerms.get,
                 onlyFraming = true
               )
             }
@@ -266,13 +275,13 @@ object Bench {
       }
     }
 
-    val bottomID = new LabelPermutation(benchmarkConfig).id
+    val bottomID = new LabelPermutation(labelOutput).id
     val outputBottom =
-      benchmarkConfig.files.perms.resolve(c0(bottomID))
+      benchmarkConfig.io.perms.resolve(c0(bottomID))
     val outputBottomVerified =
-      benchmarkConfig.files.verifiedPerms.resolve(c0(bottomID))
+      benchmarkConfig.io.verifiedPerms.resolve(c0(bottomID))
     val outputBottomText =
-      IRPrinter.print(benchmarkConfig.ir, includeSpecs = false)
+      IRPrinter.print(ir, includeSpecs = false)
     Main.writeFile(
       outputBottom.toString,
       outputBottomText
@@ -283,9 +292,9 @@ object Bench {
     )
     metaCSV.logPermutation(
       bottomID.toString(16),
-      new LabelPermutation(benchmarkConfig)
+      new LabelPermutation(labelOutput)
     )
-    val visitor = new SelectVisitor(benchmarkConfig.ir)
+    val visitor = new SelectVisitor(ir)
 
     for (pathIndex <- 0 until maxPaths) {
       val sampleToPermute =
@@ -293,18 +302,19 @@ object Bench {
 
       metaCSV.logPath(
         pathIndex,
-        benchmarkConfig.labelOutput.labels,
+        labelOutput.labels,
         sampleToPermute
       )
       val summary = LabelTools.appendPathComment("", sampleToPermute)
       val summaryDestination =
-        benchmarkConfig.files.pathDescriptions.resolve(
+        benchmarkConfig.io.pathDescriptions.resolve(
           txt(pathIndex.toString)
         )
       Files.writeString(summaryDestination, summary)
 
       metaCSV.logStep(bottomID, pathIndex, 0, None)
-      val currentPermutation = new LabelPermutation(benchmarkConfig)
+      val currentPermutation =
+        new LabelPermutation(labelOutput)
 
       for (labelIndex <- sampleToPermute.indices) {
         currentPermutation.addLabel(sampleToPermute(labelIndex))
@@ -329,22 +339,22 @@ object Bench {
         "Failed to sample the requested quantity of paths; " + sampler.numSampled + "!=" + maxPaths
       )
     }
-    if (!config.disableBaseline) {
+    if (benchmarkConfig.modifiers.disableBaseline) {
       val templateCopyDynamic =
-        new SelectVisitor(benchmarkConfig.ir).visitEmpty()
+        new SelectVisitor(ir).visitEmpty()
       generateBaseline(
         templateCopyDynamic,
         bottomID,
         List.empty,
-        benchmarkConfig.files.dynamicPerms.get
+        benchmarkConfig.io.dynamicPerms.get
       )
       val templateCopyFraming =
-        new SelectVisitor(benchmarkConfig.ir).visitEmpty()
+        new SelectVisitor(ir).visitEmpty()
       generateBaseline(
         templateCopyFraming,
         bottomID,
         List.empty,
-        benchmarkConfig.files.framingPerms.get,
+        benchmarkConfig.io.framingPerms.get,
         onlyFraming = true
       )
     }
@@ -352,18 +362,22 @@ object Bench {
     staticCSV.close()
     err.close()
   }
+
   sealed trait Stress
+
   case class StressList(levels: List[Int]) extends Stress
+
   case class StressScaling(stepSize: Int, upperBound: Int) extends Stress
+
   case class ErrorLogging(cc0: ErrorCSVPrinter, exec: ErrorCSVPrinter)
 
   def markExecution(
       config: Config,
-      benchmarkConfig: BenchmarkConfig
+      benchmarkConfig: SequentialConfig
   ): Unit = {
 
-    val errCC0 = new ErrorCSVPrinter(benchmarkConfig.files.compilationLogs)
-    val errExec = new ErrorCSVPrinter(benchmarkConfig.files.execLogs)
+    val errCC0 = new ErrorCSVPrinter(benchmarkConfig.io.compilationLogs)
+    val errExec = new ErrorCSVPrinter(benchmarkConfig.io.execLogs)
 
     val printer = new DynamicCSVPrinter(
       benchmarkConfig,
@@ -371,23 +385,25 @@ object Bench {
     )
 
     markDirectory(
-      benchmarkConfig.files.verifiedPerms,
+      benchmarkConfig.io.verifiedPerms,
       printer,
+      config,
       benchmarkConfig,
       ExecutionType.Gradual,
       ErrorLogging(errCC0, errExec)
     )
     printer.close()
 
-    if (!config.disableBaseline) {
+    if (benchmarkConfig.modifiers.disableBaseline) {
       val framingPrinter = new DynamicCSVPrinter(
         benchmarkConfig,
         ExecutionType.FramingOnly
       )
 
       markDirectory(
-        benchmarkConfig.files.framingPerms.get,
+        benchmarkConfig.io.framingPerms.get,
         framingPrinter,
+        config,
         benchmarkConfig,
         ExecutionType.FramingOnly,
         ErrorLogging(errCC0, errExec)
@@ -401,8 +417,9 @@ object Bench {
       )
 
       markDirectory(
-        benchmarkConfig.files.dynamicPerms.get,
+        benchmarkConfig.io.dynamicPerms.get,
         dynamicPrinter,
+        config,
         benchmarkConfig,
         ExecutionType.FullDynamic,
         ErrorLogging(errCC0, errExec)
@@ -410,16 +427,17 @@ object Bench {
 
       dynamicPrinter.close()
     }
-    if (Files.exists(benchmarkConfig.files.tempC0File))
-      Files.delete(benchmarkConfig.files.tempC0File)
-    if (Files.exists(benchmarkConfig.files.tempBinaryFile))
-      Files.delete(benchmarkConfig.files.tempBinaryFile)
+    if (Files.exists(benchmarkConfig.io.tempC0File))
+      Files.delete(benchmarkConfig.io.tempC0File)
+    if (Files.exists(benchmarkConfig.io.tempBinaryFile))
+      Files.delete(benchmarkConfig.io.tempBinaryFile)
   }
 
   def markFile(
       in: Path,
       printer: DynamicCSVPrinter,
-      benchConfig: BenchmarkConfig,
+      config: Config,
+      benchConfig: SequentialConfig,
       progressTracker: Option[ExecutionTracker] = None,
       logging: ErrorLogging
   ): Unit = {
@@ -435,21 +453,29 @@ object Bench {
     val source = injectStress(sourceString)
 
     Main.writeFile(
-      benchConfig.files.tempC0File.toAbsolutePath.toString,
+      benchConfig.io.tempC0File.toAbsolutePath.toString,
       source
     )
     try {
       val perfComp = Timing.compileTimed(
-        benchConfig.files.tempC0File,
-        benchConfig.files.tempBinaryFile,
+        benchConfig.io.tempC0File,
+        benchConfig.io.tempBinaryFile,
+        config,
         benchConfig
       )
       printer.logCompilation(id, perfComp)
 
-      if (!benchConfig.rootConfig.onlyCompile) {
-        for (workload <- benchConfig.workload.stepList) {
+      if (benchConfig.modifiers.onlyCompile) {
+        val stepList = benchConfig.workload.stress match {
+          case singular: StressSingular => List(singular.stressValue)
+          case list: StressList         => list.levels
+          case stepwise: StressBounded =>
+            (stepwise.wLower to stepwise.wUpper by stepwise.wStep).toList
+        }
+
+        for (workload <- stepList) {
           val perf = Timing.execTimed(
-            benchConfig.files.tempBinaryFile,
+            benchConfig.io.tempBinaryFile,
             benchConfig.workload.iterations,
             List(s"--stress $workload")
           )
@@ -482,7 +508,8 @@ object Bench {
   def markDirectory(
       in: Path,
       printer: DynamicCSVPrinter,
-      benchConfig: BenchmarkConfig,
+      config: Config,
+      benchConfig: SequentialConfig,
       verificationType: ExecutionType,
       logging: ErrorLogging
   ): Unit = {
@@ -491,7 +518,12 @@ object Bench {
     if (runlist.nonEmpty) {
       val progress = new ExecutionTracker(runlist.length, verificationType)
       runlist.foreach(file => {
-        markFile(file.toPath, printer, benchConfig, Some(progress), logging)
+        markFile(file.toPath,
+                 printer,
+                 config,
+                 benchConfig,
+                 Some(progress),
+                 logging)
       })
     } else {
       Output.error(s"No permutations to run in ${in.toString}.")
@@ -507,6 +539,7 @@ object Bench {
       arbitraryStressDeclaration.replaceAllIn(withStressDeclaration, "")
     "#use <conio>\n#use <args>\n" + removedAdditionalAssignments
   }
+
   def isInjectable(source: String): Boolean = {
     correctStressDeclaration
       .findAllMatchIn(source)

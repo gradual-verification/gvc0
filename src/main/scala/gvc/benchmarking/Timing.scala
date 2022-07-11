@@ -3,7 +3,7 @@ package gvc.benchmarking
 import gvc.{CC0Options, CC0Wrapper, Config, OutputFileCollection}
 import gvc.CC0Wrapper.{CommandOutput, Performance}
 import gvc.Main.{VerifiedOutput, verify}
-import gvc.benchmarking.BenchConfig.BenchmarkConfig
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.concurrent.duration._
@@ -27,7 +27,7 @@ object Timing {
   def verifyTimed(
       inputSource: String,
       fileNames: OutputFileCollection,
-      config: BenchmarkConfig
+      config: Config,
   ): TimedVerification = {
     var verifiedOutput: Option[VerifiedOutput] = None
     val translationTimings = ListBuffer[Long]()
@@ -35,7 +35,7 @@ object Timing {
     val weaverTimings = ListBuffer[Long]()
 
     for (_ <- 0 until 1) {
-      val out = verify(inputSource, fileNames, config.rootConfig)
+      val out = verify(inputSource, fileNames, config)
       val perf = out.timing
       translationTimings += perf.translation
       verifierTimings += perf.verification
@@ -56,9 +56,9 @@ object Timing {
   def compileTimed(
       input: Path,
       binary: Path,
-      benchConfig: BenchmarkConfig
+      config: Config,
+      benchConfig: SequentialConfig
   ): Performance = {
-    val config = benchConfig.rootConfig
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
@@ -88,10 +88,11 @@ object Timing {
       input: Path,
       output: Path,
       args: List[String],
-      benchConfig: BenchmarkConfig
+      config: Config,
+      benchConfig: SequentialConfig
   ): (Performance, Performance) = {
     (
-      compileTimed(input, output, benchConfig),
+      compileTimed(input, output, config, benchConfig),
       execTimed(output, benchConfig.workload.iterations, args)
     )
   }

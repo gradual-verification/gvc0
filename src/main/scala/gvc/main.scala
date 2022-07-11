@@ -4,7 +4,13 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.benchmarking.{Bench, BenchmarkExecutor, BenchmarkPopulator, Output}
+import gvc.benchmarking.{
+  BenchmarkExecutor,
+  BenchmarkExternalConfig,
+  BenchmarkPopulator,
+  BenchmarkSequential,
+  Output
+}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -27,15 +33,8 @@ case class OutputFileCollection(
 )
 
 object Main extends App {
-  val defaultLibraryDirectory =
-    Paths.get("src/main/resources").toAbsolutePath.toString + '/'
-  val cmdConfig = Config.fromCommandLineArgs(args.toList)
 
-  cmdConfig.validate()
-  run(cmdConfig)
-
-  def run(config: Config): Unit = {
-    val sourceFile = config.sourceFile.get
+  def getOutputCollection(sourceFile: String): OutputFileCollection = {
     val baseName =
       if (sourceFile.toLowerCase().endsWith(".c0"))
         sourceFile.slice(0, sourceFile.length() - 3)
@@ -44,49 +43,54 @@ object Main extends App {
     val silverFileName = baseName + ".vpr"
     val c0FileName = baseName + ".verified.c0"
     val profilingName = baseName + ".prof.out"
+    OutputFileCollection(
+      baseName,
+      irFileName,
+      silverFileName,
+      c0FileName,
+      profilingName
+    )
+  }
 
-    val fileNames =
-      OutputFileCollection(
-        baseName,
-        irFileName,
-        silverFileName,
-        c0FileName,
-        profilingName
-      )
+  val defaultLibraryDirectory =
+    Paths.get("src/main/resources").toAbsolutePath.toString + '/'
+  val cmdConfig = Config.fromCommandLineArgs(args.toList)
 
-    val inputSource = readFile(config.sourceFile.get)
+  cmdConfig.validate()
+  run(cmdConfig)
+
+  def run(config: Config): Unit = {
+
     val linkedLibraries =
       config.linkedLibraries ++ List(defaultLibraryDirectory)
-    config.mode match {
-      case Config.StressMode =>
-      /*
-        val startTime = Calendar.getInstance().getTime()
-        Output.info(startTime.toString)
-        Stress.test(inputSource, config, fileNames, linkedLibraries)
-        val stopTime = Calendar.getInstance().getTime()
-        val difference = stopTime.getTime - startTime.getTime
-        Output.info(stopTime.toString)
-        Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(difference)}")*/
 
-      case Config.BenchmarkMode =>
+    config.mode match {
+      case Config.BenchmarkSequential =>
+        val benchConfig =
+          BenchmarkExternalConfig.parseSequential(config)
         Output.printTiming(() => {
-          Bench.mark(
-            inputSource,
+          BenchmarkSequential.mark(
             config,
-            fileNames,
+            benchConfig,
             linkedLibraries
           )
         })
 
-      case Config.Executor => {
+      case Config.BenchmarkExecutor =>
         BenchmarkExecutor.execute(config)
-      }
 
-      case Config.Populator => {
-        BenchmarkPopulator.populate(config)
-      }
+      case Config.BenchmarkPopulator =>
+        val benchConfig =
+          BenchmarkExternalConfig.parsePopulator(config)
+        BenchmarkPopulator.populate(benchConfig)
 
       case Config.DefaultMode =>
+        val sourceFile = config.sourceFile.get
+
+        val fileNames = getOutputCollection(config.sourceFile.get)
+
+        val inputSource = readFile(config.sourceFile.get)
+
         Output.printTiming(() => {
           val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
           execute(verifiedOutput.c0Source, fileNames)
@@ -229,7 +233,7 @@ object Main extends App {
     val verificationStop = System.nanoTime()
     val verificationTime = verificationStop - verificationStart
 
-    if (config.onlyVerify && config.compileBenchmark.isEmpty) sys.exit(0)
+    if (config.onlyVerify) sys.exit(0)
 
     val weavingStart = System.nanoTime()
     Weaver.weave(ir, silver)

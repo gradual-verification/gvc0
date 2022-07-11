@@ -2,7 +2,6 @@ package gvc.benchmarking
 
 import gvc.CC0Wrapper.Performance
 import gvc.Main.ProfilingInfo
-import gvc.benchmarking.BenchConfig.{BenchmarkConfig, BenchmarkOutputFiles}
 import gvc.benchmarking.Timing.TimedVerification
 
 import java.io.FileWriter
@@ -53,14 +52,14 @@ class ErrorCSVPrinter(file: Path) {
   def close(): Unit = writer.close()
 }
 
-class StaticCSVPrinter(benchConfig: BenchmarkConfig) extends {
+class StaticCSVPrinter(benchConfig: SequentialConfig) extends {
 
   private val translationWriter =
-    new FileWriter(benchConfig.files.translationPerformance.toString, true)
+    new FileWriter(benchConfig.io.translationPerformance.toString, true)
   private val verificationWriter =
-    new FileWriter(benchConfig.files.verificationPerformance.toString, true)
+    new FileWriter(benchConfig.io.verificationPerformance.toString, true)
   private val instrumentationWriter =
-    new FileWriter(benchConfig.files.instrumentationPerformance.toString, true)
+    new FileWriter(benchConfig.io.instrumentationPerformance.toString, true)
   val writers: List[FileWriter] =
     List(translationWriter, verificationWriter, instrumentationWriter)
 
@@ -91,18 +90,18 @@ class StaticCSVPrinter(benchConfig: BenchmarkConfig) extends {
 }
 
 class DynamicCSVPrinter(
-    benchConfig: BenchmarkConfig,
+    benchConfig: SequentialConfig,
     execType: ExecutionType
 ) {
 
   var compilationWriter = new FileWriter(
     (execType match {
       case ExecutionType.Gradual =>
-        benchConfig.files.compilationPerformanceGradual
+        benchConfig.io.compilationPerformanceGradual
       case ExecutionType.FullDynamic =>
-        benchConfig.files.compilationPerformanceDynamic
+        benchConfig.io.compilationPerformanceDynamic
       case ExecutionType.FramingOnly =>
-        benchConfig.files.compilationPerformanceFraming
+        benchConfig.io.compilationPerformanceFraming
       case _ => "./compilation_perf.csv"
     }).toString,
     true
@@ -110,11 +109,11 @@ class DynamicCSVPrinter(
   var executionWriter = new FileWriter(
     (execType match {
       case ExecutionType.Gradual =>
-        benchConfig.files.executionPerformanceGradual
+        benchConfig.io.executionPerformanceGradual
       case ExecutionType.FullDynamic =>
-        benchConfig.files.executionPerformanceDynamic
+        benchConfig.io.executionPerformanceDynamic
       case ExecutionType.FramingOnly =>
-        benchConfig.files.executionPerformanceFraming
+        benchConfig.io.executionPerformanceFraming
       case _ => "./dyn_perf.csv"
     }).toString,
     true
@@ -212,7 +211,7 @@ object CSVIO {
 }
 
 class MetadataCSVPrinter(
-    files: BenchmarkOutputFiles,
+    files: SequentialOutputFiles,
     template: List[ASTLabel]
 ) {
   val metaWriter = new FileWriter(files.metadata.toString, true)

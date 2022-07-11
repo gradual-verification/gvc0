@@ -1,7 +1,6 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.Bench.BenchmarkException
-import gvc.benchmarking.BenchConfig.BenchmarkConfig
+import gvc.benchmarking.BenchmarkSequential.BenchmarkException
 import gvc.benchmarking.SamplingHeuristic.SamplingHeuristic
 import gvc.transformer.IR.{Expression, Method, Predicate}
 
@@ -15,7 +14,7 @@ object SamplingHeuristic extends Enumeration {
 
 case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
 
-class Sampler(benchConfig: BenchmarkConfig) {
+class Sampler(labelOutput: LabelOutput) {
   private val rng = new scala.util.Random
   rng.setSeed(41141441)
   private val prevSamples: mutable.Set[BigInteger] =
@@ -23,14 +22,14 @@ class Sampler(benchConfig: BenchmarkConfig) {
 
   def numSampled: Int = prevSamples.size
 
-  private val specImprecisionLabels = benchConfig.labelOutput.labels
+  private val specImprecisionLabels = labelOutput.labels
     .filter(p => p.exprType == ExprType.Imprecision)
     .map(label => {
       label.specIndex -> label
     })
     .toMap
   private val componentLabels =
-    benchConfig.labelOutput.labels.toSet
+    labelOutput.labels.toSet
       .diff(specImprecisionLabels.values.toSet)
       .filter(p => p.exprType != ExprType.Absent)
       .toList
@@ -87,7 +86,7 @@ class Sampler(benchConfig: BenchmarkConfig) {
         case SamplingHeuristic.Random => sampleRandom
         case _                        => throw new LabelException("Invalid sampling heuristic.")
       }
-      if (sampled.size != benchConfig.labelOutput.labels.size) {
+      if (sampled.size != labelOutput.labels.size) {
         throw new BenchmarkException(
           "Size of permutation doesn't match size of template.")
       }
@@ -96,10 +95,10 @@ class Sampler(benchConfig: BenchmarkConfig) {
 
     var sampled = getSample
     var hashCode =
-      LabelTools.hashPath(benchConfig.labelOutput.labels, sampled)
+      LabelTools.hashPath(labelOutput.labels, sampled)
     while (prevSamples.contains(hashCode)) {
       sampled = getSample
-      hashCode = LabelTools.hashPath(benchConfig.labelOutput.labels, sampled)
+      hashCode = LabelTools.hashPath(labelOutput.labels, sampled)
     }
     prevSamples += hashCode
     sampled
@@ -153,12 +152,12 @@ object LabelTools {
 }
 
 class LabelPermutation(
-    benchmarkConfig: BenchmarkConfig
+    labelOutput: LabelOutput
 ) {
   private val contents = mutable.TreeSet[ASTLabel]()(LabelOrdering)
   private val orderedIndices = mutable.ListBuffer[Int]()
   private val foldUnfoldCounts = mutable.Map[Method, Int]()
-  val completedExpressions = mutable.Set[Int]()
+  val completedExpressions: mutable.Set[Int] = mutable.Set[Int]()
 
   def addLabel(label: ASTLabel): Unit = {
     orderedIndices += label.exprIndex
@@ -188,14 +187,14 @@ class LabelPermutation(
   def indices: Set[Int] = orderedIndices.toSet
 
   def imprecisionStatusList: List[Int] = {
-    benchmarkConfig.labelOutput.specsToSpecIndices.values.toList.sorted
+    labelOutput.specsToSpecIndices.values.toList.sorted
       .map(index => {
         if (completedExpressions.contains(index)) 1 else 0
       })
   }
 
   def specStatusList: List[Int] = {
-    benchmarkConfig.labelOutput.labels
+    labelOutput.labels
       .map(label => {
         if (labels.contains(label)) 1 else 0
       })
@@ -203,9 +202,9 @@ class LabelPermutation(
 
   def exprIsComplete(template: Expression): Boolean =
     completedExpressions.nonEmpty &&
-      benchmarkConfig.labelOutput.specsToSpecIndices
+      labelOutput.specsToSpecIndices
         .contains(template) && completedExpressions.contains(
-      benchmarkConfig.labelOutput.specsToSpecIndices(template)
+      labelOutput.specsToSpecIndices(template)
     )
 
   def id: BigInteger = {

@@ -1,8 +1,6 @@
 package gvc
 
-import gvc.benchmarking.ExecutionType
-
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, InvalidPathException, Paths, Path}
 import java.io.File
 import scala.annotation.tailrec
 
@@ -14,24 +12,18 @@ case class Config(
     dump: Option[DumpType] = None,
     output: Option[String] = None,
     timeout: Option[Long] = None,
-    compileBenchmark: Option[String] = None,
-    compileStressTest: Option[String] = None,
     mode: Mode = Config.DefaultMode,
-    benchmarkPaths: Option[Int] = None,
-    benchmarkStress: Boolean = false,
-    benchmarkWStep: Option[Int] = None,
-    benchmarkWUpper: Option[Int] = None,
-    benchmarkIterations: Option[Int] = None,
-    benchmarkWList: Option[List[Int]] = None,
+    populatorConfig: Option[Path] = None,
+    executorConfig: Option[Path] = None,
+    sequentialConfig: Option[Path] = None,
     onlyExec: Boolean = false,
-    benchmarkStressMode: Option[ExecutionType] = None,
-    disableBaseline: Boolean = false,
     saveFiles: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
     onlyCompile: Boolean = false,
     sourceFile: Option[String] = None,
-    linkedLibraries: List[String] = List.empty
+    linkedLibraries: List[String] = List.empty,
+    versionString: Option[String] = None
 ) {
   def validate(): Unit = {
     (
@@ -49,31 +41,9 @@ case class Config(
       else if (sourceFile.isEmpty) Some("No source file specified")
       else if (!Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
-      else if (disableBaseline && compileBenchmark.isEmpty)
-        Some(
-          s"Benchmarking (--benchmark) must be enabled to use --disable-baseline."
-        )
-      else if (benchmarkPaths.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty)
-        Some(
-          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -p or --paths."
-        )
-      else if (benchmarkWStep.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty)
-        Some(
-          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --step"
-        )
-      else if (benchmarkWUpper.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty)
-        Some(
-          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --upper."
-        )
-      else if (benchmarkIterations.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty)
-        Some(
-          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -i/--iter."
-        )
-      else if ((benchmarkWStep.isDefined || benchmarkWUpper.isDefined) && benchmarkWList.isDefined)
-        Some(
-          s"Either provide a list of specific stress levels (--w-list), or set a step size (--w-step) and/or upper bound (--w-upper)."
-        )
-      else None
+      else if (versionString.nonEmpty && versionString.get.trim.isEmpty) {
+        Some(s"Invalid version string.")
+      } else None
     ).foreach(Config.error)
   }
 }
@@ -85,15 +55,13 @@ object Config {
 
   case object DumpC0 extends DumpType
 
-  case object StressMode extends Mode
-
-  case object BenchmarkMode extends Mode
-
   case object DefaultMode extends Mode
 
-  case object Executor extends Mode
+  case object BenchmarkExecutor extends Mode
 
-  case object Populator extends Mode
+  case object BenchmarkSequential extends Mode
+
+  case object BenchmarkPopulator extends Mode
 
   val help =
     """Usage: gvc0 [OPTION...] SOURCEFILE
@@ -107,44 +75,21 @@ object Config {
       |  -x            --exec                         Execute the compiled file
       |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
       |
-      |   ---[Benchmarking]---
-      |  -b <dir>      --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
-      |                --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
-      |                --disable-baseline             Speedup benchmark generation by skipping the baseline.
-      |                --only-exec                    For benchmark directories that already exist, skip verification entirely and execute the programs that are present. 
-      |                --iter=<n>                     Specify the number of iterations for execution.
-      |  
-      |                --stress=<dir>                 Perform a stress test of full dynamic verification, comparing performance against the unverified source program.
-      |                --s-only-dynamic               Only stress test fully dynamic verification.
-      |                --s-only-framing               Only stress test dynamic verification for framing.
-      |                --s-only-unverified            Only stress test the original program, without runtime checks.
-      |  -ws <n>       --w-step=<n>                   Specify the step size of the stress factor from 0 to the upper bound.
-      |  -wu <n>       --w-upper=<n>                  Specify the upper bound on the stress factor.
-      |                --w-list=<n,...>               Specify a list of stress levels to execute.
-      |
-      |---[Populating Benchmarking Database]---
-      |                --populate=<dir>               Populate the database with permutations of the provided set of sample programs.                   
-      |                --p-upper=<n>                  Set a maximum number of unique, unverified paths to add to the database.
-      |                
-      |---[Parallel Execution]---
-      |                --parallelize=<file>           Specify a benchmarking configuration file.
-      |
-      |    
-      |                
-      |                """
+      |                --sequential=<config.xml>      Execute a sequential benchmark using the specified configuration file
+      |                --executor=<config.xml>        Execute a parallel benchmark using the specified configuration file.
+      |                --populator=<config.xml>       Populate the database with permutations of the provided set of sample programs.
+      |                --version=<version>            Specify the version string identifying the current verifier. Overrides any value in a provided config.
+   """
 
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
-  private val benchmarkDir = raw"--benchmark=(.+)".r
-  private val paths = raw"--paths=(.+)".r
-  private val stepSize = raw"--w-step=(.+)".r
-  private val upperBound = raw"--w-upper=(.+)".r
-  private val specifyIncrements = raw"--w-list=(.+)".r
-  private val iterationArg = raw"--iter=(.+)".r
   private val timeoutArg = raw"--timeout=(.+)".r
-  private val stressArg = raw"--stress=(.+)".r
   private val timeoutSec = raw"([0-9]+)s".r
   private val timeoutMin = raw"([0-9]+)m".r
+  private val populatorDirectoryArg = raw"--populator=(.+)".r
+  private val executorConfigArg = raw"--executor=(.+)".r
+  private val sequentialConfigArg = raw"--sequential=(.+)".r
+  private val versionString = raw"--version=(.+)".r
 
   def error(message: String): Nothing = {
     println(message)
@@ -164,7 +109,7 @@ object Config {
     case _        => error(s"Invalid dump output type: $t")
   }
 
-  private def parseIntList(t: String): List[Int] = {
+  def parseIntList(t: String): List[Int] = {
     if (t.matches("[0-9]+(,[0-9]+)+")) {
       t.split(',').map(s => s.trim.toInt).toList
     } else {
@@ -174,26 +119,58 @@ object Config {
     }
   }
 
+  private def parsePath(p: String,
+                        isDir: Boolean = false): java.nio.file.Path = {
+    try {
+      val toPath = Paths.get(p)
+      if (Files.exists(toPath)) {
+        if (isDir) {
+          if (Files.isDirectory(toPath)) {
+            toPath
+          } else {
+            error(s"Expected a directory, but found a regular file: $p")
+          }
+        } else {
+          if (Files.isRegularFile(toPath)) {
+            toPath
+          } else {
+            error(s"Expected a file, but found a directory: $p")
+          }
+        }
+      } else {
+        error(s"File not found: $p")
+      }
+    } catch {
+      case _: InvalidPathException =>
+        error(s"Invalid path: $p")
+    }
+  }
+
   @tailrec
   def fromCommandLineArgs(
       args: List[String],
       current: Config = Config()
   ): Config =
     args match {
-      case "--s-only-dynamic" :: tail =>
+      case versionString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(versionString = Some(t)))
+      case populatorDirectoryArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(benchmarkStressMode = Some(ExecutionType.FullDynamic))
+          current.copy(populatorConfig = Some(parsePath(t)),
+                       mode = BenchmarkPopulator)
         )
-      case "--s-only-framing" :: tail =>
+      case sequentialConfigArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(benchmarkStressMode = Some(ExecutionType.FramingOnly))
+          current.copy(sequentialConfig = Some(parsePath(t)),
+                       mode = BenchmarkSequential)
         )
-      case "--s-only-unverified" :: tail =>
+      case executorConfigArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(benchmarkStressMode = Some(ExecutionType.Unverified))
+          current.copy(sequentialConfig = Some(parsePath(t)),
+                       mode = BenchmarkSequential)
         )
       case "--only-exec" :: tail =>
         fromCommandLineArgs(
@@ -205,26 +182,6 @@ object Config {
           tail,
           current.copy(onlyCompile = true)
         )
-      case specifyIncrements(t) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWList = Some(parseIntList(t)))
-        )
-      case "-i" :: t :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkIterations = Some(t.toInt))
-        )
-      case iterationArg(t) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkIterations = Some(t.toInt))
-        )
-      case stressArg(t) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(compileStressTest = Some(t), mode = StressMode)
-        )
       case "-t" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case timeoutArg(t) :: tail =>
@@ -235,45 +192,8 @@ object Config {
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
       case "-o" :: f :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
-      case paths(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(benchmarkPaths = Some(f.toInt)))
-      case benchmarkDir(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(compileBenchmark = Some(f), mode = BenchmarkMode)
-        )
-      case "-b" :: f :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(
-            compileBenchmark = Some(f),
-            mode = BenchmarkMode
-          )
-        )
-      case "-ws" :: f :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWStep = Some(f.toInt))
-        )
-      case stepSize(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWStep = Some(f.toInt))
-        )
-      case "-wu" :: f :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWUpper = Some(f.toInt))
-        )
-      case upperBound(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWUpper = Some(f.toInt))
-        )
       case outputArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
-      case "--disable-baseline" :: tail =>
-        fromCommandLineArgs(tail, current.copy(disableBaseline = true))
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>

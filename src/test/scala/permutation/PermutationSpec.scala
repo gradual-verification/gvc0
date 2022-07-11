@@ -1,5 +1,6 @@
 package gvc.specs.permutation
-import gvc.Config
+
+import gvc.Main
 import gvc.benchmarking._
 import gvc.specs._
 import gvc.transformer.{IR, IRPrinter}
@@ -16,18 +17,17 @@ class PermutationSpec extends FixtureAnyFunSuite {
   ) { _ =>
     for (input <- TestUtils.groupResources("quant-study")) {
       val tempDir = Files.createTempDirectory("gvc0-permutation-spec")
-      val benchConfig =
-        BenchConfig.resolveBenchmarkConfig(
-          input(".c0").read(),
-          List("src/main/resources/"),
-          Config(compileBenchmark = Some(tempDir.toString))
-        )
-      val sampler = new Sampler(benchConfig)
+
+      val sourceText = input(".c0").read()
+      val includeDirectories = List("src/main/resources/")
+      val ir = Main.generateIR(sourceText, includeDirectories)
+      val labelOutput = new LabelVisitor().visit(ir)
+      val sampler = new Sampler(labelOutput)
 
       for (_ <- 0 until 8) {
         val sampleToPermute =
           sampler.sample(SamplingHeuristic.Random)
-        val selector = new SelectVisitor(benchConfig.ir)
+        val selector = new SelectVisitor(ir)
         val auxLabeller = new LabelVisitor()
 
         def labelSet(labels: List[ASTLabel]): Set[String] = {
@@ -39,7 +39,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
             .toSet
         }
 
-        val labelPermutation = new LabelPermutation(benchConfig)
+        val labelPermutation = new LabelPermutation(labelOutput)
 
         for (labelIndex <- sampleToPermute.indices) {
           labelPermutation.addLabel(sampleToPermute(labelIndex))
@@ -62,15 +62,14 @@ class PermutationSpec extends FixtureAnyFunSuite {
   test("Spec IDs and Expr IDs are contiguous and unique") { _ =>
     for (input <- TestUtils.groupResources("quant-study")) {
       val tempDir = Files.createTempDirectory("gvc0-imprecision-spec")
-      val benchConfig = BenchConfig.resolveBenchmarkConfig(
-        input(".c0").read(),
-        List("src/main/resources/"),
-        Config(compileBenchmark = Some(tempDir.toString))
-      )
+      val sourceText = input(".c0").read()
+      val includeDirectories = List("src/main/resources/")
+      val ir = Main.generateIR(sourceText, includeDirectories)
+      val labelOutput = new LabelVisitor().visit(ir)
 
       val specIndices = mutable.Set[Int]()
       val exprIndices = mutable.Set[Int]()
-      benchConfig.labelOutput.labels.foreach(l => {
+      labelOutput.labels.foreach(l => {
         specIndices += l.specIndex
         assert(!exprIndices.contains(l.exprIndex) || l.exprIndex == -1)
         exprIndices += l.exprIndex
@@ -93,12 +92,12 @@ class PermutationSpec extends FixtureAnyFunSuite {
       val predicateBodies = mutable.Map[Predicate, Int]()
       for (input <- TestUtils.groupResources("quant-study")) {
         val tempDir = Files.createTempDirectory("gvc0-imprecision-spec")
-        val benchConfig = BenchConfig.resolveBenchmarkConfig(
-          input(".c0").read(),
-          List("src/main/resources/"),
-          Config(compileBenchmark = Some(tempDir.toString))
-        )
-        for (label <- benchConfig.labelOutput.labels)
+        val sourceText = input(".c0").read()
+        val includeDirectories = List("src/main/resources/")
+        val ir = Main.generateIR(sourceText, includeDirectories)
+        val labelOutput = new LabelVisitor().visit(ir)
+
+        for (label <- labelOutput.labels)
           label.parent match {
             case Left(value) =>
               label.specType match {
@@ -136,18 +135,18 @@ class PermutationSpec extends FixtureAnyFunSuite {
     {
       for (input <- TestUtils.groupResources("quant-study")) {
         val tempDir = Files.createTempDirectory("gvc0-imprecision-spec")
-        val benchConfig = BenchConfig.resolveBenchmarkConfig(
-          input(".c0").read(),
-          List("src/main/resources/"),
-          Config(compileBenchmark = Some(tempDir.toString))
-        )
-        val baseline = IRPrinter.print(benchConfig.ir, includeSpecs = true)
-        val sampler = new Sampler(benchConfig)
+        val sourceText = input(".c0").read()
+        val includeDirectories = List("src/main/resources/")
+        val ir = Main.generateIR(sourceText, includeDirectories)
+        val labelOutput = new LabelVisitor().visit(ir)
+
+        val baseline = IRPrinter.print(ir, includeSpecs = true)
+        val sampler = new Sampler(labelOutput)
         for (_ <- 0 until 8) {
           val sampleToPermute =
             sampler.sample(SamplingHeuristic.Random)
-          val selector = new SelectVisitor(benchConfig.ir)
-          val labelPermutation = new LabelPermutation(benchConfig)
+          val selector = new SelectVisitor(ir)
+          val labelPermutation = new LabelPermutation(labelOutput)
           for (labelIndex <- sampleToPermute.indices) {
             labelPermutation.addLabel(sampleToPermute(labelIndex))
           }
@@ -165,12 +164,12 @@ class PermutationSpec extends FixtureAnyFunSuite {
   ) { _ =>
     for (input <- TestUtils.groupResources("quant-study")) {
       val tempDir = Files.createTempDirectory("gvc0-imprecision-spec")
-      val benchConfig = BenchConfig.resolveBenchmarkConfig(
-        input(".c0").read(),
-        List("src/main/resources/"),
-        Config(compileBenchmark = Some(tempDir.toString))
-      )
-      val sampler = new Sampler(benchConfig)
+      val sourceText = input(".c0").read()
+      val includeDirectories = List("src/main/resources/")
+      val ir = Main.generateIR(sourceText, includeDirectories)
+      val labelOutput = new LabelVisitor().visit(ir)
+
+      val sampler = new Sampler(labelOutput)
       for (_ <- 0 until 8) {
         val ordering = sampler.sample(SamplingHeuristic.Random)
         val lastComponents = mutable.Map[Int, (ASTLabel, Int)]()
@@ -188,13 +187,11 @@ class PermutationSpec extends FixtureAnyFunSuite {
               uniqueMethods += methodContext
               methodCompletionCounts += (methodContext -> (methodCompletionCounts
                 .getOrElse(methodContext, 0) + 1))
-              if (
-                methodCompletionCounts.getOrElse(
-                  methodContext,
-                  0
-                ) == benchConfig.labelOutput
-                  .foldUnfoldCount(methodContext)
-              )
+              if (methodCompletionCounts.getOrElse(
+                    methodContext,
+                    0
+                  ) == labelOutput
+                    .foldUnfoldCount(methodContext))
                 methodCompletedAt(methodContext) = labelIndex
             case gvc.benchmarking.SpecType.Assert =>
             case _ =>
@@ -231,7 +228,9 @@ class PermutationSpec extends FixtureAnyFunSuite {
       TestUtils.deleteDirectory(tempDir)
     }
   }
+
   case class Args()
+
   type FixtureParam = Args
 
   override protected def withFixture(test: OneArgTest): Outcome = {
