@@ -179,7 +179,11 @@ object BaselineChecker {
         (rootOps, fields)
       } else {
         val acc =
-          checks.translateFieldPermission(VerifyMode, field, perms, context)
+          checks.translateFieldPermission(VerifyMode,
+                                          field,
+                                          perms,
+                                          None,
+                                          context)
         (rootOps ++ acc, field :: fields)
       }
 
@@ -206,14 +210,14 @@ object BaselineChecker {
   ): Seq[IR.Op] = {
     val (access, _) =
       validateAccess(expr, primaryPerms, checks, context, true, Nil)
-    val verify = checks.translate(VerifyMode, expr, primaryPerms, context)
+    val verify = checks.translate(VerifyMode, expr, primaryPerms, None, context)
 
     if (verify.isEmpty) {
       // If there are no checks in the specification, there will be no separation checks
       access
     } else {
       val separation =
-        checks.translate(SeparationMode, expr, tempPerms, context)
+        checks.translate(SeparationMode, expr, tempPerms, None, context)
       if (separation.isEmpty) {
         access ++ verify
       } else {
@@ -288,6 +292,7 @@ object BaselineChecker {
                   VerifyMode,
                   field,
                   perms,
+                  None,
                   ValueContext
                 )
             )
@@ -364,8 +369,7 @@ object BaselineChecker {
           argOps
         })
         val targetAccess = invoke.target.toSeq.flatMap(t =>
-          validateAccess(t, perms, checks, fieldAccs = fields)._1
-        )
+          validateAccess(t, perms, checks, fieldAccs = fields)._1)
         invoke.insertBefore(argAccess ++ targetAccess)
         invoke.callee match {
           case method: IR.Method =>

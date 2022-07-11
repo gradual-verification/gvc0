@@ -42,7 +42,7 @@ class VerificationTracker(perPath: Int, maxPaths: Int)
     if (averagePerStep == 0) {
       averagePerStep = elapsed
     } else {
-      averagePerStep = (averagePerStep + elapsed) / 2
+      averagePerStep = averagePerStep + ((elapsed - averagePerStep) / allPerms)
     }
     currentPerm += 1
     allPerms += 1

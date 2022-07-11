@@ -12,7 +12,8 @@ object Checker {
       val method: IR.Method,
       tempVars: Map[SilverVarId, IR.Invoke]
   ) extends CheckMethod {
-    val resultVars = mutable.Map[String, IR.Expression]()
+    val resultVars: mutable.Map[String, IR.Expression] =
+      mutable.Map[String, IR.Expression]()
 
     def resultVar(name: String): IR.Expression = {
       resultVars.getOrElseUpdate(
@@ -21,14 +22,12 @@ object Checker {
             SilverVarId(method.name, name),
             throw new WeaverException(s"Missing temporary variable '$name'")
           )
-
           invoke.target.getOrElse {
             val retType = invoke.method.returnType.getOrElse(
               throw new WeaverException(
                 s"Invalid temporary variable '$name' for void '${invoke.callee.name}'"
               )
             )
-
             val tempVar = method.addVar(retType)
             invoke.target = Some(tempVar)
             tempVar
@@ -232,11 +231,43 @@ object Checker {
             // No parameters can be added to a main method
             case MainCallStyle => ()
             // Imprecise methods always get the primary owned fields instance directly
-            case ImpreciseCallStyle | PrecisePreCallStyle =>
+            case ImpreciseCallStyle =>
               call.ir.arguments :+= getPrimaryOwnedFields()
-            case PreciseCallStyle
+            case PreciseCallStyle | PrecisePreCallStyle
                 if programData.imprecisionPresent || programData.requiresFieldAccessCheck =>
-              call.ir.arguments :+= getPrimaryOwnedFields()
+              val tempSet = method.addVar(
+                runtime.ownedFieldsRef,
+                CheckRuntime.Names.temporaryOwnedFields
+              )
+
+              val createTemp = new IR.Invoke(
+                runtime.initOwnedFields,
+                List(instanceCounter.get),
+                Some(tempSet)
+              )
+
+              val context = new CallSiteContext(call.ir, method)
+
+              val resolvePermissions = callee.precondition.toSeq
+                .flatMap(
+                  implementation.translate(AddRemoveMode,
+                                           _,
+                                           tempSet,
+                                           Some(getPrimaryOwnedFields),
+                                           context)
+                )
+                .toList
+              call.ir.insertBefore(
+                createTemp :: resolvePermissions
+              )
+              call.ir.arguments :+= tempSet
+              call.ir.insertAfter(
+                new IR.Invoke(
+                  runtime.join,
+                  List(getPrimaryOwnedFields, tempSet),
+                  None
+                )
+              )
             case _ =>
           }
       }
@@ -312,6 +343,7 @@ object Checker {
     context.implementation.translateFieldPermission(mode,
                                                     field,
                                                     perms,
+                                                    None,
                                                     ValueContext)
   }
 
@@ -334,6 +366,7 @@ object Checker {
     context.implementation.translatePredicateInstance(mode,
                                                       instance,
                                                       perms,
+                                                      None,
                                                       ValueContext)
   }
 
