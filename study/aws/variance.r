@@ -4,6 +4,7 @@ library(ggplot2)
 library(tidyr)
 library(tools)
 library(purrr)
+library(matrixStats)
 
 
 variance <- function(levels_path, perf_paths) {
@@ -28,10 +29,8 @@ variance <- function(levels_path, perf_paths) {
             base <- base %>% inner_join(perf_data[,-2], by=c("id"))
         }
         without_id <- base[,-1]
-        without_id$min <- apply(without_id, MARGIN =  1, FUN = min, na.rm = T)
-        without_id$max <- apply(without_id, MARGIN =  1, FUN = max, na.rm = T)
-        without_id$var <- without_id$min - without_id$max
-        mean(without_id$var)
+        without_id$variance = rowVars(as.matrix(without_id))
+        mean(without_id$variance)
     }
 }
 
@@ -55,20 +54,15 @@ sample_variance <- function(base) {
 
     if(length(unique(level_path_hashes)) == 1){
         lp <- level_paths[[1]]
-        round(abs(mean(variance(lp, gradual_paths), variance(lp, framing_paths), variance(lp, dynamic_paths))) / (10 ** 6), 2)
+        round(abs(mean(variance(lp, gradual_paths), variance(lp, framing_paths), variance(lp, dynamic_paths))))
     }else{
         print(paste("The samples in ", base, " differ by number and/or contents of paths."))
         quit()
     }
 }
-
-
-
-
-#local_variance <- sample_variance("./local")
+local_variance <- sample_variance("./local")
 remote_variance <- sample_variance("./remote")
-
-#print(paste("Local variance: ", local_variance, "mn"))
-print(paste("Remote variance: ", remote_variance, "ms"))
-
+print(paste("Local variance: ", local_variance))
+print(paste("Remote variance: ", remote_variance))
+print(paste("Difference Remote/Local: ", ((remote - local)/ local)*100, "%")
 
