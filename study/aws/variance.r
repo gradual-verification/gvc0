@@ -7,7 +7,7 @@ library(purrr)
 library(matrixStats)
 
 
-variance <- function(levels_path, perf_paths) {
+percent_stdev <- function(levels_path, perf_paths) {
     get_max_stress <- function(tb) {
         max(tb$stress)
     }
@@ -22,19 +22,22 @@ variance <- function(levels_path, perf_paths) {
         print(paste("The samples differ by number and/or contents of paths."))
         quit()
     }else{
+        perf_column_names <- c()
         for(i in 1:length(perf_paths)){
             perf_data <- read_csv(perf_paths[[i]], show_col_types = FALSE)
             perf_data <- perf_data %>% select(id, stress, median) %>% filter(stress == max(stress))
             colnames(perf_data) <- c("id", "stress", i)
+            perf_column_names <- append(perf_column_names, paste(i))
             base <- base %>% inner_join(perf_data[,-2], by=c("id"))
         }
-        without_id <- base[,-1]
-        without_id$variance = rowVars(as.matrix(without_id))
-        mean(without_id$variance)
+        base$mean <- apply(base[,perf_column_names], FUN = mean, na.rm = T, MARGIN = 1)
+        base$stdev <- apply(base[,perf_column_names], FUN = sd, na.rm = T, MARGIN = 1)
+        base$percent_stdev <- (base$stdev / base$mean * 100)
+        mean(base$percent_stdev)
     }
 }
 
-sample_variance <- function(base) {
+sample_percent_stdev <- function(base) {
     sample_dirs <- list.dirs(base, recursive = FALSE)
 
     level_paths <- c()
@@ -54,15 +57,13 @@ sample_variance <- function(base) {
 
     if(length(unique(level_path_hashes)) == 1){
         lp <- level_paths[[1]]
-        round(abs(mean(variance(lp, gradual_paths), variance(lp, framing_paths), variance(lp, dynamic_paths))))
+        round(abs(mean(percent_stdev(lp, gradual_paths), percent_stdev(lp, framing_paths), percent_stdev(lp, dynamic_paths))))
     }else{
         print(paste("The samples in ", base, " differ by number and/or contents of paths."))
         quit()
     }
 }
-local_variance <- sample_variance("./local")
-remote_variance <- sample_variance("./remote")
-print(paste("Local variance: ", local_variance))
-print(paste("Remote variance: ", remote_variance))
-print(paste("Difference Remote/Local: ", ((remote - local)/ local)*100, "%")
-
+local_variance <- sample_percent_stdev("./local")
+remote_variance <- sample_percent_stdev("./remote")
+print(paste("Local average % of mean for stdev: ", local_variance, "%", sep=""))
+print(paste("Remote average stdev % of mean for stdev: ", remote_variance, "%", sep=""))
