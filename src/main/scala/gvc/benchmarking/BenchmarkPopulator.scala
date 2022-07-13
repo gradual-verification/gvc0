@@ -8,7 +8,7 @@ object BenchmarkPopulator {
   private val BASELINE_QUANTITY = 1024
 
   //https://alvinalexander.com/source-code/scala-method-create-md5-hash-of-string/
-  private def md5sum(contents: String): String = {
+  def md5sum(contents: String): String = {
     import java.math.BigInteger
     import java.security.MessageDigest
     val md = MessageDigest.getInstance("MD5")
