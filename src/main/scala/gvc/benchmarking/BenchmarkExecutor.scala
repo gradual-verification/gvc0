@@ -3,6 +3,7 @@ package gvc.benchmarking
 object BenchmarkExecutor {
 
   def execute(config: ExecutorConfig): Unit = {
+    val dbConnection = DAO.connect(config.db)
 
     /*
    *   Assume we have a version string and a hardware string identifying our current platform, and a directory of example programs.
@@ -35,12 +36,12 @@ object BenchmarkExecutor {
   }
 
   /**
-  *
-  * @param config
-  * 1. Grab a program from the database that doesn't have performance results for the current HWID and VID
-  * 2. Insert a placeholder result for that program: If another node has already inserted the result,
-  * Query will fail
-  * 3. If fail then go to step one
-  */
+    *
+    * @param config
+    * 1. Grab a program from the database that doesn't have performance results for the current HWID and VID
+    * 2. Insert a placeholder result for that program: If another node has already inserted the result,
+    * Query will fail
+    * 3. If fail then go to step one
+    */
 
 }

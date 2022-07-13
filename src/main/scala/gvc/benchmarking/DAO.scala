@@ -8,7 +8,6 @@ import gvc.Main.ProfilingInfo
 
 import doobie._
 import doobie.implicits._
-import gvc.benchmarking.BenchmarkSequential.BenchmarkException
 import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.ModeMeasured.ModeMeasured
 import gvc.benchmarking.SpecType.SpecType
@@ -75,48 +74,30 @@ case class StoredPerformance(id: Long,
                              minimum: BigDecimal,
                              maximum: BigDecimal)
 
-class Queries {
+object DAO {
 
   private val DB_DRIVER = "com.mysql.cj.jdbc.Driver"
 
-  private val DB_URL = sys.env.get("GVC0_DB_URL") match {
-    case Some(value) => value
-    case None =>
-      throw new BenchmarkException(
-        "Unable to resolve $GVC0_DB_URL from environment."
-      )
-  }
-  private val DB_USER = sys.env.get("GVC0_DB_USER") match {
-    case Some(value) => value
-    case None =>
-      throw new BenchmarkException(
-        "Unable to resolve $GVC0_DB_USER from environment."
-      )
-  }
-  private val DB_PASS = sys.env.get("GVC0_DB_PASS") match {
-    case Some(value) => value
-    case None =>
-      throw new BenchmarkException(
-        "Unable to resolve $GVC0_DB_PASS from environment."
-      )
-  }
-
-  val xa: transactor.Transactor.Aux[IO, Unit] =
+  def connect(credentials: BenchmarkDBCredentials)
+    : transactor.Transactor.Aux[IO, Unit] = {
     Transactor.fromDriverManager[IO](
-      DB_DRIVER, // driver classname
-      DB_URL, //"jdbc:mysql://localhost:3306/", // connect URL (driver-specific)
-      DB_USER, // user
-      DB_PASS // password
+      DB_DRIVER,
+      credentials.url, //"jdbc:mysql://localhost:3306/", // connect URL (driver-specific)
+      credentials.username,
+      credentials.password
     )
+  }
 
-  def getHardware(name: String): Option[Hardware] =
+  def getHardware(name: String,
+                  xa: transactor.Transactor.Aux[IO, Unit]): Option[Hardware] =
     sql"SELECT id, hardware_name, hardware_date FROM hardware WHERE hardware_name = $name;"
       .query[Hardware]
       .option
       .transact(xa)
       .unsafeRunSync()
 
-  def addHardware(name: String): Option[Hardware] = {
+  def addHardware(name: String,
+                  xa: transactor.Transactor.Aux[IO, Unit]): Option[Hardware] = {
     val constructed = for {
       _ <- sql"INSERT INTO hardware (hardware_name) VALUES ($name);".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
@@ -127,12 +108,15 @@ class Queries {
     xa.trans.apply(constructed).unsafeRunSync()
   }
 
-  def getVersion(name: String): ConnectionIO[Option[Version]] =
+  def getVersion(
+      name: String,
+      xa: transactor.Transactor.Aux[IO, Unit]): ConnectionIO[Option[Version]] =
     sql"SELECT id, version_name, version_date FROM versions WHERE version_name = $name;"
       .query[Version]
       .option
 
-  def addVersion(name: String): ConnectionIO[Option[Version]] = {
+  def addVersion(name: String, xa: transactor.Transactor.Aux[IO, Unit])
+    : ConnectionIO[Option[Version]] = {
     for {
       _ <- sql"INSERT INTO versions (version_name) VALUES ($name);".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
@@ -144,7 +128,8 @@ class Queries {
 
   def addOrResolveProgram(filename: java.nio.file.Path,
                           hash: String,
-                          numLabels: Long): Program = {
+                          numLabels: Long,
+                          xa: transactor.Transactor.Aux[IO, Unit]): Program = {
     val addition = for {
       _ <- sql"INSERT INTO programs (src_filename, src_hash, num_labels) VALUES (${filename.getFileName.toString}, $hash, $numLabels)".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
@@ -175,7 +160,9 @@ class Queries {
                    specType: SpecType,
                    exprType: ExprType,
                    specIndex: Long,
-                   exprIndex: Long): ConnectionIO[Option[Component]] = {
+                   exprIndex: Long,
+                   xa: transactor.Transactor.Aux[IO, Unit])
+    : ConnectionIO[Option[Component]] = {
     for {
       _ <- sql"""INSERT INTO components
              (program_id, fn_name, spec_type, spec_index, expr_type, expr_index)
@@ -189,9 +176,10 @@ class Queries {
 
   }
 
-  def addPermutation(
-      program: Program,
-      permutationHash: String): ConnectionIO[Option[Permutation]] = {
+  def addPermutation(program: Program,
+                     permutationHash: String,
+                     xa: transactor.Transactor.Aux[IO, Unit])
+    : ConnectionIO[Option[Permutation]] = {
     for {
       _ <- sql"INSERT INTO permutations (program_id, permutation_hash) VALUES (${program.id}, $permutationHash);".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
@@ -201,9 +189,11 @@ class Queries {
     } yield c
   }
 
-  def addStep(perm: Permutation,
-              path: ProgramPath,
-              levelID: Long): ConnectionIO[Option[Step]] = {
+  def addStep(
+      perm: Permutation,
+      path: ProgramPath,
+      levelID: Long,
+      xa: transactor.Transactor.Aux[IO, Unit]): ConnectionIO[Option[Step]] = {
     for {
       _ <- sql"INSERT INTO steps (perm_id, path_id, level_id) VALUES (${perm.id}, ${path.id}, $levelID);".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
@@ -214,7 +204,9 @@ class Queries {
   }
 
   def addPath(hash: String,
-              programID: Long): ConnectionIO[Option[ProgramPath]] = {
+              programID: Long,
+              xa: transactor.Transactor.Aux[IO, Unit])
+    : ConnectionIO[Option[ProgramPath]] = {
 
     for {
       _ <- sql"INSERT INTO paths (path_hash, program_id) VALUES ($hash, $programID);".update.run
@@ -225,11 +217,12 @@ class Queries {
     } yield p
   }
 
-  def addConjuncts(
-      version: Version,
-      hardware: Hardware,
-      permutation: Permutation,
-      profiling: ProfilingInfo): ConnectionIO[Option[Conjuncts]] = {
+  def addConjuncts(version: Version,
+                   hardware: Hardware,
+                   permutation: Permutation,
+                   profiling: ProfilingInfo,
+                   xa: transactor.Transactor.Aux[IO, Unit])
+    : ConnectionIO[Option[Conjuncts]] = {
     sql"""
         INSERT INTO conjuncts 
             (perm_id, version_id, hardware_id, conj_total, conj_eliminated) 
@@ -243,7 +236,8 @@ class Queries {
                      modeMeasured: ModeMeasured,
                      stress: Option[Int],
                      iter: Int,
-                     perf: gvc.CC0Wrapper.Performance)
+                     perf: gvc.CC0Wrapper.Performance,
+                     xa: transactor.Transactor.Aux[IO, Unit])
     : ConnectionIO[Option[StoredPerformance]] = {
     sql"""INSERT INTO performance (
                 program_id,
