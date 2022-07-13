@@ -253,7 +253,6 @@ object BenchConfig {
     val ir = Main.generateIR(source, librarySearchPaths)
     val labeler = new LabelVisitor()
     val labels = labeler.visit(ir)
-    labeler.printCounts(labels.labels)
     val files = resolveOutputFiles(source, config)
     val work = resolveWorkload(config)
     BenchmarkConfig(

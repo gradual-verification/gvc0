@@ -205,7 +205,7 @@ object Bench {
       dumpPermutation(
         benchmarkConfig.files.perms,
         c0(idString),
-        currentPermutation.labels.toList,
+        currentPermutation.labels,
         sourceText
       )
       try {
@@ -224,7 +224,7 @@ object Bench {
             dumpPermutation(
               benchmarkConfig.files.verifiedPerms,
               c0(idString),
-              currentPermutation.labels.toList,
+              currentPermutation.labels,
               info.c0Source
             )
             metaCSV.logConjuncts(idString, info.profiling)
@@ -234,7 +234,7 @@ object Bench {
               generateBaseline(
                 builtDynamic,
                 id,
-                currentPermutation.labels.toList,
+                currentPermutation.labels,
                 benchmarkConfig.files.dynamicPerms.get
               )
               val builtFraming = new SelectVisitor(benchmarkConfig.ir)
@@ -242,7 +242,7 @@ object Bench {
               generateBaseline(
                 builtFraming,
                 id,
-                currentPermutation.labels.toList,
+                currentPermutation.labels,
                 benchmarkConfig.files.framingPerms.get,
                 onlyFraming = true
               )

@@ -7,7 +7,6 @@ import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
 import scala.collection.mutable
-import scala.util.Random
 
 object SamplingHeuristic extends Enumeration {
   type SamplingHeuristic = Value
@@ -154,7 +153,7 @@ object LabelTools {
 class LabelPermutation(
     benchmarkConfig: BenchmarkConfig
 ) {
-  private val contents = mutable.TreeSet[ASTLabel]()(LabelOrdering)
+  private val contents = mutable.ListBuffer[ASTLabel]()
   private val orderedIndices = mutable.ListBuffer[Int]()
   private val foldUnfoldCounts = mutable.Map[Method, Int]()
   val completedExpressions = mutable.Set[Int]()
@@ -179,7 +178,7 @@ class LabelPermutation(
     }
   }
 
-  def labels: Set[ASTLabel] = contents.toSet
+  def labels: List[ASTLabel] = contents.toList.sorted(LabelOrdering)
 
   def indices: Set[Int] = orderedIndices.toSet
 
