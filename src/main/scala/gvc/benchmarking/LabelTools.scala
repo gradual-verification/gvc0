@@ -70,10 +70,8 @@ class Sampler(labelOutput: LabelOutput) {
             math.max(pair._2, methodCompletedAt)
           case Right(_) => pair._2
         }) + 1
-        val randomOffset: Int = Math
-          .floor((listOfComponents.length - firstValidIndex) * this.rng
-            .nextFloat())
-          .toInt
+        val randomOffset: Int = this.rng.nextInt(
+          Math.floor(listOfComponents.length - firstValidIndex).toInt)
         (pair._1, firstValidIndex + randomOffset)
       })
       .toMap
