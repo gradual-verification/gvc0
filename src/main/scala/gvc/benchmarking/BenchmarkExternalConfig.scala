@@ -108,7 +108,7 @@ object BenchmarkExternalConfig {
   }
 
   def parseExecutor(config: Config): ExecutorConfig = {
-    val executorConfigPath = config.populatorConfig.get
+    val executorConfigPath = config.executorConfig.get
     val xml = XML.loadFile(executorConfigPath.toFile)
     val executorRoot = xml \\ "executor"
     if (executorRoot.isEmpty) {

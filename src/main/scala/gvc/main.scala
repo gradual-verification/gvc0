@@ -77,7 +77,9 @@ object Main extends App {
         })
 
       case Config.BenchmarkExecutor =>
-        BenchmarkExecutor.execute(config)
+        val benchConfig =
+          BenchmarkExternalConfig.parseExecutor(config)
+        BenchmarkExecutor.execute(benchConfig)
 
       case Config.BenchmarkPopulator =>
         val benchConfig =
@@ -85,12 +87,8 @@ object Main extends App {
         BenchmarkPopulator.populate(benchConfig)
 
       case Config.DefaultMode =>
-        val sourceFile = config.sourceFile.get
-
         val fileNames = getOutputCollection(config.sourceFile.get)
-
         val inputSource = readFile(config.sourceFile.get)
-
         Output.printTiming(() => {
           val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
           execute(verifiedOutput.c0Source, fileNames)

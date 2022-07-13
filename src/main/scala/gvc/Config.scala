@@ -169,8 +169,8 @@ object Config {
       case executorConfigArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(sequentialConfig = Some(parsePath(t)),
-                       mode = BenchmarkSequential)
+          current.copy(executorConfig = Some(parsePath(t)),
+                       mode = BenchmarkExecutor)
         )
       case "--only-exec" :: tail =>
         fromCommandLineArgs(
