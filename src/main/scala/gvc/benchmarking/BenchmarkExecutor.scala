@@ -4,7 +4,8 @@ import gvc.Config
 
 object BenchmarkExecutor {
 
-  def execute(config: Config): Unit = {
+  def execute(config: ExecutorConfig): Unit = {
+
     /*
    *   Assume we have a version string and a hardware string identifying our current platform, and a directory of example programs.
    *   0. Sync the directory of example programs with the database, identifying which match the current entries in the DB.
@@ -38,10 +39,10 @@ object BenchmarkExecutor {
   /**
   *
   * @param config
-     1. Grab a program from the database that doesn't have performance results for the current HWID and VID
-     2. Insert a placeholder result for that program: If another node has already inserted the result,
-          Query will fail
-     3. If fail then go to step one
+  * 1. Grab a program from the database that doesn't have performance results for the current HWID and VID
+  * 2. Insert a placeholder result for that program: If another node has already inserted the result,
+  * Query will fail
+  * 3. If fail then go to step one
   */
 
 }
