@@ -123,6 +123,14 @@ class Sampler(labelOutput: LabelOutput) {
 object LabelTools {
   val hexRegex = "[0-9A-Fa-f]+"
 
+  //N!
+  def theoreticalMaxPaths(numComponents: Int): Int = {
+    if (numComponents == 0)
+      1
+    else
+      numComponents * theoreticalMaxPaths(numComponents - 1)
+  }
+
   def hashPath(
       template: List[ASTLabel],
       labels: List[ASTLabel]

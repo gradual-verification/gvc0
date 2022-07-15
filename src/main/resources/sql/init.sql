@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS components
 (
     id             SERIAL,
     program_id     BIGINT UNSIGNED                                                 NOT NULL,
-    fn_name        VARCHAR(255)                                                    NOT NULL,
+    context_name   VARCHAR(255)                                                    NOT NULL,
     spec_type      ENUM ('post', 'assert', 'pre', 'unfold', 'fold', 'pred', 'inv') NOT NULL,
     spec_index     BIGINT UNSIGNED                                                 NOT NULL,
     expr_type      ENUM ('acc', 'pred_inst', 'bool', 'rem_imp')                    NOT NULL,

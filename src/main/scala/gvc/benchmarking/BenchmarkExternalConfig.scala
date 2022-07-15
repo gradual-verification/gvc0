@@ -48,8 +48,9 @@ case class PipelineModifiers(onlyVerify: Boolean,
                              disableBaseline: Boolean)
 
 case class PopulatorConfig(version: String,
+                           pathQuantity: Int,
                            db: BenchmarkDBCredentials,
-                           sources: List[File])
+                           sources: List[Path])
 
 case class ExecutorConfig(version: String,
                           hardware: String,
@@ -90,6 +91,7 @@ object BenchmarkExternalConfig {
     } else {
       val version = resolveVersion(populatorRoot, config)
       val db = parseDB(populatorRoot)
+      val quantity = intOrError(populatorRoot \ "quantity", "quantity")
       val sourceDirElement = populatorRoot \ "source-dir"
       if (sourceDirElement.isEmpty || sourceDirElement.text.trim.isEmpty) {
         error("Expected <source-dir> field.")
@@ -103,7 +105,8 @@ object BenchmarkExternalConfig {
         .filter(p => {
           p.getName.endsWith(".c0")
         })
-      PopulatorConfig(version, db, c0SourceFiles)
+        .map(_.toPath)
+      PopulatorConfig(version, quantity, db, c0SourceFiles)
     }
   }
 

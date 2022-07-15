@@ -30,7 +30,10 @@ case class Hardware(id: Long, hardwareName: String, dateAdded: String)
 
 case class Version(id: Long, versionName: String, dateAdded: String)
 
-case class Program(id: Long, hash: String, dateAdded: String, numLabels: Long)
+case class StoredProgram(id: Long,
+                         hash: String,
+                         dateAdded: String,
+                         numLabels: Long)
 
 case class Permutation(id: Long,
                        programID: Long,
@@ -48,13 +51,13 @@ case class Conjuncts(id: Long,
                      eliminated: Long,
                      date: String)
 
-case class Component(id: Long,
-                     functionName: String,
-                     specType: SpecType,
-                     exprType: ExprType,
-                     specIndex: Long,
-                     exprIndex: Long,
-                     dateAdded: String)
+case class StoredComponent(id: Long,
+                           functionName: String,
+                           specType: SpecType,
+                           exprType: ExprType,
+                           specIndex: Long,
+                           exprIndex: Long,
+                           dateAdded: String)
 
 case class ProgramPath(id: Long, hash: String, programID: Long)
 
@@ -75,17 +78,19 @@ case class StoredPerformance(id: Long,
                              maximum: BigDecimal)
 
 object DAO {
-
+  type DBConnection = Transactor.Aux[IO, Unit]
   private val DB_DRIVER = "com.mysql.cj.jdbc.Driver"
 
-  def connect(credentials: BenchmarkDBCredentials)
-    : transactor.Transactor.Aux[IO, Unit] = {
-    Transactor.fromDriverManager[IO](
+  def connect(credentials: BenchmarkDBCredentials): DBConnection = {
+    val connection = Transactor.fromDriverManager[IO](
       DB_DRIVER,
       credentials.url, //"jdbc:mysql://localhost:3306/", // connect URL (driver-specific)
       credentials.username,
       credentials.password
     )
+    Output.success(
+      s"Connected to database as ${credentials.username}@${credentials.url}")
+    connection
   }
 
   def getHardware(name: String,
@@ -126,15 +131,16 @@ object DAO {
     } yield v
   }
 
-  def addOrResolveProgram(filename: java.nio.file.Path,
-                          hash: String,
-                          numLabels: Long,
-                          xa: transactor.Transactor.Aux[IO, Unit]): Program = {
+  def addOrResolveProgram(
+      filename: java.nio.file.Path,
+      hash: String,
+      numLabels: Long,
+      xa: transactor.Transactor.Aux[IO, Unit]): StoredProgram = {
     val addition = for {
       _ <- sql"INSERT INTO programs (src_filename, src_hash, num_labels) VALUES (${filename.getFileName.toString}, $hash, $numLabels)".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
       v <- sql"SELECT id FROM programs WHERE id = $id;"
-        .query[Program]
+        .query[StoredProgram]
         .option
     } yield v
     xa.trans.apply(addition).unsafeRunSync() match {
@@ -142,12 +148,12 @@ object DAO {
       case None =>
         val resolution =
           sql"SELECT id FROM programs WHERE src_filename = ${filename.getFileName.toString} AND src_hash = $hash AND num_labels = $numLabels"
-            .query[Program]
+            .query[StoredProgram]
             .option
             .transact(xa)
             .unsafeRunSync()
         resolution match {
-          case Some(v: Program) => v
+          case Some(v: StoredProgram) => v
           case None =>
             throw new DBException(
               s"Failed to update or resolve program ${filename.toAbsolutePath.toString}")
@@ -155,28 +161,50 @@ object DAO {
     }
   }
 
-  def addComponent(program: Program,
-                   functionName: String,
-                   specType: SpecType,
-                   exprType: ExprType,
-                   specIndex: Long,
-                   exprIndex: Long,
-                   xa: transactor.Transactor.Aux[IO, Unit])
-    : ConnectionIO[Option[Component]] = {
-    for {
+  def addOrResolveComponent(
+      program: StoredProgram,
+      astLabel: ASTLabel,
+      xa: transactor.Transactor.Aux[IO, Unit]): StoredComponent = {
+    val contextName = astLabel.parent match {
+      case Left(value)  => value.name
+      case Right(value) => value.name
+    }
+    val addComponent = for {
       _ <- sql"""INSERT INTO components
-             (program_id, fn_name, spec_type, spec_index, expr_type, expr_index)
-         VALUES 
-             (${program.id}, $functionName, $specType, $specIndex, $exprType, $exprIndex);""".update.run
-      id <- sql"select LAST_INSERT_ID()".query[Long].unique
-      c <- sql"SELECT (program_id, fn_name, spec_type, spec_index, expr_type, expr_index) FROM components WHERE id = $id;"
-        .query[Component]
+             (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
+         VALUES
+             (${program.id}, $contextName, ${astLabel.specType}, ${astLabel.specIndex}, ${astLabel.exprType}, ${astLabel.exprIndex});""".update.run
+      id <- sql"SELECT LAST_INSERT_ID()".query[Long].unique
+      v <- sql"SELECT id FROM programs WHERE id = $id;"
+        .query[StoredComponent]
         .option
-    } yield c
-
+    } yield v
+    xa.trans.apply(addComponent).unsafeRunSync() match {
+      case Some(value) => value
+      case None =>
+        val resolution =
+          sql"""SELECT id FROM components WHERE
+                program_id = ${program.id} AND
+                context_name = ${contextName} AND
+                spec_type = ${astLabel.specType} AND
+                spec_index = ${astLabel.specIndex} AND
+                expr_type = ${astLabel.exprType} AND
+                expr_index = ${astLabel.exprIndex}
+             """
+            .query[StoredProgram]
+            .option
+            .transact(xa)
+            .unsafeRunSync()
+        resolution match {
+          case Some(v: StoredComponent) => v
+          case None =>
+            throw new DBException(
+              s"Failed to update or resolve component ${astLabel.hash}")
+        }
+    }
   }
 
-  def addPermutation(program: Program,
+  def addPermutation(program: StoredProgram,
                      permutationHash: String,
                      xa: transactor.Transactor.Aux[IO, Unit])
     : ConnectionIO[Option[Permutation]] = {
@@ -205,8 +233,7 @@ object DAO {
 
   def addPath(hash: String,
               programID: Long,
-              xa: transactor.Transactor.Aux[IO, Unit])
-    : ConnectionIO[Option[ProgramPath]] = {
+              xa: DBConnection): ConnectionIO[Option[ProgramPath]] = {
 
     for {
       _ <- sql"INSERT INTO paths (path_hash, program_id) VALUES ($hash, $programID);".update.run
@@ -215,6 +242,20 @@ object DAO {
         .query[ProgramPath]
         .option
     } yield p
+  }
+
+  def getNumberOfPaths(programID: Long, xa: DBConnection): Int = {
+    sql"SELECT COUNT(*) FROM paths WHERE program_id = $programID"
+      .query[Int]
+      .option
+      .transact(xa)
+      .unsafeRunSync() match {
+      case Some(value) => value
+      case None =>
+        throw new DBException(
+          s"Failed to query for number of paths corresponding to a given program.")
+    }
+
   }
 
   def addConjuncts(version: Version,
@@ -230,7 +271,7 @@ object DAO {
     """.query[Conjuncts].option
   }
 
-  def addPerformance(pg: Program,
+  def addPerformance(pg: StoredProgram,
                      version: Version,
                      hardware: Hardware,
                      modeMeasured: ModeMeasured,
