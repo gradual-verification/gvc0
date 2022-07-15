@@ -84,7 +84,7 @@ object Main extends App {
       case Config.BenchmarkPopulator =>
         val benchConfig =
           BenchmarkExternalConfig.parsePopulator(config)
-        BenchmarkPopulator.populate(benchConfig)
+        BenchmarkPopulator.populate(benchConfig, List(defaultLibraryDirectory))
 
       case Config.DefaultMode =>
         val fileNames = getOutputCollection(config.sourceFile.get)

@@ -81,12 +81,14 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
               parent,
               specType,
               ExprType.Imprecision,
-              exprIndex = -1
+              exprIndex = 0
             )
+            exprIndex += 1;
         }
       case None
           if specType == SpecType.Precondition || specType == SpecType.Postcondition =>
-        this.addLabel(parent, specType, ExprType.Absent, exprIndex = -1);
+        this.addLabel(parent, specType, ExprType.Absent, exprIndex = 0);
+        exprIndex += 1;
       case _ => {}
     }
   }
@@ -147,10 +149,7 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   ): Unit = {}
 
   override def collectOutput(): LabelOutput = {
-    val uncountedOffset =
-      this.labelSet.count(p =>
-        p.exprType == ExprType.Imprecision || p.exprType == ExprType.Absent)
-    if (this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != (this.labelSet.size - uncountedOffset)) {
+    if (this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != this.labelSet.size) {
       throw new Exception(
         s"Total expression counts for each spec index don't equal the number of labels generated."
       )

@@ -29,12 +29,14 @@ object ModeMeasured {
 object DAO {
 
   type DBConnection = Transactor.Aux[IO, Unit]
+
   case class Hardware(id: Long, hardwareName: String, dateAdded: String)
 
   case class StoredProgram(id: Long,
                            hash: String,
                            dateAdded: String,
                            numLabels: Long)
+
   case class Version(id: Long, versionName: String, dateAdded: String)
 
   case class Permutation(id: Long,
@@ -46,13 +48,6 @@ object DAO {
 
   case class Step(pathID: Long, permutationID: Long, levelID: Long)
 
-  case class StoredComponent(id: Long,
-                             functionName: String,
-                             specType: SpecType,
-                             exprType: ExprType,
-                             specIndex: Long,
-                             exprIndex: Long,
-                             dateAdded: String)
   case class Conjuncts(id: Long,
                        permutationID: Long,
                        versionID: Long,
@@ -136,30 +131,39 @@ object DAO {
       hash: String,
       numLabels: Long,
       xa: transactor.Transactor.Aux[IO, Unit]): StoredProgram = {
-    val addition = for {
-      _ <- sql"INSERT INTO programs (src_filename, src_hash, num_labels) VALUES (${filename.getFileName.toString}, $hash, $numLabels)".update.run
-      id <- sql"select LAST_INSERT_ID()".query[Long].unique
-      v <- sql"SELECT id FROM programs WHERE id = $id;"
+    val resolution =
+      sql"SELECT * FROM programs WHERE src_filename = ${filename.getFileName.toString} AND src_hash = $hash AND num_labels = $numLabels"
         .query[StoredProgram]
         .option
-    } yield v
-    xa.trans.apply(addition).unsafeRunSync() match {
-      case Some(value) => value
+        .transact(xa)
+        .unsafeRunSync()
+    resolution match {
+      case Some(v: StoredProgram) => v
       case None =>
-        val resolution =
-          sql"SELECT id FROM programs WHERE src_filename = ${filename.getFileName.toString} AND src_hash = $hash AND num_labels = $numLabels"
+        val addition = for {
+          _ <- sql"INSERT INTO programs (src_filename, src_hash, num_labels) VALUES (${filename.getFileName.toString}, $hash, $numLabels);".update.run
+          id <- sql"select LAST_INSERT_ID()".query[Long].unique
+          v <- sql"SELECT * FROM programs WHERE id = $id;"
             .query[StoredProgram]
             .option
-            .transact(xa)
-            .unsafeRunSync()
-        resolution match {
-          case Some(v: StoredProgram) => v
+        } yield v
+        xa.trans.apply(addition).unsafeRunSync() match {
+          case Some(value) => value
           case None =>
             throw new DBException(
               s"Failed to update or resolve program ${filename.toAbsolutePath.toString}")
         }
     }
   }
+
+  case class StoredComponent(id: Long,
+                             programID: Long,
+                             contextName: String,
+                             specType: SpecType,
+                             specIndex: Long,
+                             exprType: ExprType,
+                             exprIndex: Long,
+                             dateAdded: String)
 
   def addOrResolveComponent(
       program: StoredProgram,
@@ -169,53 +173,53 @@ object DAO {
       case Left(value)  => value.name
       case Right(value) => value.name
     }
-    val addComponent = for {
-      _ <- sql"""INSERT INTO components
-             (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
-         VALUES
-             (${program.id}, $contextName, ${astLabel.specType}, ${astLabel.specIndex}, ${astLabel.exprType}, ${astLabel.exprIndex});""".update.run
-      id <- sql"SELECT LAST_INSERT_ID()".query[Long].unique
-      v <- sql"SELECT id FROM programs WHERE id = $id;"
-        .query[StoredComponent]
-        .option
-    } yield v
-    xa.trans.apply(addComponent).unsafeRunSync() match {
-      case Some(value) => value
-      case None =>
-        val resolution =
-          sql"""SELECT id FROM components WHERE
+    val resolution =
+      sql"""SELECT * FROM components WHERE
                 program_id = ${program.id} AND
-                context_name = ${contextName} AND
+                context_name = $contextName AND
                 spec_type = ${astLabel.specType} AND
                 spec_index = ${astLabel.specIndex} AND
                 expr_type = ${astLabel.exprType} AND
                 expr_index = ${astLabel.exprIndex}
              """
-            .query[StoredProgram]
+        .query[StoredComponent]
+        .option
+        .transact(xa)
+        .unsafeRunSync()
+    resolution match {
+      case Some(v: StoredComponent) => v
+      case None =>
+        val addComponent = for {
+          _ <- sql"""INSERT INTO components
+             (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
+         VALUES
+             (${program.id}, $contextName, ${astLabel.specType}, ${astLabel.specIndex}, ${astLabel.exprType}, ${astLabel.exprIndex});""".update.run
+          id <- sql"SELECT LAST_INSERT_ID()".query[Long].unique
+          v <- sql"SELECT * FROM components WHERE id = $id;"
+            .query[StoredComponent]
             .option
-            .transact(xa)
-            .unsafeRunSync()
-        resolution match {
-          case Some(v: StoredComponent) => v
+        } yield v
+        xa.trans.apply(addComponent).unsafeRunSync() match {
+          case Some(value) => value
           case None =>
             throw new DBException(
               s"Failed to update or resolve component ${astLabel.hash}")
         }
     }
   }
-
-  def addPermutation(program: StoredProgram,
-                     permutationHash: String,
-                     xa: transactor.Transactor.Aux[IO, Unit])
-    : ConnectionIO[Option[Permutation]] = {
+  /*
+  def addOrResolvePermutation(
+      programID: Long,
+      permutationHash: String,
+      xa: transactor.Transactor.Aux[IO, Unit]): Permutation = {
     for {
-      _ <- sql"INSERT INTO permutations (program_id, permutation_hash) VALUES (${program.id}, $permutationHash);".update.run
+      _ <- sql"INSERT INTO permutations (program_id, permutation_hash) VALUES (${programID}, $permutationHash);".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
       c <- sql"SELECT (id, program_id, permutation_hash) FROM permutations WHERE id = $id;"
         .query[Permutation]
         .option
     } yield c
-  }
+  }*/
 
   def addStep(
       perm: Permutation,
@@ -233,15 +237,17 @@ object DAO {
 
   def addPath(hash: String,
               programID: Long,
-              xa: DBConnection): ConnectionIO[Option[ProgramPath]] = {
+              xa: DBConnection): Option[ProgramPath] = {
 
-    for {
+    (for {
       _ <- sql"INSERT INTO paths (path_hash, program_id) VALUES ($hash, $programID);".update.run
       id <- sql"select LAST_INSERT_ID()".query[Long].unique
       p <- sql"SELECT (id, path_hash, program_id) FROM paths WHERE id = $id;"
         .query[ProgramPath]
         .option
-    } yield p
+    } yield p)
+      .transact(xa)
+      .unsafeRunSync()
   }
 
   def getNumberOfPaths(programID: Long, xa: DBConnection): Int = {

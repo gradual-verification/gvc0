@@ -1,6 +1,8 @@
 package gvc
 
-import java.nio.file.{Files, InvalidPathException, Paths, Path}
+import gvc.Config.DefaultMode
+
+import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import java.io.File
 import scala.annotation.tailrec
 
@@ -38,8 +40,9 @@ case class Config(
         Some("Cannot combine --output and --only-verify")
       else if (exec && onlyVerify)
         Some("Cannot combine --exec and --only-verify")
-      else if (sourceFile.isEmpty) Some("No source file specified")
-      else if (!Files.exists(Paths.get(sourceFile.get)))
+      else if (sourceFile.isEmpty && mode == DefaultMode)
+        Some("No source file specified")
+      else if (sourceFile.nonEmpty && !Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
       else if (versionString.nonEmpty && versionString.get.trim.isEmpty) {
         Some(s"Invalid version string.")
