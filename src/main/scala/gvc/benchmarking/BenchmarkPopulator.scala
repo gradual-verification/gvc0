@@ -35,15 +35,12 @@ object BenchmarkPopulator {
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
     if (config.pathQuantity > theoreticalMax) {
-      Output.info(
-        s"""The requested number of paths to generate is greater
+      Output.info(s"""The requested number of paths to generate is greater
            | than the theoretical max for ${programRep.info.fileName} ( ${config.pathQuantity} > $theoreticalMax).
             """.stripMargin)
     }
-    while (DAO.getNumberOfPaths(programID, xa) < Math.min(config.pathQuantity, theoreticalMax)) {
-
-
-    }
+    while (DAO.getNumberOfPaths(programID, xa) < Math.min(config.pathQuantity,
+                                                          theoreticalMax)) {}
   }
 
   def syncPrograms(programList: List[Path],
@@ -60,9 +57,9 @@ object BenchmarkPopulator {
         ProgramInformation(sourceText, sourceIR, labelOutput, fileName)
 
       val insertedProgram = DAO.addOrResolveProgram(src,
-        md5sum(sourceText),
-        labelOutput.labels.size,
-        xa)
+                                                    md5sum(sourceText),
+                                                    labelOutput.labels.size,
+                                                    xa)
 
       val componentMapping = mutable.Map[Long, ASTLabel]()
       labelOutput.labels.foreach(l => {

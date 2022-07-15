@@ -1,0 +1,669 @@
+/*
+m.tree_remove_lemma_left2.3.fold.pred_inst.102.120
+m.tree_remove_lemma_max.3.fold.pred_inst.106.125
+m.tree_remove_lemma_left2.2.post.pred_inst.98.116
+m.tree_main_lemma_bst.4.unfold.pred_inst.36.44
+m.tree_min_helper.2.post.bool.60.74
+m.tree_remove.4.unfold.pred_inst.74.90
+m.tree_max_helper.3.fold.pred_inst.49.60
+m.tree_remove_helper.3.fold.pred_inst.78.94
+m.tree_remove_helper.3.fold.pred_inst.86.102
+p.tree.6.pred.pred_inst.119.155
+m.tree_remove_lemma_right.2.post.pred_inst.112.133
+m.tree_remove_lemma_right.3.fold.pred_inst.114.135
+m.tree_remove_lemma_min.3.fold.pred_inst.110.130
+m.tree_min_helper.3.fold.pred_inst.63.78
+m.main.5.inv.bool.11.15
+m.tree_contains_helper.1.pre.pred_inst.24.32
+m.tree_max_helper.4.unfold.pred_inst.44.55
+p.bstRemove.6.pred.bool.118.151
+m.tree_remove_helper.0.assert.bool.84.100
+m.tree_max.3.fold.pred_inst.41.50
+m.tree_remove_lemma_left.3.fold.pred_inst.96.113
+m.tree_max_helper.0.assert.bool.48.59
+m.tree_min_helper.1.pre.pred_inst.59.73
+m.tree_min.3.fold.pred_inst.58.71
+p.bstRemove.6.pred.bool.118.146
+p.bstRemove.6.pred.bool.118.149
+m.tree_remove_lemma_min.4.unfold.pred_inst.109.129
+m.tree_remove_helper.1.pre.pred_inst.76.92
+m.tree_min_lemma.1.pre.pred_inst.68.84
+m.tree_remove_lemma_max.2.post.pred_inst.104.123
+m.tree_min_helper.3.fold.pred_inst.62.77
+m.tree_max_helper.2.post.bool.43.53
+m.create_tree.2.post.pred_inst.1.2
+m.tree_remove_lemma_max.1.pre.pred_inst.103.122
+m.tree_remove_lemma_right.1.pre.bool.111.131
+m.tree_remove_helper.2.post.pred_inst.77.93
+m.tree_remove.1.pre.pred_inst.72.88
+m.tree_max_helper.3.fold.pred_inst.45.56
+p.bst.6.pred.bool.117.141
+m.tree_min_helper.4.unfold.pred_inst.61.76
+m.tree_add_helper.4.unfold.pred_inst.18.26
+m.tree_remove_lemma_left2.1.pre.pred_inst.97.115
+p.bstRemove.6.pred.pred_inst.118.147
+m.tree_add_helper.3.fold.pred_inst.19.27
+m.tree_contains_helper.3.fold.pred_inst.29.37
+m.tree_remove_helper.3.fold.pred_inst.82.98
+m.tree_contains.3.fold.pred_inst.23.31
+p.bst.6.pred.acc.117.145
+m.create_tree.2.post.imp.1.-1
+m.tree_remove_lemma_right.1.pre.pred_inst.111.132
+m.main.2.post.bool.9.11
+m.tree_contains_helper.4.unfold.pred_inst.26.34
+m.create_tree_helper.2.post.pred_inst.4.6
+m.tree_add_helper.1.pre.bool.16.22
+p.treeRemove.6.pred.pred_inst.120.156
+m.tree_min.1.pre.pred_inst.55.68
+m.tree_remove.3.fold.pred_inst.75.91
+m.tree_max_helper.1.pre.bool.42.51
+m.create_tree.3.fold.pred_inst.2.3
+m.tree_max_helper.4.unfold.pred_inst.47.58
+m.tree_main_lemma.3.fold.pred_inst.33.41
+m.tree_min.2.post.pred_inst.56.69
+p.bstRemove.6.pred.pred_inst.118.148
+m.tree_max_lemma.1.pre.pred_inst.51.63
+m.tree_contains.4.unfold.pred_inst.22.30
+m.tree_contains_helper.3.fold.pred_inst.27.35
+m.tree_min_helper.2.post.pred_inst.60.75
+m.tree_max.2.post.pred_inst.39.48
+p.bst.6.pred.acc.117.144
+m.tree_remove_lemma_left.1.pre.bool.91.107
+m.tree_remove_lemma_left2.1.pre.bool.97.114
+m.tree_remove_lemma_left.1.pre.pred_inst.91.108
+m.tree_remove_lemma_right.3.fold.pred_inst.116.137
+m.tree_max_helper.1.pre.pred_inst.42.52
+m.tree_remove_lemma_min.1.pre.bool.107.126
+m.tree_max_lemma.3.fold.pred_inst.54.66
+m.tree_min_helper.1.pre.bool.59.72
+m.tree_min_lemma.4.unfold.pred_inst.70.86
+*/
+#use <runtime>
+#use <stress>
+struct Node;
+
+struct Node
+{
+  int val;
+  struct Node* left;
+  struct Node* right;
+  int _id;
+};
+
+struct Node* create_tree(int val, struct OwnedFields* _ownedFields);
+struct Node* create_tree_helper(int val, int min, int max, struct OwnedFields* _ownedFields);
+int main();
+struct Node* tree_add(struct Node* root, int x, struct OwnedFields* _ownedFields);
+struct Node* tree_add_helper(struct Node* root, int x, int min, int max, struct OwnedFields* _ownedFields);
+bool tree_contains(struct Node* root, int x, struct OwnedFields* _ownedFields);
+bool tree_contains_helper(struct Node* root, int x, int min, int max, struct OwnedFields* _ownedFields);
+void tree_main_lemma(struct Node* root, int x, struct OwnedFields* _ownedFields);
+void tree_main_lemma_bst(struct Node* root, int x, int min, int max, struct OwnedFields* _ownedFields);
+int tree_max(struct Node* root, struct OwnedFields* _ownedFields);
+int tree_max_helper(struct Node* root, int min, int max, struct OwnedFields* _ownedFields);
+void tree_max_lemma(struct Node* root, int newMax, int min, int max, struct OwnedFields* _ownedFields);
+int tree_min(struct Node* root, struct OwnedFields* _ownedFields);
+int tree_min_helper(struct Node* root, int min, int max, struct OwnedFields* _ownedFields);
+void tree_min_lemma(struct Node* root, int newMin, int min, int max, struct OwnedFields* _ownedFields);
+struct Node* tree_remove(struct Node* root, int x, struct OwnedFields* _ownedFields);
+struct Node* tree_remove_helper(struct Node* root, int x, int min, int max, struct OwnedFields* _ownedFields);
+void tree_remove_lemma(struct Node* root, int min, int max, struct OwnedFields* _ownedFields);
+void tree_remove_lemma_left(struct Node* l, int x, int min, int max, struct OwnedFields* _ownedFields);
+void tree_remove_lemma_left2(struct Node* l, int newX, int x, int min, int max, struct OwnedFields* _ownedFields);
+void tree_remove_lemma_max(struct Node* root, int x, int newMax, int min, int max, struct OwnedFields* _ownedFields);
+void tree_remove_lemma_min(struct Node* root, int x, int newMin, int min, int max, struct OwnedFields* _ownedFields);
+void tree_remove_lemma_right(struct Node* r, int x, int min, int max, struct OwnedFields* _ownedFields);
+
+struct Node* create_tree(int val, struct OwnedFields* _ownedFields)
+{
+  struct Node* res = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  res = create_tree_helper(val, -2147483647, 2147483647, _ownedFields);
+  return res;
+}
+
+struct Node* create_tree_helper(int val, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct Node* root = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  root = alloc(struct Node);
+  root->_id = addStructAcc(_ownedFields, 3);
+  assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+  root->val = val;
+  assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+  root->left = NULL;
+  assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+  root->right = NULL;
+  return root;
+}
+
+int main()
+{
+  int stress = 0;
+  int seed = 0;
+  int stressCaptured = 0;
+  struct Node* t1 = NULL;
+  int i = 0;
+  int j = 0;
+  int r = 0;
+  int toAdd = 0;
+  bool test = false;
+  int r1 = 0;
+  int toRemove = 0;
+  bool test1 = false;
+  struct Node* t11 = NULL;
+  struct Node* t12 = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  stress = 0;
+  seed = 1;
+  stressCaptured = stress;
+  if (stressCaptured / 2 * 2 != stressCaptured)
+  {
+    stressCaptured = stressCaptured + 1;
+  }
+  t1 = create_tree(stressCaptured, _ownedFields);
+  i = 0;
+  while (0 <= i && i < stressCaptured)
+  {
+    r = rand(seed);
+    seed = r;
+    toAdd = mod(r, 2 * stressCaptured);
+    t11 = tree_add(t1, toAdd, _ownedFields);
+    test = tree_contains(t11, toAdd, _ownedFields);
+    assert(test);
+    i = i + 1;
+    t1 = t11;
+  }
+  j = 0;
+  while (j < stressCaptured)
+  {
+    r1 = rand(seed);
+    seed = r1;
+    toRemove = mod(r1, 2 * stressCaptured);
+    t12 = tree_remove(t1, toRemove, _ownedFields);
+    tree_main_lemma(t12, toRemove, _ownedFields);
+    test1 = tree_contains(t12, toRemove, _ownedFields);
+    assert(!test1);
+    j = j + 1;
+    t1 = t12;
+  }
+  return 0;
+}
+
+struct Node* tree_add(struct Node* root, int x, struct OwnedFields* _ownedFields)
+{
+  struct Node* res = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  res = tree_add_helper(root, x, -2147483647, 2147483647, _ownedFields);
+  return res;
+}
+
+struct Node* tree_add_helper(struct Node* root, int x, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct Node* _ = NULL;
+  int v = 0;
+  struct Node* l = NULL;
+  struct Node* r = NULL;
+  struct Node* _1 = NULL;
+  struct Node* _2 = NULL;
+  struct Node* _3 = NULL;
+  struct Node* _4 = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  if (root == NULL)
+  {
+    _ = create_tree_helper(x, min, max, _ownedFields);
+    return _;
+  }
+  else
+  {
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    v = root->val;
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+    l = root->left;
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+    r = root->right;
+    if (x < v)
+    {
+      if (l != NULL)
+      {
+        _1 = tree_add_helper(l, x, min, v - 1, _ownedFields);
+        assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+        root->left = _1;
+      }
+      else
+      {
+        _2 = create_tree_helper(x, min, v - 1, _ownedFields);
+        assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+        root->left = _2;
+      }
+    }
+    else
+    {
+      if (v < x)
+      {
+        if (r != NULL)
+        {
+          _3 = tree_add_helper(r, x, v + 1, max, _ownedFields);
+          assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+          root->right = _3;
+        }
+        else
+        {
+          _4 = create_tree_helper(x, v + 1, max, _ownedFields);
+          assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+          root->right = _4;
+        }
+      }
+    }
+    return root;
+  }
+}
+
+bool tree_contains(struct Node* root, int x, struct OwnedFields* _ownedFields)
+{
+  bool res = false;
+  struct OwnedFields* _tempFields = NULL;
+  res = tree_contains_helper(root, x, -2147483647, 2147483647, _ownedFields);
+  return res;
+}
+
+bool tree_contains_helper(struct Node* root, int x, int min, int max, struct OwnedFields* _ownedFields)
+{
+  int v = 0;
+  struct Node* l = NULL;
+  struct Node* r = NULL;
+  bool temp1 = false;
+  bool temp2 = false;
+  struct OwnedFields* _tempFields = NULL;
+  if (root == NULL)
+  {
+    return false;
+  }
+  else
+  {
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    v = root->val;
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+    l = root->left;
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+    r = root->right;
+    if (v == x)
+    {
+      return true;
+    }
+    else
+    {
+      if (x < v)
+      {
+        temp1 = tree_contains_helper(l, x, min, v - 1, _ownedFields);
+        return temp1;
+      }
+      else
+      {
+        temp2 = tree_contains_helper(r, x, v + 1, max, _ownedFields);
+        return temp2;
+      }
+    }
+  }
+}
+
+void tree_main_lemma(struct Node* root, int x, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  tree_main_lemma_bst(root, x, -2147483647, 2147483647, _ownedFields);
+}
+
+void tree_main_lemma_bst(struct Node* root, int x, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (root == NULL)
+  {
+  }
+  else
+  {
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    tree_main_lemma_bst(root->left, x, min, root->val - 1, _ownedFields);
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    tree_main_lemma_bst(root->right, x, root->val + 1, max, _ownedFields);
+  }
+}
+
+int tree_max(struct Node* root, struct OwnedFields* _ownedFields)
+{
+  int res = 0;
+  struct OwnedFields* _tempFields = NULL;
+  res = tree_max_helper(root, -2147483647, 2147483647, _ownedFields);
+  tree_max_lemma(root, 2147483647, -2147483647, res, _ownedFields);
+  return res;
+}
+
+int tree_max_helper(struct Node* root, int min, int max, struct OwnedFields* _ownedFields)
+{
+  int v = 0;
+  struct Node* r = NULL;
+  int m = 0;
+  struct OwnedFields* _tempFields = NULL;
+  assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+  v = root->val;
+  assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+  r = root->right;
+  if (r == NULL)
+  {
+    return v;
+  }
+  else
+  {
+    m = tree_max_helper(r, v + 1, max, _ownedFields);
+    return m;
+  }
+}
+
+void tree_max_lemma(struct Node* root, int newMax, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (root == NULL)
+  {
+  }
+  else
+  {
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    tree_max_lemma(root->right, newMax, root->val + 1, max, _ownedFields);
+  }
+}
+
+int tree_min(struct Node* root, struct OwnedFields* _ownedFields)
+{
+  int res = 0;
+  struct OwnedFields* _tempFields = NULL;
+  res = tree_min_helper(root, -2147483647, 2147483647, _ownedFields);
+  tree_min_lemma(root, -2147483647, res, 2147483647, _ownedFields);
+  return res;
+}
+
+int tree_min_helper(struct Node* root, int min, int max, struct OwnedFields* _ownedFields)
+{
+  int v = 0;
+  struct Node* l = NULL;
+  int m = 0;
+  struct OwnedFields* _tempFields = NULL;
+  assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+  v = root->val;
+  assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+  l = root->left;
+  if (l == NULL)
+  {
+    return v;
+  }
+  else
+  {
+    m = tree_min_helper(l, min, v - 1, _ownedFields);
+    return m;
+  }
+}
+
+void tree_min_lemma(struct Node* root, int newMin, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (root == NULL)
+  {
+  }
+  else
+  {
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    tree_min_lemma(root->left, newMin, min, root->val - 1, _ownedFields);
+  }
+}
+
+struct Node* tree_remove(struct Node* root, int x, struct OwnedFields* _ownedFields)
+{
+  struct Node* res = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  res = tree_remove_helper(root, x, -2147483647, 2147483647, _ownedFields);
+  return res;
+}
+
+struct Node* tree_remove_helper(struct Node* root, int x, int min, int max, struct OwnedFields* _ownedFields)
+{
+  int v = 0;
+  struct Node* l = NULL;
+  struct Node* r = NULL;
+  struct Node* _ = NULL;
+  struct Node* _1 = NULL;
+  int m = 0;
+  struct Node* _2 = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  if (root == NULL)
+  {
+    return root;
+  }
+  else
+  {
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    v = root->val;
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+    l = root->left;
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+    r = root->right;
+    if (x < v)
+    {
+      _ = tree_remove_helper(l, x, min, v - 1, _ownedFields);
+      assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+      root->left = _;
+      tree_remove_lemma_right(r, x, v + 1, max, _ownedFields);
+      return root;
+    }
+    else
+    {
+      if (v < x)
+      {
+        _1 = tree_remove_helper(r, x, v + 1, max, _ownedFields);
+        assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+        root->right = _1;
+        tree_remove_lemma_left(l, x, min, v - 1, _ownedFields);
+        return root;
+      }
+      else
+      {
+        if (l == NULL)
+        {
+          if (r == NULL)
+          {
+            return NULL;
+          }
+          else
+          {
+            tree_remove_lemma_right(r, x, v + 1, max, _ownedFields);
+            tree_remove_lemma_min(r, x, min, v + 1, max, _ownedFields);
+            return r;
+          }
+        }
+        else
+        {
+          if (r == NULL)
+          {
+            tree_remove_lemma_left(l, x, min, v - 1, _ownedFields);
+            tree_remove_lemma_max(l, x, max, min, v - 1, _ownedFields);
+            return l;
+          }
+          else
+          {
+            m = tree_max_helper(l, min, v - 1, _ownedFields);
+            assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+            root->val = m;
+            _2 = tree_remove_helper(l, m, min, m, _ownedFields);
+            assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+            root->left = _2;
+            assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+            tree_remove_lemma(root->left, min, m, _ownedFields);
+            assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+            tree_remove_lemma_left2(root->left, x, m, min, m - 1, _ownedFields);
+            tree_remove_lemma_right(r, x, v + 1, max, _ownedFields);
+            tree_remove_lemma_min(r, x, m + 1, v + 1, max, _ownedFields);
+            return root;
+          }
+        }
+      }
+    }
+  }
+}
+
+void tree_remove_lemma(struct Node* root, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (root == NULL)
+  {
+  }
+  else
+  {
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    tree_remove_lemma(root->right, root->val + 1, max, _ownedFields);
+  }
+}
+
+void tree_remove_lemma_left(struct Node* l, int x, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (l == NULL)
+  {
+  }
+  else
+  {
+    assertAcc(_ownedFields, l != NULL ? l->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+    if (l->left == NULL)
+    {
+      assertAcc(_ownedFields, l != NULL ? l->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+      assertAcc(_ownedFields, l != NULL ? l->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      tree_remove_lemma_left(l->right, x, l->val + 1, max, _ownedFields);
+    }
+    else
+    {
+      assertAcc(_ownedFields, l != NULL ? l->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+      if (l->right == NULL)
+      {
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        tree_remove_lemma_left(l->left, x, min, l->val - 1, _ownedFields);
+      }
+      else
+      {
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        tree_remove_lemma_left(l->right, x, l->val + 1, max, _ownedFields);
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        tree_remove_lemma_left(l->left, x, min, l->val - 1, _ownedFields);
+      }
+    }
+  }
+}
+
+void tree_remove_lemma_left2(struct Node* l, int newX, int x, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (l == NULL)
+  {
+  }
+  else
+  {
+    assertAcc(_ownedFields, l != NULL ? l->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+    if (l->left == NULL)
+    {
+      assertAcc(_ownedFields, l != NULL ? l->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+      assertAcc(_ownedFields, l != NULL ? l->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      tree_remove_lemma_left2(l->right, newX, x, l->val + 1, max, _ownedFields);
+    }
+    else
+    {
+      assertAcc(_ownedFields, l != NULL ? l->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+      if (l->right == NULL)
+      {
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        tree_remove_lemma_left2(l->left, newX, x, min, l->val - 1, _ownedFields);
+      }
+      else
+      {
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        tree_remove_lemma_left2(l->right, newX, x, l->val + 1, max, _ownedFields);
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+        assertAcc(_ownedFields, l != NULL ? l->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        tree_remove_lemma_left2(l->left, newX, x, min, l->val - 1, _ownedFields);
+      }
+    }
+  }
+}
+
+void tree_remove_lemma_max(struct Node* root, int x, int newMax, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (root == NULL)
+  {
+  }
+  else
+  {
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    tree_remove_lemma_max(root->right, x, newMax, root->val + 1, max, _ownedFields);
+  }
+}
+
+void tree_remove_lemma_min(struct Node* root, int x, int newMin, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (root == NULL)
+  {
+  }
+  else
+  {
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+    assertAcc(_ownedFields, root != NULL ? root->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    tree_remove_lemma_min(root->left, x, newMin, min, root->val - 1, _ownedFields);
+  }
+}
+
+void tree_remove_lemma_right(struct Node* r, int x, int min, int max, struct OwnedFields* _ownedFields)
+{
+  struct OwnedFields* _tempFields = NULL;
+  if (r == NULL)
+  {
+  }
+  else
+  {
+    assertAcc(_ownedFields, r != NULL ? r->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+    if (r->left == NULL)
+    {
+      assertAcc(_ownedFields, r != NULL ? r->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+      assertAcc(_ownedFields, r != NULL ? r->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      tree_remove_lemma_right(r->right, x, r->val + 1, max, _ownedFields);
+    }
+    else
+    {
+      assertAcc(_ownedFields, r != NULL ? r->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+      if (r->right == NULL)
+      {
+        assertAcc(_ownedFields, r != NULL ? r->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+        assertAcc(_ownedFields, r != NULL ? r->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        tree_remove_lemma_right(r->left, x, min, r->val - 1, _ownedFields);
+      }
+      else
+      {
+        assertAcc(_ownedFields, r != NULL ? r->_id : -1, 2, "Field access runtime check failed for struct Node.right");
+        assertAcc(_ownedFields, r != NULL ? r->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        tree_remove_lemma_right(r->right, x, r->val + 1, max, _ownedFields);
+        assertAcc(_ownedFields, r != NULL ? r->_id : -1, 1, "Field access runtime check failed for struct Node.left");
+        assertAcc(_ownedFields, r != NULL ? r->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        tree_remove_lemma_right(r->left, x, min, r->val - 1, _ownedFields);
+      }
+    }
+  }
+}

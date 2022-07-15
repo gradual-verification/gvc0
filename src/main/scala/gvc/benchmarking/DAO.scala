@@ -26,59 +26,58 @@ object ModeMeasured {
   val ExecutionDynamic = "exec_dynamic"
 }
 
-case class Hardware(id: Long, hardwareName: String, dateAdded: String)
-
-case class Version(id: Long, versionName: String, dateAdded: String)
-
-case class StoredProgram(id: Long,
-                         hash: String,
-                         dateAdded: String,
-                         numLabels: Long)
-
-case class Permutation(id: Long,
-                       programID: Long,
-                       pathID: Long,
-                       levelID: Long,
-                       componentID: Long,
-                       dateAdded: String)
-
-case class Step(pathID: Long, permutationID: Long, levelID: Long)
-
-case class Conjuncts(id: Long,
-                     permutationID: Long,
-                     versionID: Long,
-                     total: Long,
-                     eliminated: Long,
-                     date: String)
-
-case class StoredComponent(id: Long,
-                           functionName: String,
-                           specType: SpecType,
-                           exprType: ExprType,
-                           specIndex: Long,
-                           exprIndex: Long,
-                           dateAdded: String)
-
-case class ProgramPath(id: Long, hash: String, programID: Long)
-
-case class StoredPerformance(id: Long,
-                             programID: Long,
-                             versionID: Long,
-                             hardwareID: Long,
-                             performanceDate: String,
-                             modeMeasured: String,
-                             stress: Int,
-                             iter: Int,
-                             ninetyFifth: BigDecimal,
-                             fifth: BigDecimal,
-                             median: BigDecimal,
-                             mean: BigDecimal,
-                             stdev: BigDecimal,
-                             minimum: BigDecimal,
-                             maximum: BigDecimal)
-
 object DAO {
+
   type DBConnection = Transactor.Aux[IO, Unit]
+  case class Hardware(id: Long, hardwareName: String, dateAdded: String)
+
+  case class StoredProgram(id: Long,
+                           hash: String,
+                           dateAdded: String,
+                           numLabels: Long)
+  case class Version(id: Long, versionName: String, dateAdded: String)
+
+  case class Permutation(id: Long,
+                         programID: Long,
+                         pathID: Long,
+                         levelID: Long,
+                         componentID: Long,
+                         dateAdded: String)
+
+  case class Step(pathID: Long, permutationID: Long, levelID: Long)
+
+  case class StoredComponent(id: Long,
+                             functionName: String,
+                             specType: SpecType,
+                             exprType: ExprType,
+                             specIndex: Long,
+                             exprIndex: Long,
+                             dateAdded: String)
+  case class Conjuncts(id: Long,
+                       permutationID: Long,
+                       versionID: Long,
+                       total: Long,
+                       eliminated: Long,
+                       date: String)
+
+  case class ProgramPath(id: Long, hash: String, programID: Long)
+
+  case class StoredPerformance(id: Long,
+                               programID: Long,
+                               versionID: Long,
+                               hardwareID: Long,
+                               performanceDate: String,
+                               modeMeasured: String,
+                               stress: Int,
+                               iter: Int,
+                               ninetyFifth: BigDecimal,
+                               fifth: BigDecimal,
+                               median: BigDecimal,
+                               mean: BigDecimal,
+                               stdev: BigDecimal,
+                               minimum: BigDecimal,
+                               maximum: BigDecimal)
+
   private val DB_DRIVER = "com.mysql.cj.jdbc.Driver"
 
   def connect(credentials: BenchmarkDBCredentials): DBConnection = {
@@ -113,12 +112,13 @@ object DAO {
     xa.trans.apply(constructed).unsafeRunSync()
   }
 
-  def getVersion(
-      name: String,
-      xa: transactor.Transactor.Aux[IO, Unit]): ConnectionIO[Option[Version]] =
+  def getVersion(name: String,
+                 xa: transactor.Transactor.Aux[IO, Unit]): Option[Version] =
     sql"SELECT id, version_name, version_date FROM versions WHERE version_name = $name;"
       .query[Version]
       .option
+      .transact(xa)
+      .unsafeRunSync()
 
   def addVersion(name: String, xa: transactor.Transactor.Aux[IO, Unit])
     : ConnectionIO[Option[Version]] = {
