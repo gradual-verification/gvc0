@@ -79,7 +79,7 @@ object Main extends App {
       case Config.BenchmarkExecutor =>
         val benchConfig =
           BenchmarkExternalConfig.parseExecutor(config)
-        BenchmarkExecutor.execute(benchConfig)
+        BenchmarkExecutor.execute(benchConfig, config)
 
       case Config.BenchmarkPopulator =>
         val benchConfig =

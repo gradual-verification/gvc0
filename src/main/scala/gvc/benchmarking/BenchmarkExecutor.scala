@@ -1,12 +1,19 @@
 package gvc.benchmarking
 
+import gvc.{Config}
+
 object BenchmarkExecutor {
 
-  def execute(config: ExecutorConfig): Unit = {
-    val dbConnection = DAO.connect(config.db)
-
-    val workload = config.workload;
+  def execute(config: ExecutorConfig, baseConfig: Config): Unit = {
+    val conn = DAO.connect(config.db)
+    val storedVersion = DAO.addOrResolveVersion(config.version, conn)
+    val storedHardware = DAO.addOrResolveHardware(config.hardware, conn)
+    
+    val workload = config.workload
     /*
+
+
+
    *   Assume we have a version string and a hardware string identifying our current platform, and a directory of example programs.
    *   2. Find a permutation of a program that we have locally that doesn't have an associated entry in the performance table matching the hardware and version ID.
    *       * If none exists, attempt to generate new paths/programs until one does.
@@ -18,6 +25,9 @@ object BenchmarkExecutor {
    *   4. Using the permutation's ID and the program that it came from, recreate the permutation as a C0 file. (I can assist with this).
    *
    *   5. Benchmark (verify, execute) the C0 file and record results.
+
+
+
    *
    *   6. Update the permutation's entry in the performance table with the results. Return to step 1.
    * */
