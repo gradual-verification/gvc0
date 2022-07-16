@@ -124,11 +124,12 @@ object LabelTools {
   val hexRegex = "[0-9A-Fa-f]+"
 
   //N!
-  def theoreticalMaxPaths(numComponents: Int): Int = {
-    if (numComponents == 0)
-      1
-    else
-      numComponents * theoreticalMaxPaths(numComponents - 1)
+  def theoreticalMaxPaths(n: Int): BigInt = {
+    var f: BigInt = 1
+    for (i <- 1 to n) {
+      f = f * i;
+    }
+    f
   }
 
   def hashPath(

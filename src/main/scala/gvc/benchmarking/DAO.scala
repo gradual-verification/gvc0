@@ -5,13 +5,14 @@ import doobie.implicits._
 import cats.effect.IO
 import doobie.util.transactor
 import gvc.Main.ProfilingInfo
-
 import doobie._
 import doobie.implicits._
 import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.ModeMeasured.ModeMeasured
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
+
+import scala.collection.mutable
 
 class DBException(message: String) extends Exception(message)
 
@@ -41,9 +42,7 @@ object DAO {
 
   case class Permutation(id: Long,
                          programID: Long,
-                         pathID: Long,
-                         levelID: Long,
-                         componentID: Long,
+                         permutationHash: String,
                          dateAdded: String)
 
   case class Step(pathID: Long, permutationID: Long, levelID: Long)
@@ -207,47 +206,32 @@ object DAO {
         }
     }
   }
-  /*
-  def addOrResolvePermutation(
-      programID: Long,
-      permutationHash: String,
-      xa: transactor.Transactor.Aux[IO, Unit]): Permutation = {
-    for {
-      _ <- sql"INSERT INTO permutations (program_id, permutation_hash) VALUES (${programID}, $permutationHash);".update.run
-      id <- sql"select LAST_INSERT_ID()".query[Long].unique
-      c <- sql"SELECT (id, program_id, permutation_hash) FROM permutations WHERE id = $id;"
-        .query[Permutation]
-        .option
-    } yield c
-  }*/
 
-  def addStep(
-      perm: Permutation,
-      path: ProgramPath,
-      levelID: Long,
-      xa: transactor.Transactor.Aux[IO, Unit]): ConnectionIO[Option[Step]] = {
-    for {
-      _ <- sql"INSERT INTO steps (perm_id, path_id, level_id) VALUES (${perm.id}, ${path.id}, $levelID);".update.run
-      id <- sql"select LAST_INSERT_ID()".query[Long].unique
-      s <- sql"SELECT (id, perm_id, path_id, level_id) FROM steps WHERE id = $id;"
-        .query[Step]
-        .option
-    } yield s
-  }
-
-  def addPath(hash: String,
-              programID: Long,
-              xa: DBConnection): Option[ProgramPath] = {
-
-    (for {
-      _ <- sql"INSERT INTO paths (path_hash, program_id) VALUES ($hash, $programID);".update.run
-      id <- sql"select LAST_INSERT_ID()".query[Long].unique
-      p <- sql"SELECT (id, path_hash, program_id) FROM paths WHERE id = $id;"
-        .query[ProgramPath]
-        .option
-    } yield p)
+  def addOrResolvePermutation(programID: Long,
+                              permutationHash: String,
+                              xa: DBConnection): Permutation = {
+    sql"""SELECT * FROM permutations WHERE program_id = $programID AND permutation_hash = $permutationHash"""
+      .query[Permutation]
+      .option
       .transact(xa)
-      .unsafeRunSync()
+      .unsafeRunSync() match {
+      case Some(value) => value
+      case None =>
+        sql"INSERT INTO permutations (program_id, permutation_hash) VALUES ($programID, $permutationHash)"
+        val addPermutation = for {
+          _ <- sql"INSERT INTO permutations (program_id, permutation_hash) VALUES ($programID, $permutationHash)".update.run
+          id <- sql"SELECT LAST_INSERT_ID()".query[Long].unique
+          v <- sql"SELECT * FROM permutations WHERE id = $id;"
+            .query[Permutation]
+            .option
+        } yield v
+        addPermutation.transact(xa).unsafeRunSync() match {
+          case Some(value) => value
+          case None =>
+            throw new DBException(
+              s"Failed to update or resolve permutation $permutationHash")
+        }
+    }
   }
 
   def getNumberOfPaths(programID: Long, xa: DBConnection): Int = {
@@ -317,5 +301,50 @@ object DAO {
                  ${perf.maximum}
                  );
        """.query[StoredPerformance].option
+  }
+
+  def containsPath(programID: Long,
+                   pathHash: String,
+                   xa: DBConnection): Boolean = {
+    sql"SELECT * FROM paths WHERE program_id = $programID AND path_hash = $pathHash"
+      .query[ProgramPath]
+      .option
+      .transact(xa)
+      .unsafeRunSync()
+      .nonEmpty
+  }
+
+  class PathQueryCollection(hash: String,
+                            programID: Long,
+                            bottomPermutation: Permutation) {
+
+    private case class Step(permID: Long,
+                            levelID: Long,
+                            componentID: Long,
+                            pathID: Long)
+
+    private val steps = mutable.ListBuffer[(Permutation, Long)]()
+
+    def addStep(perm: Permutation, componentID: Long): Unit = {
+      steps += Tuple2(perm, componentID)
+    }
+
+    def exec(xa: DBConnection): Unit = {
+      val massUpdate = for {
+        _ <- sql"""INSERT INTO paths
+             (path_hash, program_id)
+         VALUES
+             ($hash, $programID);""".update.run
+        id <- sql"SELECT LAST_INSERT_ID()".query[Long].unique
+        _ <- sql"INSERT INTO steps (perm_id, level_id, path_id) VALUES (${bottomPermutation.id}, 0, $id)".update.run
+        v <- Update[Step](
+          s"INSERT INTO steps (perm_id, level_id, component_id, path_id) VALUES (?, ?, ?, ?)")
+          .updateMany(
+            this.steps.indices
+              .map(i => Step(this.steps(i)._1.id, i + 1, this.steps(i)._2, id))
+              .toList)
+      } yield v
+      massUpdate.transact(xa).unsafeRunSync()
+    }
   }
 }

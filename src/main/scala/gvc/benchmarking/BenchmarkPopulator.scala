@@ -3,6 +3,7 @@ package gvc.benchmarking
 import gvc.benchmarking.DAO.DBConnection
 import gvc.transformer.IR.Program
 import gvc.Main
+
 import java.nio.file.{Files, Path}
 import scala.collection.mutable
 
@@ -14,9 +15,7 @@ object BenchmarkPopulator {
                                 fileName: String)
 
   case class StoredProgramRepresentation(info: ProgramInformation,
-                                         componentMapping: Map[Long, ASTLabel])
-
-  private val BASELINE_QUANTITY = 1024
+                                         componentMapping: Map[ASTLabel, Long])
 
   def populate(populatorConfig: PopulatorConfig,
                libraryDirs: List[String]): Unit = {
@@ -26,11 +25,11 @@ object BenchmarkPopulator {
       syncPrograms(populatorConfig.sources, libraryDirs, connection)
 
     programIDMapping.foreach(programRep => {
-      // populateProgram(programRep._1, programRep._2, populatorConfig, connection)
+      populateProgram(programRep._1, programRep._2, populatorConfig, connection)
     })
   }
-  /*
-  def populateProgram(programID,
+
+  def populateProgram(programID: Long,
                       programRep: StoredProgramRepresentation,
                       config: PopulatorConfig,
                       xa: DBConnection): Unit = {
@@ -41,26 +40,51 @@ object BenchmarkPopulator {
            | than the theoretical max for ${programRep.info.fileName} ( ${config.pathQuantity} > $theoreticalMax).
             """.stripMargin)
     }
-    val sampler = new Sampler(programRep.info.labels)
 
-    //handle bottom permutation
-    while (DAO.getNumberOfPaths(programID, xa) < Math.min(config.pathQuantity,
-                                                          theoreticalMax)) {
+    val sampler = new Sampler(programRep.info.labels)
+    Output.info(s"Generating paths for ${programRep.info.fileName}")
+
+    val bottomPermutationHash =
+      new LabelPermutation(programRep.info.labels).id.toString(16)
+    val bottomPerm =
+      DAO.addOrResolvePermutation(programID, bottomPermutationHash, xa)
+
+    var currentPath = 1
+    val maximum = BigInt
+      .int2bigInt(config.pathQuantity)
+      .min(theoreticalMax)
+    while (DAO.getNumberOfPaths(programID, xa) < maximum) {
+      print(
+        Output.formatInfo(
+          s"Generating path $currentPath out of ${maximum.toString}"))
       val ordering = sampler.sample(SamplingHeuristic.Random)
       val pathHash =
-        LabelTools.hashPath(programRep.info.labels.labels, ordering)
-      val storedPath = DAO.addOrResolvePath(pathHash.toString(16), programID, xa)
-      val currentPermutation =
-        new LabelPermutation(programRep.info.labels)
+        LabelTools
+          .hashPath(programRep.info.labels.labels, ordering)
+          .toString(16)
+      if (!DAO.containsPath(programID, pathHash, xa)) {
+        val pathQuery =
+          new DAO.PathQueryCollection(pathHash, programID, bottomPerm)
 
-      for (labelIndex <- ordering.indices) {
-        currentPermutation.addLabel(ordering(labelIndex))
-        val currentID = currentPermutation.id.toString(16)
-        val storedPermutation = DAO.addOrResolvePermutation(programID, currentID, xa)
-        DAO.addStep(storedPermutation, storedPath, labelIndex + 1, xa)
+        val currentPermutation =
+          new LabelPermutation(programRep.info.labels)
 
+        for (labelIndex <- ordering.indices) {
+          currentPermutation.addLabel(ordering(labelIndex))
+          val currentID = currentPermutation.id.toString(16)
+          val storedPermutation =
+            DAO.addOrResolvePermutation(programID, currentID, xa)
+          pathQuery.addStep(storedPermutation,
+                            programRep.componentMapping(ordering(labelIndex)))
+        }
+        pathQuery.exec(xa)
       }
-  }*/
+      print("\r")
+      currentPath += 1
+    }
+    Output.success(
+      s"Completed generating paths for ${programRep.info.fileName}")
+  }
 
   def syncPrograms(programList: List[Path],
                    libraries: List[String],
@@ -69,6 +93,7 @@ object BenchmarkPopulator {
     val programIDMapping = mutable.Map[Long, StoredProgramRepresentation]()
 
     programList.foreach(src => {
+      Output.info(s"Syncing definitions for ${src.getFileName}")
       val sourceText = Files.readString(src)
       val sourceIR = Main.generateIR(sourceText, libraries)
       val labelOutput = new LabelVisitor().visit(sourceIR)
@@ -79,15 +104,21 @@ object BenchmarkPopulator {
                                                     md5sum(sourceText),
                                                     labelOutput.labels.size,
                                                     xa)
-      val componentMapping = mutable.Map[Long, ASTLabel]()
-      labelOutput.labels.foreach(l => {
+      val componentMapping = mutable.Map[ASTLabel, Long]()
+      labelOutput.labels.indices.foreach(i => {
+        print(
+          Output.formatInfo(
+            s"Resolving label ${i + 1} of ${labelOutput.labels.size}"))
+        val l = labelOutput.labels(i)
         val insertedComponent =
           DAO.addOrResolveComponent(insertedProgram, l, xa)
-        componentMapping += (insertedComponent.id -> l)
+        componentMapping += (l -> insertedComponent.id)
+        print("\r")
       })
       programIDMapping += (insertedProgram.id -> StoredProgramRepresentation(
         programInfo,
         componentMapping.toMap))
+      Output.success(s"Completed syncing ${src.getFileName}")
     })
     programIDMapping.toMap
   }

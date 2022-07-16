@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS steps
     perm_id      BIGINT UNSIGNED NOT NULL,
     path_id      BIGINT UNSIGNED NOT NULL,
     level_id     BIGINT UNSIGNED NOT NULL,
-    component_id BIGINT UNSIGNED NOT NULL,
+    component_id BIGINT UNSIGNED,
     PRIMARY KEY (id, perm_id, path_id, level_id),
     FOREIGN KEY (perm_id) REFERENCES permutations (id),
     FOREIGN KEY (path_id) REFERENCES paths (id)
