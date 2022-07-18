@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <executor>
-    <version>1.0</version>
+    <version>test</version>
     <hardware>m1-macbook-pro</hardware>
     <source-dir>./src/test/resources/quant-study/</source-dir>
     <db>
         <url>jdbc:mysql://localhost:3306/</url>
         <username>root</username>
-        <password></password>
+        <password>[insert-password-here]</password>
     </db>
     <workload>
         <stress>
