@@ -4,8 +4,6 @@ import gvc.{Config, Main}
 import gvc.Config.error
 import gvc.benchmarking.BenchmarkSequential.Names
 import gvc.benchmarking.Extensions.csv
-
-import java.io.File
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{NodeSeq, XML}
 
@@ -55,10 +53,20 @@ case class PopulatorConfig(version: String,
 case class ExecutorConfig(version: String,
                           hardware: String,
                           db: BenchmarkDBCredentials,
-                          sourceDirectory: Path,
+                          sources: List[Path],
                           workload: BenchmarkWorkload)
 
 object BenchmarkExternalConfig {
+
+  def generateStressList(stress: StressConfiguration): List[Int] = {
+    val stepList = stress match {
+      case singular: StressSingular => List(singular.stressValue)
+      case list: StressList         => list.wList
+      case stepwise: StressBounded =>
+        (stepwise.wLower to stepwise.wUpper by stepwise.wStep).toList
+    }
+    stepList
+  }
 
   def parseSequential(config: Config): SequentialConfig = {
     val sequentialConfigPath = config.sequentialConfig.get
@@ -127,11 +135,19 @@ object BenchmarkExternalConfig {
       val db = parseDB(executorRoot)
       val sources = executorRoot \ "source-dir"
       val validatedSources = validateDirectory(sources.text, "source-dir")
+      val c0SourceFiles = validatedSources.toFile
+        .listFiles()
+        .filter(_.isFile)
+        .toList
+        .filter(p => {
+          p.getName.endsWith(".c0")
+        })
+        .map(_.toPath)
       ExecutorConfig(
         versionString,
         hardwareString,
         db,
-        validatedSources,
+        c0SourceFiles,
         workload
       )
     }

@@ -461,18 +461,13 @@ object BenchmarkSequential {
         benchConfig.io.tempC0File,
         benchConfig.io.tempBinaryFile,
         config,
-        benchConfig
+        benchConfig.workload.iterations
       )
       printer.logCompilation(id, perfComp)
 
       if (benchConfig.modifiers.onlyCompile) {
-        val stepList = benchConfig.workload.stress match {
-          case singular: StressSingular => List(singular.stressValue)
-          case list: StressList         => list.levels
-          case stepwise: StressBounded =>
-            (stepwise.wLower to stepwise.wUpper by stepwise.wStep).toList
-        }
-
+        val stepList = BenchmarkExternalConfig.generateStressList(
+          benchConfig.workload.stress)
         for (workload <- stepList) {
           val perf = Timing.execTimed(
             benchConfig.io.tempBinaryFile,

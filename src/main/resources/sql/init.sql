@@ -13,13 +13,14 @@ CREATE TABLE IF NOT EXISTS programs
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_gr_Program(IN p_name VARCHAR(255), IN p_hash VARCHAR(255), IN p_labels BIGINT UNSIGNED)
+CREATE PROCEDURE sp_gr_Program(IN p_name VARCHAR(255), IN p_hash VARCHAR(255), IN p_labels BIGINT UNSIGNED,
+                               OUT p_id BIGINT UNSIGNED)
 BEGIN
-    IF (SELECT * FROM programs WHERE src_filename = p_name AND src_hash = p_hash AND num_labels = p_labels) THEN
-        SELECT * FROM programs WHERE src_filename = p_name AND src_hash = p_hash AND num_labels = p_labels;
-    ELSE
+    SELECT id INTO p_id FROM programs WHERE src_filename = p_name AND src_hash = p_hash AND num_labels = p_labels;
+
+    IF NOT (SELECT p_id) THEN
         INSERT INTO programs (src_filename, src_hash, num_labels) VALUES (p_name, p_hash, p_labels);
-        SELECT * FROM programs WHERE id = (select LAST_INSERT_ID());
+        select LAST_INSERT_ID() INTO p_id;
     END IF;
 END //
 DELIMITER ;
@@ -43,28 +44,22 @@ DELIMITER //
 CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255),
                                  IN p_stype ENUM ('post', 'assert', 'pre', 'unfold', 'fold', 'pred', 'inv'),
                                  IN p_sindex BIGINT UNSIGNED, IN p_etype ENUM ('acc', 'pred', 'bool', 'rem_imp', 'abs'),
-                                 IN p_eindex BIGINT UNSIGNED)
+                                 IN p_eindex BIGINT UNSIGNED,
+                                 OUT c_id BIGINT UNSIGNED)
 BEGIN
-    IF (SELECT id
-        FROM components
-        WHERE program_id = p_id
-          AND context_name = p_cname
-          AND spec_type = p_stype
-          AND spec_index = p_sindex
-          AND expr_type = p_etype
-          AND expr_index = p_eindex) THEN
-        SELECT *
-        FROM components
-        WHERE program_id = p_id
-          AND context_name = p_cname
-          AND spec_type = p_stype
-          AND spec_index = p_sindex
-          AND expr_type = p_etype
-          AND expr_index = p_eindex;
-    ELSE
+    SELECT id
+    INTO c_id
+    FROM components
+    WHERE program_id = p_id
+      AND context_name = p_cname
+      AND spec_type = p_stype
+      AND spec_index = p_sindex
+      AND expr_type = p_etype
+      AND expr_index = p_eindex;
+    IF NOT (SELECT c_id) THEN
         INSERT INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
         VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
-        SELECT * FROM components WHERE id = (select LAST_INSERT_ID());
+        select LAST_INSERT_ID() INTO c_id;
     END IF;
 END //
 DELIMITER ;
@@ -80,13 +75,12 @@ CREATE TABLE IF NOT EXISTS permutations
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash TEXT)
+CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash TEXT, OUT p_id BIGINT UNSIGNED)
 BEGIN
-    IF (SELECT * FROM permutations WHERE program_id = p_program_id AND permutation_hash = p_perm_hash) THEN
-        SELECT * FROM permutations WHERE program_id = p_program_id AND permutation_hash = p_perm_hash;
-    ELSE
+    SELECT id INTO p_id FROM permutations WHERE program_id = p_program_id AND permutation_hash = p_perm_hash;
+    IF NOT (SELECT p_id) THEN
         INSERT INTO permutations (program_id, permutation_hash) VALUES (p_program_id, p_perm_hash);
-        SELECT * FROM permutations WHERE id = (select LAST_INSERT_ID());
+        select LAST_INSERT_ID() INTO p_id;
     END IF;
 END //
 
@@ -121,13 +115,12 @@ CREATE TABLE IF NOT EXISTS versions
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_gr_Version(IN p_name VARCHAR(255))
+CREATE PROCEDURE sp_gr_Version(IN p_name VARCHAR(255), OUT v_id BIGINT UNSIGNED)
 BEGIN
-    IF (SELECT * FROM versions WHERE version_name = p_name) THEN
-        SELECT * FROM versions WHERE version_name = p_name;
-    ELSE
+    SELECT id INTO v_id FROM versions WHERE version_name = p_name;
+    IF NOT (SELECT v_id) THEN
         INSERT INTO versions (version_name) VALUES (p_name);
-        SELECT * FROM programs WHERE id = (select LAST_INSERT_ID());
+        select LAST_INSERT_ID() INTO v_id;
     END IF;
 END //
 
@@ -143,13 +136,12 @@ CREATE TABLE IF NOT EXISTS hardware
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_gr_Hardware(IN p_name VARCHAR(255))
+CREATE PROCEDURE sp_gr_Hardware(IN p_name VARCHAR(255), OUT h_id BIGINT UNSIGNED)
 BEGIN
-    IF (SELECT * FROM hardware WHERE hardware_name = p_name) THEN
-        SELECT * FROM hardware WHERE hardware_name = p_name;
-    ELSE
+    SELECT id INTO h_id FROM hardware WHERE hardware_name = p_name;
+    IF NOT (SELECT h_id) THEN
         INSERT INTO hardware (hardware_name) VALUES (p_name);
-        SELECT * FROM hardware WHERE id = (select LAST_INSERT_ID());
+        select LAST_INSERT_ID() INTO h_id;
     END IF;
 END //
 DELIMITER ;
@@ -168,7 +160,21 @@ CREATE TABLE IF NOT EXISTS conjuncts
     FOREIGN KEY (version_id) REFERENCES versions (id)
 );
 
+CREATE TABLE IF NOT EXISTS benchmarks
+(
+    id             SERIAL,
+    benchmark_name VARCHAR(255),
+    benchmark_desc TEXT,
+    PRIMARY KEY (id)
+);
 
+CREATE TABLE IF NOT EXISTS benchmark_membership
+(
+    benchmark_id   BIGINT UNSIGNED NOT NULL,
+    permutation_id BIGINT UNSIGNED NOT NULL,
+    FOREIGN KEY (benchmark_id) REFERENCES benchmarks (id),
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id)
+);
 
 CREATE TABLE IF NOT EXISTS performance
 (
@@ -180,7 +186,6 @@ CREATE TABLE IF NOT EXISTS performance
     iter             INTEGER,
     performance_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     mode_measured    ENUM ('translation', 'verification', 'instrumentation', 'compilation', 'exec_gradual', 'exec_framing', 'exec_dynamic'),
-
     ninety_fifth     DOUBLE PRECISION,
     fifth            DOUBLE PRECISION,
     median           DOUBLE PRECISION,
@@ -190,5 +195,6 @@ CREATE TABLE IF NOT EXISTS performance
     maximum          DOUBLE PRECISION,
     FOREIGN KEY (program_id) REFERENCES programs (id),
     FOREIGN KEY (hw_id) REFERENCES hardware (id),
-    FOREIGN KEY (version_id) REFERENCES versions (id)
+    FOREIGN KEY (version_id) REFERENCES versions (id),
+    PRIMARY KEY (id)
 );

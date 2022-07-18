@@ -11,6 +11,7 @@ import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.ModeMeasured.ModeMeasured
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
+import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
 
 import scala.collection.mutable
 
@@ -87,38 +88,42 @@ object DAO {
   }
 
   def addOrResolveHardware(name: String,
-                           xa: transactor.Transactor.Aux[IO, Unit]): Hardware =
-    sql"CALL sp_gr_Hardware($name);"
-      .query[Hardware]
-      .option
+                           xa: transactor.Transactor.Aux[IO, Unit]): Long = {
+    (for {
+      _ <- sql"CALL sp_gr_Hardware($name, @hw);".query.unique
+      hid <- sql"SELECT @hw;".query[Long].option
+    } yield hid)
       .transact(xa)
       .unsafeRunSync() match {
       case Some(value) => value
       case None =>
         throw new DBException(s"Failed to add or resolve hardware $name")
     }
+  }
 
   def addOrResolveVersion(name: String,
-                          xa: transactor.Transactor.Aux[IO, Unit]): Version =
-    sql"CALL sp_gr_Version($name);"
-      .query[Version]
-      .option
+                          xa: transactor.Transactor.Aux[IO, Unit]): Long = {
+    (for {
+      _ <- sql"CALL sp_gr_Version($name, @ver);".query.unique
+      vid <- sql"SELECT @ver;".query[Long].option
+    } yield vid)
       .transact(xa)
       .unsafeRunSync() match {
       case Some(value) => value
       case None =>
         throw new DBException(s"Failed to add or resolve version $name")
     }
+  }
 
-  def addOrResolveProgram(
-      filename: java.nio.file.Path,
-      hash: String,
-      numLabels: Long,
-      xa: transactor.Transactor.Aux[IO, Unit]): StoredProgram = {
+  def addOrResolveProgram(filename: java.nio.file.Path,
+                          hash: String,
+                          numLabels: Long,
+                          xa: transactor.Transactor.Aux[IO, Unit]): Long = {
     val name = filename.getFileName.toString
-    sql"CALL sp_gr_Program($name, $hash, $numLabels)"
-      .query[StoredProgram]
-      .option
+    (for {
+      _ <- sql"CALL sp_gr_Program($name, $hash, $numLabels, @pid)".query.unique
+      pid <- sql"SELECT @pid;".query[Long].option
+    } yield pid)
       .transact(xa)
       .unsafeRunSync() match {
       case Some(value) => value
@@ -136,19 +141,17 @@ object DAO {
                              exprIndex: Long,
                              dateAdded: String)
 
-  def addOrResolveComponent(
-      program: StoredProgram,
-      astLabel: ASTLabel,
-      xa: transactor.Transactor.Aux[IO, Unit]): StoredComponent = {
+  def addOrResolveComponent(programID: Long,
+                            astLabel: ASTLabel,
+                            xa: transactor.Transactor.Aux[IO, Unit]): Long = {
     val contextName = astLabel.parent match {
       case Left(value)  => value.name
       case Right(value) => value.name
     }
-    sql"CALL sp_gr_Component(${program.id}, $contextName, ${astLabel.specType}, ${astLabel.specIndex}, ${astLabel.exprType}, ${astLabel.exprIndex})"
-      .query[StoredComponent]
-      .option
-      .transact(xa)
-      .unsafeRunSync() match {
+    (for {
+      _ <- sql"CALL sp_gr_Component($programID, $contextName, ${astLabel.specType}, ${astLabel.specIndex}, ${astLabel.exprType}, ${astLabel.exprIndex}, @comp);".query.unique
+      cid <- sql"SELECT @comp;".query[Long].option
+    } yield cid).transact(xa).unsafeRunSync() match {
       case Some(value) => value
       case None =>
         throw new DBException(
@@ -158,12 +161,11 @@ object DAO {
 
   def addOrResolvePermutation(programID: Long,
                               permutationHash: String,
-                              xa: DBConnection): Permutation = {
-    sql"""CALL sp_gr_Permutation($programID, $permutationHash)"""
-      .query[Permutation]
-      .option
-      .transact(xa)
-      .unsafeRunSync() match {
+                              xa: DBConnection): Long = {
+    (for {
+      _ <- sql"""CALL sp_gr_Permutation($programID, $permutationHash, @perm);""".query.unique
+      pid <- sql"""SELECT @perm;""".query[Long].option
+    } yield pid).transact(xa).unsafeRunSync() match {
       case Some(value) => value
       case None =>
         throw new DBException(
@@ -196,6 +198,11 @@ object DAO {
         VALUES (${permutation.id}, ${version.id}, ${hardware.id}, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});
     """.query[Conjuncts].option
   }
+
+  def reserveProgram(version: Long,
+                     hardware: Long,
+                     workload: BenchmarkWorkload,
+                     conn: DBConnection): Option[ReservedProgram] = {}
 
   def addPerformance(pg: StoredProgram,
                      version: Version,
@@ -252,16 +259,16 @@ object DAO {
 
   class PathQueryCollection(hash: String,
                             programID: Long,
-                            bottomPermutation: Permutation) {
+                            bottomPermutationID: Long) {
 
     private case class Step(permID: Long,
                             levelID: Long,
                             componentID: Long,
                             pathID: Long)
 
-    private val steps = mutable.ListBuffer[(Permutation, Long)]()
+    private val steps = mutable.ListBuffer[(Long, Long)]()
 
-    def addStep(perm: Permutation, componentID: Long): Unit = {
+    def addStep(perm: Long, componentID: Long): Unit = {
       steps += Tuple2(perm, componentID)
     }
 
@@ -272,12 +279,12 @@ object DAO {
          VALUES
              ($hash, $programID);""".update.run
         id <- sql"SELECT LAST_INSERT_ID()".query[Long].unique
-        _ <- sql"INSERT INTO steps (perm_id, level_id, path_id) VALUES (${bottomPermutation.id}, 0, $id)".update.run
+        _ <- sql"INSERT INTO steps (perm_id, level_id, path_id) VALUES ($bottomPermutationID, 0, $id)".update.run
         v <- Update[Step](
           s"INSERT INTO steps (perm_id, level_id, component_id, path_id) VALUES (?, ?, ?, ?)")
           .updateMany(
             this.steps.indices
-              .map(i => Step(this.steps(i)._1.id, i + 1, this.steps(i)._2, id))
+              .map(i => Step(this.steps(i)._1, i + 1, this.steps(i)._2, id))
               .toList)
       } yield v
       massUpdate.transact(xa).unsafeRunSync()

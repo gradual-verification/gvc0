@@ -57,7 +57,7 @@ object Timing {
       input: Path,
       binary: Path,
       config: Config,
-      benchConfig: SequentialConfig
+      iterations: Int
   ): Performance = {
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
@@ -78,7 +78,7 @@ object Timing {
       throw new CC0CompilationException(output)
     }
     runTimedCommand(
-      benchConfig.workload.iterations,
+      iterations,
       compilationCommand,
       compileOnError
     )
@@ -92,7 +92,7 @@ object Timing {
       benchConfig: SequentialConfig
   ): (Performance, Performance) = {
     (
-      compileTimed(input, output, config, benchConfig),
+      compileTimed(input, output, config, benchConfig.workload.iterations),
       execTimed(output, benchConfig.workload.iterations, args)
     )
   }

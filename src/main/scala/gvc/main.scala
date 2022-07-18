@@ -29,10 +29,13 @@ case class OutputFileCollection(
     irFileName: String,
     silverFileName: String,
     c0FileName: String,
-    profilingName: String
+    profilingName: String,
+    binaryName: String
 )
 
 object Main extends App {
+
+  def tempOutputCollection = getOutputCollection("./temp")
 
   def getOutputCollection(sourceFile: String): OutputFileCollection = {
     val baseName =
@@ -43,12 +46,14 @@ object Main extends App {
     val silverFileName = baseName + ".vpr"
     val c0FileName = baseName + ".verified.c0"
     val profilingName = baseName + ".prof.out"
+    val binaryName = baseName + ".bin"
     OutputFileCollection(
       baseName,
       irFileName,
       silverFileName,
       c0FileName,
-      profilingName
+      profilingName,
+      binaryName
     )
   }
 

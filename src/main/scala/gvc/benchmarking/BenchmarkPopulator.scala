@@ -72,9 +72,9 @@ object BenchmarkPopulator {
         for (labelIndex <- ordering.indices) {
           currentPermutation.addLabel(ordering(labelIndex))
           val currentID = currentPermutation.id.toString(16)
-          val storedPermutation =
+          val storedPermutationID =
             DAO.addOrResolvePermutation(programID, currentID, xa)
-          pathQuery.addStep(storedPermutation,
+          pathQuery.addStep(storedPermutationID,
                             programRep.componentMapping(ordering(labelIndex)))
         }
         pathQuery.exec(xa)
@@ -100,22 +100,22 @@ object BenchmarkPopulator {
       val fileName = src.getFileName.toString
       val programInfo =
         ProgramInformation(sourceText, sourceIR, labelOutput, fileName)
-      val insertedProgram = DAO.addOrResolveProgram(src,
-                                                    md5sum(sourceText),
-                                                    labelOutput.labels.size,
-                                                    xa)
+      val insertedProgramID = DAO.addOrResolveProgram(src,
+                                                      md5sum(sourceText),
+                                                      labelOutput.labels.size,
+                                                      xa)
       val componentMapping = mutable.Map[ASTLabel, Long]()
       labelOutput.labels.indices.foreach(i => {
         print(
           Output.formatInfo(
             s"Resolving label ${i + 1} of ${labelOutput.labels.size}"))
         val l = labelOutput.labels(i)
-        val insertedComponent =
-          DAO.addOrResolveComponent(insertedProgram, l, xa)
-        componentMapping += (l -> insertedComponent.id)
+        val insertedComponentID =
+          DAO.addOrResolveComponent(insertedProgramID, l, xa)
+        componentMapping += (l -> insertedComponentID)
         print("\r")
       })
-      programIDMapping += (insertedProgram.id -> StoredProgramRepresentation(
+      programIDMapping += (insertedProgramID -> StoredProgramRepresentation(
         programInfo,
         componentMapping.toMap))
       Output.success(s"Completed syncing ${src.getFileName}")

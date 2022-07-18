@@ -1,15 +1,47 @@
 package gvc.benchmarking
 
-import gvc.{Config}
+import gvc.benchmarking.DAO.Permutation
+import gvc.{Config, Main}
+
+import java.nio.file.{Files, Paths}
 
 object BenchmarkExecutor {
+
+  case class ReservedProgram(perm: Permutation, stress: Int)
 
   def execute(config: ExecutorConfig, baseConfig: Config): Unit = {
     val conn = DAO.connect(config.db)
     val storedVersion = DAO.addOrResolveVersion(config.version, conn)
     val storedHardware = DAO.addOrResolveHardware(config.hardware, conn)
-    
+    val libraries = List(Main.defaultLibraryDirectory)
+    val syncedPrograms =
+      BenchmarkPopulator.syncPrograms(config.sources, libraries, conn)
     val workload = config.workload
+    val tempBinary = Paths.get(Main.tempOutputCollection.binaryName)
+    val tempSource = Paths.get(Main.tempOutputCollection.c0FileName)
+    var reservedProgram =
+      DAO.reserveProgram(storedVersion, storedHardware, config.workload, conn)
+
+    while (reservedProgram.nonEmpty) {
+      val reserved = reservedProgram.get
+      val reconstructedSourceText = ""
+      Files.writeString(tempSource, reconstructedSourceText)
+      val verifierOutput = Timing.verifyTimed(reconstructedSourceText,
+                                              Main.tempOutputCollection,
+                                              baseConfig)
+      val compilationOutput = Timing.compileTimed(tempSource,
+                                                  tempBinary,
+                                                  baseConfig,
+                                                  workload.iterations)
+      val executionOutput =
+        Timing.execTimed(tempBinary,
+                         workload.iterations,
+                         List(s"--stress=${reserved.stress}"))
+
+      reservedProgram =
+        DAO.reserveProgram(storedVersion, storedHardware, config.workload, conn)
+    }
+
     /*
 
 
