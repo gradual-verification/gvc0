@@ -18,7 +18,7 @@ CREATE PROCEDURE sp_gr_Program(IN p_name VARCHAR(255), IN p_hash VARCHAR(255), I
 BEGIN
     SELECT id INTO p_id FROM programs WHERE src_filename = p_name AND src_hash = p_hash AND num_labels = p_labels;
 
-    IF NOT (SELECT p_id) THEN
+    IF ((SELECT p_id) IS NULL) THEN
         INSERT INTO programs (src_filename, src_hash, num_labels) VALUES (p_name, p_hash, p_labels);
         select LAST_INSERT_ID() INTO p_id;
     END IF;
@@ -55,7 +55,7 @@ BEGIN
       AND spec_index = p_sindex
       AND expr_type = p_etype
       AND expr_index = p_eindex;
-    IF NOT (SELECT c_id) THEN
+    IF ((SELECT c_id) IS NULL) THEN
         INSERT INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
         VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
         select LAST_INSERT_ID() INTO c_id;
@@ -77,7 +77,7 @@ DELIMITER //
 CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash TEXT, OUT p_id BIGINT UNSIGNED)
 BEGIN
     SELECT id INTO p_id FROM permutations WHERE program_id = p_program_id AND permutation_hash = p_perm_hash;
-    IF NOT (SELECT p_id) THEN
+    IF ((SELECT p_id) IS NULL) THEN
         INSERT INTO permutations (program_id, permutation_hash) VALUES (p_program_id, p_perm_hash);
         select LAST_INSERT_ID() INTO p_id;
     END IF;
@@ -117,7 +117,7 @@ DELIMITER //
 CREATE PROCEDURE sp_gr_Version(IN p_name VARCHAR(255), OUT v_id BIGINT UNSIGNED)
 BEGIN
     SELECT id INTO v_id FROM versions WHERE version_name = p_name;
-    IF NOT (SELECT v_id) THEN
+    IF ((SELECT v_id) IS NULL) THEN
         INSERT INTO versions (version_name) VALUES (p_name);
         select LAST_INSERT_ID() INTO v_id;
     END IF;
@@ -138,7 +138,7 @@ DELIMITER //
 CREATE PROCEDURE sp_gr_Hardware(IN p_name VARCHAR(255), OUT h_id BIGINT UNSIGNED)
 BEGIN
     SELECT id INTO h_id FROM hardware WHERE hardware_name = p_name;
-    IF NOT (SELECT h_id) THEN
+    IF ((SELECT h_id) IS NULL) THEN
         INSERT INTO hardware (hardware_name) VALUES (p_name);
         select LAST_INSERT_ID() INTO h_id;
     END IF;
@@ -212,11 +212,10 @@ BEGIN
                           AND stress = workload) as `p*`
                        ON permutations.id = permutation_id
     WHERE `p*`.id IS NULL;
-    IF (SELECT perm_id) THEN
+    IF ((SELECT perm_id) IS NULL) THEN
         INSERT INTO performance (permutation_id, version_id, hardware_id, stress)
         VALUES ((SELECT perm_id), vid, hid, workload);
-        select LAST_INSERT_ID() INTO perf_id;
+        SELECT LAST_INSERT_ID() INTO perf_id;
     END IF;
 END //
 DELIMITER ;
-

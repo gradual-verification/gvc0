@@ -121,7 +121,7 @@ object DAO {
                           xa: transactor.Transactor.Aux[IO, Unit]): Long = {
     val name = filename.getFileName.toString
     (for {
-      _ <- sql"CALL sp_gr_Program($name, $hash, $numLabels, @pid)".query.unique
+      _ <- sql"CALL sp_gr_Program($name, $hash, $numLabels, @pid);".update.run
       pid <- sql"SELECT @pid;".query[Long].option
     } yield pid)
       .transact(xa)
@@ -149,7 +149,7 @@ object DAO {
       case Right(value) => value.name
     }
     (for {
-      _ <- sql"CALL sp_gr_Component($programID, $contextName, ${astLabel.specType}, ${astLabel.specIndex}, ${astLabel.exprType}, ${astLabel.exprIndex}, @comp);".query.unique
+      _ <- sql"CALL sp_gr_Component($programID, $contextName, ${astLabel.specType}, ${astLabel.specIndex}, ${astLabel.exprType}, ${astLabel.exprIndex}, @comp);".update.run
       cid <- sql"SELECT @comp;".query[Long].option
     } yield cid).transact(xa).unsafeRunSync() match {
       case Some(value) => value
@@ -163,7 +163,7 @@ object DAO {
                               permutationHash: String,
                               xa: DBConnection): Long = {
     (for {
-      _ <- sql"""CALL sp_gr_Permutation($programID, $permutationHash, @perm);""".query.unique
+      _ <- sql"""CALL sp_gr_Permutation($programID, $permutationHash, @perm);""".update.run
       pid <- sql"""SELECT @perm;""".query[Long].option
     } yield pid).transact(xa).unsafeRunSync() match {
       case Some(value) => value
@@ -205,7 +205,7 @@ object DAO {
                      xa: DBConnection): Option[ReservedProgram] = {
     for (i <- workloads) {
       val reserved = (for {
-        _ <- sql"""CALL sp_ReservePermutation($version, $hardware, @perm, @perf);""".query.unique
+        _ <- sql"""CALL sp_ReservePermutation($version, $hardware, @perm, @perf);""".update.run
         perf_id <- sql"""SELECT @perf;""".query[Long].option
         perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
           .query[Permutation]
