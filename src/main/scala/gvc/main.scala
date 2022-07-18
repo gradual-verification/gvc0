@@ -34,9 +34,12 @@ case class OutputFileCollection(
 )
 
 object Main extends App {
-
-  def tempOutputCollection = getOutputCollection("./temp")
-
+  object Defaults {
+    val outputFileCollection: OutputFileCollection = getOutputCollection(
+      "./temp")
+    val includeDirectories: List[String] = List(
+      Paths.get("src/main/resources").toAbsolutePath.toString + '/')
+  }
   def getOutputCollection(sourceFile: String): OutputFileCollection = {
     val baseName =
       if (sourceFile.toLowerCase().endsWith(".c0"))
@@ -57,8 +60,6 @@ object Main extends App {
     )
   }
 
-  val defaultLibraryDirectory =
-    Paths.get("src/main/resources").toAbsolutePath.toString + '/'
   val cmdConfig = Config.fromCommandLineArgs(args.toList)
 
   cmdConfig.validate()
@@ -67,7 +68,7 @@ object Main extends App {
   def run(config: Config): Unit = {
 
     val linkedLibraries =
-      config.linkedLibraries ++ List(defaultLibraryDirectory)
+      config.linkedLibraries ++ Defaults.includeDirectories
 
     config.mode match {
       case Config.BenchmarkSequential =>
@@ -89,7 +90,7 @@ object Main extends App {
       case Config.BenchmarkPopulator =>
         val benchConfig =
           BenchmarkExternalConfig.parsePopulator(config)
-        BenchmarkPopulator.populate(benchConfig, List(defaultLibraryDirectory))
+        BenchmarkPopulator.populate(benchConfig, Defaults.includeDirectories)
 
       case Config.DefaultMode =>
         val fileNames = getOutputCollection(config.sourceFile.get)
@@ -206,7 +207,7 @@ object Main extends App {
     val ir =
       generateIR(
         inputSource,
-        config.linkedLibraries ++ List(defaultLibraryDirectory)
+        config.linkedLibraries ++ Defaults.includeDirectories
       )
     val silver = IRSilver.toSilver(ir)
     val translationStop = System.nanoTime()
@@ -274,7 +275,7 @@ object Main extends App {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = List(defaultLibraryDirectory)
+      includeDirs = Defaults.includeDirectories
     )
     // Always write the intermediate C0 file, but then delete it
     // if not saving intermediate files

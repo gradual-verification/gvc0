@@ -25,7 +25,6 @@ BEGIN
 END //
 DELIMITER ;
 
-
 CREATE TABLE IF NOT EXISTS components
 (
     id             SERIAL,
@@ -96,13 +95,13 @@ CREATE TABLE IF NOT EXISTS paths
 
 CREATE TABLE IF NOT EXISTS steps
 (
-    id           SERIAL,
-    perm_id      BIGINT UNSIGNED NOT NULL,
-    path_id      BIGINT UNSIGNED NOT NULL,
-    level_id     BIGINT UNSIGNED NOT NULL,
-    component_id BIGINT UNSIGNED,
-    PRIMARY KEY (id, perm_id, path_id, level_id),
-    FOREIGN KEY (perm_id) REFERENCES permutations (id),
+    id             SERIAL,
+    permutation_id BIGINT UNSIGNED NOT NULL,
+    path_id        BIGINT UNSIGNED NOT NULL,
+    level_id       BIGINT UNSIGNED NOT NULL,
+    component_id   BIGINT UNSIGNED,
+    PRIMARY KEY (id, permutation_id, path_id, level_id),
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (path_id) REFERENCES paths (id)
 );
 
@@ -149,14 +148,14 @@ DELIMITER ;
 CREATE TABLE IF NOT EXISTS conjuncts
 (
     id              SERIAL,
-    perm_id         BIGINT UNSIGNED NOT NULL,
+    permutation_id  BIGINT UNSIGNED NOT NULL,
     version_id      BIGINT UNSIGNED NOT NULL,
     hardware_id     BIGINT UNSIGNED NOT NULL,
     conj_total      BIGINT UNSIGNED NOT NULL,
     conj_eliminated BIGINT UNSIGNED NOT NULL,
     conj_date       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    FOREIGN KEY (perm_id) REFERENCES permutations (id),
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (version_id) REFERENCES versions (id)
 );
 
@@ -179,9 +178,9 @@ CREATE TABLE IF NOT EXISTS benchmark_membership
 CREATE TABLE IF NOT EXISTS performance
 (
     id               SERIAL,
-    program_id       BIGINT UNSIGNED NOT NULL,
+    permutation_id   BIGINT UNSIGNED NOT NULL,
     version_id       BIGINT UNSIGNED NOT NULL,
-    hw_id            BIGINT UNSIGNED NOT NULL,
+    hardware_id      BIGINT UNSIGNED NOT NULL,
     stress           INTEGER,
     iter             INTEGER,
     performance_date DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -193,8 +192,31 @@ CREATE TABLE IF NOT EXISTS performance
     stdev            DOUBLE PRECISION,
     minimum          DOUBLE PRECISION,
     maximum          DOUBLE PRECISION,
-    FOREIGN KEY (program_id) REFERENCES programs (id),
-    FOREIGN KEY (hw_id) REFERENCES hardware (id),
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
+    FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
     PRIMARY KEY (id)
 );
+
+DELIMITER //
+CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN workload BIGINT UNSIGNED,
+                                       OUT perm_id BIGINT UNSIGNED, OUT perf_id BIGINT UNSIGNED)
+BEGIN
+    SELECT permutations.id
+    INTO perm_id
+    FROM permutations
+             LEFT JOIN (SELECT *
+                        FROM performance
+                        WHERE version_id = vid
+                          AND hardware_id = hid
+                          AND stress = workload) as `p*`
+                       ON permutations.id = permutation_id
+    WHERE `p*`.id IS NULL;
+    IF (SELECT perm_id) THEN
+        INSERT INTO performance (permutation_id, version_id, hardware_id, stress)
+        VALUES ((SELECT perm_id), vid, hid, workload);
+        select LAST_INSERT_ID() INTO perf_id;
+    END IF;
+END //
+DELIMITER ;
+

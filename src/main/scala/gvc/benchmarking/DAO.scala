@@ -8,9 +8,9 @@ import gvc.Main.ProfilingInfo
 import doobie._
 import doobie.implicits._
 import gvc.benchmarking.ExprType.ExprType
-import gvc.benchmarking.ModeMeasured.ModeMeasured
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
+import gvc.CC0Wrapper
 import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
 
 import scala.collection.mutable
@@ -194,56 +194,50 @@ object DAO {
     : ConnectionIO[Option[Conjuncts]] = {
     sql"""
         INSERT INTO conjuncts 
-            (perm_id, version_id, hardware_id, conj_total, conj_eliminated) 
+            (permutation_id, version_id, hardware_id, conj_total, conj_eliminated) 
         VALUES (${permutation.id}, ${version.id}, ${hardware.id}, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});
     """.query[Conjuncts].option
   }
 
   def reserveProgram(version: Long,
                      hardware: Long,
-                     workload: BenchmarkWorkload,
-                     conn: DBConnection): Option[ReservedProgram] = {}
+                     workloads: List[Int],
+                     xa: DBConnection): Option[ReservedProgram] = {
+    for (i <- workloads) {
+      val reserved = (for {
+        _ <- sql"""CALL sp_ReservePermutation($version, $hardware, @perm, @perf);""".query.unique
+        perf_id <- sql"""SELECT @perf;""".query[Long].option
+        perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
+          .query[Permutation]
+          .option
+      } yield (perf_id, perm)).transact(xa).unsafeRunSync()
+      reserved._1 match {
+        case Some(perfID) =>
+          reserved._2 match {
+            case Some(perm) => ReservedProgram(perm, i, perfID)
+            case None       =>
+          }
+        case None =>
+      }
+    }
+    None
+  }
 
-  def addPerformance(pg: StoredProgram,
-                     version: Version,
-                     hardware: Hardware,
-                     modeMeasured: ModeMeasured,
-                     stress: Option[Int],
-                     iter: Int,
-                     perf: gvc.CC0Wrapper.Performance,
-                     xa: transactor.Transactor.Aux[IO, Unit])
-    : ConnectionIO[Option[StoredPerformance]] = {
-    sql"""INSERT INTO performance (
-                program_id,
-                version_id, 
-                hw_id, 
-                mode_measured, 
-                stress, 
-                iter, 
-                ninety_fifth, 
-                fifth, 
-                median, 
-                mean, 
-                stdev, 
-                minimum, 
-                maximum
-            )
-         VALUES (
-                 ${pg.id}, 
-                 ${version.id}, 
-                 ${hardware.id}, 
-                 $modeMeasured, 
-                 ${stress.getOrElse(0)}, 
-                 $iter, 
-                 ${perf.ninetyFifth}, 
-                 ${perf.fifth}, 
-                 ${perf.median}, 
-                 ${perf.mean}, 
-                 ${perf.stdev}, 
-                 ${perf.minimum}, 
-                 ${perf.maximum}
-                 );
-       """.query[StoredPerformance].option
+  def updatePerformance(perfID: Long,
+                        perfData: CC0Wrapper.Performance,
+                        conn: DBConnection): Unit = {
+    sql"""UPDATE performance SET
+         performance_date = DEFAULT,
+         mean = ${perfData.mean},
+         median = ${perfData.median},
+         maximum = ${perfData.maximum},
+         minimum = ${perfData.minimum},
+         fifth = ${perfData.fifth},
+         ninety_fifth = ${perfData.ninetyFifth},
+         stdev = ${perfData.stdev}
+                   WHERE id = $perfID""".query.unique
+      .transact(conn)
+      .unsafeRunSync()
   }
 
   def containsPath(programID: Long,
@@ -279,9 +273,9 @@ object DAO {
          VALUES
              ($hash, $programID);""".update.run
         id <- sql"SELECT LAST_INSERT_ID()".query[Long].unique
-        _ <- sql"INSERT INTO steps (perm_id, level_id, path_id) VALUES ($bottomPermutationID, 0, $id)".update.run
+        _ <- sql"INSERT INTO steps (permutation_id, level_id, path_id) VALUES ($bottomPermutationID, 0, $id)".update.run
         v <- Update[Step](
-          s"INSERT INTO steps (perm_id, level_id, component_id, path_id) VALUES (?, ?, ?, ?)")
+          s"INSERT INTO steps (permutation_id, level_id, component_id, path_id) VALUES (?, ?, ?, ?)")
           .updateMany(
             this.steps.indices
               .map(i => Step(this.steps(i)._1, i + 1, this.steps(i)._2, id))

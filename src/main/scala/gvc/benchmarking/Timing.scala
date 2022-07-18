@@ -100,7 +100,7 @@ object Timing {
   private def runTimedCommand(
       iterations: Int,
       command: String,
-      onNonzero: (CommandOutput) => Unit
+      onNonzero: CommandOutput => Unit
   ): Performance = {
     var capture = ""
     val logger = ProcessLogger(
@@ -206,9 +206,9 @@ object Timeout {
 
   def formatMilliseconds(ms: Long): String = {
     if (ms > 1000 * 60 * 60) {
-      s"${(ms / (1000 * 60 * 60))} hr"
+      s"${ms / (1000 * 60 * 60)} hr"
     } else if (ms > 1000 * 60) {
-      s"${(ms / (1000 * 60))} min"
+      s"${ms / (1000 * 60)} min"
     } else if (ms > 1000) {
       s"${ms / 1000} sec"
     } else {

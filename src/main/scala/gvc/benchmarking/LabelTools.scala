@@ -121,6 +121,28 @@ class Sampler(labelOutput: LabelOutput) {
 }
 
 object LabelTools {
+
+  def permutationIDToPermutation(labelOut: LabelOutput, id: String,
+  ): LabelPermutation = {
+
+    val perm = new LabelPermutation(labelOut)
+    val labels = labelOut.labels
+
+    def byte2Bools(b: Byte): Seq[Boolean] =
+      0 to 7 map isBitSet(b)
+
+    def isBitSet(byte: Byte)(bit: Int): Boolean =
+      ((byte >> bit) & 1) == 1
+
+    val flags = new BigInteger(id, 16).toByteArray.flatMap(byte2Bools)
+
+    flags.indices
+      .filter(i => flags(i))
+      .map(i => labels(i))
+      .foreach(perm.addLabel)
+    perm
+  }
+
   val hexRegex = "[0-9A-Fa-f]+"
 
   //N!
