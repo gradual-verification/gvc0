@@ -28,13 +28,14 @@ object Timing {
       inputSource: String,
       fileNames: OutputFileCollection,
       config: Config,
+      iterations: Int
   ): TimedVerification = {
     var verifiedOutput: Option[VerifiedOutput] = None
     val translationTimings = ListBuffer[Long]()
     val verifierTimings = ListBuffer[Long]()
     val weaverTimings = ListBuffer[Long]()
 
-    for (_ <- 0 until 1) {
+    for (_ <- 0 until iterations) {
       val out = verify(inputSource, fileNames, config)
       val perf = out.timing
       translationTimings += perf.translation
@@ -141,7 +142,7 @@ object Timing {
   ): Performance = {
     val command = (List(binary.toAbsolutePath.toString) ++ args).mkString(" ")
     def execNonzero(output: CommandOutput): Unit = {
-      throw new ExecutionException(output)
+      throw new CC0ExecutionException(output)
     }
     runTimedCommand(iterations, command, execNonzero)
   }
@@ -188,6 +189,7 @@ object Timing {
   }
 
   class CapturedOutputException(output: CommandOutput) extends Exception {
+    val message: String = output.output
     def logMessage(name: String, printer: ErrorCSVPrinter): Unit = {
       printer.log(name, output.exitCode, output.output)
     }
@@ -195,7 +197,7 @@ object Timing {
   class CC0CompilationException(output: CommandOutput)
       extends CapturedOutputException(output)
 
-  class ExecutionException(output: CommandOutput)
+  class CC0ExecutionException(output: CommandOutput)
       extends CapturedOutputException(output)
 }
 

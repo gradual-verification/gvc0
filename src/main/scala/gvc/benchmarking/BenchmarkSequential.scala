@@ -5,7 +5,7 @@ import gvc.benchmarking.Output.blue
 import gvc.benchmarking.Timing.{
   CC0CompilationException,
   CapturedOutputException,
-  ExecutionException
+  CC0ExecutionException
 }
 import gvc.transformer.{IR, IRPrinter}
 import gvc.{Config, Main, VerificationException}
@@ -22,10 +22,8 @@ object BenchmarkSequential {
     "(int[ ]+main\\(\\s*\\)\\s\\{[\\s\\S]*\n\\s*int stress = [0-9]+;)".r
 
   class BenchmarkException(message: String) extends Exception(message)
-
   val readStress =
     "int readStress() {int* value = alloc(int); args_int(\"--stress\", value); args_t input = args_parse(); printint(*value); return *value;}\n"
-
   object Names {
     val conjuncts: String = csv("conjuncts")
     //
@@ -219,12 +217,12 @@ object BenchmarkSequential {
         val verifiedPermutation = config.timeout match {
           case Some(value) =>
             Timeout.runWithTimeout(value)(
-              Timing.verifyTimed(sourceText, outputFileCollection, config)
+              Timing.verifyTimed(sourceText, outputFileCollection, config, 1)
             )
           case None =>
             Some(
               Timing
-                .verifyTimed(sourceText, outputFileCollection, config))
+                .verifyTimed(sourceText, outputFileCollection, config, 1))
         }
         verifiedPermutation match {
           case Some(verifierOutput) =>
@@ -486,7 +484,7 @@ object BenchmarkSequential {
               case Some(value) => value.cc0Error()
               case None        =>
             }
-          case exec: ExecutionException =>
+          case exec: CC0ExecutionException =>
             exec.logMessage(id, logging.exec)
             progressTracker match {
               case Some(value) => value.execError()

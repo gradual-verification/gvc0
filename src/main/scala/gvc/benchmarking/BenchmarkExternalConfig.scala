@@ -22,6 +22,7 @@ case class BenchmarkIO(
 
 case class BenchmarkWorkload(
     iterations: Int,
+    staticIterations: Int,
     nPaths: Int,
     stress: StressConfiguration
 )
@@ -252,12 +253,20 @@ object BenchmarkExternalConfig {
 
     val paths = workloadRoot \ "paths"
     val iterations = workloadRoot \ "iterations"
+    val staticIterations = workloadRoot \ "static-iterations"
+
     val iterQuantity =
       if (iterations.isEmpty) 1
       else
         intOrError(
           iterations,
           s"Expected an integer for <iterations>, but found: '${iterations.text}")
+    val staticIterQuantity =
+      if (staticIterations.isEmpty) 1
+      else
+        intOrError(
+          staticIterations,
+          s"Expected an integer for <static-iterations>, but found: '${staticIterations.text}")
 
     val pathQuantity =
       if (paths.isEmpty) 1
@@ -268,7 +277,10 @@ object BenchmarkExternalConfig {
 
     val stress = workloadRoot \\ "stress"
 
-    BenchmarkWorkload(pathQuantity, iterQuantity, parseStress(stress))
+    BenchmarkWorkload(pathQuantity,
+                      iterQuantity,
+                      staticIterQuantity,
+                      parseStress(stress))
   }
 
   private def parseStress(xml: NodeSeq): StressConfiguration = {

@@ -4,33 +4,38 @@ import doobie._
 import doobie.implicits._
 import cats.effect.IO
 import doobie.util.transactor
-import gvc.Main.ProfilingInfo
 import doobie._
 import doobie.implicits._
 import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
-import gvc.CC0Wrapper
+import gvc.CC0Wrapper.Performance
 import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
+import gvc.benchmarking.DAO.ErrorType.ErrorType
+import gvc.benchmarking.Timing.TimedVerification
 
 import scala.collection.mutable
 
 class DBException(message: String) extends Exception(message)
 
-object ModeMeasured {
-  type ModeMeasured = String
-  val Translation = "translation"
-  val Verification = "verification"
-  val Instrumentation = "instrumentation"
-  val Compilation = "compilation"
-  val ExecutionGradual = "exec_gradual"
-  val ExecutionFraming = "exec_framing"
-  val ExecutionDynamic = "exec_dynamic"
-}
-
 object DAO {
 
   type DBConnection = Transactor.Aux[IO, Unit]
+
+  object DynamicMeasurementMode {
+    type DynamicMeasurementMode = String
+    val Gradual = "gradual"
+    val Framing = "framing"
+    val Dynamic = "dynamic"
+  }
+
+  object ErrorType {
+    type ErrorType = String
+    val Compilation = "compilation"
+    val Execution = "execution"
+    val Verification = "verification"
+    val Timeout = "timeout"
+  }
 
   case class Hardware(id: Long, hardwareName: String, dateAdded: String)
 
@@ -38,6 +43,8 @@ object DAO {
                            hash: String,
                            dateAdded: String,
                            numLabels: Long)
+
+  case class GlobalConfiguration(timeoutMinutes: Long, maxPaths: Long)
 
   case class Version(id: Long, versionName: String, dateAdded: String)
 
@@ -87,10 +94,23 @@ object DAO {
     connection
   }
 
+  def resolveGlobalConfiguration(conn: DBConnection): GlobalConfiguration = {
+    (sql"SELECT * FROM global_configuration LIMIT 1"
+      .query[GlobalConfiguration]
+      .option
+      .transact(conn)
+      .unsafeRunSync()) match {
+      case Some(value) => value
+      case None =>
+        throw new DBException(
+          "Unable to resolve global database configuration.")
+    }
+  }
+
   def addOrResolveHardware(name: String,
                            xa: transactor.Transactor.Aux[IO, Unit]): Long = {
     (for {
-      _ <- sql"CALL sp_gr_Hardware($name, @hw);".query.unique
+      _ <- sql"CALL sp_gr_Hardware($name, @hw);".update.run
       hid <- sql"SELECT @hw;".query[Long].option
     } yield hid)
       .transact(xa)
@@ -104,7 +124,7 @@ object DAO {
   def addOrResolveVersion(name: String,
                           xa: transactor.Transactor.Aux[IO, Unit]): Long = {
     (for {
-      _ <- sql"CALL sp_gr_Version($name, @ver);".query.unique
+      _ <- sql"CALL sp_gr_Version($name, @ver);".update.run
       vid <- sql"SELECT @ver;".query[Long].option
     } yield vid)
       .transact(xa)
@@ -186,36 +206,61 @@ object DAO {
     }
   }
 
-  def addConjuncts(version: Version,
-                   hardware: Hardware,
-                   permutation: Permutation,
-                   profiling: ProfilingInfo,
-                   xa: transactor.Transactor.Aux[IO, Unit])
-    : ConnectionIO[Option[Conjuncts]] = {
-    sql"""
-        INSERT INTO conjuncts 
-            (permutation_id, version_id, hardware_id, conj_total, conj_eliminated) 
-        VALUES (${permutation.id}, ${version.id}, ${hardware.id}, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});
-    """.query[Conjuncts].option
+  def updateStaticProfiling(vid: Long,
+                            hid: Long,
+                            pid: Long,
+                            iterations: Int,
+                            vOut: TimedVerification,
+                            cOut: Performance,
+                            xa: transactor.Transactor.Aux[IO, Unit]): Unit = {
+    val tr = vOut.translation
+    val vf = vOut.verification
+    val in = vOut.instrumentation
+    val cp = cOut
+    val profiling = vOut.output.profiling
+    (for {
+      _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES ($iterations, ${tr.ninetyFifth}, ${tr.fifth}, ${tr.median}, ${tr.mean}, ${tr.stdev}, ${tr.minimum}, ${tr.maximum});".update.run
+      tr_id <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
+      _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES ($iterations, ${vf.ninetyFifth}, ${vf.fifth}, ${vf.median}, ${vf.mean}, ${vf.stdev}, ${vf.minimum}, ${vf.maximum});".update.run
+      vf_id <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
+      _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES ($iterations, ${in.ninetyFifth}, ${in.fifth}, ${in.median}, ${in.mean}, ${in.stdev}, ${in.minimum}, ${in.maximum});".update.run
+      in_id <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
+      _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES ($iterations, ${cp.ninetyFifth}, ${cp.fifth}, ${cp.median}, ${cp.mean}, ${cp.stdev}, ${cp.minimum}, ${cp.maximum});".update.run
+      cp_id <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
+      r <- sql"CALL sp_UpdateStatic($vid, $hid, $pid, $tr_id, $vf_id, $in_id, $cp_id, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});".update.run
+    } yield r).transact(xa).unsafeRunSync()
   }
 
-  def reserveProgram(version: Long,
-                     hardware: Long,
-                     workloads: List[Int],
-                     xa: DBConnection): Option[ReservedProgram] = {
+  def reserveProgramForMeasurement(
+      version: Long,
+      hardware: Long,
+      workloads: List[Int],
+      xa: DBConnection): Option[ReservedProgram] = {
     for (i <- workloads) {
       val reserved = (for {
-        _ <- sql"""CALL sp_ReservePermutation($version, $hardware, @perm, @perf);""".update.run
+        _ <- sql"""CALL sp_ReservePermutation($version, $hardware, $i, @perm, @perf, @mode);""".update.run
         perf_id <- sql"""SELECT @perf;""".query[Long].option
         perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
           .query[Permutation]
           .option
-      } yield (perf_id, perm)).transact(xa).unsafeRunSync()
+        mode <- sql"""SELECT @mode;"""
+          .query[DynamicMeasurementMode.DynamicMeasurementMode]
+          .option
+      } yield (perf_id, perm, mode)).transact(xa).unsafeRunSync()
       reserved._1 match {
-        case Some(perfID) =>
+        case Some(perfIDReserved) =>
           reserved._2 match {
-            case Some(perm) => ReservedProgram(perm, i, perfID)
-            case None       =>
+            case Some(permutationReserved) =>
+              reserved._3 match {
+                case Some(modeReserved) =>
+                  Some(
+                    ReservedProgram(permutationReserved,
+                                    i,
+                                    perfIDReserved,
+                                    modeReserved))
+                case None =>
+              }
+            case None =>
           }
         case None =>
       }
@@ -223,21 +268,15 @@ object DAO {
     None
   }
 
-  def updatePerformance(perfID: Long,
-                        perfData: CC0Wrapper.Performance,
-                        conn: DBConnection): Unit = {
-    sql"""UPDATE performance SET
-         performance_date = DEFAULT,
-         mean = ${perfData.mean},
-         median = ${perfData.median},
-         maximum = ${perfData.maximum},
-         minimum = ${perfData.minimum},
-         fifth = ${perfData.fifth},
-         ninety_fifth = ${perfData.ninetyFifth},
-         stdev = ${perfData.stdev}
-                   WHERE id = $perfID""".query.unique
-      .transact(conn)
-      .unsafeRunSync()
+  def completeProgramMeasurement(performanceID: Long,
+                                 iterations: Int,
+                                 p: Performance,
+                                 xa: DBConnection) = {
+    (for {
+      _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES (${iterations}, ${p.ninetyFifth}, ${p.fifth}, ${p.median}, ${p.mean}, ${p.stdev}, ${p.minimum}, ${p.maximum});".update.run
+      mid <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
+      r <- sql"UPDATE dynamic_performance SET measurement_id = $mid WHERE id = $performanceID;".update.run
+    } yield r).transact(xa).unsafeRunSync()
   }
 
   def containsPath(programID: Long,
@@ -283,5 +322,20 @@ object DAO {
       } yield v
       massUpdate.transact(xa).unsafeRunSync()
     }
+  }
+
+  def logException(versionID: Long,
+                   hardwareID: Long,
+                   reserved: ReservedProgram,
+                   mode: ErrorType,
+                   errText: String,
+                   timeElapsedSeconds: Long,
+                   conn: DBConnection): Unit = {
+    (for {
+      _ <- sql"CALL sp_gr_Error($errText, $timeElapsedSeconds, $mode, @eid)".update.run
+      eid <- sql"SELECT @eid".query[Long].unique
+      _ <- sql"UPDATE static_performance SET error_id = $eid WHERE hardware_id = $hardwareID AND version_id = $versionID AND permutation_id = ${reserved.perm.id}".update.run
+      u <- sql"UPDATE dynamic_performance SET error_id = $eid WHERE id = ${reserved.perfID}".update.run
+    } yield u).transact(conn).unsafeRunSync()
   }
 }
