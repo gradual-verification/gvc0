@@ -1,6 +1,6 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.DAO.DBConnection
+import gvc.benchmarking.DAO.{DBConnection, GlobalConfiguration}
 import gvc.transformer.IR.Program
 import gvc.Main
 
@@ -20,39 +20,32 @@ object BenchmarkPopulator {
   def populate(populatorConfig: PopulatorConfig,
                libraryDirs: List[String]): Unit = {
     val connection = DAO.connect(populatorConfig.db)
+    val globalConfig = DAO.resolveGlobalConfiguration(connection)
 
     val programIDMapping =
       syncPrograms(populatorConfig.sources, libraryDirs, connection)
 
     programIDMapping.foreach(programRep => {
-      populateProgram(programRep._1, programRep._2, populatorConfig, connection)
+      populateProgram(programRep._1, programRep._2, globalConfig, connection)
     })
   }
 
   def populateProgram(programID: Long,
                       programRep: StoredProgramRepresentation,
-                      config: PopulatorConfig,
+                      globalConfig: GlobalConfiguration,
                       xa: DBConnection): Unit = {
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
-    if (config.pathQuantity > theoreticalMax) {
-      Output.info(s"""The requested number of paths to generate is greater
-           | than the theoretical max for ${programRep.info.fileName} ( ${config.pathQuantity} > $theoreticalMax).
-            """.stripMargin)
-    }
 
     val sampler = new Sampler(programRep.info.labels)
     Output.info(s"Generating paths for ${programRep.info.fileName}")
-
     val bottomPermutationHash =
       new LabelPermutation(programRep.info.labels).id.toString(16)
     val bottomPerm =
       DAO.addOrResolvePermutation(programID, bottomPermutationHash, xa)
 
     var currentPath = 1
-    val maximum = BigInt
-      .int2bigInt(config.pathQuantity)
-      .min(theoreticalMax)
+    val maximum = theoreticalMax.min(globalConfig.maxPaths)
     while (DAO.getNumberOfPaths(programID, xa) < maximum) {
       print(
         Output.formatInfo(

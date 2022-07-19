@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS global_configuration
 );
 
 INSERT INTO global_configuration (timeout_minutes, max_paths)
-VALUES (60, 128);
+VALUES (60, 4);
 
 CREATE TABLE IF NOT EXISTS programs
 (
@@ -301,8 +301,9 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     hardware_id              BIGINT UNSIGNED NOT NULL,
     stress                   INTEGER         NOT NULL,
     dynamic_measurement_type BIGINT UNSIGNED NOT NULL,
-    measurement_id           BIGINT UNSIGNED DEFAULT NULL,
-    error_id                 BIGINT UNSIGNED DEFAULT NULL,
+    measurement_id           BIGINT UNSIGNED          DEFAULT NULL,
+    last_updated             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    error_id                 BIGINT UNSIGNED          DEFAULT NULL,
     FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
@@ -311,6 +312,7 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     FOREIGN KEY (error_id) REFERENCES errors (id),
     PRIMARY KEY (id)
 );
+
 
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN workload BIGINT UNSIGNED,
@@ -347,6 +349,15 @@ BEGIN
     SELECT NULL INTO perf_id;
 END //
 DELIMITER ;
+
+CREATE EVENT delete_reserved_permutations
+    ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 15 MINUTE
+    DO
+    DELETE
+    FROM dynamic_performance
+    WHERE error_id IS NULL
+      AND measurement_id IS NULL
+      AND TIMESTAMPDIFF(HOUR, last_updated, CURRENT_TIMESTAMP) > 1;
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Error(IN p_edesc TEXT, IN p_etime BIGINT UNSIGNED,
