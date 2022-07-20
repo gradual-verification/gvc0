@@ -313,22 +313,22 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     PRIMARY KEY (id)
 );
 
-
+DROP PROCEDURE sp_ReservePermutation;
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN workload BIGINT UNSIGNED,
                                        OUT perm_id BIGINT UNSIGNED, OUT perf_id BIGINT UNSIGNED,
                                        OUT missing_mode VARCHAR(255))
 BEGIN
-    SELECT perm_id = id
-    FROM (SELECT id
-          FROM permutations
-                   LEFT OUTER JOIN (SELECT permutation_id
-                                    FROM dynamic_performance
-                                    WHERE version_id = vid
-                                      AND hardware_id = hid
-                                      AND stress = workload) as `p*`
-                                   ON permutations.id = `p*`.permutation_id
-          WHERE `p*`.permutation_id IS NULL) as `pp*i`
+    SELECT id
+    INTO perm_id
+    FROM permutations
+             LEFT OUTER JOIN (SELECT permutation_id
+                              FROM dynamic_performance
+                              WHERE version_id = vid
+                                AND hardware_id = hid
+                                AND stress = workload) as `p*`
+                             ON permutations.id = `p*`.permutation_id
+    WHERE `p*`.permutation_id IS NULL
     LIMIT 1;
 
     IF ((SELECT perm_id) IS NOT NULL) THEN
@@ -344,9 +344,10 @@ BEGIN
         VALUES ((SELECT perm_id), vid, hid, workload, @missing_mode_id);
         SELECT LAST_INSERT_ID() INTO perf_id;
         SELECT type INTO missing_mode FROM dynamic_measurement_types WHERE id = (SELECT @missing_mode_id);
+    ELSE
+        SELECT NULL INTO missing_mode;
+        SELECT NULL INTO perf_id;
     END IF;
-    SELECT NULL INTO missing_mode;
-    SELECT NULL INTO perf_id;
 END //
 DELIMITER ;
 
@@ -376,4 +377,3 @@ BEGIN
         UPDATE errors SET time_elapsed_seconds = p_etime, error_date = DEFAULT WHERE id = (SELECT eid);
     END IF;
 END;
-
