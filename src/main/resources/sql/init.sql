@@ -31,7 +31,7 @@ BEGIN
 
     IF ((SELECT p_id) IS NULL) THEN
         INSERT INTO programs (src_filename, src_hash, num_labels) VALUES (p_name, p_hash, p_labels);
-        select LAST_INSERT_ID() INTO p_id;
+        SELECT LAST_INSERT_ID() INTO p_id;
     END IF;
 END //
 DELIMITER ;
@@ -69,7 +69,7 @@ BEGIN
     IF ((SELECT c_id) IS NULL) THEN
         INSERT INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
         VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
-        select LAST_INSERT_ID() INTO c_id;
+        SELECT LAST_INSERT_ID() INTO c_id;
     END IF;
 END //
 DELIMITER ;
@@ -90,7 +90,7 @@ BEGIN
     SELECT id INTO p_id FROM permutations WHERE program_id = p_program_id AND permutation_hash = p_perm_hash;
     IF ((SELECT p_id) IS NULL) THEN
         INSERT INTO permutations (program_id, permutation_hash) VALUES (p_program_id, p_perm_hash);
-        select LAST_INSERT_ID() INTO p_id;
+        SELECT LAST_INSERT_ID() INTO p_id;
     END IF;
 END //
 
@@ -130,7 +130,7 @@ BEGIN
     SELECT id INTO v_id FROM versions WHERE version_name = p_name;
     IF ((SELECT v_id) IS NULL) THEN
         INSERT INTO versions (version_name) VALUES (p_name);
-        select LAST_INSERT_ID() INTO v_id;
+        SELECT LAST_INSERT_ID() INTO v_id;
     END IF;
 END //
 
@@ -151,7 +151,7 @@ BEGIN
     SELECT id INTO h_id FROM hardware WHERE hardware_name = p_name;
     IF ((SELECT h_id) IS NULL) THEN
         INSERT INTO hardware (hardware_name) VALUES (p_name);
-        select LAST_INSERT_ID() INTO h_id;
+        SELECT LAST_INSERT_ID() INTO h_id;
     END IF;
 END //
 DELIMITER ;
