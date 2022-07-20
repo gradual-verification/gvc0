@@ -25,7 +25,10 @@ object BenchmarkExecutor {
     val libraries = Main.Defaults.includeDirectories
 
     val syncedPrograms =
-      BenchmarkPopulator.syncPrograms(config.sources, libraries, conn)
+      BenchmarkPopulator.syncPrograms(config.sources,
+                                      libraries,
+                                      globalConfig,
+                                      conn)
 
     val workload = config.workload
 
