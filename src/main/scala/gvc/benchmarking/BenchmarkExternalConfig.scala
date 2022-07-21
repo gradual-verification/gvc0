@@ -250,11 +250,9 @@ object BenchmarkExternalConfig {
 
   private def parseWorkload(xml: NodeSeq): BenchmarkWorkload = {
     val workloadRoot = xml \\ "workload"
-
     val paths = workloadRoot \ "paths"
     val iterations = workloadRoot \ "iterations"
     val staticIterations = workloadRoot \ "static-iterations"
-
     val iterQuantity =
       if (iterations.isEmpty) 1
       else
@@ -267,19 +265,16 @@ object BenchmarkExternalConfig {
         intOrError(
           staticIterations,
           s"Expected an integer for <static-iterations>, but found: '${staticIterations.text}")
-
     val pathQuantity =
       if (paths.isEmpty) 1
       else
         intOrError(
           paths,
           s"Expected an integer for <paths>, but found: '${paths.text}'")
-
     val stress = workloadRoot \\ "stress"
-
-    BenchmarkWorkload(pathQuantity,
-                      iterQuantity,
+    BenchmarkWorkload(iterQuantity,
                       staticIterQuantity,
+                      pathQuantity,
                       parseStress(stress))
   }
 

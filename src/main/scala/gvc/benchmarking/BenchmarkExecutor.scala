@@ -1,9 +1,13 @@
 package gvc.benchmarking
 
-import gvc.CC0Wrapper.Performance
+import gvc.CC0Wrapper.{CommandOutput, Performance}
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
-import gvc.benchmarking.Timing.{CC0CompilationException, CC0ExecutionException}
+import gvc.benchmarking.Timing.{
+  CC0CompilationException,
+  CC0ExecutionException,
+  CapturedOutputException
+}
 import gvc.transformer.IRPrinter
 import gvc.{Config, Main, VerificationException}
 
@@ -108,7 +112,7 @@ object BenchmarkExecutor {
                                                tempBinary,
                                                baseConfig,
                                                workload.staticIterations)
-
+                throw new CC0CompilationException(CommandOutput(1, "hello"))
                 DAO.updateStaticProfiling(storedVersion,
                                           storedHardware,
                                           reserved.perm.id,
@@ -133,26 +137,42 @@ object BenchmarkExecutor {
           case None =>
         }
       } catch {
-        case t: Throwable =>
+        case _: TimeoutException =>
           val timingStop = System.nanoTime()
           val differenceSeconds: Long =
             Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
-          val (output: String, mode: DynamicMeasurementMode) = t match {
-            case verify: VerificationException =>
-              (verify.message, ErrorType.Verification)
-            case compile: CC0CompilationException =>
-              (compile.message, ErrorType.Compilation)
-            case exec: CC0ExecutionException =>
-              (exec.message, ErrorType.Execution)
-            case _: TimeoutException =>
-              ("", ErrorType.Timeout)
-            case _ =>
+          DAO.logException(storedVersion,
+                           storedHardware,
+                           reserved,
+                           ErrorType.Timeout,
+                           "",
+                           differenceSeconds,
+                           conn)
+        case vex: VerificationException =>
+          val timingStop = System.nanoTime()
+          val differenceSeconds: Long =
+            Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
+          DAO.logException(storedVersion,
+                           storedHardware,
+                           reserved,
+                           ErrorType.Verification,
+                           vex.message,
+                           differenceSeconds,
+                           conn)
+
+        case coe: CapturedOutputException =>
+          val timingStop = System.nanoTime()
+          val differenceSeconds: Long =
+            Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
+          val eType = coe match {
+            case _: CC0CompilationException => ErrorType.Compilation
+            case _: CC0ExecutionException   => ErrorType.Execution
           }
           DAO.logException(storedVersion,
                            storedHardware,
                            reserved,
-                           mode,
-                           output,
+                           eType,
+                           coe.message,
                            differenceSeconds,
                            conn)
       }

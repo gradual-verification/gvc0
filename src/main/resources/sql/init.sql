@@ -257,7 +257,7 @@ DELIMITER //
 CREATE PROCEDURE sp_UpdateStatic(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED,
                                  IN perm_id BIGINT UNSIGNED, IN tr_id BIGINT UNSIGNED, IN vf_id BIGINT UNSIGNED,
                                  IN inst_id BIGINT UNSIGNED, IN cp_id BIGINT UNSIGNED, IN total_cond BIGINT UNSIGNED,
-                                 IN elim_cond BIGINT UNSIGNED, IN err_id BIGINT UNSIGNED)
+                                 IN elim_cond BIGINT UNSIGNED)
 BEGIN
     SELECT @ex = version_id,
            @ex_tr = translation_perf_id,
@@ -276,7 +276,7 @@ BEGIN
             compilation_perf_id     = cp_id,
             conj_total              = total_cond,
             conj_eliminated         = elim_cond,
-            error_id                = err_id
+            error_id                = NULL
         WHERE version_id = vid
           AND hardware_id = hid
           AND permutation_id = perm_id;
@@ -288,7 +288,7 @@ BEGIN
         INSERT INTO static_performance (permutation_id, version_id, hardware_id, translation_perf_id,
                                         verification_perf_id, instrumentation_perf_id, compilation_perf_id, conj_total,
                                         conj_eliminated, error_id)
-        VALUES (perm_id, vid, hid, tr_id, vf_id, inst_id, cp_id, total_cond, elim_cond, err_id);
+        VALUES (perm_id, vid, hid, tr_id, vf_id, inst_id, cp_id, total_cond, elim_cond, NULL);
     END IF;
 end //
 DELIMITER ;
