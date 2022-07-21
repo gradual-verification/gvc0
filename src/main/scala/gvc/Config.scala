@@ -66,6 +66,8 @@ object Config {
 
   case object BenchmarkPopulator extends Mode
 
+  case object QuickCheck extends Mode
+
   val help =
     """Usage: gvc0 [OPTION...] SOURCEFILE
       |where OPTION is
@@ -93,6 +95,7 @@ object Config {
   private val executorConfigArg = raw"--executor=(.+)".r
   private val sequentialConfigArg = raw"--sequential=(.+)".r
   private val versionString = raw"--version=(.+)".r
+  private val quickcheck = raw"--quickcheck=(.+)".r
 
   def error(message: String): Nothing = {
     println(message)
