@@ -56,10 +56,6 @@ object BenchmarkExecutor {
 
       val convertedToIR = new SelectVisitor(
         syncedPrograms(reserved.perm.programID).info.ir).visit(asLabelSet)
-      val reconstructedSourceText =
-        IRPrinter.print(convertedToIR, includeSpecs = false)
-
-      Files.writeString(tempSource, reconstructedSourceText)
 
       val timingStart = System.nanoTime()
 
@@ -68,10 +64,10 @@ object BenchmarkExecutor {
           case DynamicMeasurementMode.Dynamic =>
             () =>
               {
-                val ir = Main.generateIR(reconstructedSourceText, libraries)
-                BaselineChecker.check(ir)
-                Files.writeString(tempSource,
-                                  IRPrinter.print(ir, includeSpecs = false))
+                BaselineChecker.check(convertedToIR)
+                Files.writeString(
+                  tempSource,
+                  IRPrinter.print(convertedToIR, includeSpecs = false))
                 Timing.compileTimed(tempSource,
                                     tempBinary,
                                     baseConfig,
@@ -83,10 +79,10 @@ object BenchmarkExecutor {
           case DynamicMeasurementMode.Framing =>
             () =>
               {
-                val ir = Main.generateIR(reconstructedSourceText, libraries)
-                BaselineChecker.check(ir, onlyFraming = true)
-                Files.writeString(tempSource,
-                                  IRPrinter.print(ir, includeSpecs = false))
+                BaselineChecker.check(convertedToIR, onlyFraming = true)
+                Files.writeString(
+                  tempSource,
+                  IRPrinter.print(convertedToIR, includeSpecs = false))
                 Timing.compileTimed(tempSource,
                                     tempBinary,
                                     baseConfig,
@@ -98,6 +94,8 @@ object BenchmarkExecutor {
           case DynamicMeasurementMode.Gradual =>
             () =>
               {
+                val reconstructedSourceText =
+                  IRPrinter.print(convertedToIR, includeSpecs = true)
                 val vOut = Timing.verifyTimed(
                   reconstructedSourceText,
                   Main.Defaults.outputFileCollection,

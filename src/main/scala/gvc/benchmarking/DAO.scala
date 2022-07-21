@@ -247,13 +247,14 @@ object DAO {
           .query[DynamicMeasurementMode.DynamicMeasurementMode]
           .option
       } yield (perf_id, perm, mode)).transact(xa).unsafeRunSync()
+
       reserved._1 match {
         case Some(perfIDReserved) =>
           reserved._2 match {
             case Some(permutationReserved) =>
               reserved._3 match {
                 case Some(modeReserved) =>
-                  Some(
+                  return Some(
                     ReservedProgram(permutationReserved,
                                     i,
                                     perfIDReserved,

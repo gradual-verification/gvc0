@@ -313,7 +313,6 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     PRIMARY KEY (id)
 );
 
-DROP PROCEDURE sp_ReservePermutation;
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN workload BIGINT UNSIGNED,
                                        OUT perm_id BIGINT UNSIGNED, OUT perf_id BIGINT UNSIGNED,

@@ -5,6 +5,7 @@ import gvc.benchmarking.SamplingHeuristic.SamplingHeuristic
 import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
+import scala.collection.immutable.BitSet
 import scala.collection.mutable
 
 object SamplingHeuristic extends Enumeration {
@@ -128,18 +129,23 @@ object LabelTools {
     val perm = new LabelPermutation(labelOut)
     val labels = labelOut.labels
 
-    def byte2Bools(b: Byte): Seq[Boolean] =
-      0 to 7 map isBitSet(b)
+    val flags = new BigInteger(id, 16)
+      .toString(2)
+      .toCharArray
+      .map(c => {
+        c == '1'
+      })
 
-    def isBitSet(byte: Byte)(bit: Int): Boolean =
-      ((byte >> bit) & 1) == 1
-
-    val flags = new BigInteger(id, 16).toByteArray.flatMap(byte2Bools)
-
-    flags.indices
-      .filter(i => flags(i))
+    val excluded = flags.slice(1, flags.length)
+    excluded.indices
+      .filter(i => excluded(i))
       .map(i => labels(i))
       .foreach(perm.addLabel)
+    if (!perm.id.toString(16).equals(id)) {
+      throw new BenchmarkException(
+        "The generated program doesn't match the permutation's ID.")
+    }
+
     perm
   }
 
@@ -227,7 +233,7 @@ class LabelPermutation(
   def specStatusList: List[Int] = {
     labelOutput.labels
       .map(label => {
-        if (labels.contains(label)) 1 else 0
+        if (this.labels.contains(label)) 1 else 0
       })
   }
 
@@ -239,12 +245,12 @@ class LabelPermutation(
     )
 
   def id: BigInteger = {
-    val specsPresent = specStatusList.foldRight("")(_.toString + _)
-    val imprecisionPresent = imprecisionStatusList.foldRight("")(_.toString + _)
-    new BigInteger(
-      specsPresent + imprecisionPresent,
+    val specsPresent = "1" + specStatusList.foldLeft("")(_ + _)
+    val big = new BigInteger(
+      specsPresent,
       2
     )
+    big
   }
 }
 

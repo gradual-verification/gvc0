@@ -155,7 +155,7 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
       )
     }
     LabelOutput(
-      labelSet.toList,
+      labelSet.toList.sorted(LabelOrdering),
       labelsPerSpecIndex.toMap,
       specsToSpecIndices.toMap,
       foldUnfoldCount.toMap

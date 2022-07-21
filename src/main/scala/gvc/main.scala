@@ -24,6 +24,8 @@ import sys.process._
 import scala.language.postfixOps
 import viper.silicon.state.BranchCond
 
+import java.math.BigInteger
+
 case class OutputFileCollection(
     baseName: String,
     irFileName: String,
@@ -40,6 +42,7 @@ object Main extends App {
     val includeDirectories: List[String] = List(
       Paths.get("src/main/resources").toAbsolutePath.toString + '/')
   }
+
   def getOutputCollection(sourceFile: String): OutputFileCollection = {
     val baseName =
       if (sourceFile.toLowerCase().endsWith(".c0"))
