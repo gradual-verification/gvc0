@@ -7,6 +7,14 @@ sealed trait CheckMode {
   def prefix: String
 }
 
+case object CheckAddRemoveMode extends CheckMode {
+  def prefix = "check_add_remove_"
+}
+
+case object CheckAddMode extends CheckMode {
+  def prefix = "check_add_"
+}
+
 case object AddMode extends CheckMode {
   def prefix = "add_"
 }
@@ -34,17 +42,17 @@ case object Separation extends CheckType
 case object Verification extends CheckType
 
 class CheckImplementation(
-    program: IR.Program,
-    val runtime: CheckRuntime,
-    structIds: Map[String, IR.StructField]
-) {
+                           program: IR.Program,
+                           val runtime: CheckRuntime,
+                           structIds: Map[String, IR.StructField]
+                         ) {
   private val predicateImplementations =
     mutable.Map[(CheckMode, String), Option[IR.MethodDefinition]]()
 
   private def resolvePredicateDefinition(
-      mode: CheckMode,
-      pred: IR.Predicate
-  ): Option[IR.MethodDefinition] = {
+                                          mode: CheckMode,
+                                          pred: IR.Predicate
+                                        ): Option[IR.MethodDefinition] = {
 
     predicateImplementations.getOrElse(
       (mode, pred.name),
@@ -53,9 +61,9 @@ class CheckImplementation(
   }
 
   private def implementPredicate(
-      mode: CheckMode,
-      pred: IR.Predicate
-  ): Option[IR.MethodDefinition] = {
+                                  mode: CheckMode,
+                                  pred: IR.Predicate
+                                ): Option[IR.MethodDefinition] = {
 
     // TODO: allow name collisions when adding methods
     val defn = program.addMethod(mode.prefix + pred.name, None)
@@ -71,7 +79,7 @@ class CheckImplementation(
     )
 
     val permsSecondary =
-      if (mode == AddRemoveMode)
+      if (mode == AddRemoveMode || mode == CheckAddMode || mode == CheckAddRemoveMode)
         Some(
           defn.addParameter(
             runtime.ownedFieldsRef,
@@ -94,32 +102,33 @@ class CheckImplementation(
     }
   }
 
-  def structIdField(struct: IR.StructDefinition) = structIds(struct.name)
+  def structIdField(struct: IR.StructDefinition): IR.StructField =
+    structIds(struct.name)
 
   def translate(
-      mode: CheckMode,
-      expr: IR.Expression,
-      permsPrimary: IR.Var,
-      permsSecondary: Option[IR.Var],
-      context: SpecificationContext
-  ): Seq[IR.Op] = expr match {
+                 mode: CheckMode,
+                 expr: IR.Expression,
+                 permsPrimary: IR.Var,
+                 permsSecondary: Option[IR.Var],
+                 context: SpecificationContext,
+               ): Seq[IR.Op] = expr match {
     case acc: IR.Accessibility =>
       acc.member match {
         case member: IR.FieldMember =>
           translateFieldPermission(mode,
-                                   member,
-                                   permsPrimary,
-                                   permsSecondary,
-                                   context)
+            member,
+            permsPrimary,
+            permsSecondary,
+            context)
         case _ =>
           throw new WeaverException("Invalid conjunct in specification.")
       }
     case pred: IR.PredicateInstance =>
       translatePredicateInstance(mode,
-                                 pred,
-                                 permsPrimary,
-                                 permsSecondary,
-                                 context)
+        pred,
+        permsPrimary,
+        permsSecondary,
+        context)
 
     case imp: IR.Imprecise =>
       imp.precise match {
@@ -128,43 +137,43 @@ class CheckImplementation(
           translate(mode, precise, permsPrimary, permsSecondary, context)
       }
 
-    case conditional: IR.Conditional => {
+    case conditional: IR.Conditional =>
       val trueOps = translate(mode,
-                              conditional.ifTrue,
-                              permsPrimary,
-                              permsSecondary,
-                              context)
+        conditional.ifTrue,
+        permsPrimary,
+        permsSecondary,
+        context)
       val falseOps = translate(mode,
-                               conditional.ifFalse,
-                               permsPrimary,
-                               permsSecondary,
-                               context)
+        conditional.ifFalse,
+        permsPrimary,
+        permsSecondary,
+        context)
       val condition = context.convertExpression(conditional.condition)
       (trueOps.isEmpty, falseOps.isEmpty) match {
-        case (false, false) => {
+        case (false, false) =>
           val ifStmt = new IR.If(condition)
           ifStmt.ifTrue ++= trueOps
           ifStmt.ifFalse ++= falseOps
           Seq(ifStmt)
-        }
-        case (false, true) => {
+
+        case (false, true) =>
           val ifStmt = new IR.If(condition)
           ifStmt.ifTrue ++= trueOps
           Seq(ifStmt)
-        }
-        case (true, false) => {
+
+        case (true, false) =>
           val ifStmt =
             new IR.If(new IR.Unary(IR.UnaryOp.Not, condition))
           ifStmt.ifTrue ++= falseOps
           Seq(ifStmt)
-        }
-        case (true, true) => {
-          Seq.empty
-        }
-      }
-    }
 
-    case binary: IR.Binary if binary.operator == IR.BinaryOp.And => {
+        case (true, true) =>
+          Seq.empty
+
+      }
+
+
+    case binary: IR.Binary if binary.operator == IR.BinaryOp.And =>
       translate(mode, binary.left, permsPrimary, permsSecondary, context) ++ translate(
         mode,
         binary.right,
@@ -172,31 +181,33 @@ class CheckImplementation(
         permsSecondary,
         context
       )
-    }
+
 
     case expr =>
       mode match {
-        case SeparationMode | AddMode | RemoveMode | AddRemoveMode => Seq.empty
-        case VerifyMode => {
+        case SeparationMode | AddMode | RemoveMode | AddRemoveMode =>
+          Seq.empty
+        case VerifyMode | CheckAddMode | CheckAddRemoveMode =>
           val toAssert = context.convertExpression(expr)
           Seq(new IR.Assert(toAssert, IR.AssertKind.Imperative))
-        }
+        
       }
   }
 
   def translateFieldPermission(
-      mode: CheckMode,
-      member: IR.FieldMember,
-      permsPrimary: IR.Var,
-      permsSecondary: Option[IR.Var],
-      context: SpecificationContext
-  ): Seq[IR.Op] = {
+                                mode: CheckMode,
+                                member: IR.FieldMember,
+                                permsPrimary: IR.Var,
+                                permsSecondary: Option[IR.Var],
+                                context: SpecificationContext
+                              ): Seq[IR.Op] = {
     val convertedMember = context.convertFieldMember(member)
     val struct = convertedMember.field.struct
     val instanceId =
       if (convertedMember.root.valueType.isDefined) {
         mode match {
-          case SeparationMode | VerifyMode =>
+          case SeparationMode | VerifyMode | CheckAddRemoveMode |
+               CheckAddMode =>
             new IR.Conditional(
               new IR.Binary(
                 IR.BinaryOp.NotEqual,
@@ -216,7 +227,8 @@ class CheckImplementation(
         mode match {
           case SeparationMode | VerifyMode =>
             new IR.IntLit(-1)
-          case AddMode | RemoveMode | AddRemoveMode =>
+          case AddMode | RemoveMode | AddRemoveMode | CheckAddRemoveMode |
+               CheckAddMode =>
             throw new WeaverException("Invalid NULL dereference")
         }
       }
@@ -265,6 +277,53 @@ class CheckImplementation(
             None
           )
         )
+      case CheckAddRemoveMode =>
+        val error =
+          new IR.StringLit(s"Field access runtime check failed for $fullName")
+        permsSecondary match {
+          case Some(secondary) =>
+            Seq(
+              new IR.Invoke(
+                runtime.assertAcc,
+                List(secondary, instanceId, fieldIndex, error),
+                None
+              ),
+              new IR.Invoke(
+                runtime.addAcc,
+                List(permsPrimary, instanceId, numFields, fieldIndex),
+                None
+              ),
+              new IR.Invoke(
+                runtime.loseAcc,
+                List(secondary, instanceId, fieldIndex),
+                None
+              )
+            )
+          case None =>
+            throw new WeaverException(
+              "Missing temporary OwnedFields struct reference for CheckAddRemove mode.")
+        }
+      case CheckAddMode =>
+        val error =
+          new IR.StringLit(s"Field access runtime check failed for $fullName")
+        permsSecondary match {
+          case Some(secondary) =>
+            Seq(
+              new IR.Invoke(
+                runtime.assertAcc,
+                List(secondary, instanceId, fieldIndex, error),
+                None
+              ),
+              new IR.Invoke(
+                runtime.addAcc,
+                List(permsPrimary, instanceId, numFields, fieldIndex),
+                None
+              )
+            )
+          case None =>
+            throw new WeaverException(
+              "Missing temporary OwnedFields struct reference for CheckAdd mode.")
+        }
       case AddRemoveMode =>
         permsSecondary match {
           case Some(secondary) =>
@@ -289,21 +348,22 @@ class CheckImplementation(
   }
 
   def translatePredicateInstance(
-      mode: CheckMode,
-      pred: IR.PredicateInstance,
-      permsPrimary: IR.Var,
-      permsSecondary: Option[IR.Var],
-      context: SpecificationContext
-  ): Seq[IR.Op] = {
-    val arguments = pred.arguments.map(context.convertExpression(_))
+                                  mode: CheckMode,
+                                  pred: IR.PredicateInstance,
+                                  permsPrimary: IR.Var,
+                                  permsSecondary: Option[IR.Var],
+                                  context: SpecificationContext
+                                ): Seq[IR.Op] = {
+    val arguments = pred.arguments.map(context.convertExpression)
 
     val toAppend = mode match {
-      case AddRemoveMode =>
+
+      case AddRemoveMode | CheckAddRemoveMode | CheckAddMode =>
         permsSecondary match {
           case Some(value) => List(permsPrimary, value)
           case None =>
             throw new WeaverException(
-              "Missing secondary OwnedFields reference for AddRemove mode.")
+              "Missing secondary OwnedFields reference for optimized permission tracking mode.")
         }
       case _ => List(permsPrimary)
     }
@@ -330,7 +390,6 @@ class CheckImplementation(
 
   def idAllocation(alloc: IR.AllocStruct,
                    instanceCounter: IR.Expression): Unit = {
-    val structType = alloc.struct
     val idField = new IR.FieldMember(
       alloc.target,
       structIdField(alloc.struct)
@@ -342,8 +401,8 @@ class CheckImplementation(
         new IR.AssignMember(
           new IR.DereferenceMember(instanceCounter),
           new IR.Binary(IR.BinaryOp.Add,
-                        new IR.DereferenceMember(instanceCounter),
-                        new IR.IntLit(1)))
+            new IR.DereferenceMember(instanceCounter),
+            new IR.IntLit(1)))
       ))
   }
 }

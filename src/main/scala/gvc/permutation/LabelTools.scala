@@ -62,14 +62,14 @@ class Sampler(benchConfig: BenchmarkConfig) {
     lastComponentWithSpecIndexAt
       .map(pair => {
         val context = specIndexToContext(pair._1)
-        val firstValidIndex = (context match {
+        val firstValidIndex = context match {
           case Left(value) =>
             val methodCompletedAt = lastFoldUnfoldForMethod.getOrElse(value, 0)
             math.max(pair._2, methodCompletedAt)
           case Right(_) => pair._2
-        }) + 1
+        }
         val randomOffset: Int = this.rng.nextInt(
-          Math.floor(listOfComponents.length - firstValidIndex).toInt)
+          Math.floor(listOfComponents.length - firstValidIndex).toInt) + 1
         (pair._1, firstValidIndex + randomOffset)
       })
       .toMap

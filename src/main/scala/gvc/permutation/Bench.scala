@@ -369,14 +369,14 @@ object Bench {
       benchmarkConfig,
       ExecutionType.Gradual
     )
-
+    /*
     markDirectory(
       benchmarkConfig.files.verifiedPerms,
       printer,
       benchmarkConfig,
       ExecutionType.Gradual,
       ErrorLogging(errCC0, errExec)
-    )
+    )*/
     printer.close()
 
     if (!config.disableBaseline) {
