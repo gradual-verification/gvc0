@@ -46,6 +46,8 @@ object DAO {
 
   case class GlobalConfiguration(timeoutMinutes: Long, maxPaths: Long)
 
+  case class Identity(vid: Long, hid: Long, nid: Option[Long])
+
   case class Version(id: Long, versionName: String, dateAdded: String)
 
   case class Permutation(id: Long,
@@ -107,8 +109,37 @@ object DAO {
     }
   }
 
-  def addOrResolveHardware(name: String,
-                           xa: transactor.Transactor.Aux[IO, Unit]): Long = {
+  def addOrResolveIdentity(config: ExecutorConfig,
+                           xa: DBConnection): Identity = {
+    val hid = addOrResolveHardware(config.hardware, xa)
+    val vid = addOrResolveVersion(config.version, xa)
+    val nid = addOrResolveNickname(config.nickname, xa)
+    Identity(vid, hid, nid)
+  }
+
+  def addOrResolveNickname(
+      nameOption: Option[String],
+      xa: transactor.Transactor.Aux[IO, Unit]): Option[Long] = {
+    nameOption match {
+      case Some(value) =>
+        (for {
+          _ <- sql"CALL sp_gr_Nickname($value, @nn);".update.run
+          nid <- sql"SELECT @nn;".query[Long].option
+        } yield nid)
+          .transact(xa)
+          .unsafeRunSync() match {
+          case Some(id) => Some(id)
+          case None =>
+            throw new DBException(s"Failed to add or resolve nickname: $value")
+        }
+      case None => None
+    }
+
+  }
+
+  private def addOrResolveHardware(
+      name: String,
+      xa: transactor.Transactor.Aux[IO, Unit]): Long = {
     (for {
       _ <- sql"CALL sp_gr_Hardware($name, @hw);".update.run
       hid <- sql"SELECT @hw;".query[Long].option
@@ -121,8 +152,9 @@ object DAO {
     }
   }
 
-  def addOrResolveVersion(name: String,
-                          xa: transactor.Transactor.Aux[IO, Unit]): Long = {
+  private def addOrResolveVersion(
+      name: String,
+      xa: transactor.Transactor.Aux[IO, Unit]): Long = {
     (for {
       _ <- sql"CALL sp_gr_Version($name, @ver);".update.run
       vid <- sql"SELECT @ver;".query[Long].option
@@ -206,8 +238,7 @@ object DAO {
     }
   }
 
-  def updateStaticProfiling(vid: Long,
-                            hid: Long,
+  def updateStaticProfiling(id: Identity,
                             pid: Long,
                             iterations: Int,
                             vOut: TimedVerification,
@@ -218,6 +249,10 @@ object DAO {
     val in = vOut.instrumentation
     val cp = cOut
     val profiling = vOut.output.profiling
+    val nn = id.nid match {
+      case Some(value) => value.toString
+      case None        => "NULL"
+    }
     (for {
       _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES ($iterations, ${tr.ninetyFifth}, ${tr.fifth}, ${tr.median}, ${tr.mean}, ${tr.stdev}, ${tr.minimum}, ${tr.maximum});".update.run
       tr_id <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
@@ -227,18 +262,21 @@ object DAO {
       in_id <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
       _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES ($iterations, ${cp.ninetyFifth}, ${cp.fifth}, ${cp.median}, ${cp.mean}, ${cp.stdev}, ${cp.minimum}, ${cp.maximum});".update.run
       cp_id <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
-      r <- sql"CALL sp_UpdateStatic($vid, $hid, $pid, $tr_id, $vf_id, $in_id, $cp_id, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});".update.run
+      r <- sql"CALL sp_UpdateStatic(${id.vid}, ${id.hid}, $nn, $pid, $tr_id, $vf_id, $in_id, $cp_id, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});".update.run
     } yield r).transact(xa).unsafeRunSync()
   }
 
   def reserveProgramForMeasurement(
-      version: Long,
-      hardware: Long,
+      id: Identity,
       workloads: List[Int],
       xa: DBConnection): Option[ReservedProgram] = {
+    val nn = id.nid match {
+      case Some(value) => value.toString
+      case None        => "NULL"
+    }
     for (i <- workloads) {
       val reserved = (for {
-        _ <- sql"""CALL sp_ReservePermutation($version, $hardware, $i, @perm, @perf, @mode);""".update.run
+        _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $i, @perm, @perf, @mode);""".update.run
         perf_id <- sql"""SELECT @perf;""".query[Long].option
         perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
           .query[Permutation]
@@ -325,17 +363,20 @@ object DAO {
     }
   }
 
-  def logException(versionID: Long,
-                   hardwareID: Long,
+  def logException(id: Identity,
                    reserved: ReservedProgram,
                    mode: ErrorType,
                    errText: String,
                    timeElapsedSeconds: Long,
                    conn: DBConnection): Unit = {
+    val nn = id.nid match {
+      case Some(value) => value.toString
+      case None        => "NULL"
+    }
     (for {
       _ <- sql"CALL sp_gr_Error($errText, $timeElapsedSeconds, $mode, @eid)".update.run
       eid <- sql"SELECT @eid".query[Long].unique
-      _ <- sql"UPDATE static_performance SET error_id = $eid WHERE hardware_id = $hardwareID AND version_id = $versionID AND permutation_id = ${reserved.perm.id}".update.run
+      _ <- sql"UPDATE static_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
       u <- sql"UPDATE dynamic_performance SET error_id = $eid WHERE id = ${reserved.perfID}".update.run
     } yield u).transact(conn).unsafeRunSync()
   }

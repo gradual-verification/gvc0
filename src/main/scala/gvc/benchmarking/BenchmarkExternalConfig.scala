@@ -53,6 +53,7 @@ case class PopulatorConfig(version: String,
 
 case class ExecutorConfig(version: String,
                           hardware: String,
+                          nickname: Option[String],
                           db: BenchmarkDBCredentials,
                           sources: List[Path],
                           workload: BenchmarkWorkload)
@@ -132,6 +133,12 @@ object BenchmarkExternalConfig {
       if (hardwareString.trim.isEmpty) {
         error(s"<hardware>: Invalid hardware identifier: $hardwareString")
       }
+      val nickname = executorRoot \ "nickname"
+      val nicknameString = nickname.text
+      if (nickname.nonEmpty && nicknameString.trim.isEmpty) {
+        error(s"<nickname>: Invalid nickname identifier: $nicknameString")
+      }
+
       val workload = parseWorkload(executorRoot)
       val db = parseDB(executorRoot)
       val sources = executorRoot \ "source-dir"
@@ -147,6 +154,7 @@ object BenchmarkExternalConfig {
       ExecutorConfig(
         versionString,
         hardwareString,
+        if (nickname.nonEmpty) Some(nicknameString.trim) else None,
         db,
         c0SourceFiles,
         workload

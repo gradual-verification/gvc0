@@ -24,8 +24,7 @@ object BenchmarkExecutor {
   def execute(config: ExecutorConfig, baseConfig: Config): Unit = {
     val conn = DAO.connect(config.db)
     val globalConfig = DAO.resolveGlobalConfiguration(conn)
-    val storedVersion = DAO.addOrResolveVersion(config.version, conn)
-    val storedHardware = DAO.addOrResolveHardware(config.hardware, conn)
+    val id = DAO.addOrResolveIdentity(config, conn)
     val libraries = Main.Defaults.includeDirectories
 
     val syncedPrograms =
@@ -43,14 +42,13 @@ object BenchmarkExecutor {
       BenchmarkExternalConfig.generateStressList(config.workload.stress)
 
     var reservedProgram =
-      DAO.reserveProgramForMeasurement(storedVersion,
-                                       storedHardware,
-                                       worklist,
-                                       conn)
+      DAO.reserveProgramForMeasurement(id, worklist, conn)
 
     while (reservedProgram.nonEmpty) {
-
       val reserved = reservedProgram.get
+      Output.info(
+        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).info.fileName} | ${reserved.measurementMode} | w=${reserved.stress} | id=${reserved.perm.permutationHash}")
+
       val correspondingProgramLabels =
         syncedPrograms(reserved.perm.programID).info.labels
 
@@ -113,8 +111,7 @@ object BenchmarkExecutor {
                                                baseConfig,
                                                workload.staticIterations)
                 throw new CC0CompilationException(CommandOutput(1, "hello"))
-                DAO.updateStaticProfiling(storedVersion,
-                                          storedHardware,
+                DAO.updateStaticProfiling(id,
                                           reserved.perm.id,
                                           workload.staticIterations,
                                           vOut,
@@ -141,8 +138,7 @@ object BenchmarkExecutor {
           val timingStop = System.nanoTime()
           val differenceSeconds: Long =
             Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
-          DAO.logException(storedVersion,
-                           storedHardware,
+          DAO.logException(id,
                            reserved,
                            ErrorType.Timeout,
                            "",
@@ -152,8 +148,7 @@ object BenchmarkExecutor {
           val timingStop = System.nanoTime()
           val differenceSeconds: Long =
             Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
-          DAO.logException(storedVersion,
-                           storedHardware,
+          DAO.logException(id,
                            reserved,
                            ErrorType.Verification,
                            vex.message,
@@ -168,18 +163,14 @@ object BenchmarkExecutor {
             case _: CC0CompilationException => ErrorType.Compilation
             case _: CC0ExecutionException   => ErrorType.Execution
           }
-          DAO.logException(storedVersion,
-                           storedHardware,
+          DAO.logException(id,
                            reserved,
                            eType,
                            coe.message,
                            differenceSeconds,
                            conn)
       }
-      reservedProgram = DAO.reserveProgramForMeasurement(storedVersion,
-                                                         storedHardware,
-                                                         worklist,
-                                                         conn)
+      reservedProgram = DAO.reserveProgramForMeasurement(id, worklist, conn)
     }
   }
 }
