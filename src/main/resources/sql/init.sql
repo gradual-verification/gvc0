@@ -327,80 +327,25 @@ CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNS
                                        OUT perm_id BIGINT UNSIGNED, OUT perf_id BIGINT UNSIGNED,
                                        OUT missing_mode VARCHAR(255))
 BEGIN
-    SELECT remaining.program_id
+    SELECT program_id
     INTO @min_program_id
-    FROM (SELECT tblA.program_id,
-                 total_perms - IFNULL(completed_perms, 0) AS total_remaining
-          FROM (SELECT program_id,
-                       COUNT(id) AS total_perms
-                FROM (SELECT permutations.id,
-                             permutations.program_id
-                      FROM permutations
-                               LEFT OUTER JOIN (SELECT permutation_id,
-                                                       COUNT(
-                                                               DISTINCT dynamic_measurement_type
-                                                           ) AS c_type
-                                                FROM dynamic_performance
-                                                WHERE version_id = vid
-                                                  AND hardware_id = hid
-                                                GROUP BY permutation_id) as tbl1
-                                               ON tbl1.permutation_id = permutations.id) AS tbl2
-                GROUP BY program_id) AS tblA
-                   LEFT OUTER JOIN (SELECT program_id,
-                                           COUNT(id) AS completed_perms
-                                    FROM (SELECT permutations.id,
-                                                 permutations.program_id
-                                          FROM permutations
-                                                   LEFT OUTER JOIN (SELECT permutation_id,
-                                                                           COUNT(
-                                                                                   DISTINCT dynamic_measurement_type
-                                                                               ) AS c_type
-                                                                    FROM dynamic_performance
-                                                                    WHERE version_id = vid
-                                                                      AND hardware_id = hid
-                                                                    GROUP BY permutation_id) as tbl1
-                                                                   ON tbl1.permutation_id = permutations.id
-                                          WHERE tbl1.c_type = (SELECT COUNT(DISTINCT id)
-                                                               FROM dynamic_measurement_types)) AS tbl2
-                                    GROUP BY program_id) AS tblB ON tblA.program_id = tblB.program_id) as remaining
-    WHERE remaining.total_remaining = (SELECT MAX(total_remaining)
-                                       FROM (SELECT total_perms - IFNULL(completed_perms, 0) AS total_remaining
-                                             FROM (SELECT program_id,
-                                                          COUNT(id) AS total_perms
-                                                   FROM (SELECT permutations.id,
-                                                                permutations.program_id
-                                                         FROM permutations
-                                                                  LEFT OUTER JOIN (SELECT permutation_id,
-                                                                                          COUNT(
-                                                                                                  DISTINCT
-                                                                                                  dynamic_measurement_type
-                                                                                              ) AS c_type
-                                                                                   FROM dynamic_performance
-                                                                                   WHERE version_id = vid
-                                                                                     AND hardware_id = hid
-                                                                                   GROUP BY permutation_id) as tbl1
-                                                                                  ON tbl1.permutation_id = permutations.id) AS tbl2
-                                                   GROUP BY program_id) AS tblA
-                                                      LEFT OUTER JOIN (SELECT program_id,
-                                                                              COUNT(id) AS completed_perms
-                                                                       FROM (SELECT permutations.id,
-                                                                                    permutations.program_id
-                                                                             FROM permutations
-                                                                                      LEFT OUTER JOIN (SELECT permutation_id,
-                                                                                                              COUNT(
-                                                                                                                      DISTINCT
-                                                                                                                      dynamic_measurement_type
-                                                                                                                  ) AS c_type
-                                                                                                       FROM dynamic_performance
-                                                                                                       WHERE version_id = vid
-                                                                                                         AND hardware_id = hid
-                                                                                                       GROUP BY permutation_id) as tbl1
-                                                                                                      ON tbl1.permutation_id = permutations.id
-                                                                             WHERE tbl1.c_type =
-                                                                                   (SELECT COUNT(DISTINCT id)
-                                                                                    FROM dynamic_measurement_types)) AS tbl2
-                                                                       GROUP BY program_id) AS tblB
-                                                                      ON tblA.program_id = tblB.program_id) AS dup_remaining)
+    FROM (SELECT program_id,
+                 COUNT(id) AS total_perms
+          FROM (SELECT permutations.id,
+                       permutations.program_id
+                FROM permutations
+                         LEFT OUTER JOIN (SELECT permutation_id,
+                                                 COUNT(
+                                                         DISTINCT dynamic_measurement_type
+                                                     ) AS c_type
+                                          FROM dynamic_performance
+                                          WHERE version_id = vid
+                                            AND hardware_id = hid
+                                          GROUP BY permutation_id) as tbl1
+                                         ON tbl1.permutation_id = permutations.id
+                WHERE c_type < (SELECT COUNT(DISTINCT id) FROM dynamic_measurement_types)) AS tbl2
+          GROUP BY program_id) AS tblA
+    ORDER BY total_perms desc
     LIMIT 1;
 
     SELECT id
@@ -418,25 +363,25 @@ BEGIN
     ORDER BY tblB.completion DESC
     LIMIT 1;
 
-
     IF ((SELECT perm_id) IS NOT NULL) THEN
-
-        SELECT id
+        SELECT dynamic_measurement_types.id
         INTO @missing_mode_id
         FROM dynamic_measurement_types
-        WHERE id NOT IN (SELECT dynamic_measurement_type
-                         FROM dynamic_performance
-                         WHERE permutation_id = (SELECT perm_id)
-                           AND version_id = vid
-                           AND hardware_id = hid)
+                 LEFT OUTER JOIN
+             (SELECT dynamic_measurement_type
+              FROM dynamic_performance
+              WHERE permutation_id = (SELECT perm_id)
+                AND measurement_id IS NOT NULL)
+                 AS `p*` ON dynamic_measurement_types.id = `p*`.dynamic_measurement_type
+        WHERE `p*`.dynamic_measurement_type IS NULL
         LIMIT 1;
 
         INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
-                                         dynamic_measurement_type,
-                                         error_id)
-        VALUES ((SELECT perm_id), vid, hid, nnid, workload, @missing_mode_id, NULL);
+                                         dynamic_measurement_type)
+
+        VALUES ((SELECT perm_id), vid, hid, nnid, workload, (SELECT @missing_mode_id));
         SELECT LAST_INSERT_ID() INTO perf_id;
-        SELECT type INTO missing_mode FROM dynamic_measurement_types WHERE id = (SELECT @missing_mode_id);
+        SELECT type INTO missing_mode FROM dynamic_measurement_types WHERE id = (SELECT @missing_mode_id) LIMIT 1;
     ELSE
         SELECT NULL INTO missing_mode;
         SELECT NULL INTO perf_id;
@@ -471,3 +416,6 @@ BEGIN
         UPDATE errors SET time_elapsed_seconds = p_etime, error_date = DEFAULT WHERE id = (SELECT eid);
     END IF;
 END;
+
+CALL sp_ReservePermutation(1, 1, 1, 16, @a, @b, @c);
+SELECT @a, @b, @c;

@@ -277,13 +277,13 @@ object DAO {
     for (i <- workloads) {
       val reserved = (for {
         _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $i, @perm, @perf, @mode);""".update.run
-        perf_id <- sql"""SELECT @perf;""".query[Long].option
+        perf_id <- sql"""SELECT @perf;""".query[Option[Long]].unique
         perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
-          .query[Permutation]
-          .option
+          .query[Option[Permutation]]
+          .unique
         mode <- sql"""SELECT @mode;"""
-          .query[DynamicMeasurementMode.DynamicMeasurementMode]
-          .option
+          .query[Option[DynamicMeasurementMode.DynamicMeasurementMode]]
+          .unique
       } yield (perf_id, perm, mode)).transact(xa).unsafeRunSync()
 
       reserved._1 match {
