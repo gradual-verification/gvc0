@@ -5,7 +5,7 @@ import gvc.benchmarking.SamplingHeuristic.SamplingHeuristic
 import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
-import scala.collection.immutable.BitSet
+
 import scala.collection.mutable
 
 object SamplingHeuristic extends Enumeration {

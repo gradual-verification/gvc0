@@ -471,13 +471,3 @@ BEGIN
         UPDATE errors SET time_elapsed_seconds = p_etime, error_date = DEFAULT WHERE id = (SELECT eid);
     END IF;
 END;
-
-CALL sp_ReservePermutation(1, 1, NULL, 16, @perm, @perf, @mode);
-SELECT permutations.id
-FROM permutations
-         LEFT OUTER JOIN dynamic_performance on permutations.id = dynamic_performance.permutation_id
-WHERE program_id = 2
-  AND version_id = 1
-  AND hardware_id = 1
-GROUP BY permutation_id;
-
