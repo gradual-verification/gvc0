@@ -16,6 +16,8 @@ int main()
 int test(int x, struct OwnedFields* _ownedFields)
 {
   struct OwnedFields* _tempFields = NULL;
+  struct OwnedFields* _contextFields = NULL;
+  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
   assert(x + 1 == x + 1);
   return x + 1;
 }

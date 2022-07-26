@@ -1,6 +1,30 @@
-DROP DATABASE IF EXISTS gvc0;
-CREATE DATABASE gvc0;
 USE gvc0;
+
+DROP TABLE IF EXISTS global_configuration;
+DROP TABLE IF EXISTS static_performance;
+DROP TABLE IF EXISTS dynamic_performance;
+DROP TABLE IF EXISTS measurements;
+DROP TABLE IF EXISTS dynamic_measurement_types;
+DROP TABLE IF EXISTS errors;
+DROP TABLE IF EXISTS benchmark_membership;
+DROP TABLE IF EXISTS benchmarks;
+DROP TABLE IF EXISTS steps;
+DROP TABLE IF EXISTS permutations;
+DROP TABLE IF EXISTS components;
+DROP TABLE IF EXISTS paths;
+DROP TABLE IF EXISTS programs;
+
+DROP PROCEDURE IF EXISTS sp_gr_Program;
+DROP PROCEDURE IF EXISTS sp_ReservePermutation;
+DROP PROCEDURE IF EXISTS sp_gr_Component;
+DROP PROCEDURE IF EXISTS sp_gr_Error;
+DROP PROCEDURE IF EXISTS sp_gr_Hardware;
+DROP PROCEDURE IF EXISTS sp_gr_Version;
+DROP PROCEDURE IF EXISTS sp_gr_Nickname;
+DROP PROCEDURE IF EXISTS sp_gr_Program;
+DROP PROCEDURE IF EXISTS sp_UpdateStatic;
+
+DROP EVENT IF EXISTS delete_reserved_permutations;
 
 CREATE TABLE IF NOT EXISTS global_configuration
 (
@@ -13,6 +37,7 @@ CREATE TABLE IF NOT EXISTS global_configuration
 INSERT INTO global_configuration (timeout_minutes, max_paths)
 VALUES (60, 4);
 
+
 CREATE TABLE IF NOT EXISTS programs
 (
     id           SERIAL,
@@ -22,7 +47,6 @@ CREATE TABLE IF NOT EXISTS programs
     program_date DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
-
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Program(IN p_name VARCHAR(255), IN p_hash VARCHAR(255), IN p_labels BIGINT UNSIGNED,
@@ -51,6 +75,7 @@ CREATE TABLE IF NOT EXISTS components
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
+DROP PROCEDURE IF EXISTS sp_gr_Component;
 DELIMITER //
 CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255),
                                  IN p_stype ENUM ('post', 'assert', 'pre', 'unfold', 'fold', 'pred', 'inv'),
@@ -75,6 +100,7 @@ BEGIN
 END //
 DELIMITER ;
 
+DROP TABLE IF EXISTS permutations;
 CREATE TABLE IF NOT EXISTS permutations
 (
     id               SERIAL,
@@ -85,6 +111,7 @@ CREATE TABLE IF NOT EXISTS permutations
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
+DROP PROCEDURE IF EXISTS sp_gr_Permutation;
 DELIMITER //
 CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash BLOB, OUT p_id BIGINT UNSIGNED)
 BEGIN
