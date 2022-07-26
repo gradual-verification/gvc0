@@ -6,8 +6,6 @@ jobs:
   build:
     runs-on: self-hosted
     steps:
-      - name: Install Z3
-        uses: pavpanchekha/setup-z3@1.2.2
       - uses: actions/checkout@v3
       - uses: actions/checkout@v3
         with:
@@ -17,11 +15,7 @@ jobs:
         with:
           repository: 'gradual-verification/silver-gv'
           path: './silicon/silver'
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'sbt'
       - name: Assembly
         run: sbt assembly
+      - name: Execution
+        run: java -Xss15M -Xmx8G -jar target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar --config=./study/config/config/xml --execute --db-url=$DB_URL --db-user=$DB_USER --db_pass=$DB_PASSWORD;
