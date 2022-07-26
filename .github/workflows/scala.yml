@@ -8,8 +8,6 @@ jobs:
     steps:
       - name: Install Z3
         uses: pavpanchekha/setup-z3@1.2.2
-      - name: Install CC0
-        run: sudo apt install wget && wget https://c0.cs.cmu.edu/downloads/cc0-debian.deb && sudo apt install ./cc0-debian.deb
       - uses: actions/checkout@v3
         with:
           repository: 'gradual-verification/silver-gv'
