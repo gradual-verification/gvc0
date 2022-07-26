@@ -10,10 +10,10 @@ jobs:
         uses: pavpanchekha/setup-z3@1.2.2
       - uses: actions/checkout@v3
         with:
-          repository: 'https://github.com/gradual-verification/silver-gv.git'
+          repository: 'gradual-verification/silver-gv'
       - uses: actions/checkout@v3
         with:
-          repository: 'https://github.com/gradual-verification/silicon-gv.git'
+          repository: 'gradual-verification/silicon-gv'
       - run: ln -s $GITHUB_WORKSPACE/silver-gv $GITHUB_WORKSPACE/silicon-gv/silver
       - uses: actions/checkout@v3
       - run: ln -s $GITHUB_WORKSPACE/silicon-gv $GITHUB_WORKSPACE/gvc0/silicon
