@@ -4,7 +4,14 @@ import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
 import gvc.transformer._
-import gvc.permutation.{Bench, Output, Timeout}
+import gvc.benchmarking.{
+  BenchmarkExecutor,
+  BenchmarkExternalConfig,
+  BenchmarkMonitor,
+  BenchmarkPopulator,
+  BenchmarkRecreator,
+  Output
+}
 import gvc.weaver.Weaver
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -18,24 +25,24 @@ import sys.process._
 import scala.language.postfixOps
 import viper.silicon.state.BranchCond
 
-import java.util.Calendar
-
 case class OutputFileCollection(
     baseName: String,
     irFileName: String,
     silverFileName: String,
     c0FileName: String,
-    profilingName: String
+    profilingName: String,
+    binaryName: String
 )
 
 object Main extends App {
-  val defaultLibraryDirectory =
-    Paths.get("src/main/resources").toAbsolutePath.toString + '/'
-  val cmdConfig = Config.fromCommandLineArgs(args.toList)
-  cmdConfig.validate()
-  run(cmdConfig)
-  def run(config: Config): Unit = {
-    val sourceFile = config.sourceFile.get
+  object Defaults {
+    val outputFileCollection: OutputFileCollection = getOutputCollection(
+      "./temp")
+    val includeDirectories: List[String] = List(
+      Paths.get("src/main/resources").toAbsolutePath.toString + '/')
+  }
+
+  def getOutputCollection(sourceFile: String): OutputFileCollection = {
     val baseName =
       if (sourceFile.toLowerCase().endsWith(".c0"))
         sourceFile.slice(0, sourceFile.length() - 3)
@@ -44,46 +51,71 @@ object Main extends App {
     val silverFileName = baseName + ".vpr"
     val c0FileName = baseName + ".verified.c0"
     val profilingName = baseName + ".prof.out"
+    val binaryName = baseName + ".bin"
+    OutputFileCollection(
+      baseName,
+      irFileName,
+      silverFileName,
+      c0FileName,
+      profilingName,
+      binaryName
+    )
+  }
 
-    val fileNames =
-      OutputFileCollection(
-        baseName,
-        irFileName,
-        silverFileName,
-        c0FileName,
-        profilingName
-      )
+  val cmdConfig = Config.fromCommandLineArgs(args.toList)
 
-    val inputSource = readFile(config.sourceFile.get)
+  cmdConfig.validate()
+  run(cmdConfig)
+
+  def run(config: Config): Unit = {
+
     val linkedLibraries =
-      config.linkedLibraries ++ List(defaultLibraryDirectory)
-    config.mode match {
-      case Config.StressMode =>
-      /*
-        val startTime = Calendar.getInstance().getTime()
-        Output.info(startTime.toString)
-        Stress.test(inputSource, config, fileNames, linkedLibraries)
-        val stopTime = Calendar.getInstance().getTime()
-        val difference = stopTime.getTime - startTime.getTime
-        Output.info(stopTime.toString)
-        Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(difference)}")*/
+      config.linkedLibraries ++ Defaults.includeDirectories
 
-      case Config.BenchmarkMode =>
-        val startTime = Calendar.getInstance().getTime()
-        Output.info(startTime.toString)
-        Bench.mark(
-          inputSource,
-          config,
-          fileNames,
-          linkedLibraries
-        )
-        val stopTime = Calendar.getInstance().getTime()
-        val difference = stopTime.getTime - startTime.getTime
-        Output.info(stopTime.toString)
-        Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(difference)}")
+    config.mode match {
+
+      case Config.Monitor =>
+        val benchConfig =
+          BenchmarkExternalConfig.parseMonitor(config)
+        BenchmarkMonitor.monitor(benchConfig)
+
+      case Config.Recreate =>
+        val benchConfig =
+          BenchmarkExternalConfig.parseRecreator(config)
+        Output.info(
+          "Recreating permutation ID=${benchConfig.permToRecreate}...")
+        val recreated =
+          BenchmarkRecreator.recreate(benchConfig, config, linkedLibraries)
+        val recreationName = s"./recreated_${benchConfig.permToRecreate}.c0"
+        Output.success(
+          s"Successfully recreated permutation ID=${benchConfig.permToRecreate}, writing to $recreationName")
+        val inputSource = IRPrinter.print(recreated, includeSpecs = true)
+        val sourcePath =
+          Paths.get(recreationName)
+        Files.writeString(sourcePath, inputSource)
+        val fileNames = getOutputCollection(recreationName)
+        Output.printTiming(() => {
+          val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+          execute(verifiedOutput.c0Source, fileNames)
+        })
+      case Config.Execute =>
+        val benchConfig =
+          BenchmarkExternalConfig.parseExecutor(config)
+        BenchmarkExecutor.execute(benchConfig, config, linkedLibraries)
+
+      case Config.Populate =>
+        val benchConfig =
+          BenchmarkExternalConfig.parsePopulator(config)
+        BenchmarkPopulator.populate(benchConfig, linkedLibraries)
+
       case Config.DefaultMode =>
-        val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
-        execute(verifiedOutput.c0Source, fileNames)
+        val fileNames = getOutputCollection(config.sourceFile.get)
+        val inputSource = readFile(config.sourceFile.get)
+        Output.printTiming(() => {
+          val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+          execute(verifiedOutput.c0Source, fileNames)
+        })
+      case _ =>
     }
   }
 
@@ -127,8 +159,7 @@ object Main extends App {
               b.branchInfo
                 .map { case BranchCond(branch, _, _) => branch }
                 .map(c => "(" + c.toString() + ")")
-                .mkString(" && ")}: ${b.checks.toString()}"
-          )
+                .mkString(" && ")}: ${b.checks.toString()}")
           .mkString("\n")
       )
     }
@@ -193,7 +224,7 @@ object Main extends App {
     val ir =
       generateIR(
         inputSource,
-        config.linkedLibraries ++ List(defaultLibraryDirectory)
+        config.linkedLibraries ++ Defaults.includeDirectories
       )
     val silver = IRSilver.toSilver(ir)
     val translationStop = System.nanoTime()
@@ -223,7 +254,7 @@ object Main extends App {
     val verificationStop = System.nanoTime()
     val verificationTime = verificationStop - verificationStart
 
-    if (config.onlyVerify && config.compileBenchmark.isEmpty) sys.exit(0)
+    if (config.onlyVerify) sys.exit(0)
 
     val weavingStart = System.nanoTime()
     Weaver.weave(ir, silver)
@@ -261,7 +292,7 @@ object Main extends App {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = List(defaultLibraryDirectory)
+      includeDirs = Defaults.includeDirectories
     )
     // Always write the intermediate C0 file, but then delete it
     // if not saving intermediate files
@@ -283,4 +314,5 @@ object Main extends App {
     }
   }
 }
+
 case class VerificationException(message: String) extends Exception(message)

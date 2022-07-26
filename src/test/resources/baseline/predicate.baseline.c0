@@ -8,20 +8,49 @@ struct Node
   int _id;
 };
 
+void add_list(struct Node* node, struct OwnedFields* _ownedFields);
+void check_add_remove_list(struct Node* node, struct OwnedFields* _ownedFields, struct OwnedFields* _tempFields);
 struct Node* emptyList(struct OwnedFields* _ownedFields);
 void list(struct Node* node, struct OwnedFields* _ownedFields);
 int main();
 struct Node* prependList(int value, struct Node* node, struct OwnedFields* _ownedFields);
 void sep_list(struct Node* node, struct OwnedFields* _ownedFields);
 
+void add_list(struct Node* node, struct OwnedFields* _ownedFields)
+{
+  if (!(node == NULL))
+  {
+    addAcc(_ownedFields, node->_id, 3, 0);
+    add_list(node->next, _ownedFields);
+  }
+}
+
+void check_add_remove_list(struct Node* node, struct OwnedFields* _ownedFields, struct OwnedFields* _tempFields)
+{
+  if (node == NULL)
+  {
+    assert(true);
+  }
+  else
+  {
+    assertAcc(_tempFields, node != NULL ? node->_id : -1, 0, "Field access runtime check failed for struct Node.value");
+    addAcc(_ownedFields, node != NULL ? node->_id : -1, 3, 0);
+    loseAcc(_tempFields, node != NULL ? node->_id : -1, 0);
+    check_add_remove_list(node->next, _ownedFields, _tempFields);
+  }
+}
+
 struct Node* emptyList(struct OwnedFields* _ownedFields)
 {
   struct Node* nullList = NULL;
   struct OwnedFields* _tempFields = NULL;
+  struct OwnedFields* _contextFields = NULL;
+  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
   nullList = NULL;
-  list(nullList, _ownedFields);
-  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  list(nullList, _contextFields);
+  _tempFields = initOwnedFields(_contextFields->instanceCounter);
   sep_list(nullList, _tempFields);
+  add_list(nullList, _ownedFields);
   return nullList;
 }
 
@@ -52,18 +81,19 @@ struct Node* prependList(int value, struct Node* node, struct OwnedFields* _owne
 {
   struct Node* newNode = NULL;
   struct OwnedFields* _tempFields = NULL;
-  list(node, _ownedFields);
-  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  sep_list(node, _tempFields);
+  struct OwnedFields* _contextFields = NULL;
+  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
+  check_add_remove_list(node, _contextFields, _ownedFields);
   newNode = alloc(struct Node);
-  newNode->_id = addStructAcc(_ownedFields, 3);
-  assertAcc(_ownedFields, newNode != NULL ? newNode->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+  newNode->_id = addStructAcc(_contextFields, 3);
+  assertAcc(_contextFields, newNode != NULL ? newNode->_id : -1, 1, "Field access runtime check failed for struct Node.next");
   newNode->next = node;
-  assertAcc(_ownedFields, newNode != NULL ? newNode->_id : -1, 0, "Field access runtime check failed for struct Node.value");
+  assertAcc(_contextFields, newNode != NULL ? newNode->_id : -1, 0, "Field access runtime check failed for struct Node.value");
   newNode->value = value;
-  list(newNode, _ownedFields);
-  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  list(newNode, _contextFields);
+  _tempFields = initOwnedFields(_contextFields->instanceCounter);
   sep_list(newNode, _tempFields);
+  add_list(newNode, _ownedFields);
   return newNode;
 }
 

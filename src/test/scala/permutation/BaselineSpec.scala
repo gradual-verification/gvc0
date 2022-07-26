@@ -5,7 +5,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import gvc.specs._
 import gvc.specs.BaseFileSpec
 import gvc.transformer.IRPrinter
-import gvc.permutation.BaselineChecker
+import gvc.benchmarking.BaselineChecker
 
 class BaselineSpec extends AnyFunSuite with BaseFileSpec {
   for (input <- TestUtils.groupResources("baseline")) {

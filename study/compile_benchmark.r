@@ -412,7 +412,7 @@ if (length(args)==0) {
   stop("A directory containing result directories for bst, list, and composite must be supplied.", call.=FALSE)
 }
 dir <- args[1]
-compile(file.path(dir, "bst"), c(8, 16, 32))
+compile(file.path(dir, "bst"), c(8,16,32))
 #compile(file.path(dir, "list"), c(32, 64, 128))
 #compile(file.path(dir, "composite"), c(4, 8, 16))
 

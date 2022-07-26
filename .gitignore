@@ -75,13 +75,13 @@ study/benchmarks
 temp.c0
 a.out
 *.sh
-*.xml.bz2
+*.xml.bz2g
 *.zip
 *.results.default*.txt
 
 *.RData
 *.Rhistory
-
+study/data
 study/results*
 study/aws/archives
 study/aws/local

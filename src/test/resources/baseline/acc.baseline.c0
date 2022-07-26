@@ -15,21 +15,26 @@ struct Test* createTest(struct OwnedFields* _ownedFields)
 {
   struct Test* _ = NULL;
   struct OwnedFields* _tempFields = NULL;
+  struct OwnedFields* _contextFields = NULL;
+  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
   _ = alloc(struct Test);
-  _->_id = addStructAcc(_ownedFields, 2);
-  assertAcc(_ownedFields, _ != NULL ? _->_id : -1, 0, "Field access runtime check failed for struct Test.value");
-  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+  _->_id = addStructAcc(_contextFields, 2);
+  assertAcc(_contextFields, _ != NULL ? _->_id : -1, 0, "Field access runtime check failed for struct Test.value");
+  _tempFields = initOwnedFields(_contextFields->instanceCounter);
   addAccEnsureSeparate(_tempFields, _ != NULL ? _->_id : -1, 0, 2, "Overlapping field permissions for struct Test.value");
+  addAcc(_ownedFields, _->_id, 2, 0);
   return _;
 }
 
 int getValue(struct Test* test, struct OwnedFields* _ownedFields)
 {
   struct OwnedFields* _tempFields = NULL;
+  struct OwnedFields* _contextFields = NULL;
+  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
   assertAcc(_ownedFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.value");
-  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  addAccEnsureSeparate(_tempFields, test != NULL ? test->_id : -1, 0, 2, "Overlapping field permissions for struct Test.value");
-  assertAcc(_ownedFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.value");
+  addAcc(_contextFields, test != NULL ? test->_id : -1, 2, 0);
+  loseAcc(_ownedFields, test != NULL ? test->_id : -1, 0);
+  assertAcc(_contextFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.value");
   return test->value;
 }
 

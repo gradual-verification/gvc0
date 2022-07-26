@@ -1,36 +1,36 @@
 package gvc
-import gvc.permutation.ExecutionType
 
-import java.nio.file.{Files, Paths}
+import gvc.Config.DefaultMode
+
+import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import java.io.File
 import scala.annotation.tailrec
 
 sealed trait DumpType
+
 sealed trait Mode
 
 case class Config(
-    dump: Option[DumpType] = None,
-    output: Option[String] = None,
-    timeout: Option[Long] = None,
-    compileBenchmark: Option[String] = None,
-    compileStressTest: Option[String] = None,
-    mode: Mode = Config.DefaultMode,
-    benchmarkPaths: Option[Int] = None,
-    benchmarkStress: Boolean = false,
-    benchmarkWStep: Option[Int] = None,
-    benchmarkWUpper: Option[Int] = None,
-    benchmarkIterations: Option[Int] = None,
-    benchmarkWList: Option[List[Int]] = None,
-    onlyExec: Boolean = false,
-    benchmarkStressMode: Option[ExecutionType] = None,
-    disableBaseline: Boolean = false,
-    saveFiles: Boolean = false,
-    exec: Boolean = false,
-    onlyVerify: Boolean = false,
-    onlyCompile: Boolean = false,
-    sourceFile: Option[String] = None,
-    linkedLibraries: List[String] = List.empty
-) {
+                   dump: Option[DumpType] = None,
+                   output: Option[String] = None,
+                   timeout: Option[Long] = None,
+                   mode: Mode = Config.DefaultMode,
+                   config: Option[Path] = None,
+                   onlyExec: Boolean = false,
+                   saveFiles: Boolean = false,
+                   exec: Boolean = false,
+                   onlyVerify: Boolean = false,
+                   onlyCompile: Boolean = false,
+                   sourceFile: Option[String] = None,
+                   linkedLibraries: List[String] = List.empty,
+                   versionString: Option[String] = None,
+                   nicknameString: Option[String] = None,
+                   hardwareString: Option[String] = None,
+                   dbURLString: Option[String] = None,
+                   dbUserString: Option[String] = None,
+                   dbPassString: Option[String] = None,
+                   recreatePerm: Option[Int] = None,
+                 ) {
   def validate(): Unit = {
     (
       if (dump.isDefined && output.isDefined)
@@ -44,92 +44,77 @@ case class Config(
         Some("Cannot combine --output and --only-verify")
       else if (exec && onlyVerify)
         Some("Cannot combine --exec and --only-verify")
-      else if (sourceFile.isEmpty) Some("No source file specified")
-      else if (!Files.exists(Paths.get(sourceFile.get)))
+      else if (sourceFile.isEmpty && mode == DefaultMode)
+        Some("No source file specified")
+      else if (sourceFile.nonEmpty && !Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
-      else if (disableBaseline && compileBenchmark.isEmpty)
-        Some(
-          s"Benchmarking (--benchmark) must be enabled to use --disable-baseline."
-        )
-      else if (
-        benchmarkPaths.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
-      )
-        Some(
-          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -p or --paths."
-        )
-      else if (
-        benchmarkWStep.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
-      )
-        Some(
-          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --step"
-        )
-      else if (
-        benchmarkWUpper.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
-      )
-        Some(
-          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use --upper."
-        )
-      else if (
-        benchmarkIterations.isDefined && compileBenchmark.isEmpty && compileStressTest.isEmpty
-      )
-        Some(
-          s"Benchmarking (--benchmark) or stress testing (--stress) must be enabled to use -i/--iter."
-        )
-      else if (
-        (benchmarkWStep.isDefined || benchmarkWUpper.isDefined) && benchmarkWList.isDefined
-      )
-        Some(
-          s"Either provide a list of specific stress levels (--w-list), or set a step size (--w-step) and/or upper bound (--w-upper)."
-        )
-      else None
-    ).foreach(Config.error)
+      else if (versionString.nonEmpty && versionString.get.trim.isEmpty) {
+        Some(s"Invalid version string.")
+      } else None
+      ).foreach(Config.error)
   }
 }
 
 object Config {
   case object DumpIR extends DumpType
+
   case object DumpSilver extends DumpType
+
   case object DumpC0 extends DumpType
-  case object StressMode extends Mode
-  case object BenchmarkMode extends Mode
+
   case object DefaultMode extends Mode
 
-  val help = """Usage: gvc0 [OPTION...] SOURCEFILE
-               |where OPTION is
-               |  -h            --help                         Give short usage message and exit
-               |  -d <type>     --dump=<type>                  Print the generated code and exit, where <type> specifies
-               |                                               the type of code to print: ir, silver, c0
-               |  -o <file>     --output=<file>                Place the executable output into <file>
-               |  -v            --only-verify                  Stop after static verification
-               |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
-               |  -x            --exec                         Execute the compiled file
-               |  -b <dir>      --benchmark=<dir>              Generate all files required for benchmarking to the specified directory.
-               |                --paths=<n>                    Specify how many paths through the lattice of permutations to sample. Default is 1.
-               |                --disable-baseline             Speedup benchmark generation by skipping the baseline.
-               |                --only-exec                    For benchmark directories that already exist, skip verification entirely and execute the programs that are present. 
-               |                --iter=<n>                     Specify the number of iterations for execution.
-               |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
-               |  
-               |                --stress=<dir>                 Perform a stress test of full dynamic verification, comparing performance against the unverified source program.
-               |                --s-only-dynamic               Only stress test fully dynamic verification.
-               |                --s-only-framing               Only stress test dynamic verification for framing.
-               |                --s-only-unverified            Only stress test the original program, without runtime checks.
-               |  -ws <n>       --w-step=<n>                   Specify the step size of the stress factor from 0 to the upper bound.
-               |  -wu <n>       --w-upper=<n>                  Specify the upper bound on the stress factor.
-               |                --w-list=<n,...>            Specify a list of stress levels to execute."""
+  case object Populate extends Mode
+
+  case object Execute extends Mode
+
+  case object Recreate extends Mode
+
+  case object Monitor extends Mode
+
+  val help =
+    """Usage: gvc0 [OPTION...] SOURCEFILE
+      |where OPTION is
+      |  -h            --help                         Give short usage message and exit
+      |  -d <type>     --dump=<type>                  Print the generated code and exit, where <type> specifies
+      |                                               the type of code to print: ir, silver, c0
+      |  -o <file>     --output=<file>                Place the executable output into <file>
+      |  -v            --only-verify                  Stop after static verification
+      |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
+      |  -x            --exec                         Execute the compiled file
+      |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
+      |
+      |                --config=<config.xml>          Execute a benchmark using the specified configuration file
+      |
+      |                --populate                     Populate the benchmarking database using options from the specified configuration file.
+      |                --execute                      Execute programs and store results in the database using options from the specified configuration file.
+      |                --recreate=<id>                Specify a permutation to recreate from the database  using options from the specified configuration file.
+      |
+      |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
+      |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
+      |                --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
+
+      |                --db-url=<url>                 Specify the URL for the benchmarking database. Overrides config.
+      |                --db-user=<username>           Specify the user for the benchmarking database. Overrides config.
+      |                --db-pass=<password>           Specify the password for the benchmarking database. Overrides config.
+    """
 
   private val dumpArg = raw"--dump=(.+)".r
   private val outputArg = raw"--output=(.+)".r
-  private val benchmarkDir = raw"--benchmark=(.+)".r
-  private val paths = raw"--paths=(.+)".r
-  private val stepSize = raw"--w-step=(.+)".r
-  private val upperBound = raw"--w-upper=(.+)".r
-  private val specifyIncrements = raw"--w-list=(.+)".r
-  private val iterationArg = raw"--iter=(.+)".r
   private val timeoutArg = raw"--timeout=(.+)".r
-  private val stressArg = raw"--stress=(.+)".r
   private val timeoutSec = raw"([0-9]+)s".r
   private val timeoutMin = raw"([0-9]+)m".r
+  private val configFileArg = raw"--config=(.+)".r
+
+  private val versionString = raw"--version=(.+)".r
+  private val nicknameString = raw"--nickname=(.+)".r
+  private val hardwareString = raw"--hardware=(.+)".r
+
+  private val dbURLString = raw"--db-url=(.+)".r
+  private val dbPassString = raw"--db-user=(.+)".r
+  private val dbUserString = raw"--db-pass=(.+)".r
+
+  private val recreatePermString = raw"--recreate=(.+)".r
 
   def error(message: String): Nothing = {
     println(message)
@@ -139,46 +124,87 @@ object Config {
   private def parseTimeout(t: String): Long = t match {
     case timeoutSec(t) => t.substring(0, t.length).toLong * 1000
     case timeoutMin(t) => t.substring(0, t.length).toLong * 60 * 1000
-    case _             => error(s"Invalid timeout: $t")
+    case _ => error(s"Invalid timeout: $t")
   }
 
   private def parseDumpType(t: String) = t.toLowerCase() match {
-    case "ir"     => DumpIR
+    case "ir" => DumpIR
     case "silver" => DumpSilver
-    case "c0"     => DumpC0
-    case _        => error(s"Invalid dump output type: $t")
+    case "c0" => DumpC0
+    case _ => error(s"Invalid dump output type: $t")
   }
 
-  private def parseIntList(t: String): List[Int] = {
-    if (t.matches("[0-9]+(,[0-9]+)+")) {
-      t.split(',').map(s => s.trim.toInt).toList
-    } else {
-      error(
-        s"Invalid input for --w-list; expected a comma-separated list of integers"
-      )
+  def parseInt(t: String, config: String): Int = {
+    try {
+      t.toInt
+    } catch {
+      case _: NumberFormatException => {
+        error(
+          s"Invalid option for $config; expected an integer but found '$t'.")
+      }
+    }
+  }
+
+  private def parsePath(p: String,
+                        isDir: Boolean = false): java.nio.file.Path = {
+    try {
+      val toPath = Paths.get(p)
+      if (Files.exists(toPath)) {
+        if (isDir) {
+          if (Files.isDirectory(toPath)) {
+            toPath
+          } else {
+            error(s"Expected a directory, but found a regular file: $p")
+          }
+        } else {
+          if (Files.isRegularFile(toPath)) {
+            toPath
+          } else {
+            error(s"Expected a file, but found a directory: $p")
+          }
+        }
+      } else {
+        error(s"File not found: $p")
+      }
+    } catch {
+      case _: InvalidPathException =>
+        error(s"Invalid path: $p")
     }
   }
 
   @tailrec
   def fromCommandLineArgs(
-      args: List[String],
-      current: Config = Config()
-  ): Config =
+                           args: List[String],
+                           current: Config = Config()
+                         ): Config =
     args match {
-      case "--s-only-dynamic" :: tail =>
+      case hardwareString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(hardwareString = Some(t)))
+      case versionString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(versionString = Some(t)))
+      case nicknameString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(nicknameString = Some(t)))
+      case dbURLString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(dbURLString = Some(t)))
+      case dbPassString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(dbUserString = Some(t)))
+      case dbUserString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(dbPassString = Some(t)))
+      case "--monitor" :: tail =>
+        fromCommandLineArgs(tail, current.copy(mode = Monitor))
+      case "--populate" :: tail =>
+        fromCommandLineArgs(tail, current.copy(mode = Populate))
+      case "--execute" :: tail =>
+        fromCommandLineArgs(tail, current.copy(mode = Execute))
+      case recreatePermString(t) :: tail =>
+        fromCommandLineArgs(tail,
+          current.copy(recreatePerm =
+            Some(this.parseInt(t, "--recreate")),
+            mode = Recreate))
+      case configFileArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(benchmarkStressMode = Some(ExecutionType.FullDynamic))
-        )
-      case "--s-only-framing" :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkStressMode = Some(ExecutionType.FramingOnly))
-        )
-      case "--s-only-unverified" :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkStressMode = Some(ExecutionType.Unverified))
+          current.copy(config = Some(parsePath(t)))
         )
       case "--only-exec" :: tail =>
         fromCommandLineArgs(
@@ -190,26 +216,6 @@ object Config {
           tail,
           current.copy(onlyCompile = true)
         )
-      case specifyIncrements(t) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWList = Some(parseIntList(t)))
-        )
-      case "-i" :: t :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkIterations = Some(t.toInt))
-        )
-      case iterationArg(t) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkIterations = Some(t.toInt))
-        )
-      case stressArg(t) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(compileStressTest = Some(t), mode = StressMode)
-        )
       case "-t" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case timeoutArg(t) :: tail =>
@@ -220,45 +226,8 @@ object Config {
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
       case "-o" :: f :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
-      case paths(f) :: tail =>
-        fromCommandLineArgs(tail, current.copy(benchmarkPaths = Some(f.toInt)))
-      case benchmarkDir(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(compileBenchmark = Some(f), mode = BenchmarkMode)
-        )
-      case "-b" :: f :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(
-            compileBenchmark = Some(f),
-            mode = BenchmarkMode
-          )
-        )
-      case "-ws" :: f :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWStep = Some(f.toInt))
-        )
-      case stepSize(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWStep = Some(f.toInt))
-        )
-      case "-wu" :: f :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWUpper = Some(f.toInt))
-        )
-      case upperBound(f) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(benchmarkWUpper = Some(f.toInt))
-        )
       case outputArg(f) :: tail =>
         fromCommandLineArgs(tail, current.copy(output = Some(f)))
-      case "--disable-baseline" :: tail =>
-        fromCommandLineArgs(tail, current.copy(disableBaseline = true))
       case ("-s" | "--save-files") :: tail =>
         fromCommandLineArgs(tail, current.copy(saveFiles = true))
       case ("-x" | "--exec") :: tail =>

@@ -5,11 +5,20 @@ import java.nio.file.Paths
 import sys.process._
 import scala.language.postfixOps
 
-sealed trait CC0Architecture { val name: String }
-object CC0Architecture {
-  case object Arch32 { val name = "32" }
-  case object Arch64 { val name = "64" }
+sealed trait CC0Architecture {
+  val name: String
 }
+
+object CC0Architecture {
+  case object Arch32 {
+    val name = "32"
+  }
+
+  case object Arch64 {
+    val name = "64"
+  }
+}
+
 case class CC0Options(
     compilerPath: String = "cc0",
     verbose: Boolean = false,
@@ -38,7 +47,11 @@ case class CC0Options(
 )
 
 object CC0Wrapper {
-  private val bundledResourcesDirectory = Paths.get("src/main/resources").toAbsolutePath.toString + '/'
+  private val bundledResourcesDirectory = Paths
+    .get("src/main/resources")
+    .toAbsolutePath
+    .toString + '/'
+
   class CC0Exception(val message: String) extends RuntimeException {
     override def getMessage: String = message
   }
@@ -52,7 +65,10 @@ object CC0Wrapper {
   }
 
   case class CommandOutput(exitCode: Int, output: String)
-  case class TimedCommandOutput(exitCode: Int, output: String, perf: Performance)
+
+  case class TimedCommandOutput(exitCode: Int,
+                                output: String,
+                                perf: Performance)
 
   case class ExecutionOutput(
       exitCode: Int,
@@ -61,15 +77,22 @@ object CC0Wrapper {
   )
 
   class Performance(
-                   p95:BigDecimal,
-                   p5: BigDecimal,
-      median: BigDecimal,
-      mean: BigDecimal,
-      stdev: BigDecimal,
+      p95: BigDecimal,
+      p5: BigDecimal,
+      med: BigDecimal,
+      mn: BigDecimal,
+      std: BigDecimal,
       min: Long,
       max: Long
   ) {
-    val med = median
+    val median = med
+    val mean = mn
+    val ninetyFifth = p95
+    val fifth = p5
+    val stdev = std
+    val minimum = min
+    val maximum = max
+
     override def toString: String = {
       s"$p95,$p5,$median,$mean,$stdev,$min,$max"
     }
@@ -92,9 +115,11 @@ object CC0Wrapper {
   ): List[String] = {
     def flag(arg: String, flag: Boolean): Seq[String] =
       if (flag) Seq(arg) else Seq.empty
+
     def values(arg: String, values: Seq[String]): Seq[String] =
       values.flatMap(value =>
         if (arg.startsWith("--")) Seq(s"$arg=$value") else Seq(arg, value))
+
     def value(arg: String, value: Option[String]): Seq[String] =
       values(arg, value.toSeq)
 
