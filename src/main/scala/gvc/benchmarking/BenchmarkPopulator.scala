@@ -3,7 +3,7 @@ package gvc.benchmarking
 import gvc.benchmarking.DAO.{DBConnection, GlobalConfiguration}
 import gvc.transformer.IR.Program
 import gvc.Main
-import gvc.benchmarking.BenchmarkSequential.BenchmarkException
+import gvc.benchmarking.Benchmark.BenchmarkException
 
 import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global

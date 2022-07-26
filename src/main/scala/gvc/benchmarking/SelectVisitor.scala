@@ -1,5 +1,5 @@
 package gvc.benchmarking
-import gvc.benchmarking.BenchmarkSequential.BenchmarkException
+import gvc.benchmarking.Benchmark.BenchmarkException
 import gvc.transformer.IR
 import gvc.transformer.IR.{
   Binary,

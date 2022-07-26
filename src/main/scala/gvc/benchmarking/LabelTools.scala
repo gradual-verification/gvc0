@@ -1,6 +1,6 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.BenchmarkSequential.BenchmarkException
+import gvc.benchmarking.Benchmark.BenchmarkException
 import gvc.benchmarking.SamplingHeuristic.SamplingHeuristic
 import gvc.transformer.IR.{Expression, Method, Predicate}
 

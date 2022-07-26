@@ -2,7 +2,7 @@ package gvc.benchmarking
 
 import gvc.{Config, Main}
 import gvc.Config.error
-import gvc.benchmarking.BenchmarkSequential.Names
+import gvc.benchmarking.Benchmark.Names
 import gvc.benchmarking.Extensions.csv
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{NodeSeq, XML}
