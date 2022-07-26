@@ -42,20 +42,20 @@ object BenchmarkPopulator {
       globalConfig: GlobalConfiguration,
       connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
 
-    sources
-      .map(src => {
-        syncProgram(src, libraryDirs, globalConfig, connection)
-      })
-      .toMap
-    /*
+    val synchronized = allOf(
+      sources
+        .map(src => {
+          Future(syncProgram(src, libraryDirs, globalConfig, connection))
+        }))
+
     val mapping = mutable.Map[Long, StoredProgramRepresentation]()
     Await
       .result(synchronized, Duration.Inf)
       .foreach {
-        case Failure(f) => throw new BenchmarkException(f.getMessage)
+        case Failure(f)     => throw new BenchmarkException(f.getMessage)
         case Success(value) => mapping += value
       }
-    mapping.toMap*/
+    mapping.toMap
   }
 
   private def syncProgram(
@@ -89,7 +89,6 @@ object BenchmarkPopulator {
       val pathHash =
         LabelTools
           .hashPath(programRep.info.labels.labels, ordering)
-          .toString(16)
       if (!DAO.containsPath(programID, pathHash, xa)) {
         val pathQuery =
           new DAO.PathQueryCollection(pathHash, programID, bottomPerm)

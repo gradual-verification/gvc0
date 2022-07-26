@@ -245,7 +245,8 @@ class MetadataCSVPrinter(
       permutation: List[ASTLabel]
   ): Unit = {
     val permID = LabelTools.hashPath(template, permutation)
-    pathWriter.write(index.toString + "," + permID.toString(16) + '\n')
+    pathWriter.write(
+      index.toString + "," + permID.map(_.toHexString).mkString("") + '\n')
     pathWriter.flush()
   }
   def logPermutation(

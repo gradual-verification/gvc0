@@ -278,12 +278,12 @@ object DAO {
     for (i <- workloads) {
       val reserved = (for {
         _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $i, @perm, @perf, @mode);""".update.run
-        perf_id <- sql"""SELECT @perf;""".query[Long].option
+        perf_id <- sql"""SELECT @perf;""".query[Option[Long]].unique
         perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
-          .query[Permutation]
+          .query[Option[Permutation]]
           .option
         mode <- sql"""SELECT @mode;"""
-          .query[DynamicMeasurementMode.DynamicMeasurementMode]
+          .query[Option[DynamicMeasurementMode.DynamicMeasurementMode]]
           .option
       } yield (perf_id, perm, mode)).transact(xa).unsafeRunSync()
 
@@ -294,10 +294,10 @@ object DAO {
               reserved._3 match {
                 case Some(modeReserved) =>
                   return Some(
-                    ReservedProgram(permutationReserved,
+                    ReservedProgram(permutationReserved.get,
                                     i,
                                     perfIDReserved,
-                                    modeReserved))
+                                    modeReserved.get))
                 case None =>
               }
             case None =>
@@ -320,17 +320,16 @@ object DAO {
   }
 
   def containsPath(programID: Long,
-                   pathHash: String,
+                   pathHash: Array[Byte],
                    xa: DBConnection): Boolean = {
-    sql"SELECT * FROM paths WHERE program_id = $programID AND path_hash = $pathHash"
-      .query[ProgramPath]
-      .option
+    sql"SELECT COUNT(*) > 0 FROM paths WHERE program_id = $programID AND path_hash = $pathHash;"
+      .query[Boolean]
+      .unique
       .transact(xa)
       .unsafeRunSync()
-      .nonEmpty
   }
 
-  class PathQueryCollection(hash: String,
+  class PathQueryCollection(hash: Array[Byte],
                             programID: Long,
                             bottomPermutationID: Long) {
 

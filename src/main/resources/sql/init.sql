@@ -99,7 +99,7 @@ END //
 CREATE TABLE IF NOT EXISTS paths
 (
     id         SERIAL,
-    path_hash  TEXT            NOT NULL,
+    path_hash  BLOB            NOT NULL,
     program_id BIGINT UNSIGNED NOT NULL,
     PRIMARY KEY (id, program_id),
     FOREIGN KEY (program_id) REFERENCES programs (id)

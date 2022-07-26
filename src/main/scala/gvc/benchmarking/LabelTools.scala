@@ -18,8 +18,8 @@ case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
 class Sampler(labelOutput: LabelOutput) {
   private val rng = new scala.util.Random
   rng.setSeed(41141441)
-  private val prevSamples: mutable.Set[BigInteger] =
-    mutable.Set[BigInteger]()
+  private val prevSamples: mutable.Set[Array[Byte]] =
+    mutable.Set[Array[Byte]]()
 
   def numSampled: Int = prevSamples.size
 
@@ -154,10 +154,14 @@ object LabelTools {
   def hashPath(
       template: List[ASTLabel],
       labels: List[ASTLabel]
-  ): BigInteger = {
-    val hash =
-      labels.map(template.indexOf(_).toHexString).foldLeft("")(_ + _)
-    new BigInteger(hash, 16)
+  ): Array[Byte] = {
+    labels
+      .map(template.indexOf(_))
+      .flatMap(l => {
+        val masked: Int = 0x0000 | l
+        (0 to 3).map(i => ((masked >> ((3 - i) * 8)) & 0xff).toByte)
+      })
+      .toArray
   }
 
   def parseID(input: String): Option[BigInteger] = {
