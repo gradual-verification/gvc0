@@ -82,7 +82,7 @@ predicate right(struct Node *y, int ylh, int xlh, int xrh) =
 @*/
 
 // A utility function to get maximum of two integers
-int max(int a, int b)
+int maximum(int a, int b)
   //@ requires true;
   //@ ensures a > b ? \result == a : \result == b;
 {
@@ -140,7 +140,7 @@ struct Node *rightRotate(struct Node *y, int xlh, int xrh, int yrh)
     // update heights
 	y->leftHeight = xrh;
 
-	x->rightHeight = max(xrh+1, yrh+1);
+	x->rightHeight = maximum(xrh+1, yrh+1);
     //@ fold right(x, xlh, xrh, yrh);
 
 	// Return new root
@@ -163,7 +163,7 @@ struct Node *leftRotate(struct Node *x, int xlh, int ylh, int yrh)
 
 	// Update heights
 	x->rightHeight = ylh;
-	y->leftHeight = max(xlh+1, ylh+1);
+	y->leftHeight = maximum(xlh+1, ylh+1);
 
 	// Return new root
 	//@ fold left(y, xlh, ylh, yrh);
@@ -211,7 +211,7 @@ struct Node* insert(struct Node* node, int h, int key, struct Height *hp)
 			// are we balanced?
 			if (node->leftHeight - node->rightHeight < 2) {
 				// it's balanced! Return the (unchanged) node pointer
-				hp->height = 1+max(node->leftHeight, node->rightHeight);
+				hp->height = 1+maximum(node->leftHeight, node->rightHeight);
 				//@ fold avlh(node, hp->height);
 				//@ assert acc(hp->height) && avlh(node, hp->height) && hp->height >= h && hp->height <= h+1 && node != NULL;
 				return node;
@@ -229,7 +229,7 @@ struct Node* insert(struct Node* node, int h, int key, struct Height *hp)
 					//@ unfold right(n, llh, lrh, rh);
 					//@ assert n->rightHeight == 1+lrh;
 					//@ fold avlh(n->right, n->rightHeight);
-					hp->height = 1+max(n->leftHeight, n->rightHeight);
+					hp->height = 1+maximum(n->leftHeight, n->rightHeight);
 					//@ fold avlh(n, hp->height);
 					//@ assert acc(hp->height) && avlh(n, hp->height) && hp->height >= h && hp->height <= h+1 && n != NULL;
 					return n;
@@ -250,7 +250,7 @@ struct Node* insert(struct Node* node, int h, int key, struct Height *hp)
 					struct Node *n= rightRotate(node, llh, lrh, rh);
 					//@ unfold right(n, llh, lrh, rh);
 					//@ fold avlh(n->right, n->rightHeight);
-					hp->height = 1+max(n->leftHeight, n->rightHeight);
+					hp->height = 1+maximum(n->leftHeight, n->rightHeight);
 					//@ fold avlh(n, hp->height);
 					//@ assert acc(hp->height) && avlh(n, hp->height) && hp->height >= h && hp->height <= h+1 && n != NULL;
 					return n;
@@ -264,7 +264,7 @@ struct Node* insert(struct Node* node, int h, int key, struct Height *hp)
 			// are we balanced?
 			if (node->rightHeight - node->leftHeight < 2) {
 				// it's balanced! Return the (unchanged) node pointer
-				hp->height = 1+max(node->leftHeight, node->rightHeight);
+				hp->height = 1+maximum(node->leftHeight, node->rightHeight);
 				//@ fold avlh(node, hp->height);
 				//@ assert acc(hp->height) && avlh(node, hp->height) && hp->height >= h && hp->height <= h+1 && node != NULL;
 				return node;
@@ -280,7 +280,7 @@ struct Node* insert(struct Node* node, int h, int key, struct Height *hp)
 					struct Node *n = leftRotate(node, lh, rlh, rrh);
 					//@ unfold left(n, lh, rlh, rrh);
 					//@ fold avlh(n->left, n->leftHeight);
-					hp->height = 1+max(n->leftHeight, n->rightHeight);
+					hp->height = 1+maximum(n->leftHeight, n->rightHeight);
 					//@ fold avlh(n, hp->height);
 					//@ assert acc(hp->height) && avlh(n, hp->height) && hp->height >= h && hp->height <= h+1 && n != NULL;
 					return n;
@@ -301,7 +301,7 @@ struct Node* insert(struct Node* node, int h, int key, struct Height *hp)
 					struct Node *n = leftRotate(node, lh, rlh, rrh);
 					//@ unfold left(n, lh, rlh, rrh);
 					//@ fold avlh(n->left, n->leftHeight);
-					hp->height = 1+max(n->leftHeight, n->rightHeight);
+					hp->height = 1+maximum(n->leftHeight, n->rightHeight);
 					//@ fold avlh(n, hp->height);
 					//@ assert acc(hp->height) && avlh(n, hp->height) && hp->height >= h && hp->height <= h+1 && n != NULL;
 					return n;

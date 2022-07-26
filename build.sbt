@@ -12,6 +12,7 @@ lazy val gvc = (project in file("."))
     libraryDependencies += "org.tpolecat" %% "doobie-hikari" % "1.0.0-RC1", // HikariCP transactor.
     libraryDependencies += "mysql" % "mysql-connector-java" % "8.0.29",
     libraryDependencies += "org.tpolecat" %% "doobie-scalatest" % "1.0.0-RC1" % "test", // ScalaTest support for typechecking statements
+    libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6",
     Test / testOptions +=
       Tests.Argument(
         TestFrameworks.ScalaTest,
