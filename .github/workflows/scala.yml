@@ -8,6 +8,8 @@ jobs:
     steps:
       - name: Install Z3
         uses: pavpanchekha/setup-z3@1.2.2
+      - name: Install CC0
+        run: sudo apt install wget && wget https://c0.cs.cmu.edu/downloads/cc0-debian.deb && sudo apt install ./cc0-debian.deb
       - uses: actions/checkout@v3
         with:
           repository: 'gradual-verification/silver-gv'
@@ -21,8 +23,8 @@ jobs:
           repository: 'gradual-verification/silicon-gv'
           path: 'gvc0'
       - run: cd $GITHUB_WORKSPACE && ls -la
-      - run: ln -s $GITHUB_WORKSPACE/silver-gv $GITHUB_WORKSPACE/silicon-gv/silver
-      - run: ln -s $GITHUB_WORKSPACE/silicon-gv $GITHUB_WORKSPACE/gvc0/silicon
+      - run: ln -s $GITHUB_WORKSPACE/silver-gv/ $GITHUB_WORKSPACE/silicon-gv/silver
+      - run: ln -s $GITHUB_WORKSPACE/silicon-gv/ $GITHUB_WORKSPACE/gvc0/silicon
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
