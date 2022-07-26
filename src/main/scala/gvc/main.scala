@@ -71,16 +71,21 @@ object Main extends App {
       config.linkedLibraries ++ Defaults.includeDirectories
 
     config.mode match {
-
-      case Config.BenchmarkExecutor =>
+      case Config.Recreate =>
         val benchConfig =
           BenchmarkExternalConfig.parseExecutor(config)
-        BenchmarkExecutor.execute(benchConfig, config)
+      /*val inputSourceRecreated =
+          BenchmarkRecreator.recreate(benchConfig, config)*/
 
-      case Config.BenchmarkPopulator =>
+      case Config.Execute =>
+        val benchConfig =
+          BenchmarkExternalConfig.parseExecutor(config)
+        BenchmarkExecutor.execute(benchConfig, config, linkedLibraries)
+
+      case Config.Populate =>
         val benchConfig =
           BenchmarkExternalConfig.parsePopulator(config)
-        BenchmarkPopulator.populate(benchConfig, Defaults.includeDirectories)
+        BenchmarkPopulator.populate(benchConfig, linkedLibraries)
 
       case Config.DefaultMode =>
         val fileNames = getOutputCollection(config.sourceFile.get)

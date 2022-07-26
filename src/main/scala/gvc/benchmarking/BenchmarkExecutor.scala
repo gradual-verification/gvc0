@@ -38,12 +38,13 @@ object BenchmarkExecutor {
                              perfID: Long,
                              measurementMode: DynamicMeasurementMode)
 
-  def execute(config: ExecutorConfig, baseConfig: Config): Unit = {
+  def execute(config: ExecutorConfig,
+              baseConfig: Config,
+              libraries: List[String]): Unit = {
 
     val conn = DAO.connect(config.db)
     val globalConfig = DAO.resolveGlobalConfiguration(conn)
     val id = DAO.addOrResolveIdentity(config, conn)
-    val libraries = Main.Defaults.includeDirectories
 
     val syncedPrograms =
       BenchmarkPopulator.syncPrograms(config.sources,

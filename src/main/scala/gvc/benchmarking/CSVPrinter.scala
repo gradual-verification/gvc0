@@ -1,8 +1,6 @@
 package gvc.benchmarking
 
-import gvc.CC0Wrapper.Performance
 import gvc.Main.ProfilingInfo
-import gvc.benchmarking.Timing.TimedVerification
 
 import java.io.FileWriter
 import java.math.BigInteger
@@ -51,7 +49,7 @@ class ErrorCSVPrinter(file: Path) {
   }
   def close(): Unit = writer.close()
 }
-
+/*
 class StaticCSVPrinter(benchConfig: SequentialConfig) extends {
 
   private val translationWriter =
@@ -153,7 +151,7 @@ class DynamicCSVPrinter(
     executionWriter.flush()
   }
 }
-
+ */
 object CSVIO {
 
   def readEntries(input: Path): List[List[String]] = {

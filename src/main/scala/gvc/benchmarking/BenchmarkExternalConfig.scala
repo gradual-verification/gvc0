@@ -38,18 +38,17 @@ case class StressSingular(stressValue: Int) extends StressConfiguration
 
 case class PlatformIdentification(versionID: String, hardwareID: String)
 
-case class SequentialConfig(io: SequentialOutputFiles,
-                            workload: BenchmarkWorkload,
-                            modifiers: PipelineModifiers)
+trait BenchmarkingConfig
 
 case class PipelineModifiers(onlyVerify: Boolean,
                              onlyCompile: Boolean,
                              disableBaseline: Boolean)
 
 case class PopulatorConfig(version: String,
-                           pathQuantity: Int,
+                           pathQuantity: Option[Int],
                            db: BenchmarkDBCredentials,
                            sources: List[Path])
+    extends BenchmarkingConfig
 
 case class ExecutorConfig(version: String,
                           hardware: String,
@@ -57,52 +56,64 @@ case class ExecutorConfig(version: String,
                           db: BenchmarkDBCredentials,
                           sources: List[Path],
                           workload: BenchmarkWorkload)
+    extends BenchmarkingConfig
+
+case class BenchmarkConfigResults(
+    version: String,
+    hardware: String,
+    nickname: Option[String],
+    credentials: BenchmarkDBCredentials,
+    sources: List[Path],
+    workload: Option[BenchmarkWorkload],
+    pathQuantity: Option[Int],
+    modifiers: PipelineModifiers
+)
 
 object BenchmarkExternalConfig {
 
-  def generateStressList(stress: StressConfiguration): List[Int] = {
-    val stepList = stress match {
-      case singular: StressSingular => List(singular.stressValue)
-      case list: StressList         => list.wList
-      case stepwise: StressBounded =>
-        (stepwise.wLower to stepwise.wUpper by stepwise.wStep).toList
-    }
-    stepList
-  }
-
-  def parseSequential(config: Config): SequentialConfig = {
-    val sequentialConfigPath = config.sequentialConfig.get
-    val xml = XML.loadFile(sequentialConfigPath.toFile)
-    val sequentialRoot = xml \\ "sequential"
-    if (sequentialRoot.isEmpty) {
-      error("Expected <sequential> element.")
-    } else {
-      val source = sequentialRoot \ "source"
-      val sourcePath = validateFile(source.text, "source")
-      val outputDir = sequentialRoot \ "output-dir"
-      val outputPath = validateDirectory(outputDir.text, "output-dir")
-      val workload = parseWorkload(sequentialRoot)
-      val pipelineModifiers = parsePipelineModifiers(sequentialRoot)
-      val sequentialOutput =
-        resolveSequentialOutputFiles(sourcePath,
-                                     outputPath,
-                                     pipelineModifiers,
-                                     config)
-      SequentialConfig(sequentialOutput, workload, pipelineModifiers)
+  def parseExecutor(rootConfig: Config): ExecutorConfig = {
+    val resolved = parseConfig(rootConfig)
+    resolved.workload match {
+      case Some(value) =>
+        ExecutorConfig(
+          resolved.version,
+          resolved.hardware,
+          resolved.nickname,
+          resolved.credentials,
+          resolved.sources,
+          value
+        )
+      case None => error("A <workload> must be provided.")
     }
   }
 
-  def parsePopulator(config: Config): PopulatorConfig = {
-    val populatorConfigPath = config.populatorConfig.get
-    val xml = XML.loadFile(populatorConfigPath.toFile)
-    val populatorRoot = xml \\ "populator"
-    if (populatorRoot.isEmpty) {
-      error("Expected <populator> element.")
+  def parsePopulator(rootConfig: Config): PopulatorConfig = {
+    val resolved = parseConfig(rootConfig)
+    PopulatorConfig(resolved.version,
+                    resolved.pathQuantity,
+                    resolved.credentials,
+                    resolved.sources)
+  }
+
+  private def parseConfig(rootConfig: Config): BenchmarkConfigResults = {
+    val configPath = rootConfig.config.get
+    val xml = XML.loadFile(configPath.toFile)
+    val benchmarkRoot = xml \\ "benchmark"
+    if (benchmarkRoot.isEmpty) {
+      error("Expected <benchmark> element.")
     } else {
-      val version = resolveVersion(populatorRoot, config)
-      val db = parseDB(populatorRoot)
-      val quantity = intOrError(populatorRoot \ "quantity", "quantity")
-      val sourceDirElement = populatorRoot \ "source-dir"
+      val version =
+        resolveFallback("version", benchmarkRoot, rootConfig.versionString)
+      val hardware =
+        resolveFallback("hardware", benchmarkRoot, rootConfig.hardwareString)
+      val nickname =
+        resolveFallbackOptional("nickname",
+                                benchmarkRoot,
+                                rootConfig.nicknameString)
+      val quantity =
+        intOption(benchmarkRoot \ "quantity")
+
+      val sourceDirElement = benchmarkRoot \ "source-dir"
       if (sourceDirElement.isEmpty || sourceDirElement.text.trim.isEmpty) {
         error("Expected <source-dir> field.")
       }
@@ -116,62 +127,68 @@ object BenchmarkExternalConfig {
           p.getName.endsWith(".c0")
         })
         .map(_.toPath)
-      PopulatorConfig(version, quantity, db, c0SourceFiles)
+      val fileCollection = rootConfig.sourceFile match {
+        case Some(value) => c0SourceFiles ++ List(Paths.get(value))
+        case None        => c0SourceFiles
+      }
+
+      val credentials = parseDB(benchmarkRoot \\ "db", rootConfig)
+
+      val workload = parseWorkload(benchmarkRoot \\ "workload")
+
+      val modifiers = parsePipelineModifiers(benchmarkRoot)
+
+      BenchmarkConfigResults(version,
+                             hardware,
+                             nickname,
+                             credentials,
+                             fileCollection,
+                             workload,
+                             quantity,
+                             modifiers)
     }
   }
 
-  def parseExecutor(config: Config): ExecutorConfig = {
-    val executorConfigPath = config.executorConfig.get
-    val xml = XML.loadFile(executorConfigPath.toFile)
-    val executorRoot = xml \\ "executor"
-    if (executorRoot.isEmpty) {
-      error("Expected <executor> element.")
-    } else {
-      val versionString = resolveVersion(executorRoot, config)
-      val hardware = executorRoot \ "hardware"
-      val hardwareString = hardware.text
-      if (hardwareString.trim.isEmpty) {
-        error(s"<hardware>: Invalid hardware identifier: $hardwareString")
-      }
-      val nickname = executorRoot \ "nickname"
-      val nicknameString = nickname.text
-      if (nickname.nonEmpty && nicknameString.trim.isEmpty) {
-        error(s"<nickname>: Invalid nickname identifier: $nicknameString")
-      }
-
-      val workload = parseWorkload(executorRoot)
-      val db = parseDB(executorRoot)
-      val sources = executorRoot \ "source-dir"
-      val validatedSources = validateDirectory(sources.text, "source-dir")
-      val c0SourceFiles = validatedSources.toFile
-        .listFiles()
-        .filter(_.isFile)
-        .toList
-        .filter(p => {
-          p.getName.endsWith(".c0")
-        })
-        .map(_.toPath)
-      ExecutorConfig(
-        versionString,
-        hardwareString,
-        if (nickname.nonEmpty) Some(nicknameString.trim) else None,
-        db,
-        c0SourceFiles,
-        workload
-      )
+  def generateStressList(stress: StressConfiguration): List[Int] = {
+    val stepList = stress match {
+      case singular: StressSingular => List(singular.stressValue)
+      case list: StressList         => list.wList
+      case stepwise: StressBounded =>
+        (stepwise.wLower to stepwise.wUpper by stepwise.wStep).toList
     }
+    stepList
   }
 
-  private def resolveVersion(xml: NodeSeq, config: Config): String = {
-    config.versionString match {
+  private def resolveFallback(field: String,
+                              xml: NodeSeq,
+                              fallback: Option[String]) = {
+    fallback match {
       case Some(value) => value
-      case None =>
-        val provided = xml \ "version"
+      case None => {
+        val provided = xml \ field
         if (provided.nonEmpty) {
-          provided.text
+          provided.text.trim
+
         } else {
           error(
-            "No version string has been provided, either as a command line argument (--version) or configuration file field.")
+            s"No $field string has been provided, either as a command line argument (--$field) or configuration file field.")
+        }
+      }
+    }
+  }
+
+  private def resolveFallbackOptional(field: String,
+                                      xml: NodeSeq,
+                                      fallback: Option[String]) = {
+    fallback match {
+      case Some(_) => fallback
+      case None =>
+        val provided = xml \ field
+        if (provided.nonEmpty) {
+          Some(provided.text.trim)
+
+        } else {
+          None
         }
     }
   }
@@ -184,28 +201,16 @@ object BenchmarkExternalConfig {
     )
   }
 
-  private def parseDB(xml: NodeSeq): BenchmarkDBCredentials = {
-    val dbRoot = xml \\ "db"
-    if (dbRoot.isEmpty) {
-      error("Expected <db> credential tag.")
-    } else {
-      val url = dbRoot \ "url"
-      val username = dbRoot \ "username"
-      val passwordField = dbRoot \ "password"
-
-      if (url.isEmpty || url.text.trim.isEmpty) {
-        error("Missing <url> field in <db>")
-      }
-      if (username.isEmpty || url.text.trim.isEmpty) {
-        error("Missing <username> field in <db>")
-      }
-      val password = if (passwordField.isEmpty) "" else passwordField.text
-      BenchmarkDBCredentials(
-        url.text,
-        username.text,
-        password,
-      )
-    }
+  private def parseDB(xml: NodeSeq,
+                      rootConfig: Config): BenchmarkDBCredentials = {
+    val url = resolveFallback("url", xml, rootConfig.dbURLString)
+    val username = resolveFallback("username", xml, rootConfig.dbUserString)
+    val password = resolveFallback("password", xml, rootConfig.dbPassString)
+    BenchmarkDBCredentials(
+      url,
+      username,
+      password,
+    )
   }
 
   private def intOrError(xml: NodeSeq, errorText: String): Int = {
@@ -214,6 +219,15 @@ object BenchmarkExternalConfig {
     } catch {
       case _: NumberFormatException =>
         error(errorText)
+    }
+  }
+
+  private def intOption(xml: NodeSeq): Option[Int] = {
+    try {
+      Some(xml.text.toInt)
+    } catch {
+      case _: NumberFormatException =>
+        None
     }
   }
 
@@ -256,34 +270,39 @@ object BenchmarkExternalConfig {
     }
   }
 
-  private def parseWorkload(xml: NodeSeq): BenchmarkWorkload = {
+  private def parseWorkload(xml: NodeSeq): Option[BenchmarkWorkload] = {
     val workloadRoot = xml \\ "workload"
-    val paths = workloadRoot \ "paths"
-    val iterations = workloadRoot \ "iterations"
-    val staticIterations = workloadRoot \ "static-iterations"
-    val iterQuantity =
-      if (iterations.isEmpty) 1
-      else
-        intOrError(
-          iterations,
-          s"Expected an integer for <iterations>, but found: '${iterations.text}")
-    val staticIterQuantity =
-      if (staticIterations.isEmpty) 1
-      else
-        intOrError(
-          staticIterations,
-          s"Expected an integer for <static-iterations>, but found: '${staticIterations.text}")
-    val pathQuantity =
-      if (paths.isEmpty) 1
-      else
-        intOrError(
-          paths,
-          s"Expected an integer for <paths>, but found: '${paths.text}'")
-    val stress = workloadRoot \\ "stress"
-    BenchmarkWorkload(iterQuantity,
-                      staticIterQuantity,
-                      pathQuantity,
-                      parseStress(stress))
+    if (workloadRoot.isEmpty) {
+      None
+    } else {
+      val paths = workloadRoot \ "paths"
+      val iterations = workloadRoot \ "iterations"
+      val staticIterations = workloadRoot \ "static-iterations"
+      val iterQuantity =
+        if (iterations.isEmpty) 1
+        else
+          intOrError(
+            iterations,
+            s"Expected an integer for <iterations>, but found: '${iterations.text}")
+      val staticIterQuantity =
+        if (staticIterations.isEmpty) 1
+        else
+          intOrError(
+            staticIterations,
+            s"Expected an integer for <static-iterations>, but found: '${staticIterations.text}")
+      val pathQuantity =
+        if (paths.isEmpty) 1
+        else
+          intOrError(
+            paths,
+            s"Expected an integer for <paths>, but found: '${paths.text}'")
+      val stress = workloadRoot \\ "stress"
+      Some(
+        BenchmarkWorkload(iterQuantity,
+                          staticIterQuantity,
+                          pathQuantity,
+                          parseStress(stress)))
+    }
   }
 
   private def parseStress(xml: NodeSeq): StressConfiguration = {

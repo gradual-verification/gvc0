@@ -85,19 +85,6 @@ object Timing {
     )
   }
 
-  def compileAndExec(
-      input: Path,
-      output: Path,
-      args: List[String],
-      config: Config,
-      benchConfig: SequentialConfig
-  ): (Performance, Performance) = {
-    (
-      compileTimed(input, output, config, benchConfig.workload.iterations),
-      execTimed(output, benchConfig.workload.iterations, args)
-    )
-  }
-
   private def runTimedCommand(
       iterations: Int,
       command: String,
