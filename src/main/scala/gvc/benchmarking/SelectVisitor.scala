@@ -62,6 +62,18 @@ class SelectVisitor(program: IR.Program)
       specType: SpecType
   ): Unit = {
     super.enterSpec(parent, template, specType)
+    template match {
+      case Some(_) =>
+        specType match {
+          case SpecType.Fold | SpecType.Unfold | SpecType.Assert =>
+          case _ =>
+            exprIndex += 1;
+        }
+      case None
+          if specType == SpecType.Precondition || specType == SpecType.Postcondition =>
+        exprIndex += 1;
+      case _ =>
+    }
   }
 
   override def visitSpecExpr(

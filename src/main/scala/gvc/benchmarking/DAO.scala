@@ -52,7 +52,7 @@ object DAO {
 
   case class Permutation(id: Long,
                          programID: Long,
-                         permutationHash: String,
+                         permutationHash: Array[Byte],
                          dateAdded: String)
 
   case class Step(pathID: Long, permutationID: Long, levelID: Long)
@@ -212,8 +212,9 @@ object DAO {
   }
 
   def addOrResolvePermutation(programID: Long,
-                              permutationHash: String,
+                              permutationHash: Array[Byte],
                               xa: DBConnection): Long = {
+
     (for {
       _ <- sql"""CALL sp_gr_Permutation($programID, $permutationHash, @perm);""".update.run
       pid <- sql"""SELECT @perm;""".query[Long].option
@@ -277,13 +278,13 @@ object DAO {
     for (i <- workloads) {
       val reserved = (for {
         _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $i, @perm, @perf, @mode);""".update.run
-        perf_id <- sql"""SELECT @perf;""".query[Option[Long]].unique
+        perf_id <- sql"""SELECT @perf;""".query[Long].option
         perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
-          .query[Option[Permutation]]
-          .unique
+          .query[Permutation]
+          .option
         mode <- sql"""SELECT @mode;"""
-          .query[Option[DynamicMeasurementMode.DynamicMeasurementMode]]
-          .unique
+          .query[DynamicMeasurementMode.DynamicMeasurementMode]
+          .option
       } yield (perf_id, perm, mode)).transact(xa).unsafeRunSync()
 
       reserved._1 match {

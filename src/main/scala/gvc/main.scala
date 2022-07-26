@@ -8,7 +8,6 @@ import gvc.benchmarking.{
   BenchmarkExecutor,
   BenchmarkExternalConfig,
   BenchmarkPopulator,
-  BenchmarkSequential,
   Output
 }
 import gvc.weaver.Weaver
@@ -72,16 +71,6 @@ object Main extends App {
       config.linkedLibraries ++ Defaults.includeDirectories
 
     config.mode match {
-      case Config.BenchmarkSequential =>
-        val benchConfig =
-          BenchmarkExternalConfig.parseSequential(config)
-        Output.printTiming(() => {
-          BenchmarkSequential.mark(
-            config,
-            benchConfig,
-            linkedLibraries
-          )
-        })
 
       case Config.BenchmarkExecutor =>
         val benchConfig =
@@ -100,6 +89,7 @@ object Main extends App {
           val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
           execute(verifiedOutput.c0Source, fileNames)
         })
+      case _ =>
     }
   }
 

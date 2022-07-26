@@ -8,11 +8,12 @@ import gvc.transformer.IR.{Expression, Method, Predicate}
 import scala.collection.mutable
 
 case class LabelOutput(
-    labels: List[ASTLabel],
-    labelsPerSpecIndex: Map[Int, Int],
-    specsToSpecIndices: Map[Expression, Int],
-    foldUnfoldCount: Map[Method, Int]
-)
+                        labels: List[ASTLabel],
+                        labelsPerSpecIndex: Map[Int, Int],
+                        specsToSpecIndices: Map[Expression, Int],
+                        foldUnfoldCount: Map[Method, Int],
+                        pairToLabelOrdering: Map[(Int, Int), Int]
+                      )
 
 class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
 
@@ -23,6 +24,7 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   private var foldUnfoldCount: mutable.Map[Method, Int] =
     mutable.Map[Method, Int]()
   private var labelSet = mutable.ListBuffer[ASTLabel]()
+
   private var startingIndex = 0
 
   override def reset(): Unit = {
@@ -65,31 +67,34 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   }
 
   override def enterSpec(
-      parent: Either[Method, Predicate],
-      template: Option[Expression] = None,
-      specType: SpecType
-  ): Unit = {
+                          parent: Either[Method, Predicate],
+                          template: Option[Expression] = None,
+                          specType: SpecType
+                        ): Unit = {
     super.enterSpec(parent, template, specType)
     this.startingIndex = this.exprIndex
     template match {
       case Some(value) =>
         this.specsToSpecIndices += (value -> this.specIndex)
         specType match {
-          case SpecType.Fold | SpecType.Unfold | SpecType.Assert => {}
+          case SpecType.Fold | SpecType.Unfold | SpecType.Assert =>
           case _ =>
             this.addLabel(
               parent,
               specType,
               ExprType.Imprecision,
-              exprIndex = 0
+              exprIndex = this.exprIndex
             )
             exprIndex += 1;
         }
       case None
-          if specType == SpecType.Precondition || specType == SpecType.Postcondition =>
-        this.addLabel(parent, specType, ExprType.Absent, exprIndex = 0);
+        if specType == SpecType.Precondition || specType == SpecType.Postcondition =>
+        this.addLabel(parent,
+          specType,
+          ExprType.Absent,
+          exprIndex = this.exprIndex)
         exprIndex += 1;
-      case _ => {}
+      case _ =>
     }
   }
 
@@ -102,21 +107,21 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   }
 
   override def visitSpecExpr(
-      parent: Either[Method, Predicate],
-      template: Expression,
-      specType: SpecType,
-      exprType: ExprType
-  ): Unit = {
+                              parent: Either[Method, Predicate],
+                              template: Expression,
+                              specType: SpecType,
+                              exprType: ExprType
+                            ): Unit = {
     super.visitSpecExpr(parent, template, specType, exprType)
     addLabel(parent, specType, exprType)
   }
 
   override def visitSpecOp(
-      parent: Either[Method, Predicate],
-      template: IR.Op,
-      specType: SpecType,
-      exprType: ExprType
-  ): Unit = {
+                            parent: Either[Method, Predicate],
+                            template: IR.Op,
+                            specType: SpecType,
+                            exprType: ExprType
+                          ): Unit = {
     super.visitSpecOp(parent, template, specType, exprType)
     addLabel(parent, specType, exprType)
     parent match {
@@ -134,19 +139,25 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
   }
 
   def addLabel(
-      parent: Either[Method, Predicate],
-      specType: SpecType.SpecType,
-      exprType: ExprType.ExprType,
-      exprIndex: Int = this.previousExpr()
-  ): Unit = {
-    labelSet +=
-      new ASTLabel(parent, specType, exprType, this.specIndex, exprIndex)
+                parent: Either[Method, Predicate],
+                specType: SpecType.SpecType,
+                exprType: ExprType.ExprType,
+                exprIndex: Int = this.previousExpr()
+              ): Unit = {
+    val maxLong: Long = 2 * Integer.MAX_VALUE.toLong + 1
+    if (labelSet.size.toLong + 1 >= maxLong) {
+      throw new LabelException(
+        "Maximum number of labels reached (unsigned 32-bit integer).")
+    } else {
+      labelSet +=
+        new ASTLabel(parent, specType, exprType, this.specIndex, exprIndex)
+    }
   }
 
   override def visitOp(
-      parent: Either[Method, Predicate],
-      template: IR.Op
-  ): Unit = {}
+                        parent: Either[Method, Predicate],
+                        template: IR.Op
+                      ): Unit = {}
 
   override def collectOutput(): LabelOutput = {
     if (this.labelsPerSpecIndex.values.isEmpty || this.labelsPerSpecIndex.values.sum != this.labelSet.size) {
@@ -155,10 +166,16 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
       )
     }
     LabelOutput(
-      labelSet.toList.sorted(LabelOrdering),
+      labelSet.toList,
       labelsPerSpecIndex.toMap,
       specsToSpecIndices.toMap,
-      foldUnfoldCount.toMap
+      foldUnfoldCount.toMap,
+      labelSet.indices
+        .map(idx => {
+          val l = labelSet(idx)
+          ((l.specIndex, l.exprIndex), idx)
+        })
+        .toMap
     )
   }
 
@@ -190,26 +207,19 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
 }
 
 class ASTLabel(
-    val parent: Either[Method, Predicate],
-    val specType: SpecType,
-    val exprType: ExprType,
-    val specIndex: Int,
-    val exprIndex: Int
-) {
+                val parent: Either[Method, Predicate],
+                val specType: SpecType,
+                val exprType: ExprType,
+                val specIndex: Int,
+                val exprIndex: Int
+              ) {
   val hash: String = {
     val name = parent match {
-      case Left(value)  => "m." + value.name
+      case Left(value) => "m." + value.name
       case Right(value) => "p." + value.name
     }
     List(name, specType, exprType, specIndex, exprIndex)
       .mkString(".")
   }
-}
 
-object LabelOrdering extends Ordering[ASTLabel] {
-  override def compare(
-      x: ASTLabel,
-      y: ASTLabel
-  ): Int =
-    x.exprIndex compare y.exprIndex
 }

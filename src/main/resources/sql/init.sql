@@ -79,14 +79,14 @@ CREATE TABLE IF NOT EXISTS permutations
 (
     id               SERIAL,
     program_id       BIGINT UNSIGNED NOT NULL,
-    permutation_hash TEXT            NOT NULL,
+    permutation_hash BLOB            NOT NULL,
     permutation_date DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash TEXT, OUT p_id BIGINT UNSIGNED)
+CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash BLOB, OUT p_id BIGINT UNSIGNED)
 BEGIN
     SELECT id INTO p_id FROM permutations WHERE program_id = p_program_id AND permutation_hash = p_perm_hash;
     IF ((SELECT p_id) IS NULL) THEN
@@ -331,19 +331,21 @@ BEGIN
     INTO @min_program_id
     FROM (SELECT program_id,
                  COUNT(id) AS total_perms
-          FROM (SELECT permutations.id,
-                       permutations.program_id
-                FROM permutations
-                         LEFT OUTER JOIN (SELECT permutation_id,
-                                                 COUNT(
-                                                         DISTINCT dynamic_measurement_type
-                                                     ) AS c_type
-                                          FROM dynamic_performance
-                                          WHERE version_id = vid
-                                            AND hardware_id = hid
-                                          GROUP BY permutation_id) as tbl1
-                                         ON tbl1.permutation_id = permutations.id
-                WHERE c_type < (SELECT COUNT(DISTINCT id) FROM dynamic_measurement_types)) AS tbl2
+          FROM (SELECT id, program_id
+                FROM (SELECT permutations.id,
+                             permutations.program_id,
+                             IFNULL(tbl1.c_type, 0) as c_type_zeroed
+                      FROM permutations
+                               LEFT OUTER JOIN (SELECT permutation_id,
+                                                       IFNULL(COUNT(
+                                                                      DISTINCT dynamic_measurement_type
+                                                                  ), 0) AS c_type
+                                                FROM dynamic_performance
+                                                WHERE version_id = vid
+                                                  AND hardware_id = hid
+                                                GROUP BY permutation_id) as tbl1
+                                               ON permutations.id = tbl1.permutation_id) as tbl2
+                WHERE c_type_zeroed < (SELECT COUNT(DISTINCT id) FROM dynamic_measurement_types)) AS tbl2
           GROUP BY program_id) AS tblA
     ORDER BY total_perms desc
     LIMIT 1;
@@ -357,6 +359,7 @@ BEGIN
                 from dynamic_performance
                 WHERE version_id = vid
                   AND hardware_id = hid
+
                 GROUP BY permutation_id) as tblA on permutations.id = tblA.permutation_id
           WHERE program_id = (SELECT @min_program_id)) AS tblB
     WHERE tblB.completion < (SELECT COUNT(DISTINCT id) FROM dynamic_measurement_types)
@@ -368,19 +371,18 @@ BEGIN
         INTO @missing_mode_id
         FROM dynamic_measurement_types
                  LEFT OUTER JOIN
-             (SELECT dynamic_measurement_type
+             (SELECT DISTINCT dynamic_measurement_type
               FROM dynamic_performance
-              WHERE permutation_id = (SELECT perm_id)
-                AND measurement_id IS NOT NULL)
+              WHERE permutation_id = (SELECT perm_id))
                  AS `p*` ON dynamic_measurement_types.id = `p*`.dynamic_measurement_type
-        WHERE `p*`.dynamic_measurement_type IS NULL
+        WHERE dynamic_measurement_type IS NULL
         LIMIT 1;
 
         INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
                                          dynamic_measurement_type)
 
         VALUES ((SELECT perm_id), vid, hid, nnid, workload, (SELECT @missing_mode_id));
-        SELECT LAST_INSERT_ID() INTO perf_id;
+        SELECT LAST_INSERT_ID() INTO perf_id LIMIT 1;
         SELECT type INTO missing_mode FROM dynamic_measurement_types WHERE id = (SELECT @missing_mode_id) LIMIT 1;
     ELSE
         SELECT NULL INTO missing_mode;
@@ -417,5 +419,6 @@ BEGIN
     END IF;
 END;
 
-CALL sp_ReservePermutation(1, 1, 1, 16, @a, @b, @c);
-SELECT @a, @b, @c;
+#CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
+#CALL sp_ReservePermutation(1, 1, 1, 16, @a, @b, @c);
+#SELECT @a, @b, @c;

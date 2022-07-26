@@ -5,7 +5,7 @@ import gvc.benchmarking.SamplingHeuristic.SamplingHeuristic
 import gvc.transformer.IR.{Expression, Method, Predicate}
 
 import java.math.BigInteger
-
+import java.nio.{ByteBuffer, ByteOrder}
 import scala.collection.mutable
 
 object SamplingHeuristic extends Enumeration {
@@ -64,15 +64,13 @@ class Sampler(labelOutput: LabelOutput) {
     lastComponentWithSpecIndexAt
       .map(pair => {
         val context = specIndexToContext(pair._1)
-        val firstValidIndex = context match {
+        val firstValidIndex = (context match {
           case Left(value) =>
-            val methodCompletedAt = lastFoldUnfoldForMethod.getOrElse(value, 0)
-            math.max(pair._2, methodCompletedAt)
+            math.max(lastFoldUnfoldForMethod.getOrElse(value, 0), pair._2)
           case Right(_) => pair._2
-        }
-        val randomOffset: Int = this.rng.nextInt(
-          Math.floor(listOfComponents.length - firstValidIndex).toInt) + 1
-        (pair._1, firstValidIndex + randomOffset)
+        }) + 1
+        val offset = rng.nextInt(listOfComponents.length - firstValidIndex + 1)
+        (pair._1, firstValidIndex + offset)
       })
       .toMap
   }
@@ -121,29 +119,24 @@ class Sampler(labelOutput: LabelOutput) {
 
 object LabelTools {
 
-  def permutationIDToPermutation(labelOut: LabelOutput, id: String,
+  def byteToIntArray(arr: Array[Byte]): Array[Int] = {
+    val intBuf = ByteBuffer
+      .wrap(arr)
+      .order(ByteOrder.BIG_ENDIAN)
+      .asIntBuffer()
+    val contents = new Array[Int](intBuf.remaining())
+    intBuf.get(contents)
+    contents
+  }
+
+  def permutationIDToPermutation(labelOut: LabelOutput, id: Array[Byte],
   ): LabelPermutation = {
-
+    val contents = byteToIntArray(id)
     val perm = new LabelPermutation(labelOut)
-    val labels = labelOut.labels
-
-    val flags = new BigInteger(id, 16)
-      .toString(2)
-      .toCharArray
-      .map(c => {
-        c == '1'
+    contents
+      .foreach(index => {
+        perm.addLabel(labelOut.labels(index))
       })
-
-    val excluded = flags.slice(1, flags.length)
-    excluded.indices
-      .filter(i => excluded(i))
-      .map(i => labels(i))
-      .foreach(perm.addLabel)
-    if (!perm.id.toString(16).equals(id)) {
-      throw new BenchmarkException(
-        "The generated program doesn't match the permutation's ID.")
-    }
-
     perm
   }
 
@@ -192,7 +185,7 @@ class LabelPermutation(
   private val contents = mutable.ListBuffer[ASTLabel]()
   private val orderedIndices = mutable.ListBuffer[Int]()
   private val foldUnfoldCounts = mutable.Map[Method, Int]()
-  val completedExpressions: mutable.Set[Int] = mutable.Set[Int]()
+  val completedSpecs: mutable.Set[Int] = mutable.Set[Int]()
 
   def addLabel(label: ASTLabel): Unit = {
     orderedIndices += label.exprIndex
@@ -212,19 +205,19 @@ class LabelPermutation(
     }
     label.exprType match {
       case gvc.benchmarking.ExprType.Imprecision =>
-        completedExpressions += label.specIndex
+        completedSpecs += label.specIndex
       case _ =>
     }
   }
 
-  def labels: List[ASTLabel] = contents.toList.sorted(LabelOrdering)
+  def labels: List[ASTLabel] = contents.toList
 
   def indices: Set[Int] = orderedIndices.toSet
 
   def imprecisionStatusList: List[Int] = {
     labelOutput.specsToSpecIndices.values.toList.sorted
       .map(index => {
-        if (completedExpressions.contains(index)) 1 else 0
+        if (completedSpecs.contains(index)) 1 else 0
       })
   }
 
@@ -236,19 +229,38 @@ class LabelPermutation(
   }
 
   def exprIsComplete(template: Expression): Boolean =
-    completedExpressions.nonEmpty &&
+    completedSpecs.nonEmpty &&
       labelOutput.specsToSpecIndices
-        .contains(template) && completedExpressions.contains(
+        .contains(template) && completedSpecs.contains(
       labelOutput.specsToSpecIndices(template)
     )
 
-  def id: BigInteger = {
-    val specsPresent = "1" + specStatusList.foldLeft("")(_ + _)
-    val big = new BigInteger(
-      specsPresent,
-      2
-    )
-    big
+  def id: String = {
+    this.orderedIndices
+      .map(i => {
+        "%04X".format(i)
+      })
+      .mkString("")
+  }
+
+  def idArray: Array[Byte] = {
+    val test = this.labels
+      .flatMap(l => {
+        val masked: Int = 0x0000 | labelOutput.pairToLabelOrdering(
+          (l.specIndex, l.exprIndex))
+        (0 to 3).map(i => ((masked >> ((3 - i) * 8)) & 0xff).toByte)
+      })
+    val compare = LabelTools.byteToIntArray(test.toArray)
+
+    if (compare.length != this.orderedIndices.length) {
+      throw new BenchmarkException("unequal!")
+    }
+    if (compare.length > 0) {
+      for (i <- compare.indices) {
+        this.orderedIndices(i) == compare(i)
+      }
+    }
+    test.toArray
   }
 }
 

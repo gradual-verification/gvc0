@@ -3,6 +3,7 @@ package gvc.benchmarking
 import gvc.benchmarking.DAO.{DBConnection, GlobalConfiguration}
 import gvc.transformer.IR.Program
 import gvc.Main
+import gvc.benchmarking.BenchmarkSequential.BenchmarkException
 
 import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -36,31 +37,32 @@ object BenchmarkPopulator {
   }
 
   def syncPrograms(
-                    sources: List[Path],
-                    libraryDirs: List[String],
-                    globalConfig: GlobalConfiguration,
-                    connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
-    val synchronized = allOf(
-      sources
-        .map(src => {
-          Future(syncProgram(src, libraryDirs, globalConfig, connection))
-        })
-    )
+      sources: List[Path],
+      libraryDirs: List[String],
+      globalConfig: GlobalConfiguration,
+      connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
+
+    sources
+      .map(src => {
+        syncProgram(src, libraryDirs, globalConfig, connection)
+      })
+      .toMap
+    /*
     val mapping = mutable.Map[Long, StoredProgramRepresentation]()
     Await
       .result(synchronized, Duration.Inf)
       .foreach {
-        case Failure(_) =>
+        case Failure(f) => throw new BenchmarkException(f.getMessage)
         case Success(value) => mapping += value
       }
-    mapping.toMap
+    mapping.toMap*/
   }
 
   private def syncProgram(
-                           src: Path,
-                           libraries: List[String],
-                           globalConfiguration: GlobalConfiguration,
-                           xa: DBConnection): (Long, StoredProgramRepresentation) = {
+      src: Path,
+      libraries: List[String],
+      globalConfiguration: GlobalConfiguration,
+      xa: DBConnection): (Long, StoredProgramRepresentation) = {
     val storedRep =
       this.populateComponents(src, libraries, globalConfiguration, xa)
     populateProgram(storedRep._1, storedRep._2, globalConfiguration, xa)
@@ -77,7 +79,7 @@ object BenchmarkPopulator {
     val sampler = new Sampler(programRep.info.labels)
     Output.info(s"Generating paths for ${programRep.info.fileName}")
     val bottomPermutationHash =
-      new LabelPermutation(programRep.info.labels).id.toString(16)
+      new LabelPermutation(programRep.info.labels).idArray
     val bottomPerm =
       DAO.addOrResolvePermutation(programID, bottomPermutationHash, xa)
 
@@ -97,11 +99,22 @@ object BenchmarkPopulator {
 
         for (labelIndex <- ordering.indices) {
           currentPermutation.addLabel(ordering(labelIndex))
-          val currentID = currentPermutation.id.toString(16)
+          val currentID = currentPermutation.idArray
           val storedPermutationID =
             DAO.addOrResolvePermutation(programID, currentID, xa)
           pathQuery.addStep(storedPermutationID,
-            programRep.componentMapping(ordering(labelIndex)))
+                            programRep.componentMapping(ordering(labelIndex)))
+
+          val recreated = new LabelPermutation(programRep.info.labels)
+          currentPermutation.labels.foreach(recreated.addLabel)
+          val selected = new SelectVisitor(programRep.info.ir).visit(recreated)
+
+          val decoded = LabelTools.permutationIDToPermutation(
+            programRep.info.labels,
+            currentID)
+
+          val selectDecoded =
+            new SelectVisitor(programRep.info.ir).visit(decoded)
         }
         pathQuery.exec(xa)
       }
@@ -111,10 +124,10 @@ object BenchmarkPopulator {
   }
 
   private def populateComponents(
-                                  src: Path,
-                                  libraries: List[String],
-                                  globalConfiguration: GlobalConfiguration,
-                                  xa: DBConnection): (Long, StoredProgramRepresentation) = {
+      src: Path,
+      libraries: List[String],
+      globalConfiguration: GlobalConfiguration,
+      xa: DBConnection): (Long, StoredProgramRepresentation) = {
     Output.info(s"Syncing definitions for ${src.getFileName}")
     val sourceText = Files.readString(src)
     val sourceIR = Main.generateIR(sourceText, libraries)
@@ -123,9 +136,9 @@ object BenchmarkPopulator {
     val programInfo =
       ProgramInformation(sourceText, sourceIR, labelOutput, fileName)
     val insertedProgramID = DAO.addOrResolveProgram(src,
-      md5sum(sourceText),
-      labelOutput.labels.size,
-      xa)
+                                                    md5sum(sourceText),
+                                                    labelOutput.labels.size,
+                                                    xa)
     val componentMapping = mutable.Map[ASTLabel, Long]()
     labelOutput.labels.indices.foreach(i => {
       val l = labelOutput.labels(i)
