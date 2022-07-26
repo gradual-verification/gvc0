@@ -424,8 +424,3 @@ BEGIN
         UPDATE errors SET time_elapsed_seconds = p_etime, error_date = DEFAULT WHERE id = (SELECT eid);
     END IF;
 END;
-
-#CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
-#CALL sp_ReservePermutation(1, 1, 1, 16, @a, @b, @c);
-#SELECT @a, @b, @c;
-

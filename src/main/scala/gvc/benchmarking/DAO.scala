@@ -11,6 +11,7 @@ import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import gvc.CC0Wrapper.Performance
 import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
+import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
 import gvc.benchmarking.Timing.TimedVerification
 
@@ -56,6 +57,12 @@ object DAO {
                          dateAdded: String)
 
   case class Step(pathID: Long, permutationID: Long, levelID: Long)
+
+  case class CompletionMetadata(versionName: String,
+                                srcFilename: String,
+                                measurementMode: DynamicMeasurementMode,
+                                totalCompleted: Long,
+                                total: Long)
 
   case class Conjuncts(id: Long,
                        permutationID: Long,
@@ -413,5 +420,28 @@ object DAO {
       _ <- sql"UPDATE static_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
       u <- sql"UPDATE dynamic_performance SET error_id = $eid WHERE id = ${reserved.perfID}".update.run
     } yield u).transact(conn).unsafeRunSync()
+  }
+
+  def listPerformanceResults(conn: DBConnection): List[CompletionMetadata] = {
+    sql"""SELECT version_name, src_filename, type, total_completed, total_perms
+    FROM (SELECT program_id, COUNT(permutations.id) as total_perms
+      FROM permutations
+      INNER JOIN programs p on permutations.program_id = p.id
+
+      GROUP BY program_id) as tblA
+    INNER JOIN (SELECT program_id, src_filename, version_name, type, COUNT(measurement_id) as total_completed
+    FROM versions
+      INNER JOIN dynamic_performance dp on versions.id = dp.version_id
+    INNER JOIN permutations p on dp.permutation_id = p.id
+    INNER JOIN programs p2 on p.program_id = p2.id
+    INNER JOIN dynamic_measurement_types dmt on dp.dynamic_measurement_type = dmt.id
+
+    WHERE measurement_id IS NOT NULL
+    GROUP BY program_id, src_filename, version_name, type) as tblB
+      on tblA.program_id = tblB.program_id"""
+      .query[CompletionMetadata]
+      .to[List]
+      .transact(conn)
+      .unsafeRunSync()
   }
 }

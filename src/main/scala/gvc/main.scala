@@ -7,6 +7,7 @@ import gvc.transformer._
 import gvc.benchmarking.{
   BenchmarkExecutor,
   BenchmarkExternalConfig,
+  BenchmarkMonitor,
   BenchmarkPopulator,
   BenchmarkRecreator,
   Output
@@ -72,6 +73,12 @@ object Main extends App {
       config.linkedLibraries ++ Defaults.includeDirectories
 
     config.mode match {
+
+      case Config.Monitor =>
+        val benchConfig =
+          BenchmarkExternalConfig.parseMonitor(config)
+        BenchmarkMonitor.monitor(benchConfig)
+
       case Config.Recreate =>
         val benchConfig =
           BenchmarkExternalConfig.parseRecreator(config)

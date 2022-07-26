@@ -10,27 +10,27 @@ import scala.xml.{NodeSeq, XML}
 class BenchmarkConfigException(message: String) extends Exception(message)
 
 case class BenchmarkDBCredentials(
-    url: String,
-    username: String,
-    password: String
-)
+                                   url: String,
+                                   username: String,
+                                   password: String
+                                 )
 
 case class BenchmarkIO(
-    outputDir: java.nio.file.Path,
-    input: List[java.nio.file.Path]
-)
+                        outputDir: java.nio.file.Path,
+                        input: List[java.nio.file.Path]
+                      )
 
 case class BenchmarkWorkload(
-    iterations: Int,
-    staticIterations: Int,
-    nPaths: Int,
-    stress: StressConfiguration
-)
+                              iterations: Int,
+                              staticIterations: Int,
+                              nPaths: Int,
+                              stress: StressConfiguration
+                            )
 
 trait StressConfiguration
 
 case class StressBounded(wLower: Int, wUpper: Int, wStep: Int)
-    extends StressConfiguration
+  extends StressConfiguration
 
 case class StressList(wList: List[Int]) extends StressConfiguration
 
@@ -53,7 +53,9 @@ case class PopulatorConfig(version: String,
                            pathQuantity: Option[Int],
                            db: BenchmarkDBCredentials,
                            sources: List[Path])
-    extends BenchmarkingConfig
+  extends BenchmarkingConfig
+
+case class MonitorConfig(db: BenchmarkDBCredentials)
 
 case class ExecutorConfig(version: String,
                           hardware: String,
@@ -61,29 +63,36 @@ case class ExecutorConfig(version: String,
                           db: BenchmarkDBCredentials,
                           sources: List[Path],
                           workload: BenchmarkWorkload)
-    extends BenchmarkingConfig
+  extends BenchmarkingConfig
 
 case class BenchmarkConfigResults(
-    version: String,
-    hardware: String,
-    nickname: Option[String],
-    credentials: BenchmarkDBCredentials,
-    sources: List[Path],
-    workload: Option[BenchmarkWorkload],
-    pathQuantity: Option[Int],
-    modifiers: PipelineModifiers
-)
+                                   version: String,
+                                   hardware: String,
+                                   nickname: Option[String],
+                                   credentials: BenchmarkDBCredentials,
+                                   sources: List[Path],
+                                   workload: Option[BenchmarkWorkload],
+                                   pathQuantity: Option[Int],
+                                   modifiers: PipelineModifiers
+                                 )
 
 object BenchmarkExternalConfig {
+
+  def parseMonitor(rootConfig: Config): MonitorConfig = {
+    val resolved = parseConfig(rootConfig)
+    MonitorConfig(
+      resolved.credentials
+    )
+  }
 
   def parseRecreator(rootConfig: Config): RecreatorConfig = {
     val resolved = parseConfig(rootConfig)
     rootConfig.recreatePerm match {
       case Some(value) =>
         RecreatorConfig(resolved.version,
-                        resolved.credentials,
-                        resolved.sources,
-                        value)
+          resolved.credentials,
+          resolved.sources,
+          value)
       case None => error("Expected an integer value passed to --recreate.")
     }
   }
@@ -107,9 +116,9 @@ object BenchmarkExternalConfig {
   def parsePopulator(rootConfig: Config): PopulatorConfig = {
     val resolved = parseConfig(rootConfig)
     PopulatorConfig(resolved.version,
-                    resolved.pathQuantity,
-                    resolved.credentials,
-                    resolved.sources)
+      resolved.pathQuantity,
+      resolved.credentials,
+      resolved.sources)
   }
 
   private def parseConfig(rootConfig: Config): BenchmarkConfigResults = {
@@ -125,8 +134,8 @@ object BenchmarkExternalConfig {
         resolveFallback("hardware", benchmarkRoot, rootConfig.hardwareString)
       val nickname =
         resolveFallbackOptional("nickname",
-                                benchmarkRoot,
-                                rootConfig.nicknameString)
+          benchmarkRoot,
+          rootConfig.nicknameString)
       val quantity =
         intOption(benchmarkRoot \ "quantity")
 
@@ -146,7 +155,7 @@ object BenchmarkExternalConfig {
         .map(_.toPath)
       val fileCollection = rootConfig.sourceFile match {
         case Some(value) => c0SourceFiles ++ List(Paths.get(value))
-        case None        => c0SourceFiles
+        case None => c0SourceFiles
       }
 
       val credentials = parseDB(benchmarkRoot \\ "db", rootConfig)
@@ -156,20 +165,20 @@ object BenchmarkExternalConfig {
       val modifiers = parsePipelineModifiers(benchmarkRoot)
 
       BenchmarkConfigResults(version,
-                             hardware,
-                             nickname,
-                             credentials,
-                             fileCollection,
-                             workload,
-                             quantity,
-                             modifiers)
+        hardware,
+        nickname,
+        credentials,
+        fileCollection,
+        workload,
+        quantity,
+        modifiers)
     }
   }
 
   def generateStressList(stress: StressConfiguration): List[Int] = {
     val stepList = stress match {
       case singular: StressSingular => List(singular.stressValue)
-      case list: StressList         => list.wList
+      case list: StressList => list.wList
       case stepwise: StressBounded =>
         (stepwise.wLower to stepwise.wUpper by stepwise.wStep).toList
     }
@@ -264,7 +273,7 @@ object BenchmarkExternalConfig {
       }
     } catch {
       case _: InvalidPathException => {}
-      error(s"<$tag>: Invalid path format: $pathText")
+        error(s"<$tag>: Invalid path format: $pathText")
     }
   }
 
@@ -283,7 +292,7 @@ object BenchmarkExternalConfig {
       }
     } catch {
       case _: InvalidPathException => {}
-      error(s"<$tag>: Invalid path format: $pathText")
+        error(s"<$tag>: Invalid path format: $pathText")
     }
   }
 
@@ -316,9 +325,9 @@ object BenchmarkExternalConfig {
       val stress = workloadRoot \\ "stress"
       Some(
         BenchmarkWorkload(iterQuantity,
-                          staticIterQuantity,
-                          pathQuantity,
-                          parseStress(stress)))
+          staticIterQuantity,
+          pathQuantity,
+          parseStress(stress)))
     }
   }
 
@@ -392,11 +401,11 @@ object BenchmarkExternalConfig {
   }
 
   private def resolveSequentialOutputFiles(
-      inputSource: java.nio.file.Path,
-      root: java.nio.file.Path,
-      modifiers: PipelineModifiers,
-      config: Config
-  ): SequentialOutputFiles = {
+                                            inputSource: java.nio.file.Path,
+                                            root: java.nio.file.Path,
+                                            modifiers: PipelineModifiers,
+                                            config: Config
+                                          ): SequentialOutputFiles = {
     def deleteMultiple(locations: java.nio.file.Path*): Unit =
       locations.foreach(p => {
         Files.deleteIfExists(p)
@@ -410,8 +419,8 @@ object BenchmarkExternalConfig {
 
     if (Files.exists(existingSource)) {
       if (!Files
-            .readString(existingSource)
-            .equals(Files.readString(inputSource)))
+        .readString(existingSource)
+        .equals(Files.readString(inputSource)))
         Config.error(
           s"The existing permutation directory ${existingSource.getParent.toAbsolutePath} was created for a different source file than the one provided"
         )
@@ -557,41 +566,41 @@ object BenchmarkExternalConfig {
 }
 
 case class SequentialOutputFiles(
-    root: java.nio.file.Path,
-    perms: java.nio.file.Path,
-    verifiedPerms: java.nio.file.Path,
-    pathDescriptions: java.nio.file.Path,
-    dynamicPerms: Option[java.nio.file.Path],
-    framingPerms: Option[java.nio.file.Path],
-    logs: java.nio.file.Path,
-    verifyLogs: java.nio.file.Path,
-    //
-    compilationLogs: java.nio.file.Path,
-    dynamicCompilationLogs: java.nio.file.Path,
-    framingCompilationLogs: java.nio.file.Path,
-    //
-    execLogs: java.nio.file.Path,
-    dynamicExecLogs: java.nio.file.Path,
-    framingExecLogs: java.nio.file.Path,
-    //
-    verificationPerformance: java.nio.file.Path,
-    instrumentationPerformance: java.nio.file.Path,
-    translationPerformance: java.nio.file.Path,
-    //
-    compilationPerformanceGradual: java.nio.file.Path,
-    compilationPerformanceDynamic: java.nio.file.Path,
-    compilationPerformanceFraming: java.nio.file.Path,
-    //
-    executionPerformanceGradual: java.nio.file.Path,
-    executionPerformanceDynamic: java.nio.file.Path,
-    executionPerformanceFraming: java.nio.file.Path,
-    //
-    levels: java.nio.file.Path,
-    metadata: java.nio.file.Path,
-    source: java.nio.file.Path,
-    permMap: java.nio.file.Path,
-    conjunctMap: java.nio.file.Path,
-    //
-    tempC0File: java.nio.file.Path,
-    tempBinaryFile: java.nio.file.Path
-)
+                                  root: java.nio.file.Path,
+                                  perms: java.nio.file.Path,
+                                  verifiedPerms: java.nio.file.Path,
+                                  pathDescriptions: java.nio.file.Path,
+                                  dynamicPerms: Option[java.nio.file.Path],
+                                  framingPerms: Option[java.nio.file.Path],
+                                  logs: java.nio.file.Path,
+                                  verifyLogs: java.nio.file.Path,
+                                  //
+                                  compilationLogs: java.nio.file.Path,
+                                  dynamicCompilationLogs: java.nio.file.Path,
+                                  framingCompilationLogs: java.nio.file.Path,
+                                  //
+                                  execLogs: java.nio.file.Path,
+                                  dynamicExecLogs: java.nio.file.Path,
+                                  framingExecLogs: java.nio.file.Path,
+                                  //
+                                  verificationPerformance: java.nio.file.Path,
+                                  instrumentationPerformance: java.nio.file.Path,
+                                  translationPerformance: java.nio.file.Path,
+                                  //
+                                  compilationPerformanceGradual: java.nio.file.Path,
+                                  compilationPerformanceDynamic: java.nio.file.Path,
+                                  compilationPerformanceFraming: java.nio.file.Path,
+                                  //
+                                  executionPerformanceGradual: java.nio.file.Path,
+                                  executionPerformanceDynamic: java.nio.file.Path,
+                                  executionPerformanceFraming: java.nio.file.Path,
+                                  //
+                                  levels: java.nio.file.Path,
+                                  metadata: java.nio.file.Path,
+                                  source: java.nio.file.Path,
+                                  permMap: java.nio.file.Path,
+                                  conjunctMap: java.nio.file.Path,
+                                  //
+                                  tempC0File: java.nio.file.Path,
+                                  tempBinaryFile: java.nio.file.Path
+                                )
