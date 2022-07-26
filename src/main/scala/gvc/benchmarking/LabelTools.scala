@@ -191,7 +191,7 @@ object LabelTools {
 class LabelPermutation(
     labelOutput: LabelOutput
 ) {
-  private val contents = mutable.TreeSet[ASTLabel]()(LabelOrdering)
+  private val contents = mutable.ListBuffer[ASTLabel]()
   private val orderedIndices = mutable.ListBuffer[Int]()
   private val foldUnfoldCounts = mutable.Map[Method, Int]()
   val completedExpressions: mutable.Set[Int] = mutable.Set[Int]()
@@ -219,7 +219,7 @@ class LabelPermutation(
     }
   }
 
-  def labels: Set[ASTLabel] = contents.toSet
+  def labels: List[ASTLabel] = contents.toList.sorted(LabelOrdering)
 
   def indices: Set[Int] = orderedIndices.toSet
 

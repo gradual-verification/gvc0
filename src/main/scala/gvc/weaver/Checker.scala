@@ -226,6 +226,7 @@ object Checker {
             AddMode,
             _,
             getPrimaryOwnedFields,
+            None,
             ValueContext
           )
         )
@@ -259,6 +260,7 @@ object Checker {
                       RemoveMode,
                       _,
                       getPrimaryOwnedFields,
+                      None,
                       context
                     )
                   )
@@ -271,6 +273,7 @@ object Checker {
                       AddMode,
                       _,
                       getPrimaryOwnedFields,
+                      None,
                       context
                     )
                   )
@@ -295,24 +298,17 @@ object Checker {
 
               val context = new CallSiteContext(call.ir, method)
 
-              val addPermsToTemp = callee.precondition.toSeq
+              val resolvePermissions = callee.precondition.toSeq
                 .flatMap(
-                  implementation.translate(AddMode, _, tempSet, context)
+                  implementation.translate(AddRemoveMode,
+                                           _,
+                                           tempSet,
+                                           Some(getPrimaryOwnedFields),
+                                           context)
                 )
                 .toList
-              val removePermsFromPrimary = callee.precondition.toSeq
-                .flatMap(
-                  implementation.translate(
-                    RemoveMode,
-                    _,
-                    getPrimaryOwnedFields,
-                    context
-                  )
-                )
-                .toList
-
               call.ir.insertBefore(
-                createTemp :: addPermsToTemp ++ removePermsFromPrimary
+                createTemp :: resolvePermissions
               )
               call.ir.arguments :+= tempSet
               call.ir.insertAfter(
@@ -392,6 +388,7 @@ object Checker {
     context.implementation.translateFieldPermission(mode,
                                                     field,
                                                     perms,
+                                                    None,
                                                     ValueContext)
   }
 
@@ -414,6 +411,7 @@ object Checker {
     context.implementation.translatePredicateInstance(mode,
                                                       instance,
                                                       perms,
+                                                      None,
                                                       ValueContext)
   }
 
