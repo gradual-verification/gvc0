@@ -8,6 +8,7 @@ import gvc.benchmarking.{
   BenchmarkExecutor,
   BenchmarkExternalConfig,
   BenchmarkPopulator,
+  BenchmarkRecreator,
   Output
 }
 import gvc.weaver.Weaver
@@ -73,10 +74,23 @@ object Main extends App {
     config.mode match {
       case Config.Recreate =>
         val benchConfig =
-          BenchmarkExternalConfig.parseExecutor(config)
-      /*val inputSourceRecreated =
-          BenchmarkRecreator.recreate(benchConfig, config)*/
-
+          BenchmarkExternalConfig.parseRecreator(config)
+        Output.info(
+          "Recreating permutation ID=${benchConfig.permToRecreate}...")
+        val recreated =
+          BenchmarkRecreator.recreate(benchConfig, config, linkedLibraries)
+        val recreationName = s"./recreated_${benchConfig.permToRecreate}.c0"
+        Output.success(
+          s"Successfully recreated permutation ID=${benchConfig.permToRecreate}, writing to $recreationName")
+        val inputSource = IRPrinter.print(recreated, includeSpecs = true)
+        val sourcePath =
+          Paths.get(recreationName)
+        Files.writeString(sourcePath, inputSource)
+        val fileNames = getOutputCollection(recreationName)
+        Output.printTiming(() => {
+          val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+          execute(verifiedOutput.c0Source, fileNames)
+        })
       case Config.Execute =>
         val benchConfig =
           BenchmarkExternalConfig.parseExecutor(config)

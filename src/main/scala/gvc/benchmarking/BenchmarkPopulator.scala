@@ -33,20 +33,49 @@ object BenchmarkPopulator {
                libraryDirs: List[String]): Unit = {
     val connection = DAO.connect(populatorConfig.db)
     val globalConfig = DAO.resolveGlobalConfiguration(connection)
-    syncPrograms(populatorConfig.sources, libraryDirs, globalConfig, connection)
+    populatePrograms(populatorConfig.sources,
+                     libraryDirs,
+                     globalConfig,
+                     connection)
   }
 
-  def syncPrograms(
+  def sync(sources: List[Path],
+           libraryDirs: List[String],
+           connection: DBConnection): Map[Long, ProgramInformation] = {
+    val synchronized = allOf(
+      sources.map(src => {
+        Future(syncProgram(src, libraryDirs, connection))
+      })
+    )
+    val mapping = mutable.Map[Long, ProgramInformation]()
+    Await
+      .result(synchronized, Duration.Inf)
+      .foreach {
+        case Failure(f) => throw new BenchmarkException(f.getMessage)
+        case Success(valueOption) =>
+          valueOption match {
+            case Some(value) => mapping += value
+            case None        =>
+          }
+      }
+    mapping.toMap
+  }
+
+  def populatePrograms(
       sources: List[Path],
       libraryDirs: List[String],
       globalConfig: GlobalConfiguration,
       connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
 
-    val synchronized = allOf(
-      sources
-        .map(src => {
-          Future(syncProgram(src, libraryDirs, globalConfig, connection))
-        }))
+    val synchronized = allOf(sources
+      .map(src => {
+        Future({
+          val storedRep =
+            this.populateComponents(src, libraryDirs, globalConfig, connection)
+          populateProgram(storedRep._1, storedRep._2, globalConfig, connection)
+          storedRep
+        })
+      }))
 
     val mapping = mutable.Map[Long, StoredProgramRepresentation]()
     Await
@@ -61,12 +90,31 @@ object BenchmarkPopulator {
   private def syncProgram(
       src: Path,
       libraries: List[String],
-      globalConfiguration: GlobalConfiguration,
-      xa: DBConnection): (Long, StoredProgramRepresentation) = {
-    val storedRep =
-      this.populateComponents(src, libraries, globalConfiguration, xa)
-    populateProgram(storedRep._1, storedRep._2, globalConfiguration, xa)
-    storedRep
+      xa: DBConnection): Option[(Long, ProgramInformation)] = {
+
+    Output.info(s"Syncing definitions for ${src.getFileName}")
+
+    val sourceText = Files.readString(src)
+    val sourceIR = Main.generateIR(sourceText, libraries)
+    val labelOutput = new LabelVisitor().visit(sourceIR)
+    val fileName = src.getFileName.toString
+    val programInfo =
+      ProgramInformation(sourceText, sourceIR, labelOutput, fileName)
+
+    val insertedProgramID =
+      DAO.resolveProgram(md5sum(sourceText), labelOutput.labels.size, xa)
+
+    insertedProgramID match {
+      case Some(value) =>
+        if (labelOutput.labels.indices.exists(i => {
+              val l = labelOutput.labels(i)
+              DAO.resolveComponent(value, l, xa).isEmpty
+            })) None
+        else {
+          Some(value -> programInfo)
+        }
+      case None => None
+    }
   }
 
   private def populateProgram(programID: Long,

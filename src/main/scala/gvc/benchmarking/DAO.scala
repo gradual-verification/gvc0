@@ -167,6 +167,16 @@ object DAO {
     }
   }
 
+  def resolveProgram(hash: String,
+                     numLabels: Long,
+                     xa: transactor.Transactor.Aux[IO, Unit]): Option[Long] = {
+    sql"SELECT id FROM programs WHERE num_labels = $numLabels AND src_hash = $hash"
+      .query[Long]
+      .option
+      .transact(xa)
+      .unsafeRunSync()
+  }
+
   def addOrResolveProgram(filename: java.nio.file.Path,
                           hash: String,
                           numLabels: Long,
@@ -193,6 +203,21 @@ object DAO {
                              exprIndex: Long,
                              dateAdded: String)
 
+  def resolveComponent(
+      programID: Long,
+      astLabel: ASTLabel,
+      xa: transactor.Transactor.Aux[IO, Unit]): Option[Long] = {
+    val contextName = astLabel.parent match {
+      case Left(value)  => value.name
+      case Right(value) => value.name
+    }
+    sql"SELECT id FROM components WHERE context_name = $contextName AND spec_index = ${astLabel.specIndex} AND spec_type = ${astLabel.specType} AND expr_index = ${astLabel.exprIndex} AND expr_type = ${astLabel.exprType} AND program_id = $programID;"
+      .query[Long]
+      .option
+      .transact(xa)
+      .unsafeRunSync()
+  }
+
   def addOrResolveComponent(programID: Long,
                             astLabel: ASTLabel,
                             xa: transactor.Transactor.Aux[IO, Unit]): Long = {
@@ -209,6 +234,15 @@ object DAO {
         throw new DBException(
           s"Failed to add or resolve component ${astLabel.hash}")
     }
+  }
+
+  def resolvePermutation(permID: Long,
+                         xa: DBConnection): Option[Permutation] = {
+    sql"SELECT * FROM permutations WHERE id = $permID;"
+      .query[Permutation]
+      .option
+      .transact(xa)
+      .unsafeRunSync()
   }
 
   def addOrResolvePermutation(programID: Long,

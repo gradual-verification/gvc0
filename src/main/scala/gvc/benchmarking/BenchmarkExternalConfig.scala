@@ -44,6 +44,11 @@ case class PipelineModifiers(onlyVerify: Boolean,
                              onlyCompile: Boolean,
                              disableBaseline: Boolean)
 
+case class RecreatorConfig(version: String,
+                           db: BenchmarkDBCredentials,
+                           sources: List[Path],
+                           permToRecreate: Long)
+
 case class PopulatorConfig(version: String,
                            pathQuantity: Option[Int],
                            db: BenchmarkDBCredentials,
@@ -70,6 +75,18 @@ case class BenchmarkConfigResults(
 )
 
 object BenchmarkExternalConfig {
+
+  def parseRecreator(rootConfig: Config): RecreatorConfig = {
+    val resolved = parseConfig(rootConfig)
+    rootConfig.recreatePerm match {
+      case Some(value) =>
+        RecreatorConfig(resolved.version,
+                        resolved.credentials,
+                        resolved.sources,
+                        value)
+      case None => error("Expected an integer value passed to --recreate.")
+    }
+  }
 
   def parseExecutor(rootConfig: Config): ExecutorConfig = {
     val resolved = parseConfig(rootConfig)

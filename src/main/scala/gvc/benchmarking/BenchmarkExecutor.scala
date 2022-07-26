@@ -47,10 +47,7 @@ object BenchmarkExecutor {
     val id = DAO.addOrResolveIdentity(config, conn)
 
     val syncedPrograms =
-      BenchmarkPopulator.syncPrograms(config.sources,
-                                      libraries,
-                                      globalConfig,
-                                      conn)
+      BenchmarkPopulator.sync(config.sources, libraries, conn)
 
     val workload = config.workload
 
@@ -66,17 +63,17 @@ object BenchmarkExecutor {
     while (reservedProgram.nonEmpty) {
       val reserved = reservedProgram.get
       Output.info(
-        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).info.fileName} | ${reserved.measurementMode} | w=${reserved.stress} | id=${reserved.perm.id}")
+        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${reserved.measurementMode} | w=${reserved.stress} | id=${reserved.perm.id}")
 
       val correspondingProgramLabels =
-        syncedPrograms(reserved.perm.programID).info.labels
+        syncedPrograms(reserved.perm.programID).labels
 
       val asLabelSet =
         LabelTools.permutationIDToPermutation(correspondingProgramLabels,
                                               reserved.perm.permutationHash)
 
       val convertedToIR = new SelectVisitor(
-        syncedPrograms(reserved.perm.programID).info.ir).visit(asLabelSet)
+        syncedPrograms(reserved.perm.programID).ir).visit(asLabelSet)
 
       val timingStart = System.nanoTime()
 
