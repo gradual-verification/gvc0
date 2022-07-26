@@ -17,6 +17,7 @@ jobs:
           path: 'silicon-gv'
           repository: 'gradual-verification/silicon-gv'
       - uses: actions/checkout@v3
+      - run: cd $GITHUB_WORKSPACE && ls -la
       - run: ln -s $GITHUB_WORKSPACE/silver-gv $GITHUB_WORKSPACE/silicon-gv/silver
       - run: ln -s $GITHUB_WORKSPACE/silicon-gv $GITHUB_WORKSPACE/gvc0/silicon
       - name: Set up JDK 17
