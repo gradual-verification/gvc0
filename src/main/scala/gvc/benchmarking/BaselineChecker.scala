@@ -1,6 +1,9 @@
 package gvc.benchmarking
+
 import gvc.transformer.IR
+import gvc.weaver.Collector.getCallstyle
 import gvc.weaver._
+
 object BaselineChecker {
 
   def check(program: IR.Program, onlyFraming: Boolean = false): Unit = {
@@ -20,7 +23,7 @@ object BaselineChecker {
       checks: CheckImplementation,
       onlyFraming: Boolean
   ): Unit = {
-    val perms = method.name match {
+    val globalPerms = method.name match {
       case "main" =>
         method.addVar(
           checks.runtime.ownedFieldsRef,
@@ -37,35 +40,103 @@ object BaselineChecker {
       checks.runtime.ownedFieldsRef,
       CheckRuntime.Names.temporaryOwnedFields
     )
+    val callstyle = getCallstyle(method)
 
-    checkBlock(method.body, checks, perms, tempPerms, onlyFraming)
+    callstyle match {
 
-    if (!onlyFraming) {
-      method.precondition.toSeq.flatMap(
-        validateSpec(_, perms, tempPerms, checks)
-      ) ++=: method.body
+      case Collector.PreciseCallStyle | Collector.PrecisePreCallStyle =>
+        val contextPerms = method.addVar(checks.runtime.ownedFieldsRef,
+                                         CheckRuntime.Names.contextOwnedFields)
 
-      if (Collector.hasImplicitReturn(method)) {
-        method.body ++= method.postcondition.toSeq.flatMap(
-          validateSpec(_, perms, tempPerms, checks)
-        )
-      }
-    }
-    // Add the initialization to main
-    if (method.name == "main") {
-      val instanceCounter = method.addVar(
-        new IR.PointerType(IR.IntType),
-        CheckRuntime.Names.instanceCounter
-      )
+        checkBlock(method.body,
+                   checks,
+                   contextPerms,
+                   tempPerms,
+                   globalPerms,
+                   onlyFraming)
 
-      Seq(
-        new IR.AllocValue(IR.IntType, instanceCounter),
-        new IR.Invoke(
-          checks.runtime.initOwnedFields,
-          List(instanceCounter),
-          Some(perms)
-        )
-      ) ++=: method.body
+        // CheckAddRemove mode
+        // Check in global perms, add to context perms, remove from global perms.
+        val mode = if (onlyFraming) AddRemoveMode else CheckAddRemoveMode
+        method.precondition.toSeq
+          .flatMap(
+            checks
+              .translate(mode, _, contextPerms, Some(globalPerms), ValueContext)
+          )
+          .toList ++=: method.body
+
+        if (Collector.hasImplicitReturn(method)) {
+
+          if (callstyle == Collector.PrecisePreCallStyle) {
+            if (!onlyFraming) {
+              method.body ++= method.postcondition.toSeq.flatMap(
+                validateSpec(_, contextPerms, tempPerms, checks)
+              )
+            }
+            method.body ++= Seq(
+              new IR.Invoke(
+                checks.runtime.join,
+                List(globalPerms, contextPerms),
+                None
+              ))
+
+          } else {
+            val mode = if (onlyFraming) CheckAddMode else AddMode
+            method.body ++= method.postcondition.toSeq
+              .flatMap(
+                checks.translate(mode,
+                                 _,
+                                 globalPerms,
+                                 Some(contextPerms),
+                                 ValueContext)
+              )
+              .toList
+          }
+        }
+        Seq(
+          new IR.Invoke(
+            checks.runtime.initOwnedFields,
+            List(
+              new IR.FieldMember(
+                globalPerms,
+                checks.runtime.ownedFieldInstanceCounter
+              )
+            ),
+            Some(contextPerms)
+          )
+        ) ++=: method.body
+      case Collector.ImpreciseCallStyle | Collector.MainCallStyle =>
+        checkBlock(method.body,
+                   checks,
+                   globalPerms,
+                   tempPerms,
+                   globalPerms,
+                   onlyFraming)
+        method.precondition.toSeq.flatMap(
+          validateSpec(_, globalPerms, tempPerms, checks)
+        ) ++=: method.body
+
+        if (!onlyFraming && Collector.hasImplicitReturn(method)) {
+          method.body ++= method.postcondition.toSeq.flatMap(
+            validateSpec(_, globalPerms, tempPerms, checks)
+          )
+        }
+
+        if (callstyle == Collector.MainCallStyle) {
+          val instanceCounter = method.addVar(
+            new IR.PointerType(IR.IntType),
+            CheckRuntime.Names.instanceCounter
+          )
+
+          Seq(
+            new IR.AllocValue(IR.IntType, instanceCounter),
+            new IR.Invoke(
+              checks.runtime.initOwnedFields,
+              List(instanceCounter),
+              Some(globalPerms)
+            )
+          ) ++=: method.body
+        }
     }
   }
 
@@ -248,6 +319,7 @@ object BaselineChecker {
       checks: CheckImplementation,
       perms: IR.Var,
       tempPerms: IR.Var,
+      globalPerms: IR.Var,
       onlyFraming: Boolean
   ): Unit = {
     for (op <- block) op match {
@@ -308,8 +380,20 @@ object BaselineChecker {
       case iff: IR.If =>
         val (condAccess, _) = validateAccess(iff.condition, perms, checks)
         iff.insertBefore(condAccess)
-        checkBlock(iff.ifTrue, checks, perms, tempPerms, onlyFraming)
-        checkBlock(iff.ifFalse, checks, perms, tempPerms, onlyFraming)
+
+        checkBlock(iff.ifTrue,
+                   checks,
+                   perms,
+                   tempPerms,
+                   globalPerms,
+                   onlyFraming)
+
+        checkBlock(iff.ifFalse,
+                   checks,
+                   perms,
+                   tempPerms,
+                   globalPerms,
+                   onlyFraming)
 
       case ret: IR.Return =>
         val context = ret.value match {
@@ -322,20 +406,37 @@ object BaselineChecker {
             case (ops, _) => ops
           })
 
-        ret.insertBefore(
-          valueAccess ++ (if (!onlyFraming)
-                            block.method.postcondition.toSeq.flatMap(
-                              validateSpec(
-                                _,
-                                perms,
-                                tempPerms,
-                                checks,
-                                context = context
-                              )
-                            )
-                          else Seq.empty)
-        )
+        val validationOps = if (!onlyFraming) {
+          valueAccess ++
+            block.method.postcondition.toSeq.flatMap(
+              validateSpec(
+                _,
+                perms,
+                tempPerms,
+                checks,
+                context = context
+              )
+            )
+        } else {
+          Seq.empty
+        }
 
+        ret.insertBefore(validationOps ++ (getCallstyle(block.method) match {
+          case Collector.PreciseCallStyle =>
+            block.method.postcondition.toSeq
+              .flatMap(
+                checks.translate(AddMode, _, globalPerms, None, context)
+              )
+              .toList
+          case Collector.PrecisePreCallStyle =>
+            Seq(
+              new IR.Invoke(
+                checks.runtime.join,
+                List(globalPerms, perms),
+                None
+              ))
+          case _ => Seq.empty
+        }))
       case loop: IR.While =>
         val preAccessibility = validateAccess(
           loop.condition,
@@ -348,7 +449,12 @@ object BaselineChecker {
           preAccessibility
         )
 
-        checkBlock(loop.body, checks, perms, tempPerms, onlyFraming)
+        checkBlock(loop.body,
+                   checks,
+                   perms,
+                   tempPerms,
+                   globalPerms,
+                   onlyFraming)
 
         val postAccessibility = validateAccess(
           loop.condition,

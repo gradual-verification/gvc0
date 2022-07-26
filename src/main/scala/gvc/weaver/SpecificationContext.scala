@@ -55,7 +55,7 @@ abstract class SpecificationContext {
 // like \result are not used incorrectly
 object ValueContext extends SpecificationContext {
   def convertResult: IR.Expression =
-    throw new WeaverException("Invalid \result expression")
+    throw new WeaverException("Invalid result expression")
 
   def convertVar(source: IR.Var): IR.Expression = source
 }

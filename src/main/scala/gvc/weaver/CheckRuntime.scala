@@ -34,6 +34,7 @@ object CheckRuntime {
     val fieldArray = "FieldArray"
     val primaryOwnedFields = "_ownedFields"
     val temporaryOwnedFields = "_tempFields"
+    val contextOwnedFields = "_contextFields"
     val initOwnedFields = "initOwnedFields"
     val addStructAcc = "addStructAcc"
     val addAcc = "addAcc"
