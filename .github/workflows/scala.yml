@@ -14,9 +14,9 @@ jobs:
       - uses: actions/checkout@v3
         with:
           repository: 'gradual-verification/silicon-gv'
-      - run: ln -s $GITHUB_WORKSPACE/silver-gv $GITHUB_WORKSPACE/silicon-gv/silver
+      - run: ln -s $GITHUB_WORKSPACE/../silver-gv $GITHUB_WORKSPACE/../silicon-gv/silver
       - uses: actions/checkout@v3
-      - run: ln -s $GITHUB_WORKSPACE/silicon-gv $GITHUB_WORKSPACE/gvc0/silicon
+      - run: ln -s $GITHUB_WORKSPACE/../silicon-gv $GITHUB_WORKSPACE/../gvc0/silicon
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
