@@ -1,3 +1,5 @@
+DROP DATABASE IF EXISTS gvc0;
+CREATE DATABASE gvc0;
 USE gvc0;
 
 DROP TABLE IF EXISTS global_configuration;
@@ -75,7 +77,6 @@ CREATE TABLE IF NOT EXISTS components
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
-DROP PROCEDURE IF EXISTS sp_gr_Component;
 DELIMITER //
 CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255),
                                  IN p_stype ENUM ('post', 'assert', 'pre', 'unfold', 'fold', 'pred', 'inv'),
@@ -100,7 +101,6 @@ BEGIN
 END //
 DELIMITER ;
 
-DROP TABLE IF EXISTS permutations;
 CREATE TABLE IF NOT EXISTS permutations
 (
     id               SERIAL,
@@ -111,7 +111,6 @@ CREATE TABLE IF NOT EXISTS permutations
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
-DROP PROCEDURE IF EXISTS sp_gr_Permutation;
 DELIMITER //
 CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash BLOB, OUT p_id BIGINT UNSIGNED)
 BEGIN
@@ -121,6 +120,7 @@ BEGIN
         select LAST_INSERT_ID() INTO p_id;
     END IF;
 END //
+DELIMITER ;
 
 
 CREATE TABLE IF NOT EXISTS paths
@@ -450,4 +450,5 @@ BEGIN
     ELSE
         UPDATE errors SET time_elapsed_seconds = p_etime, error_date = DEFAULT WHERE id = (SELECT eid);
     END IF;
-END;
+END //
+DELIMITER ;
