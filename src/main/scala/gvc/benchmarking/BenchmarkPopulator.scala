@@ -75,7 +75,6 @@ object BenchmarkPopulator {
                               xa: DBConnection): Unit = {
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
-
     val sampler = new Sampler(programRep.info.labels)
     Output.info(s"Generating paths for ${programRep.info.fileName}")
     val bottomPermutationHash =
@@ -103,17 +102,6 @@ object BenchmarkPopulator {
             DAO.addOrResolvePermutation(programID, currentID, xa)
           pathQuery.addStep(storedPermutationID,
                             programRep.componentMapping(ordering(labelIndex)))
-
-          val recreated = new LabelPermutation(programRep.info.labels)
-          currentPermutation.labels.foreach(recreated.addLabel)
-          val selected = new SelectVisitor(programRep.info.ir).visit(recreated)
-
-          val decoded = LabelTools.permutationIDToPermutation(
-            programRep.info.labels,
-            currentID)
-
-          val selectDecoded =
-            new SelectVisitor(programRep.info.ir).visit(decoded)
         }
         pathQuery.exec(xa)
       }

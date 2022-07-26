@@ -248,23 +248,13 @@ class LabelPermutation(
   }
 
   def idArray: Array[Byte] = {
-    val test = this.labels
+    this.labels
       .flatMap(l => {
         val masked: Int = 0x0000 | labelOutput.pairToLabelOrdering(
           (l.specIndex, l.exprIndex))
         (0 to 3).map(i => ((masked >> ((3 - i) * 8)) & 0xff).toByte)
       })
-    val compare = LabelTools.byteToIntArray(test.toArray)
-
-    if (compare.length != this.orderedIndices.length) {
-      throw new BenchmarkException("unequal!")
-    }
-    if (compare.length > 0) {
-      for (i <- compare.indices) {
-        this.orderedIndices(i) == compare(i)
-      }
-    }
-    test.toArray
+      .toArray
   }
 }
 

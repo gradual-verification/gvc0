@@ -359,11 +359,17 @@ BEGIN
                 from dynamic_performance
                 WHERE version_id = vid
                   AND hardware_id = hid
-
                 GROUP BY permutation_id) as tblA on permutations.id = tblA.permutation_id
           WHERE program_id = (SELECT @min_program_id)) AS tblB
+             INNER JOIN (SELECT permutation_id, COUNT(DISTINCT path_id) as presence
+                         FROM (SELECT permutation_id, path_id
+                               FROM steps
+                                        INNER JOIN permutations on permutations.id = steps.permutation_id
+                               WHERE program_id = (SELECT @min_program_id))
+                                  as tblA
+                         GROUP BY permutation_id) as tblC ON tblB.id = tblC.permutation_id
     WHERE tblB.completion < (SELECT COUNT(DISTINCT id) FROM dynamic_measurement_types)
-    ORDER BY tblB.completion DESC
+    ORDER BY tblB.completion DESC, tblC.presence DESC
     LIMIT 1;
 
     IF ((SELECT perm_id) IS NOT NULL) THEN
@@ -422,3 +428,4 @@ END;
 #CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
 #CALL sp_ReservePermutation(1, 1, 1, 16, @a, @b, @c);
 #SELECT @a, @b, @c;
+
