@@ -1,20 +1,27 @@
 name: Assembly
-
-on: [workflow_dispatch]
-
+on: [ workflow_dispatch ]
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: self-hosted
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: 'sbt'
-    - name: Assembly
-      run: sbt assembly
+      - name: Install Z3
+        uses: pavpanchekha/setup-z3@1.2.2
+      - uses: actions/checkout@v3
+        with:
+          repository: 'https://github.com/gradual-verification/silver-gv.git'
+      - uses: actions/checkout@v3
+        with:
+          repository: 'https://github.com/gradual-verification/silicon-gv.git'
+      - run: ln -s $GITHUB_WORKSPACE/silver-gv $GITHUB_WORKSPACE/silicon-gv/silver
+      - uses: actions/checkout@v3
+      - run: ln -s $GITHUB_WORKSPACE/silicon-gv $GITHUB_WORKSPACE/gvc0/silicon
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'sbt'
+      - name: Assembly
+        run: sbt assembly
