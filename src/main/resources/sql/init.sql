@@ -14,6 +14,7 @@ DROP TABLE IF EXISTS programs;
 
 DROP PROCEDURE IF EXISTS sp_gr_Program;
 DROP PROCEDURE IF EXISTS sp_ReservePermutation;
+DROP PROCEDURE IF EXISTS sp_gr_Permutation;
 DROP PROCEDURE IF EXISTS sp_gr_Component;
 DROP PROCEDURE IF EXISTS sp_gr_Error;
 DROP PROCEDURE IF EXISTS sp_gr_Hardware;
@@ -62,21 +63,21 @@ DELIMITER ;
 CREATE TABLE IF NOT EXISTS components
 (
     id             SERIAL,
-    program_id     BIGINT UNSIGNED                                                 NOT NULL,
-    context_name   VARCHAR(255)                                                    NOT NULL,
-    spec_type      ENUM ('post', 'assert', 'pre', 'unfold', 'fold', 'pred', 'inv') NOT NULL,
-    spec_index     BIGINT UNSIGNED                                                 NOT NULL,
-    expr_type      ENUM ('acc', 'pred', 'bool', 'rem_imp', 'abs')                  NOT NULL,
-    expr_index     BIGINT UNSIGNED                                                 NOT NULL,
-    component_date DATETIME                                                        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    program_id     BIGINT UNSIGNED NOT NULL,
+    context_name   VARCHAR(255)    NOT NULL,
+    spec_type      VARCHAR(255)    NOT NULL,
+    spec_index     BIGINT UNSIGNED NOT NULL,
+    expr_type      VARCHAR(255)    NOT NULL,
+    expr_index     BIGINT UNSIGNED NOT NULL,
+    component_date DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255),
-                                 IN p_stype ENUM ('post', 'assert', 'pre', 'unfold', 'fold', 'pred', 'inv'),
-                                 IN p_sindex BIGINT UNSIGNED, IN p_etype ENUM ('acc', 'pred', 'bool', 'rem_imp', 'abs'),
+                                 IN p_stype VARCHAR(255),
+                                 IN p_sindex BIGINT UNSIGNED, IN p_etype VARCHAR(255),
                                  IN p_eindex BIGINT UNSIGNED,
                                  OUT c_id BIGINT UNSIGNED)
 BEGIN
@@ -219,16 +220,16 @@ CREATE TABLE IF NOT EXISTS benchmark_membership
 
 CREATE TABLE IF NOT EXISTS dynamic_measurement_types
 (
-    id   SERIAL,
-    type VARCHAR(255) NOT NULL UNIQUE,
+    id               SERIAL,
+    measurement_type VARCHAR(255) NOT NULL UNIQUE,
     PRIMARY KEY (id)
 );
 
-INSERT INTO dynamic_measurement_types (type)
+INSERT INTO dynamic_measurement_types (measurement_type)
 VALUES ('gradual');
-INSERT INTO dynamic_measurement_types (type)
+INSERT INTO dynamic_measurement_types (measurement_type)
 VALUES ('framing');
-INSERT INTO dynamic_measurement_types (type)
+INSERT INTO dynamic_measurement_types (measurement_type)
 VALUES ('dynamic');
 
 CREATE TABLE IF NOT EXISTS measurements
@@ -248,9 +249,9 @@ CREATE TABLE IF NOT EXISTS measurements
 CREATE TABLE IF NOT EXISTS errors
 (
     id                   SERIAL,
-    error_desc           TEXT,
-    error_date           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    error_type           ENUM ('verification', 'compilation', 'execution'),
+    error_desc           TEXT                  DEFAULT NULL,
+    error_date           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    error_type           VARCHAR(255) NOT NULL,
     time_elapsed_seconds BIGINT UNSIGNED,
     PRIMARY KEY (id)
 );
@@ -412,7 +413,11 @@ BEGIN
 
         VALUES ((SELECT perm_id), vid, hid, nnid, workload, (SELECT @missing_mode_id));
         SELECT LAST_INSERT_ID() INTO perf_id LIMIT 1;
-        SELECT type INTO missing_mode FROM dynamic_measurement_types WHERE id = (SELECT @missing_mode_id) LIMIT 1;
+        SELECT measurement_type
+        INTO missing_mode
+        FROM dynamic_measurement_types
+        WHERE id = (SELECT @missing_mode_id)
+        LIMIT 1;
     ELSE
         SELECT NULL INTO missing_mode;
         SELECT NULL INTO perf_id;
@@ -432,16 +437,16 @@ CREATE EVENT delete_reserved_permutations
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Error(IN p_edesc TEXT, IN p_etime BIGINT UNSIGNED,
-                             IN type ENUM ('verification', 'compilation', 'execution'), OUT eid BIGINT UNSIGNED)
+                             IN p_err_type VARCHAR(255), OUT eid BIGINT UNSIGNED)
 BEGIN
     SELECT id
     INTO eid
     FROM errors
     WHERE error_desc = p_edesc
-      AND error_type = type;
+      AND error_type = p_err_type;
     IF ((SELECT eid) IS NULL) THEN
         INSERT INTO errors (error_desc, time_elapsed_seconds, error_type)
-        VALUES (p_edesc, p_etime, type);
+        VALUES (p_edesc, p_etime, p_err_type);
         SELECT LAST_INSERT_ID() INTO eid;
     ELSE
         UPDATE errors SET time_elapsed_seconds = p_etime, error_date = DEFAULT WHERE id = (SELECT eid);
