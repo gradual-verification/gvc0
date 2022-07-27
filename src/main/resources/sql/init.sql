@@ -351,7 +351,6 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     FOREIGN KEY (error_id) REFERENCES errors (id),
     PRIMARY KEY (permutation_id, version_id, hardware_id, nickname_id, stress, dynamic_measurement_type)
 );
-DROP PROCEDURE sp_ReservePermutation;
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
                                        IN workload BIGINT UNSIGNED,
