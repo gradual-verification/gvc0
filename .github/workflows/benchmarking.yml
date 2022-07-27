@@ -1,4 +1,4 @@
-name: Assembly
+name: Executor
 on: [ workflow_dispatch ]
 permissions:
   contents: read
@@ -18,4 +18,4 @@ jobs:
       - name: Assembly
         run: sbt assembly
       - name: Execution
-        run: java -Xss15M -Xmx8G -jar target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar --config=./study/config/nuc.xml --execute --nickname=${{ runner.name }} --db-url=$DB_URL --db-user=$DB_USER --db-pass=$DB_PASSWORD --version=$GITHUB_SHA
+        run: java -Xss15M -Xmx8G -jar target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar --config=./study/config/nuc.xml --execute --nickname=${{ runner.name }} --db-url=${{ secrets.DB_URL }} --db-user=${{ secrets.DB_USER }} --db-pass=${{ secrets.DB_PASSWORD }} --version=${{ github.sha }}
