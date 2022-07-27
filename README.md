@@ -1,4 +1,5 @@
 # `gvc0`: Gradually Verified C0
+![Build](https://github.com/gradual-verification/gvc0/actions/workflows/build.yml/badge.svg)
 
 TODO: Get a better name
 
