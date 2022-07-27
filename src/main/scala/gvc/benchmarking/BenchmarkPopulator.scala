@@ -66,16 +66,11 @@ object BenchmarkPopulator {
       libraryDirs: List[String],
       globalConfig: GlobalConfiguration,
       connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
-
-    val synchronized = allOf(sources
-      .map(src => {
-        Future({
-          val storedRep =
-            this.populateComponents(src, libraryDirs, globalConfig, connection)
-          populateProgram(storedRep._1, storedRep._2, globalConfig, connection)
-          storedRep
-        })
-      }))
+    val synchronized = allOf(
+      sources
+        .map(src => {
+          Future(populateProgram(src, libraryDirs, globalConfig, connection))
+        }))
 
     val mapping = mutable.Map[Long, StoredProgramRepresentation]()
     Await
@@ -116,11 +111,10 @@ object BenchmarkPopulator {
       case None => None
     }
   }
-
-  private def populateProgram(programID: Long,
-                              programRep: StoredProgramRepresentation,
-                              globalConfig: GlobalConfiguration,
-                              xa: DBConnection): Unit = {
+  private def populatePaths(programID: Long,
+                            programRep: StoredProgramRepresentation,
+                            globalConfig: GlobalConfiguration,
+                            xa: DBConnection): Unit = {
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
     val sampler = new Sampler(programRep.info.labels)
@@ -158,7 +152,7 @@ object BenchmarkPopulator {
       s"Completed generating paths for ${programRep.info.fileName}")
   }
 
-  private def populateComponents(
+  private def populateProgram(
       src: Path,
       libraries: List[String],
       globalConfiguration: GlobalConfiguration,
@@ -185,7 +179,7 @@ object BenchmarkPopulator {
 
     val programRep =
       StoredProgramRepresentation(programInfo, componentMapping.toMap)
-    populateProgram(insertedProgramID, programRep, globalConfiguration, xa)
+    populatePaths(insertedProgramID, programRep, globalConfiguration, xa)
 
     (insertedProgramID, programRep)
   }
