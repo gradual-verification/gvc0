@@ -11,8 +11,6 @@ lazy val gvc = (project in file("."))
     libraryDependencies += "org.tpolecat" %% "doobie-h2" % "1.0.0-RC1", // H2 driver 1.4.199 + type mappings.
     libraryDependencies += "org.tpolecat" %% "doobie-hikari" % "1.0.0-RC1", // HikariCP transactor.
     libraryDependencies += "mysql" % "mysql-connector-java" % "8.0.29",
-    libraryDependencies += "org.tpolecat" %% "doobie-scalatest" % "1.0.0-RC1" % "test", // ScalaTest support for typechecking statements
-    libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6",
     Test / testOptions +=
       Tests.Argument(
         TestFrameworks.ScalaTest,
@@ -22,3 +20,7 @@ lazy val gvc = (project in file("."))
   .dependsOn(silicon)
 Compile / run / fork := true
 Compile / run / javaOptions += "-Xss15m"
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case x                             => MergeStrategy.first
+}
