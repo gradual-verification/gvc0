@@ -11,26 +11,26 @@ sealed trait DumpType
 sealed trait Mode
 
 case class Config(
-                   dump: Option[DumpType] = None,
-                   output: Option[String] = None,
-                   timeout: Option[Long] = None,
-                   mode: Mode = Config.DefaultMode,
-                   config: Option[Path] = None,
-                   onlyExec: Boolean = false,
-                   saveFiles: Boolean = false,
-                   exec: Boolean = false,
-                   onlyVerify: Boolean = false,
-                   onlyCompile: Boolean = false,
-                   sourceFile: Option[String] = None,
-                   linkedLibraries: List[String] = List.empty,
-                   versionString: Option[String] = None,
-                   nicknameString: Option[String] = None,
-                   hardwareString: Option[String] = None,
-                   dbURLString: Option[String] = None,
-                   dbUserString: Option[String] = None,
-                   dbPassString: Option[String] = None,
-                   recreatePerm: Option[Int] = None,
-                 ) {
+    dump: Option[DumpType] = None,
+    output: Option[String] = None,
+    timeout: Option[Long] = None,
+    mode: Mode = Config.DefaultMode,
+    config: Option[Path] = None,
+    onlyExec: Boolean = false,
+    saveFiles: Boolean = false,
+    exec: Boolean = false,
+    onlyVerify: Boolean = false,
+    onlyCompile: Boolean = false,
+    sourceFile: Option[String] = None,
+    linkedLibraries: List[String] = List.empty,
+    versionString: Option[String] = None,
+    nicknameString: Option[String] = None,
+    hardwareString: Option[String] = None,
+    dbURLString: Option[String] = None,
+    dbUserString: Option[String] = None,
+    dbPassString: Option[String] = None,
+    recreatePerm: Option[Int] = None,
+) {
   def validate(): Unit = {
     (
       if (dump.isDefined && output.isDefined)
@@ -51,7 +51,7 @@ case class Config(
       else if (versionString.nonEmpty && versionString.get.trim.isEmpty) {
         Some(s"Invalid version string.")
       } else None
-      ).foreach(Config.error)
+    ).foreach(Config.error)
   }
 }
 
@@ -111,8 +111,8 @@ object Config {
   private val hardwareString = raw"--hardware=(.+)".r
 
   private val dbURLString = raw"--db-url=(.+)".r
-  private val dbPassString = raw"--db-user=(.+)".r
-  private val dbUserString = raw"--db-pass=(.+)".r
+  private val dbUserString = raw"--db-user=(.+)".r
+  private val dbPassString = raw"--db-pass=(.+)".r
 
   private val recreatePermString = raw"--recreate=(.+)".r
 
@@ -124,14 +124,14 @@ object Config {
   private def parseTimeout(t: String): Long = t match {
     case timeoutSec(t) => t.substring(0, t.length).toLong * 1000
     case timeoutMin(t) => t.substring(0, t.length).toLong * 60 * 1000
-    case _ => error(s"Invalid timeout: $t")
+    case _             => error(s"Invalid timeout: $t")
   }
 
   private def parseDumpType(t: String) = t.toLowerCase() match {
-    case "ir" => DumpIR
+    case "ir"     => DumpIR
     case "silver" => DumpSilver
-    case "c0" => DumpC0
-    case _ => error(s"Invalid dump output type: $t")
+    case "c0"     => DumpC0
+    case _        => error(s"Invalid dump output type: $t")
   }
 
   def parseInt(t: String, config: String): Int = {
@@ -174,9 +174,9 @@ object Config {
 
   @tailrec
   def fromCommandLineArgs(
-                           args: List[String],
-                           current: Config = Config()
-                         ): Config =
+      args: List[String],
+      current: Config = Config()
+  ): Config =
     args match {
       case hardwareString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(hardwareString = Some(t)))
@@ -187,9 +187,9 @@ object Config {
       case dbURLString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(dbURLString = Some(t)))
       case dbPassString(t) :: tail =>
-        fromCommandLineArgs(tail, current.copy(dbUserString = Some(t)))
-      case dbUserString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(dbPassString = Some(t)))
+      case dbUserString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(dbUserString = Some(t)))
       case "--monitor" :: tail =>
         fromCommandLineArgs(tail, current.copy(mode = Monitor))
       case "--populate" :: tail =>
@@ -198,9 +198,9 @@ object Config {
         fromCommandLineArgs(tail, current.copy(mode = Execute))
       case recreatePermString(t) :: tail =>
         fromCommandLineArgs(tail,
-          current.copy(recreatePerm =
-            Some(this.parseInt(t, "--recreate")),
-            mode = Recreate))
+                            current.copy(recreatePerm =
+                                           Some(this.parseInt(t, "--recreate")),
+                                         mode = Recreate))
       case configFileArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
