@@ -317,29 +317,21 @@ object DAO {
     }
     for (i <- workloads) {
       val reserved = (for {
-        _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $i, @perm, @perf, @mode);""".update.run
-        perf_id <- sql"""SELECT @perf;""".query[Option[Long]].unique
+        _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $i, @perm, @mode);""".update.run
         perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
           .query[Option[Permutation]]
           .option
         mode <- sql"""SELECT @mode;"""
           .query[Option[String]]
           .option
-      } yield (perf_id, perm, mode)).transact(xa).unsafeRunSync()
+      } yield (perm, mode)).transact(xa).unsafeRunSync()
 
       reserved._1 match {
-        case Some(perfIDReserved) =>
+        case Some(permutationReserved) =>
           reserved._2 match {
-            case Some(permutationReserved) =>
-              reserved._3 match {
-                case Some(modeReserved) =>
-                  return Some(
-                    ReservedProgram(permutationReserved.get,
-                                    i,
-                                    perfIDReserved,
-                                    modeReserved.get))
-                case None =>
-              }
+            case Some(modeReserved) =>
+              return Some(
+                ReservedProgram(permutationReserved.get, i, modeReserved.get))
             case None =>
           }
         case None =>
@@ -348,14 +340,19 @@ object DAO {
     None
   }
 
-  def completeProgramMeasurement(performanceID: Long,
+  def completeProgramMeasurement(id: Identity,
+                                 permID: Long,
                                  iterations: Int,
                                  p: Performance,
                                  xa: DBConnection) = {
+    val nicknameResolved = id.nid match {
+      case Some(value) => value.toString
+      case None        => "NULL"
+    }
     (for {
       _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES ($iterations, ${p.ninetyFifth}, ${p.fifth}, ${p.median}, ${p.mean}, ${p.stdev}, ${p.minimum}, ${p.maximum});".update.run
       mid <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
-      r <- sql"UPDATE dynamic_performance SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP WHERE id = $performanceID;".update.run
+      r <- sql"UPDATE dynamic_performance SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP WHERE permutation_id = $permID AND version_id = ${id.vid} AND nickname_id = $nicknameResolved AND hardware_id = ${id.hid};".update.run
     } yield r).transact(xa).unsafeRunSync()
   }
 
@@ -417,7 +414,7 @@ object DAO {
       _ <- sql"CALL sp_gr_Error($errText, $timeElapsedSeconds, $mode, @eid)".update.run
       eid <- sql"SELECT @eid".query[Long].unique
       _ <- sql"UPDATE static_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
-      u <- sql"UPDATE dynamic_performance SET error_id = $eid WHERE id = ${reserved.perfID}".update.run
+      u <- sql"UPDATE dynamic_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
     } yield u).transact(conn).unsafeRunSync()
   }
 

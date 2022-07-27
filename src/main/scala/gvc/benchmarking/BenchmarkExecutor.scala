@@ -1,6 +1,6 @@
 package gvc.benchmarking
 
-import gvc.CC0Wrapper.{CommandOutput, Performance}
+import gvc.CC0Wrapper.Performance
 import gvc.benchmarking.Benchmark.{
   BenchmarkException,
   injectStress,
@@ -34,7 +34,6 @@ object BenchmarkExecutor {
 
   case class ReservedProgram(perm: Permutation,
                              stress: Int,
-                             perfID: Long,
                              measurementMode: String)
 
   def execute(config: ExecutorConfig,
@@ -151,7 +150,8 @@ object BenchmarkExecutor {
         val performanceResult =
           Timeout.runWithTimeout(globalConfig.timeoutMinutes * 60 * 1000)(
             benchmarkingFunction())
-        DAO.completeProgramMeasurement(reserved.perfID,
+        DAO.completeProgramMeasurement(id,
+                                       reserved.perm.id,
                                        workload.iterations,
                                        performanceResult,
                                        conn)

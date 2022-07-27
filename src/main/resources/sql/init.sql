@@ -278,7 +278,7 @@ CREATE TABLE IF NOT EXISTS static_performance
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
     FOREIGN KEY (error_id) REFERENCES errors (id),
-    PRIMARY KEY (permutation_id, version_id, hardware_id)
+    PRIMARY KEY (permutation_id, hardware_id, version_id)
 );
 
 DELIMITER //
@@ -295,11 +295,12 @@ BEGIN
     FROM static_performance
     WHERE version_id = vid
       AND hardware_id = hid
-      AND permutation_id = perm_id;
+      AND permutation_id = perm_id
+      AND nickname_id = nid;
     IF ((SELECT @ex) IS NOT NULL) THEN
+
         UPDATE static_performance
-        SET nickname_id             = nid,
-            translation_perf_id     = tr_id,
+        SET translation_perf_id     = tr_id,
             verification_perf_id    = vf_id,
             instrumentation_perf_id = inst_id,
             compilation_perf_id     = cp_id,
@@ -309,6 +310,7 @@ BEGIN
         WHERE version_id = vid
           AND hardware_id = hid
           AND permutation_id = perm_id;
+
         DELETE FROM measurements WHERE id = (SELECT @ex_tr);
         DELETE FROM measurements WHERE id = (SELECT @ex_vf);
         DELETE FROM measurements WHERE id = (SELECT @ex_inst);
@@ -324,7 +326,6 @@ DELIMITER ;
 
 CREATE TABLE IF NOT EXISTS dynamic_performance
 (
-    id                       SERIAL,
     permutation_id           BIGINT UNSIGNED NOT NULL,
     version_id               BIGINT UNSIGNED NOT NULL,
     hardware_id              BIGINT UNSIGNED NOT NULL,
@@ -341,14 +342,14 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     FOREIGN KEY (dynamic_measurement_type) REFERENCES dynamic_measurement_types (id),
     FOREIGN KEY (measurement_id) REFERENCES measurements (id),
     FOREIGN KEY (error_id) REFERENCES errors (id),
-    PRIMARY KEY (id)
+    PRIMARY KEY (permutation_id, version_id, hardware_id, stress, dynamic_measurement_type)
 );
 
 
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
                                        IN workload BIGINT UNSIGNED,
-                                       OUT perm_id BIGINT UNSIGNED, OUT perf_id BIGINT UNSIGNED,
+                                       OUT perm_id BIGINT UNSIGNED,
                                        OUT missing_mode VARCHAR(255))
 BEGIN
     SELECT program_id
@@ -410,9 +411,7 @@ BEGIN
 
         INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
                                          dynamic_measurement_type)
-
         VALUES ((SELECT perm_id), vid, hid, nnid, workload, (SELECT @missing_mode_id));
-        SELECT LAST_INSERT_ID() INTO perf_id LIMIT 1;
         SELECT measurement_type
         INTO missing_mode
         FROM dynamic_measurement_types
@@ -420,7 +419,6 @@ BEGIN
         LIMIT 1;
     ELSE
         SELECT NULL INTO missing_mode;
-        SELECT NULL INTO perf_id;
     END IF;
 END //
 DELIMITER ;
