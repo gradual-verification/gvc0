@@ -11,7 +11,6 @@ import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import gvc.CC0Wrapper.Performance
 import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
-import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
 import gvc.benchmarking.Timing.TimedVerification
 
@@ -60,7 +59,7 @@ object DAO {
 
   case class CompletionMetadata(versionName: String,
                                 srcFilename: String,
-                                measurementMode: DynamicMeasurementMode,
+                                measurementMode: String,
                                 totalCompleted: Long,
                                 total: Long)
 
@@ -324,7 +323,7 @@ object DAO {
           .query[Option[Permutation]]
           .option
         mode <- sql"""SELECT @mode;"""
-          .query[Option[DynamicMeasurementMode.DynamicMeasurementMode]]
+          .query[Option[String]]
           .option
       } yield (perf_id, perm, mode)).transact(xa).unsafeRunSync()
 

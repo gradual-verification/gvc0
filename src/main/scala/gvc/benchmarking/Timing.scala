@@ -189,8 +189,8 @@ object Timing {
 }
 
 object Timeout {
-  def runWithTimeout[T](timeoutMs: Long)(f: => T): Option[T] = {
-    Some(Await.result(Future(f), timeoutMs milliseconds))
+  def runWithTimeout[T](timeoutMs: Long)(f: => T): T = {
+    Await.result(Future(f), timeoutMs milliseconds)
   }
 
   def formatMilliseconds(ms: Long): String = {

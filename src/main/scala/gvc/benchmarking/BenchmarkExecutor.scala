@@ -6,7 +6,6 @@ import gvc.benchmarking.Benchmark.{
   injectStress,
   isInjectable
 }
-import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
 import gvc.benchmarking.Timing.{
   CC0CompilationException,
@@ -36,7 +35,7 @@ object BenchmarkExecutor {
   case class ReservedProgram(perm: Permutation,
                              stress: Int,
                              perfID: Long,
-                             measurementMode: DynamicMeasurementMode)
+                             measurementMode: String)
 
   def execute(config: ExecutorConfig,
               baseConfig: Config,
@@ -77,7 +76,7 @@ object BenchmarkExecutor {
 
       val timingStart = System.nanoTime()
 
-      val benchmarkingFunction: () => Performance =
+      val benchmarkingFunction: () => (Performance) =
         reserved.measurementMode match {
           case DynamicMeasurementMode.Dynamic =>
             () =>
@@ -136,7 +135,6 @@ object BenchmarkExecutor {
                                                tempBinary,
                                                baseConfig,
                                                workload.staticIterations)
-                throw new CC0CompilationException(CommandOutput(1, "hello"))
                 DAO.updateStaticProfiling(id,
                                           reserved.perm.id,
                                           workload.staticIterations,
@@ -150,16 +148,13 @@ object BenchmarkExecutor {
               }
         }
       try {
-        Timeout.runWithTimeout(globalConfig.timeoutMinutes * 60 * 1000)(
-          benchmarkingFunction()) match {
-          case Some(value) =>
-            DAO.completeProgramMeasurement(reserved.perfID,
-                                           workload.iterations,
-                                           value,
-                                           conn)
-          case None =>
-        }
-
+        val performanceResult =
+          Timeout.runWithTimeout(globalConfig.timeoutMinutes * 60 * 1000)(
+            benchmarkingFunction())
+        DAO.completeProgramMeasurement(reserved.perfID,
+                                       workload.iterations,
+                                       performanceResult,
+                                       conn)
       } catch {
         case _: TimeoutException =>
           val timingStop = System.nanoTime()
