@@ -284,7 +284,7 @@ CREATE TABLE IF NOT EXISTS static_performance
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
     FOREIGN KEY (error_id) REFERENCES errors (id),
-    PRIMARY KEY (permutation_id, hardware_id, version_id)
+    PRIMARY KEY (permutation_id, hardware_id, version_id, nickname_id)
 );
 
 DELIMITER //
@@ -303,7 +303,7 @@ BEGIN
       AND hardware_id = hid
       AND permutation_id = perm_id
       AND nickname_id = nid FOR
-        SHARE;
+    UPDATE;
     IF ((SELECT @ex) IS NOT NULL) THEN
 
         UPDATE static_performance
@@ -357,6 +357,7 @@ CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNS
                                        OUT perm_id BIGINT UNSIGNED,
                                        OUT missing_mode VARCHAR(255))
 BEGIN
+    SELECT GET_LOCK('sp_ReservePermutation', -1);
     SELECT program_id
     INTO @min_program_id
     FROM (SELECT program_id,
@@ -378,9 +379,7 @@ BEGIN
                 WHERE c_type_zeroed < (SELECT COUNT(DISTINCT id) FROM dynamic_measurement_types)) AS tbl2
           GROUP BY program_id) AS tblA
     ORDER BY total_perms desc
-    LIMIT 1
-    FOR
-    SHARE;
+    LIMIT 1;
 
     SELECT @found_perm_id := id,
            @found_missing_mode := measurement_type,
@@ -393,6 +392,7 @@ BEGIN
                                    on permutations.id = bm.permutation_id AND
                                       dynamic_measurement_types.id = bm.dynamic_measurement_type
           WHERE bm.dynamic_measurement_type IS NULL
+            AND bm.error_id IS NULL
             AND permutations.program_id = (SELECT @min_program_id)) as A
              LEFT OUTER JOIN (SELECT permutation_id, COUNT(DISTINCT dynamic_measurement_type) AS c_type
                               from dynamic_performance
@@ -406,10 +406,9 @@ BEGIN
                                WHERE program_id = (SELECT @min_program_id))
                                   as tblA
                          GROUP BY permutation_id) AS C ON A.id = C.permutation_id
+
     ORDER BY presence, num_completed DESC
-    LIMIT 1
-    FOR
-    UPDATE;
+    LIMIT 1;
 
     IF ((SELECT @found_perm_id) IS NOT NULL AND (SELECT @found_missing_mode) IS NOT NULL) THEN
         INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
@@ -418,6 +417,7 @@ BEGIN
         SET perm_id := @found_perm_id;
         SET missing_mode := @found_missing_mode;
     END IF;
+    SELECT RELEASE_LOCK('sp_ReservePermutation');
 END //
 DELIMITER ;
 
