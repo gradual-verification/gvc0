@@ -18,18 +18,28 @@ import sys.process._
 object Timing {
 
   case class TimedVerification(
-      output: VerifiedOutput,
-      translation: Performance,
-      verification: Performance,
-      instrumentation: Performance
-  )
+                                output: VerifiedOutput,
+                                translation: Performance,
+                                verification: Performance,
+                                instrumentation: Performance
+                              )
+
+  def compileAndExec(input: Path,
+                     binary: Path,
+                     config: Config,
+                     args: List[String],
+                     iterations: Int): (Performance, Performance) = {
+    val compilationPerf = compileTimed(input, binary, config, iterations)
+    val execPerf = execTimed(binary, iterations, args)
+    (compilationPerf, execPerf)
+  }
 
   def verifyTimed(
-      inputSource: String,
-      fileNames: OutputFileCollection,
-      config: Config,
-      iterations: Int
-  ): TimedVerification = {
+                   inputSource: String,
+                   fileNames: OutputFileCollection,
+                   config: Config,
+                   iterations: Int
+                 ): TimedVerification = {
     var verifiedOutput: Option[VerifiedOutput] = None
     val translationTimings = ListBuffer[Long]()
     val verifierTimings = ListBuffer[Long]()
@@ -55,11 +65,11 @@ object Timing {
   }
 
   def compileTimed(
-      input: Path,
-      binary: Path,
-      config: Config,
-      iterations: Int
-  ): Performance = {
+                    input: Path,
+                    binary: Path,
+                    config: Config,
+                    iterations: Int
+                  ): Performance = {
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
@@ -75,9 +85,11 @@ object Timing {
     val compilationCommand = CC0Wrapper
       .formatCommand(input.toAbsolutePath.toString, cc0Options)
       .mkString(" ")
+
     def compileOnError(output: CommandOutput): Unit = {
       throw new CC0CompilationException(output)
     }
+
     runTimedCommand(
       iterations,
       compilationCommand,
@@ -85,24 +97,11 @@ object Timing {
     )
   }
 
-  def compileAndExec(
-      input: Path,
-      output: Path,
-      args: List[String],
-      config: Config,
-      benchConfig: SequentialConfig
-  ): (Performance, Performance) = {
-    (
-      compileTimed(input, output, config, benchConfig.workload.iterations),
-      execTimed(output, benchConfig.workload.iterations, args)
-    )
-  }
-
   private def runTimedCommand(
-      iterations: Int,
-      command: String,
-      onNonzero: CommandOutput => Unit
-  ): Performance = {
+                               iterations: Int,
+                               command: String,
+                               onNonzero: CommandOutput => Unit
+                             ): Performance = {
     var capture = ""
     val logger = ProcessLogger(
       (o: String) => capture += o,
@@ -136,14 +135,16 @@ object Timing {
   }
 
   def execTimed(
-      binary: Path,
-      iterations: Int,
-      args: List[String]
-  ): Performance = {
+                 binary: Path,
+                 iterations: Int,
+                 args: List[String]
+               ): Performance = {
     val command = (List(binary.toAbsolutePath.toString) ++ args).mkString(" ")
+
     def execNonzero(output: CommandOutput): Unit = {
       throw new CC0ExecutionException(output)
     }
+
     runTimedCommand(iterations, command, execNonzero)
   }
 
@@ -189,21 +190,20 @@ object Timing {
   }
 
   class CapturedOutputException(output: CommandOutput) extends Exception {
-    val message: String = output.output
-    def logMessage(name: String, printer: ErrorCSVPrinter): Unit = {
-      printer.log(name, output.exitCode, output.output)
-    }
+    override def getMessage: String = output.output
+
   }
+
   class CC0CompilationException(output: CommandOutput)
-      extends CapturedOutputException(output)
+    extends CapturedOutputException(output)
 
   class CC0ExecutionException(output: CommandOutput)
-      extends CapturedOutputException(output)
+    extends CapturedOutputException(output)
 }
 
 object Timeout {
-  def runWithTimeout[T](timeoutMs: Long)(f: => T): Option[T] = {
-    Some(Await.result(Future(f), timeoutMs milliseconds))
+  def runWithTimeout[T](timeoutMs: Long)(f: => T): T = {
+    Await.result(Future(f), timeoutMs milliseconds)
   }
 
   def formatMilliseconds(ms: Long): String = {
