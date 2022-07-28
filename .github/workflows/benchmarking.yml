@@ -4,6 +4,7 @@ permissions:
   contents: read
 jobs:
   build:
+    timeout-minutes: 4200
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3

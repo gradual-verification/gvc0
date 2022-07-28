@@ -11,6 +11,9 @@ DROP TABLE IF EXISTS permutations;
 DROP TABLE IF EXISTS components;
 DROP TABLE IF EXISTS paths;
 DROP TABLE IF EXISTS programs;
+DROP TABLE IF EXISTS nicknames;
+DROP TABLE IF EXISTS hardware;
+DROP TABLE IF EXISTS versions;
 
 DROP PROCEDURE IF EXISTS sp_gr_Program;
 DROP PROCEDURE IF EXISTS sp_ReservePermutation;
@@ -44,25 +47,20 @@ CREATE TABLE IF NOT EXISTS programs
     src_hash     VARCHAR(255) UNIQUE NOT NULL,
     num_labels   BIGINT UNSIGNED     NOT NULL,
     program_date DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id, src_filename, src_hash, num_labels)
 );
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Program(IN p_name VARCHAR(255), IN p_hash VARCHAR(255), IN p_labels BIGINT UNSIGNED,
                                OUT p_id BIGINT UNSIGNED)
 BEGIN
-
+    INSERT IGNORE INTO programs (src_filename, src_hash, num_labels) VALUES (p_name, p_hash, p_labels);
     SELECT id
     INTO p_id
     FROM programs
     WHERE src_filename = p_name
       AND src_hash = p_hash
       AND num_labels = p_labels;
-
-    IF ((SELECT p_id) IS NULL) THEN
-        INSERT INTO programs (src_filename, src_hash, num_labels) VALUES (p_name, p_hash, p_labels);
-        select LAST_INSERT_ID() INTO p_id;
-    END IF;
 END //
 DELIMITER ;
 
@@ -76,7 +74,7 @@ CREATE TABLE IF NOT EXISTS components
     expr_type      VARCHAR(255)    NOT NULL,
     expr_index     BIGINT UNSIGNED NOT NULL,
     component_date DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
+    PRIMARY KEY (id, program_id, spec_type, spec_index, expr_type, expr_index),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
@@ -87,6 +85,9 @@ CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255
                                  IN p_eindex BIGINT UNSIGNED,
                                  OUT c_id BIGINT UNSIGNED)
 BEGIN
+
+    INSERT IGNORE INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
+    VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
     SELECT id
     INTO c_id
     FROM components
@@ -96,11 +97,6 @@ BEGIN
       AND spec_index = p_sindex
       AND expr_type = p_etype
       AND expr_index = p_eindex;
-    IF ((SELECT c_id) IS NULL) THEN
-        INSERT INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
-        VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
-        select LAST_INSERT_ID() INTO c_id;
-    END IF;
 END //
 DELIMITER ;
 
@@ -117,10 +113,16 @@ CREATE TABLE IF NOT EXISTS permutations
 DELIMITER //
 CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash BLOB, OUT p_id BIGINT UNSIGNED)
 BEGIN
-    SELECT id INTO p_id FROM permutations WHERE program_id = p_program_id AND permutation_hash = p_perm_hash;
+    SELECT id
+    INTO p_id
+    FROM permutations
+    WHERE program_id = p_program_id
+      AND permutation_hash = p_perm_hash FOR
+    UPDATE;
+
     IF ((SELECT p_id) IS NULL) THEN
         INSERT INTO permutations (program_id, permutation_hash) VALUES (p_program_id, p_perm_hash);
-        select LAST_INSERT_ID() INTO p_id;
+        SELECT LAST_INSERT_ID() INTO p_id;
     END IF;
 END //
 DELIMITER ;
@@ -152,17 +154,14 @@ CREATE TABLE IF NOT EXISTS versions
     id           SERIAL,
     version_name VARCHAR(255) UNIQUE NOT NULL,
     version_date DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id, version_name)
 );
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Version(IN p_name VARCHAR(255), OUT v_id BIGINT UNSIGNED)
 BEGIN
+    INSERT IGNORE INTO versions (version_name) VALUES (p_name);
     SELECT id INTO v_id FROM versions WHERE version_name = p_name;
-    IF ((SELECT v_id) IS NULL) THEN
-        INSERT INTO versions (version_name) VALUES (p_name);
-        select LAST_INSERT_ID() INTO v_id;
-    END IF;
 END //
 
 DELIMITER ;
@@ -173,37 +172,31 @@ CREATE TABLE IF NOT EXISTS hardware
     id            SERIAL,
     hardware_name VARCHAR(255) UNIQUE NOT NULL,
     hardware_date DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id, hardware_name)
 );
 
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Hardware(IN p_name VARCHAR(255), OUT h_id BIGINT UNSIGNED)
 BEGIN
+    INSERT IGNORE INTO hardware (hardware_name) VALUES (p_name);
     SELECT id INTO h_id FROM hardware WHERE hardware_name = p_name;
-    IF ((SELECT h_id) IS NULL) THEN
-        INSERT INTO hardware (hardware_name) VALUES (p_name);
-        select LAST_INSERT_ID() INTO h_id;
-    END IF;
 END //
 DELIMITER ;
 
 CREATE TABLE IF NOT EXISTS nicknames
 (
     id            SERIAL,
-    nickname      VARCHAR(255) NOT NULL,
-    nickname_date DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
+    nickname      VARCHAR(255) UNIQUE NOT NULL,
+    nickname_date DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id, nickname)
 );
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Nickname(IN p_nname VARCHAR(255), OUT n_id BIGINT UNSIGNED)
 BEGIN
+    INSERT IGNORE INTO nicknames (nickname) VALUES (p_nname);
     SELECT id INTO n_id FROM nicknames WHERE nickname = p_nname;
-    IF ((SELECT n_id) IS NULL) THEN
-        INSERT INTO nicknames (nickname) VALUES (p_nname);
-        select LAST_INSERT_ID() INTO n_id;
-    END IF;
 END //
 DELIMITER ;
 
@@ -213,7 +206,7 @@ CREATE TABLE IF NOT EXISTS benchmarks
     id             SERIAL,
     benchmark_name VARCHAR(255),
     benchmark_desc TEXT,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id, benchmark_name)
 );
 
 CREATE TABLE IF NOT EXISTS benchmark_membership
@@ -221,7 +214,8 @@ CREATE TABLE IF NOT EXISTS benchmark_membership
     benchmark_id   BIGINT UNSIGNED NOT NULL,
     permutation_id BIGINT UNSIGNED NOT NULL,
     FOREIGN KEY (benchmark_id) REFERENCES benchmarks (id),
-    FOREIGN KEY (permutation_id) REFERENCES permutations (id)
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
+    PRIMARY KEY (benchmark_id, permutation_id)
 );
 
 CREATE TABLE IF NOT EXISTS dynamic_measurement_types
@@ -293,6 +287,7 @@ CREATE PROCEDURE sp_UpdateStatic(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED,
                                  IN inst_id BIGINT UNSIGNED, IN cp_id BIGINT UNSIGNED, IN total_cond BIGINT UNSIGNED,
                                  IN elim_cond BIGINT UNSIGNED)
 BEGIN
+    SELECT GET_LOCK('sp_UpdateStatic', -1);
     SELECT @ex = version_id,
            @ex_tr = translation_perf_id,
            @ex_vf = verification_perf_id,
@@ -302,9 +297,9 @@ BEGIN
     WHERE version_id = vid
       AND hardware_id = hid
       AND permutation_id = perm_id
-      AND nickname_id = nid FOR
-    UPDATE;
+      AND nickname_id = nid;
     IF ((SELECT @ex) IS NOT NULL) THEN
+        SELECT RELEASE_LOCK('sp_UpdateStatic');
 
         UPDATE static_performance
         SET translation_perf_id     = tr_id,
@@ -327,6 +322,7 @@ BEGIN
                                         verification_perf_id, instrumentation_perf_id, compilation_perf_id, conj_total,
                                         conj_eliminated, error_id)
         VALUES (perm_id, vid, hid, nid, tr_id, vf_id, inst_id, cp_id, total_cond, elim_cond, NULL);
+        SELECT RELEASE_LOCK('sp_UpdateStatic');
     END IF;
 end //
 DELIMITER ;
@@ -463,18 +459,13 @@ DELIMITER //
 CREATE PROCEDURE sp_gr_Error(IN p_edesc TEXT, IN p_etime BIGINT UNSIGNED,
                              IN p_err_type VARCHAR(255), OUT eid BIGINT UNSIGNED)
 BEGIN
+    INSERT INTO errors (error_desc, time_elapsed_seconds, error_type)
+    VALUES (p_edesc, p_etime, p_err_type)
+    ON DUPLICATE KEY UPDATE time_elapsed_seconds = p_etime, error_date = DEFAULT;
     SELECT id
     INTO eid
     FROM errors
     WHERE error_desc = p_edesc
-      AND error_type = p_err_type FOR
-    UPDATE;
-    IF ((SELECT eid) IS NULL) THEN
-        INSERT INTO errors (error_desc, time_elapsed_seconds, error_type)
-        VALUES (p_edesc, p_etime, p_err_type);
-        SELECT LAST_INSERT_ID() INTO eid;
-    ELSE
-        UPDATE errors SET time_elapsed_seconds = p_etime, error_date = DEFAULT WHERE id = (SELECT eid);
-    END IF;
+      AND error_type = p_err_type;
 END //
 DELIMITER ;
