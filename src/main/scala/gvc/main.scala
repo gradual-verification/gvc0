@@ -12,7 +12,7 @@ import gvc.benchmarking.{
   BenchmarkRecreator,
   Output
 }
-import gvc.weaver.Weaver
+import gvc.weaver.{Weaver, WeaverException}
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
 import viper.silver.ast.Program
@@ -257,7 +257,13 @@ object Main extends App {
     if (config.onlyVerify) sys.exit(0)
 
     val weavingStart = System.nanoTime()
-    Weaver.weave(ir, silver)
+    try {
+      Weaver.weave(ir, silver)
+    } catch {
+      case t: Throwable =>
+        throw new WeaverException(t.getMessage)
+
+    }
     val weavingStop = System.nanoTime()
     val weavingTime = weavingStop - weavingStart
 

@@ -36,6 +36,7 @@ object DAO {
     val Verification = "verification"
     val Timeout = "timeout"
     val Unknown = "unknown"
+    val Weaving = "weaving"
   }
 
   case class Hardware(id: Long, hardwareName: String, dateAdded: String)
@@ -57,12 +58,6 @@ object DAO {
                          dateAdded: String)
 
   case class Step(pathID: Long, permutationID: Long, levelID: Long)
-
-  case class CompletionMetadata(versionName: String,
-                                srcFilename: String,
-                                measurementMode: String,
-                                totalCompleted: Long,
-                                total: Long)
 
   case class Conjuncts(id: Long,
                        permutationID: Long,
@@ -419,23 +414,62 @@ object DAO {
     } yield u).transact(conn).unsafeRunSync()
   }
 
+  case class CompletionMetadata(versionName: String,
+                                hardwareName: String,
+                                srcFilename: String,
+                                measurementMode: String,
+                                totalCompleted: Long,
+                                total: Long,
+                                errorType: Option[String],
+                                errorCount: Option[Long])
+
   def listPerformanceResults(conn: DBConnection): List[CompletionMetadata] = {
-    sql"""SELECT version_name, src_filename, type, total_completed, total_perms
-    FROM (SELECT program_id, COUNT(permutations.id) as total_perms
-      FROM permutations
-      INNER JOIN programs p on permutations.program_id = p.id
+    sql"""SELECT version_name,
+           hardware_name,
+           src_filename,
+           measurement_type,
+           total_completed,
+           total_perms,
+           error_type,
+           error_count
+    FROM (SELECT *
+          FROM (SELECT program_id, COUNT(permutations.id) as total_perms
+                FROM permutations
+                         INNER JOIN programs p on permutations.program_id = p.id
 
-      GROUP BY program_id) as tblA
-    INNER JOIN (SELECT program_id, src_filename, version_name, type, COUNT(measurement_id) as total_completed
-    FROM versions
-      INNER JOIN dynamic_performance dp on versions.id = dp.version_id
-    INNER JOIN permutations p on dp.permutation_id = p.id
-    INNER JOIN programs p2 on p.program_id = p2.id
-    INNER JOIN dynamic_measurement_types dmt on dp.dynamic_measurement_type = dmt.id
-
-    WHERE measurement_id IS NOT NULL
-    GROUP BY program_id, src_filename, version_name, type) as tblB
-      on tblA.program_id = tblB.program_id"""
+                GROUP BY program_id) as tblA
+                   INNER JOIN (SELECT program_id            as pid,
+                                      src_filename,
+                                      version_name,
+                                      version_id,
+                                      hardware_name,
+                                      hardware_id,
+                                      measurement_type,
+                                      dmt.id,
+                                      COUNT(measurement_id) as total_completed
+                               FROM versions
+                                        INNER JOIN dynamic_performance dp on versions.id = dp.version_id
+                                        INNER JOIN permutations p on dp.permutation_id = p.id
+                                        INNER JOIN programs p2 on p.program_id = p2.id
+                                        INNER JOIN dynamic_measurement_types dmt on dp.dynamic_measurement_type = dmt.id
+                                        INNER JOIN hardware h on dp.hardware_id = h.id
+                               WHERE measurement_id IS NOT NULL
+                               GROUP BY program_id, src_filename, version_name, hardware_name, measurement_type) as tblB
+                              on tblA.program_id = tblB.pid) as completion
+             LEFT OUTER JOIN (SELECT version_id,
+                                     hardware_id,
+                                     program_id,
+                                     dynamic_measurement_type,
+                                     error_type,
+                                     COUNT(DISTINCT error_id) as error_count
+                              FROM dynamic_performance
+                                       INNER JOIN permutations p on dynamic_performance.permutation_id = p.id
+                                       INNER JOIN errors e on dynamic_performance.error_id = e.id
+                              GROUP BY version_id, hardware_id, program_id, dynamic_measurement_type, error_type) as errors
+                             ON completion.program_id = errors.program_id
+                                 AND completion.version_id = errors.version_id AND
+                                completion.program_id = errors.program_id AND
+                                completion.id = errors.dynamic_measurement_type;"""
       .query[CompletionMetadata]
       .to[List]
       .transact(conn)

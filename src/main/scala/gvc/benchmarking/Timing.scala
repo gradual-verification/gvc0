@@ -1,7 +1,7 @@
 package gvc.benchmarking
 
 import gvc.{CC0Options, CC0Wrapper, Config, OutputFileCollection}
-import gvc.CC0Wrapper.{CommandOutput, Performance}
+import gvc.CC0Wrapper.{CommandOutput, Performance, exec}
 import gvc.Main.{VerifiedOutput, verify}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -23,6 +23,16 @@ object Timing {
       verification: Performance,
       instrumentation: Performance
   )
+
+  def compileAndExec(input: Path,
+                     binary: Path,
+                     config: Config,
+                     args: List[String],
+                     iterations: Int): (Performance, Performance) = {
+    val compilationPerf = compileTimed(input, binary, config, iterations)
+    val execPerf = execTimed(binary, iterations, args)
+    (compilationPerf, execPerf)
+  }
 
   def verifyTimed(
       inputSource: String,
@@ -75,9 +85,11 @@ object Timing {
     val compilationCommand = CC0Wrapper
       .formatCommand(input.toAbsolutePath.toString, cc0Options)
       .mkString(" ")
+
     def compileOnError(output: CommandOutput): Unit = {
       throw new CC0CompilationException(output)
     }
+
     runTimedCommand(
       iterations,
       compilationCommand,
@@ -128,9 +140,11 @@ object Timing {
       args: List[String]
   ): Performance = {
     val command = (List(binary.toAbsolutePath.toString) ++ args).mkString(" ")
+
     def execNonzero(output: CommandOutput): Unit = {
       throw new CC0ExecutionException(output)
     }
+
     runTimedCommand(iterations, command, execNonzero)
   }
 
@@ -176,11 +190,13 @@ object Timing {
   }
 
   class CapturedOutputException(output: CommandOutput) extends Exception {
-    val message: String = output.output
+    override def getMessage: String = output.output
+
     def logMessage(name: String, printer: ErrorCSVPrinter): Unit = {
       printer.log(name, output.exitCode, output.output)
     }
   }
+
   class CC0CompilationException(output: CommandOutput)
       extends CapturedOutputException(output)
 

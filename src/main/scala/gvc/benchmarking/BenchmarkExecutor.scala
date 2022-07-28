@@ -7,12 +7,9 @@ import gvc.benchmarking.Benchmark.{
   isInjectable
 }
 import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
-import gvc.benchmarking.Timing.{
-  CC0CompilationException,
-  CC0ExecutionException,
-  CapturedOutputException
-}
+import gvc.benchmarking.Timing.{CC0CompilationException, CC0ExecutionException}
 import gvc.transformer.IRPrinter
+import gvc.weaver.WeaverException
 import gvc.{Config, Main, VerificationException}
 
 import java.nio.file.{Files, Path, Paths}
@@ -75,7 +72,7 @@ object BenchmarkExecutor {
 
       val timingStart = System.nanoTime()
 
-      val benchmarkingFunction: () => (Performance) =
+      val benchmarkingFunction: () => Performance =
         reserved.measurementMode match {
           case DynamicMeasurementMode.Dynamic =>
             () =>
@@ -156,55 +153,28 @@ object BenchmarkExecutor {
                                        performanceResult,
                                        conn)
       } catch {
-        case _: TimeoutException =>
-          val timingStop = System.nanoTime()
-          val differenceSeconds: Long =
-            Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
-          DAO.logException(id,
-                           reserved,
-                           ErrorType.Timeout,
-                           "",
-                           differenceSeconds,
-                           conn)
-        case vex: VerificationException =>
-          val timingStop = System.nanoTime()
-          val differenceSeconds: Long =
-            Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
-          DAO.logException(id,
-                           reserved,
-                           ErrorType.Verification,
-                           vex.message,
-                           differenceSeconds,
-                           conn)
-
-        case coe: CapturedOutputException =>
-          val timingStop = System.nanoTime()
-          val differenceSeconds: Long =
-            Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
-          val eType = coe match {
-            case _: CC0CompilationException => ErrorType.Compilation
-            case _: CC0ExecutionException   => ErrorType.Execution
-          }
-          DAO.logException(id,
-                           reserved,
-                           eType,
-                           coe.message,
-                           differenceSeconds,
-                           conn)
         case t: Throwable =>
           val timingStop = System.nanoTime()
           val differenceSeconds: Long =
             Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
+
+          val errorType = t match {
+            case _: TimeoutException        => ErrorType.Timeout
+            case _: VerificationException   => ErrorType.Verification
+            case _: CC0CompilationException => ErrorType.Compilation
+            case _: CC0ExecutionException   => ErrorType.Execution
+            case _: WeaverException         => ErrorType.Weaving
+            case _                          => ErrorType.Unknown
+          }
           DAO.logException(id,
                            reserved,
-                           ErrorType.Unknown,
+                           errorType,
                            t.getMessage,
                            differenceSeconds,
                            conn)
 
       }
       reservedProgram = DAO.reserveProgramForMeasurement(id, worklist, conn)
-
     }
   }
 }
