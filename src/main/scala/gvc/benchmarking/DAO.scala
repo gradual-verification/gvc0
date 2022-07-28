@@ -475,4 +475,25 @@ object DAO {
       .transact(conn)
       .unsafeRunSync()
   }
+
+  def listErrors(conn: DBConnection): List[PermutationError] = {
+    sql"""SELECT permutation_id, version_name, src_filename, measurement_type, error_type, error_desc
+         FROM errors
+             INNER JOIN dynamic_performance ON dynamic_performance.error_id = errors.id
+             INNER JOIN versions ON dynamic_performance.version_id = versions.id
+INNER JOIN permutations p on dynamic_performance.permutation_id = p.id
+INNER JOIN programs p2 on p.program_id = p2.id
+INNER JOIN dynamic_measurement_types dmt on dynamic_performance.dynamic_measurement_type = dmt.id;"""
+      .query[PermutationError]
+      .to[List]
+      .transact(conn)
+      .unsafeRunSync()
+  }
+
+  case class PermutationError(pid: Long,
+                              versionName: String,
+                              programName: String,
+                              measurementMode: String,
+                              errorType: String,
+                              errorDesc: String)
 }

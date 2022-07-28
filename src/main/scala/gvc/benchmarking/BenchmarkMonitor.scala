@@ -1,13 +1,29 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.DAO.CompletionMetadata
+import gvc.benchmarking.Benchmark.Extensions.csv
+import gvc.benchmarking.DAO.{CompletionMetadata, DBConnection}
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
+
+import java.nio.file.Files
 import java.util.Calendar
 
 object BenchmarkMonitor {
 
   def monitor(config: MonitorConfig): Unit = {
     val conn = DAO.connect(config.db)
+    printContentsSummary(conn)
+    logStatistics(config, conn)
+  }
+
+  private object Names {
+    val errorListing = csv("errors")
+    val dynamicPerformanceListing = csv("dynamic_performance")
+    val staticPerformanceListing = csv("static_performance")
+    val errorContentsColumns =
+      "permutation_id,version_name,src_filename,mode,error_type,error_desc"
+  }
+
+  private def printContentsSummary(conn: DBConnection): Unit = {
     val results = DAO.listPerformanceResults(conn)
     val sortedResults = sortResults(results)
     print("\u001b[2J")
@@ -36,12 +52,37 @@ object BenchmarkMonitor {
     })
   }
 
-  case class CompletedCategory(srcFileName: String,
-                               errorCountListing: Map[String, Long],
-                               totalCompleted: Long,
-                               total: Long)
+  private def logStatistics(config: MonitorConfig, conn: DBConnection): Unit = {
+    if (Files.notExists(config.outputDirectory)) {
+      Files.createDirectories(config.outputDirectory)
+    }
 
-  def sortResults(results: List[DAO.CompletionMetadata])
+    val errors = config.outputDirectory.resolve(this.Names.errorListing)
+    Files.writeString(errors, this.generateErrorCSV(conn))
+  }
+
+  private def generateErrorCSV(conn: DBConnection): String = {
+    val errors = DAO.listErrors(conn)
+
+    (List(Names.errorContentsColumns) ++
+      errors
+        .map(e => {
+          List(e.pid,
+               e.versionName,
+               e.programName,
+               e.measurementMode,
+               e.errorType,
+               e.errorDesc).mkString(",")
+        }))
+      .mkString("\n")
+  }
+
+  private case class CompletedCategory(srcFileName: String,
+                                       errorCountListing: Map[String, Long],
+                                       totalCompleted: Long,
+                                       total: Long)
+
+  private def sortResults(results: List[DAO.CompletionMetadata])
     : Map[String,
           Map[String,
               Map[DynamicMeasurementMode, Map[String, CompletedCategory]]]] = {
@@ -65,7 +106,7 @@ object BenchmarkMonitor {
 
   }
 
-  def createCategory(
+  private def createCategory(
       completion: List[CompletionMetadata]): CompletedCategory = {
 
     val errorCountMapping = completion

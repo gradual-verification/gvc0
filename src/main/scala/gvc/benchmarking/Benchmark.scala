@@ -1,9 +1,24 @@
 package gvc.benchmarking
-import gvc.benchmarking.Extensions.{c0, csv, log, out}
+
+import gvc.benchmarking.Benchmark.Extensions.{c0, csv, log, out}
 
 import scala.util.matching.Regex
 
 object Benchmark {
+  object Extensions {
+    def c0(basename: Object): String = basename.toString + ".c0"
+
+    def out(basename: String): String = basename + ".out"
+
+    def csv(basename: String): String = basename + ".csv"
+
+    def log(basename: String): String = basename + ".log"
+
+    def txt(basename: String): String = basename + ".txt"
+
+    def remove(fullname: String): String =
+      fullname.replaceFirst("[.][^.]+$", "")
+  }
   val arbitraryStressDeclaration: Regex = "(int )?(stress = [0-9]+;)".r
   val correctStressDeclaration: Regex =
     "(int[ ]+main\\(\\s*\\)\\s\\{[\\s\\S]*\n\\s*int stress = [0-9]+;)".r

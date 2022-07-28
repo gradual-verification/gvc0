@@ -1,7 +1,7 @@
 package gvc.benchmarking
 
 import gvc.{CC0Options, CC0Wrapper, Config, OutputFileCollection}
-import gvc.CC0Wrapper.{CommandOutput, Performance, exec}
+import gvc.CC0Wrapper.{CommandOutput, Performance}
 import gvc.Main.{VerifiedOutput, verify}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -191,10 +191,7 @@ object Timing {
 
   class CapturedOutputException(output: CommandOutput) extends Exception {
     override def getMessage: String = output.output
-
-    def logMessage(name: String, printer: ErrorCSVPrinter): Unit = {
-      printer.log(name, output.exitCode, output.output)
-    }
+    
   }
 
   class CC0CompilationException(output: CommandOutput)
