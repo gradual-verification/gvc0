@@ -351,6 +351,7 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     FOREIGN KEY (error_id) REFERENCES errors (id),
     PRIMARY KEY (permutation_id, version_id, hardware_id, nickname_id, stress, dynamic_measurement_type)
 );
+
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
                                        IN workload BIGINT UNSIGNED,
@@ -381,41 +382,69 @@ BEGIN
     ORDER BY total_perms desc
     LIMIT 1;
 
-    SELECT @found_perm_id := id,
-           @found_missing_mode := measurement_type,
-           @missing_mode_id := measurement_type_id,
-           IFNULL(c_type, 0) as num_completed
-    FROM (SELECT permutations.id, measurement_type, dynamic_measurement_types.id as measurement_type_id
-          from permutations
-                   CROSS JOIN dynamic_measurement_types
-                   LEFT OUTER JOIN (SELECT * FROM dynamic_performance WHERE version_id = vid AND hardware_id = hid) bm
-                                   on permutations.id = bm.permutation_id AND
-                                      dynamic_measurement_types.id = bm.dynamic_measurement_type
-          WHERE bm.dynamic_measurement_type IS NULL
-            AND bm.error_id IS NULL
-            AND permutations.program_id = (SELECT @min_program_id)) as A
-             LEFT OUTER JOIN (SELECT permutation_id, COUNT(DISTINCT dynamic_measurement_type) AS c_type
-                              from dynamic_performance
-                              WHERE version_id = vid
-                                AND hardware_id = hid
-                              GROUP BY permutation_id) as B ON A.id = B.permutation_id
-             INNER JOIN (SELECT permutation_id, COUNT(DISTINCT path_id) as presence
-                         FROM (SELECT permutation_id, path_id
-                               FROM steps
-                                        INNER JOIN permutations on permutations.id = steps.permutation_id
-                               WHERE program_id = (SELECT @min_program_id))
-                                  as tblA
-                         GROUP BY permutation_id) AS C ON A.id = C.permutation_id
-
-    ORDER BY presence, num_completed DESC
+    SELECT id
+    INTO @found_perm_id
+    from permutations
+    WHERE id IN (SELECT id
+                 FROM (SELECT id,
+                              IFNULL(c_type, 0) as num_completed
+                       FROM (SELECT permutations.id,
+                                    measurement_type,
+                                    dynamic_measurement_types.id as measurement_type_id
+                             from permutations
+                                      CROSS JOIN dynamic_measurement_types
+                                      LEFT OUTER JOIN (SELECT *
+                                                       FROM dynamic_performance
+                                                       WHERE version_id = vid
+                                                         AND hardware_id = hid) bm
+                                                      on permutations.id = bm.permutation_id AND
+                                                         dynamic_measurement_types.id = bm.dynamic_measurement_type
+                             WHERE bm.dynamic_measurement_type IS NULL
+                               AND bm.error_id IS NULL
+                               AND permutations.program_id = (SELECT @min_program_id)) as A
+                                LEFT OUTER JOIN (SELECT permutation_id,
+                                                        COUNT(DISTINCT dynamic_measurement_type) AS c_type
+                                                 from dynamic_performance
+                                                 WHERE version_id = vid
+                                                   AND hardware_id = hid
+                                                 GROUP BY permutation_id) as B ON A.id = B.permutation_id
+                                INNER JOIN (SELECT permutation_id, COUNT(DISTINCT path_id) as presence
+                                            FROM (SELECT permutation_id, path_id
+                                                  FROM steps
+                                                           INNER JOIN permutations on permutations.id = steps.permutation_id
+                                                  WHERE program_id = (SELECT @min_program_id))
+                                                     as tblA
+                                            GROUP BY permutation_id) AS C ON A.id = C.permutation_id
+                       ORDER BY presence, num_completed DESC) AS id_set)
     LIMIT 1;
 
-    IF ((SELECT @found_perm_id) IS NOT NULL AND (SELECT @found_missing_mode) IS NOT NULL) THEN
-        INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
-                                         dynamic_measurement_type)
-        VALUES ((SELECT @found_perm_id), vid, hid, nnid, workload, (SELECT @missing_mode_id));
-        SET perm_id := @found_perm_id;
-        SET missing_mode := @found_missing_mode;
+    IF ((SELECT @found_perm_id) IS NOT NULL) THEN
+
+        SELECT @found_missing_mode := dynamic_measurement_types.measurement_type,
+               @missing_mode_id := dynamic_measurement_types.id
+        FROM dynamic_measurement_types
+                 LEFT OUTER JOIN (SELECT *
+                                  FROM dynamic_performance
+                                  WHERE permutation_id = (SELECT @found_perm_id)
+                                    AND version_id = vid
+                                    AND hardware_id = hid) AS dp
+                                 ON dynamic_measurement_types.id = dp.dynamic_measurement_type
+        WHERE dp.dynamic_measurement_type IS NULL
+        LIMIT 1;
+
+        IF ((SELECT @missing_mode_id) IS NOT NULL) THEN
+            INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
+                                             dynamic_measurement_type)
+            VALUES ((SELECT @found_perm_id), vid, hid, nnid, workload, (SELECT @missing_mode_id));
+            SET perm_id := @found_perm_id;
+            SET missing_mode := @found_missing_mode;
+        ELSE
+            SET perm_id := NULL;
+            SET missing_mode := NULL;
+        END IF;
+    ELSE
+        SET perm_id := NULL;
+        SET missing_mode := NULL;
     END IF;
     SELECT RELEASE_LOCK('sp_ReservePermutation');
 END //

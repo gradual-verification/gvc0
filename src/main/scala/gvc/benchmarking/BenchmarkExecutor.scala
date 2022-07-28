@@ -191,6 +191,17 @@ object BenchmarkExecutor {
                            coe.message,
                            differenceSeconds,
                            conn)
+        case t: Throwable =>
+          val timingStop = System.nanoTime()
+          val differenceSeconds: Long =
+            Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
+          DAO.logException(id,
+                           reserved,
+                           ErrorType.Unknown,
+                           t.getMessage,
+                           differenceSeconds,
+                           conn)
+
       }
       reservedProgram = DAO.reserveProgramForMeasurement(id, worklist, conn)
 

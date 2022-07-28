@@ -35,6 +35,7 @@ object DAO {
     val Execution = "execution"
     val Verification = "verification"
     val Timeout = "timeout"
+    val Unknown = "unknown"
   }
 
   case class Hardware(id: Long, hardwareName: String, dateAdded: String)
