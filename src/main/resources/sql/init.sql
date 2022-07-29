@@ -1,3 +1,5 @@
+USE gvc0;
+
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS static_performance;
 DROP TABLE IF EXISTS dynamic_performance;
@@ -208,7 +210,7 @@ CREATE TABLE IF NOT EXISTS benchmarks
     benchmark_desc TEXT,
     PRIMARY KEY (id, benchmark_name)
 );
-INSERT INTO benchmarks
+INSERT INTO benchmarks (benchmark_name, benchmark_desc)
 VALUES ('default', 'the first path generated for each program.');
 
 CREATE TABLE IF NOT EXISTS benchmark_membership
@@ -354,7 +356,7 @@ DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
                                        IN workload BIGINT UNSIGNED,
                                        OUT perm_id BIGINT UNSIGNED,
-                                       OUT missing_mode VARCHAR(255))
+                                       OUT missing_mode BIGINT UNSIGNED)
 BEGIN
     SELECT GET_LOCK('sp_ReservePermutation', -1);
     SELECT program_id
@@ -418,8 +420,7 @@ BEGIN
 
     IF ((SELECT @found_perm_id) IS NOT NULL) THEN
 
-        SELECT @found_missing_mode := dynamic_measurement_types.measurement_type,
-               @missing_mode_id := dynamic_measurement_types.id
+        SELECT @found_missing_mode_id := dynamic_measurement_types.id
         FROM dynamic_measurement_types
                  LEFT OUTER JOIN (SELECT *
                                   FROM dynamic_performance
@@ -430,12 +431,12 @@ BEGIN
         WHERE dp.dynamic_measurement_type IS NULL
         LIMIT 1;
 
-        IF ((SELECT @missing_mode_id) IS NOT NULL) THEN
+        IF ((SELECT @found_missing_mode_id) IS NOT NULL) THEN
             INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
                                              dynamic_measurement_type)
-            VALUES ((SELECT @found_perm_id), vid, hid, nnid, workload, (SELECT @missing_mode_id));
+            VALUES ((SELECT @found_perm_id), vid, hid, nnid, workload, (SELECT @found_missing_mode_id));
             SET perm_id := @found_perm_id;
-            SET missing_mode := @found_missing_mode;
+            SET missing_mode := @found_missing_mode_id;
         ELSE
             SET perm_id := NULL;
             SET missing_mode := NULL;

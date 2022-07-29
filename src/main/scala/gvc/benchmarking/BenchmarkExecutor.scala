@@ -1,6 +1,7 @@
 package gvc.benchmarking
 
 import gvc.CC0Wrapper.Performance
+import gvc.Config.error
 import gvc.benchmarking.Benchmark.{
   BenchmarkException,
   injectStress,
@@ -31,7 +32,7 @@ object BenchmarkExecutor {
 
   case class ReservedProgram(perm: Permutation,
                              stress: Int,
-                             measurementMode: String)
+                             measurementMode: Long)
 
   def execute(config: ExecutorConfig,
               baseConfig: Config,
@@ -40,6 +41,7 @@ object BenchmarkExecutor {
     val conn = DAO.connect(config.db)
     val globalConfig = DAO.resolveGlobalConfiguration(conn)
     val id = DAO.addOrResolveIdentity(config, conn)
+    val modes = DAO.resolveDynamicModes(conn)
 
     val syncedPrograms =
       BenchmarkPopulator.sync(config.sources, libraries, conn)
@@ -73,82 +75,89 @@ object BenchmarkExecutor {
       val timingStart = System.nanoTime()
 
       val benchmarkingFunction: () => Performance =
-        reserved.measurementMode match {
-          case DynamicMeasurementMode.Dynamic =>
-            () =>
-              {
-                BaselineChecker.check(convertedToIR)
-                val sourceText =
-                  IRPrinter.print(convertedToIR, includeSpecs = false)
-                this.injectAndWrite(sourceText, tempSource)
-                Timing.compileTimed(tempSource,
-                                    tempBinary,
-                                    baseConfig,
-                                    workload.staticIterations)
-                Timing.execTimed(tempBinary,
-                                 workload.iterations,
-                                 List(s"--stress=${reserved.stress}"))
-              }
-          case DynamicMeasurementMode.Framing =>
-            () =>
-              {
-                BaselineChecker.check(convertedToIR, onlyFraming = true)
-                val sourceText =
-                  IRPrinter.print(convertedToIR, includeSpecs = false)
-                this.injectAndWrite(sourceText, tempSource)
-                Files.writeString(
-                  tempSource,
-                  IRPrinter.print(convertedToIR, includeSpecs = false))
-                Timing.compileTimed(tempSource,
-                                    tempBinary,
-                                    baseConfig,
-                                    workload.staticIterations)
-                Timing.execTimed(tempBinary,
-                                 workload.iterations,
-                                 List(s"--stress=${reserved.stress}"))
-              }
-          case DynamicMeasurementMode.Gradual =>
-            () =>
-              {
-                val reconstructedSourceText =
-                  IRPrinter.print(convertedToIR, includeSpecs = true)
+        modes.get(reserved.measurementMode) match {
+          case Some(value) =>
+            value match {
+              case DynamicMeasurementMode.Dynamic =>
+                () =>
+                  {
+                    BaselineChecker.check(convertedToIR)
+                    val sourceText =
+                      IRPrinter.print(convertedToIR, includeSpecs = false)
+                    this.injectAndWrite(sourceText, tempSource)
+                    Timing.compileTimed(tempSource,
+                                        tempBinary,
+                                        baseConfig,
+                                        workload.staticIterations)
+                    Timing.execTimed(tempBinary,
+                                     workload.iterations,
+                                     List(s"--stress=${reserved.stress}"))
+                  }
+              case DynamicMeasurementMode.Framing =>
+                () =>
+                  {
+                    BaselineChecker.check(convertedToIR, onlyFraming = true)
+                    val sourceText =
+                      IRPrinter.print(convertedToIR, includeSpecs = false)
+                    this.injectAndWrite(sourceText, tempSource)
+                    Files.writeString(
+                      tempSource,
+                      IRPrinter.print(convertedToIR, includeSpecs = false))
+                    Timing.compileTimed(tempSource,
+                                        tempBinary,
+                                        baseConfig,
+                                        workload.staticIterations)
+                    Timing.execTimed(tempBinary,
+                                     workload.iterations,
+                                     List(s"--stress=${reserved.stress}"))
+                  }
+              case DynamicMeasurementMode.Gradual =>
+                () =>
+                  {
+                    val reconstructedSourceText =
+                      IRPrinter.print(convertedToIR, includeSpecs = true)
 
-                val vOut = Timing.verifyTimed(
-                  reconstructedSourceText,
-                  Main.Defaults.outputFileCollection,
-                  baseConfig,
-                  workload.staticIterations)
+                    val vOut = Timing.verifyTimed(
+                      reconstructedSourceText,
+                      Main.Defaults.outputFileCollection,
+                      baseConfig,
+                      workload.staticIterations)
 
-                if (!isInjectable(vOut.output.c0Source)) {
-                  throw new BenchmarkException(
-                    s"The file doesn't include an assignment of the form 'int stress = ...'."
-                  )
-                }
-                val source = injectStress(vOut.output.c0Source)
-                Files.writeString(tempSource, source)
+                    if (!isInjectable(vOut.output.c0Source)) {
+                      throw new BenchmarkException(
+                        s"The file doesn't include an assignment of the form 'int stress = ...'."
+                      )
+                    }
+                    val source = injectStress(vOut.output.c0Source)
+                    Files.writeString(tempSource, source)
 
-                val cOut = Timing.compileTimed(tempSource,
-                                               tempBinary,
-                                               baseConfig,
-                                               workload.staticIterations)
-                DAO.updateStaticProfiling(id,
-                                          reserved.perm.id,
-                                          workload.staticIterations,
-                                          vOut,
-                                          cOut,
-                                          conn)
+                    val cOut = Timing.compileTimed(tempSource,
+                                                   tempBinary,
+                                                   baseConfig,
+                                                   workload.staticIterations)
+                    DAO.updateStaticProfiling(id,
+                                              reserved.perm.id,
+                                              workload.staticIterations,
+                                              vOut,
+                                              cOut,
+                                              conn)
 
-                Timing.execTimed(tempBinary,
-                                 workload.iterations,
-                                 List(s"--stress=${reserved.stress}"))
-              }
+                    Timing.execTimed(tempBinary,
+                                     workload.iterations,
+                                     List(s"--stress=${reserved.stress}"))
+                  }
+            }
+          case None =>
+            error(
+              s"Unrecognized dynamic measurement mode with ID ${reserved.measurementMode}")
         }
+
       try {
         val performanceResult =
           Timeout.runWithTimeout(globalConfig.timeoutMinutes * 60 * 1000)(
             benchmarkingFunction())
         DAO.completeProgramMeasurement(id,
-                                       reserved.perm.id,
+                                       reserved,
                                        workload.iterations,
                                        performanceResult,
                                        conn)

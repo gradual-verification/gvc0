@@ -12,6 +12,7 @@ import cats.effect.unsafe.implicits.global
 import gvc.CC0Wrapper.Performance
 import gvc.Config.prettyPrintException
 import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
+import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
 import gvc.benchmarking.Timing.TimedVerification
 
@@ -348,7 +349,7 @@ object DAO {
           .query[Option[Permutation]]
           .option
         mode <- sql"""SELECT @mode;"""
-          .query[Option[String]]
+          .query[Option[Long]]
           .option
       } yield (perm, mode)).transact(xa).attempt.unsafeRunSync()
       reservedAttempt match {
@@ -376,7 +377,7 @@ object DAO {
   }
 
   def completeProgramMeasurement(id: Identity,
-                                 permID: Long,
+                                 reserved: ReservedProgram,
                                  iterations: Int,
                                  p: Performance,
                                  xa: DBConnection): Unit = {
@@ -387,12 +388,12 @@ object DAO {
     val result = (for {
       _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES ($iterations, ${p.ninetyFifth}, ${p.fifth}, ${p.median}, ${p.mean}, ${p.stdev}, ${p.minimum}, ${p.maximum});".update.run
       mid <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
-      r <- sql"UPDATE dynamic_performance SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP WHERE permutation_id = $permID AND version_id = ${id.vid} AND nickname_id = $nicknameResolved AND hardware_id = ${id.hid};".update.run
+      r <- sql"UPDATE dynamic_performance SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP WHERE permutation_id = ${reserved.perm.id} AND version_id = ${id.vid} AND nickname_id = $nicknameResolved AND hardware_id = ${id.hid} AND dynamic_measurement_type = ${reserved.measurementMode};".update.run
     } yield r).transact(xa).attempt.unsafeRunSync()
     result match {
       case Left(t) =>
         prettyPrintException(
-          s"Unable to update performance measurement for permutation $permID.",
+          s"Unable to update performance measurement for permutation ${reserved.perm.id}.",
           t)
       case Right(_) =>
     }
@@ -529,6 +530,22 @@ object DAO {
       case Left(t) =>
         prettyPrintException("Unable to resolve completion data.", t)
       case Right(value) => value
+    }
+  }
+  case class ResolvedMeasurementMode(id: Long, modeType: String)
+  def resolveDynamicModes(
+      conn: DBConnection): Map[Long, DynamicMeasurementMode] = {
+    sql"""SELECT id, measurement_type FROM dynamic_measurement_types;"""
+      .query[ResolvedMeasurementMode]
+      .to[List]
+      .transact(conn)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          "Unable to resolve list of dynamic measurement modes.",
+          t)
+      case Right(value) => value.map(rm => rm.id -> rm.modeType).toMap
     }
   }
 
