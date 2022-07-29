@@ -73,7 +73,7 @@ object Benchmark {
   def injectStress(source: String): String = {
     val withStressDeclaration = correctStressDeclaration.replaceFirstIn(
       source,
-      readStress + "int main()\n{\nint stress = readStress();\n"
+      readStress + "int main()\n{\nint stress = readStress();\nprintint(stress);\n"
     )
     val removedAdditionalAssignments =
       arbitraryStressDeclaration.replaceAllIn(withStressDeclaration, "")

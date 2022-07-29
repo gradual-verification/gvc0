@@ -96,7 +96,7 @@ object BenchmarkExecutor {
                                         workload.staticIterations)
                     Timing.execTimed(tempBinary,
                                      workload.iterations,
-                                     List(s"--stress=${reserved.stress}"))
+                                     List(s"--stress ${reserved.stress}"))
                   }
               case DynamicMeasurementMode.Framing =>
                 () =>
@@ -115,7 +115,7 @@ object BenchmarkExecutor {
                                         workload.staticIterations)
                     Timing.execTimed(tempBinary,
                                      workload.iterations,
-                                     List(s"--stress=${reserved.stress}"))
+                                     List(s"--stress ${reserved.stress}"))
                   }
               case DynamicMeasurementMode.Gradual =>
                 () =>

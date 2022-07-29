@@ -96,7 +96,7 @@ object Main extends App {
           Timing.compileTimed(outputC0Source, outputBinary, config, 1)
           Timing.execTimed(outputBinary,
                            1,
-                           List(s"--stress=${config.stressLevel.getOrElse(1)}"))
+                           List(s"--stress ${config.stressLevel.getOrElse(1)}"))
         })
       case Config.Recreate =>
         val benchConfig =
