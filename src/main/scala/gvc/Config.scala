@@ -1,6 +1,7 @@
 package gvc
 
 import gvc.Config.DefaultMode
+import gvc.benchmarking.Output
 
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import java.io.File
@@ -117,7 +118,14 @@ object Config {
   private val recreatePermString = raw"--recreate=(.+)".r
 
   def error(message: String): Nothing = {
+    Output.error(message)
     println(message)
+    sys.exit(1)
+  }
+
+  def prettyPrintException(message: String, throwable: Throwable): Nothing = {
+    Output.error(message)
+    println(throwable.getMessage)
     sys.exit(1)
   }
 

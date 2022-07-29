@@ -97,7 +97,10 @@ object BenchmarkPopulator {
       ProgramInformation(sourceText, sourceIR, labelOutput, fileName)
 
     val insertedProgramID =
-      DAO.resolveProgram(md5sum(sourceText), labelOutput.labels.size, xa)
+      DAO.resolveProgram(fileName,
+                         md5sum(sourceText),
+                         labelOutput.labels.size,
+                         xa)
 
     insertedProgramID match {
       case Some(value) =>

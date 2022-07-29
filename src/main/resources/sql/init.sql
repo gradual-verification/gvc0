@@ -208,6 +208,8 @@ CREATE TABLE IF NOT EXISTS benchmarks
     benchmark_desc TEXT,
     PRIMARY KEY (id, benchmark_name)
 );
+INSERT INTO benchmarks
+VALUES ('default', 'the first path generated for each program.');
 
 CREATE TABLE IF NOT EXISTS benchmark_membership
 (
@@ -469,3 +471,4 @@ BEGIN
       AND error_type = p_err_type;
 END //
 DELIMITER ;
+
