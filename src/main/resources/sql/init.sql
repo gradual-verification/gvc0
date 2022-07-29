@@ -1,5 +1,3 @@
-USE gvc0;
-
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS static_performance;
 DROP TABLE IF EXISTS dynamic_performance;
