@@ -123,8 +123,7 @@ object Config {
   }
 
   def prettyPrintException(message: String, throwable: Throwable): Nothing = {
-    Output.error(message)
-    println(throwable.getMessage)
+    Output.error(message + s": ${throwable.getMessage}")
     sys.exit(1)
   }
 

@@ -1,6 +1,10 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.DAO.{DBConnection, GlobalConfiguration}
+import gvc.benchmarking.DAO.{
+  DBConnection,
+  GlobalConfiguration,
+  PathQueryCollection
+}
 import gvc.transformer.IR.Program
 import gvc.Main
 import gvc.benchmarking.Benchmark.BenchmarkException
@@ -76,8 +80,11 @@ object BenchmarkPopulator {
     Await
       .result(synchronized, Duration.Inf)
       .foreach {
-        case Failure(f)     => throw new BenchmarkException(f.getMessage)
-        case Success(value) => mapping += value
+        case Failure(f) => throw new BenchmarkException(f.getMessage)
+        case Success(value) =>
+          Output.info(s"Storing paths for ${value.rep.info.fileName}")
+          value.pathQueries.foreach(q => q.exec(connection))
+          mapping += (value.id -> value.rep)
       }
     mapping.toMap
   }
@@ -114,10 +121,11 @@ object BenchmarkPopulator {
       case None => None
     }
   }
+
   private def populatePaths(programID: Long,
                             programRep: StoredProgramRepresentation,
                             globalConfig: GlobalConfiguration,
-                            xa: DBConnection): Unit = {
+                            xa: DBConnection): List[PathQueryCollection] = {
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
     val sampler = new Sampler(programRep.info.labels)
@@ -127,8 +135,13 @@ object BenchmarkPopulator {
     val bottomPerm =
       DAO.addOrResolvePermutation(programID, bottomPermutationHash, xa)
 
-    val maximum = theoreticalMax.min(globalConfig.maxPaths)
-    while (DAO.getNumberOfPaths(programID, xa) < maximum) {
+    val queryCollections = mutable.ListBuffer[PathQueryCollection]()
+
+    val maximum =
+      theoreticalMax.min(globalConfig.maxPaths).min(globalConfig.maxPaths)
+    val difference = maximum - DAO.getNumberOfPaths(programID, xa)
+    for (_ <- 0 until difference.intValue()) {
+
       val ordering = sampler.sample(SamplingHeuristic.Random)
       val pathHash =
         LabelTools
@@ -148,18 +161,23 @@ object BenchmarkPopulator {
           pathQuery.addStep(storedPermutationID,
                             programRep.componentMapping(ordering(labelIndex)))
         }
-        pathQuery.exec(xa)
+        queryCollections += pathQuery
+
       }
     }
     Output.success(
       s"Completed generating paths for ${programRep.info.fileName}")
+    queryCollections.toList
   }
 
-  private def populateProgram(
-      src: Path,
-      libraries: List[String],
-      globalConfiguration: GlobalConfiguration,
-      xa: DBConnection): (Long, StoredProgramRepresentation) = {
+  case class PopulatedProgram(id: Long,
+                              rep: StoredProgramRepresentation,
+                              pathQueries: List[PathQueryCollection])
+
+  private def populateProgram(src: Path,
+                              libraries: List[String],
+                              globalConfiguration: GlobalConfiguration,
+                              xa: DBConnection): PopulatedProgram = {
     Output.info(s"Syncing definitions for ${src.getFileName}")
     val sourceText = Files.readString(src)
     val sourceIR = Main.generateIR(sourceText, libraries)
@@ -182,9 +200,10 @@ object BenchmarkPopulator {
 
     val programRep =
       StoredProgramRepresentation(programInfo, componentMapping.toMap)
-    populatePaths(insertedProgramID, programRep, globalConfiguration, xa)
-
-    (insertedProgramID, programRep)
+    PopulatedProgram(
+      insertedProgramID,
+      programRep,
+      populatePaths(insertedProgramID, programRep, globalConfiguration, xa))
   }
 
   //https://alvinalexander.com/source-code/scala-method-create-md5-hash-of-string/

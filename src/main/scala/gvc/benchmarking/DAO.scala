@@ -10,7 +10,7 @@ import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import gvc.CC0Wrapper.Performance
-import gvc.Config.prettyPrintException
+import gvc.Config.{error, prettyPrintException}
 import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
@@ -246,12 +246,13 @@ object DAO {
     }
     (for {
       _ <- sql"CALL sp_gr_Component($programID, $contextName, ${astLabel.specType}, ${astLabel.specIndex}, ${astLabel.exprType}, ${astLabel.exprIndex}, @comp);".update.run
-      cid <- sql"SELECT @comp;".query[Long].option
-    } yield cid).transact(xa).unsafeRunSync() match {
-      case Some(value) => value
-      case None =>
-        throw new DBException(
-          s"Failed to add or resolve component ${astLabel.hash}")
+      cid <- sql"SELECT @comp;".query[Long].unique
+    } yield cid).transact(xa).attempt.unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          s"Unable to add or resolve component ${astLabel.hash}",
+          t)
+      case Right(value) => value
     }
   }
 

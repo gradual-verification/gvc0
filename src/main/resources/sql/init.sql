@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS programs
     src_hash     VARCHAR(255) UNIQUE NOT NULL,
     num_labels   BIGINT UNSIGNED     NOT NULL,
     program_date DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id, src_filename, src_hash, num_labels)
+    PRIMARY KEY (id),
+    UNIQUE KEY contents (src_filename, src_hash, num_labels)
 );
 
 DELIMITER //
@@ -74,7 +75,8 @@ CREATE TABLE IF NOT EXISTS components
     expr_type      VARCHAR(255)    NOT NULL,
     expr_index     BIGINT UNSIGNED NOT NULL,
     component_date DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id, program_id, spec_type, spec_index, expr_type, expr_index),
+    PRIMARY KEY (id),
+    UNIQUE KEY contents (program_id, spec_type, spec_index, expr_type, expr_index),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
@@ -85,7 +87,6 @@ CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255
                                  IN p_eindex BIGINT UNSIGNED,
                                  OUT c_id BIGINT UNSIGNED)
 BEGIN
-
     INSERT IGNORE INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
     VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
     SELECT id
@@ -107,6 +108,7 @@ CREATE TABLE IF NOT EXISTS permutations
     permutation_hash BLOB            NOT NULL,
     permutation_date DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
+    UNIQUE KEY contents (program_id, permutation_hash),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
@@ -117,9 +119,7 @@ BEGIN
     INTO p_id
     FROM permutations
     WHERE program_id = p_program_id
-      AND permutation_hash = p_perm_hash FOR
-    UPDATE;
-
+      AND permutation_hash = p_perm_hash;
     IF ((SELECT p_id) IS NULL) THEN
         INSERT INTO permutations (program_id, permutation_hash) VALUES (p_program_id, p_perm_hash);
         SELECT LAST_INSERT_ID() INTO p_id;
