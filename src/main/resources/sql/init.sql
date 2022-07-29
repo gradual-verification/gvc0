@@ -108,7 +108,6 @@ CREATE TABLE IF NOT EXISTS permutations
     permutation_hash BLOB            NOT NULL,
     permutation_date DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY contents (program_id, permutation_hash),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
