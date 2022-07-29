@@ -19,6 +19,7 @@ case class Config(
     config: Option[Path] = None,
     onlyExec: Boolean = false,
     saveFiles: Boolean = false,
+    stressLevel: Option[Int] = None,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
     onlyCompile: Boolean = false,
@@ -69,6 +70,10 @@ object Config {
 
   case object Execute extends Mode
 
+  case object DynamicVerification extends Mode
+
+  case object FramingVerification extends Mode
+
   case object Recreate extends Mode
 
   case object Monitor extends Mode
@@ -101,6 +106,7 @@ object Config {
     """
 
   private val dumpArg = raw"--dump=(.+)".r
+  private val stressArg = raw"--stress=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val timeoutArg = raw"--timeout=(.+)".r
   private val timeoutSec = raw"([0-9]+)s".r
@@ -184,6 +190,10 @@ object Config {
       current: Config = Config()
   ): Config =
     args match {
+      case stressArg(t) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(stressLevel = Some(parseInt(t, "--stress"))))
       case hardwareString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(hardwareString = Some(t)))
       case versionString(t) :: tail =>
@@ -221,6 +231,16 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(onlyCompile = true)
+        )
+      case "--dynamic" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = DynamicVerification)
+        )
+      case "--framing" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = FramingVerification)
         )
       case "-t" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))

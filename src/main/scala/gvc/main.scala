@@ -3,14 +3,18 @@ package gvc
 import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
+import gvc.benchmarking.Benchmark.injectStress
+import gvc.benchmarking.BenchmarkExecutor.injectAndWrite
 import gvc.transformer._
 import gvc.benchmarking.{
+  BaselineChecker,
   BenchmarkExecutor,
   BenchmarkExternalConfig,
   BenchmarkMonitor,
   BenchmarkPopulator,
   BenchmarkRecreator,
-  Output
+  Output,
+  Timing
 }
 import gvc.weaver.{Weaver, WeaverException}
 import viper.silicon.Silicon
@@ -78,7 +82,22 @@ object Main extends App {
         val benchConfig =
           BenchmarkExternalConfig.parseMonitor(config)
         BenchmarkMonitor.monitor(benchConfig)
-
+      case Config.DynamicVerification | Config.FramingVerification =>
+        Output.printTiming(() => {
+          val fileNames = getOutputCollection(config.sourceFile.get)
+          val inputSource = readFile(config.sourceFile.get)
+          val onlyFraming = config.mode == Config.FramingVerification
+          val ir = generateIR(inputSource, linkedLibraries)
+          BaselineChecker.check(ir, onlyFraming)
+          val outputC0Source = Paths.get(fileNames.c0FileName)
+          val outputBinary = Paths.get(fileNames.binaryName)
+          injectAndWrite(IRPrinter.print(ir, includeSpecs = false),
+                         outputC0Source)
+          Timing.compileTimed(outputC0Source, outputBinary, config, 1)
+          Timing.execTimed(outputBinary,
+                           1,
+                           List(s"--stress=${config.stressLevel.getOrElse(1)}"))
+        })
       case Config.Recreate =>
         val benchConfig =
           BenchmarkExternalConfig.parseRecreator(config)
