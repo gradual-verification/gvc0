@@ -119,7 +119,6 @@ object Config {
 
   def error(message: String): Nothing = {
     Output.error(message)
-    println(message)
     sys.exit(1)
   }
 
@@ -156,7 +155,7 @@ object Config {
   private def parsePath(p: String,
                         isDir: Boolean = false): java.nio.file.Path = {
     try {
-      val toPath = Paths.get(p)
+      val toPath = Paths.get(p).toAbsolutePath
       if (Files.exists(toPath)) {
         if (isDir) {
           if (Files.isDirectory(toPath)) {
