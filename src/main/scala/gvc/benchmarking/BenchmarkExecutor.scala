@@ -48,8 +48,10 @@ object BenchmarkExecutor {
 
     val workload = config.workload
 
-    val tempBinary = Paths.get(Main.Defaults.outputFileCollection.binaryName)
-    val tempSource = Paths.get(Main.Defaults.outputFileCollection.c0FileName)
+    val tempBinary =
+      Files.createTempFile("temp_bin", ".c0")
+
+    val tempSource = Files.createTempFile("temp_src", ".c0")
 
     val worklist =
       BenchmarkExternalConfig.generateStressList(config.workload.stress)
@@ -85,6 +87,8 @@ object BenchmarkExecutor {
                     val sourceText =
                       IRPrinter.print(convertedToIR, includeSpecs = false)
                     this.injectAndWrite(sourceText, tempSource)
+                    Files.deleteIfExists(tempBinary)
+
                     Timing.compileTimed(tempSource,
                                         tempBinary,
                                         baseConfig,
@@ -103,6 +107,7 @@ object BenchmarkExecutor {
                     Files.writeString(
                       tempSource,
                       IRPrinter.print(convertedToIR, includeSpecs = false))
+                    Files.deleteIfExists(tempBinary)
                     Timing.compileTimed(tempSource,
                                         tempBinary,
                                         baseConfig,
@@ -130,6 +135,7 @@ object BenchmarkExecutor {
                     }
                     val source = injectStress(vOut.output.c0Source)
                     Files.writeString(tempSource, source)
+                    Files.deleteIfExists(tempBinary)
 
                     val cOut = Timing.compileTimed(tempSource,
                                                    tempBinary,
