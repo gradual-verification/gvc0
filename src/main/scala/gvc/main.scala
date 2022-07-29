@@ -83,7 +83,7 @@ object Main extends App {
         val benchConfig =
           BenchmarkExternalConfig.parseRecreator(config)
         Output.info(
-          "Recreating permutation ID=${benchConfig.permToRecreate}...")
+          s"Recreating permutation ID=${benchConfig.permToRecreate}...")
         val recreated =
           BenchmarkRecreator.recreate(benchConfig, config, linkedLibraries)
         val recreationName = s"./recreated_${benchConfig.permToRecreate}.c0"

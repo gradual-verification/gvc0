@@ -62,7 +62,8 @@ object BenchmarkExecutor {
     while (reservedProgram.nonEmpty) {
       val reserved = reservedProgram.get
       Output.info(
-        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${reserved.measurementMode} | w=${reserved.stress} | id=${reserved.perm.id}")
+        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${modes(
+          reserved.measurementMode)} | w=${reserved.stress} | id=${reserved.perm.id}")
 
       val correspondingProgramLabels =
         syncedPrograms(reserved.perm.programID).labels
