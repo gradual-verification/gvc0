@@ -1,6 +1,7 @@
 package gvc
 
 import gvc.Config.DefaultMode
+import gvc.benchmarking.Output
 
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import java.io.File
@@ -11,22 +12,27 @@ sealed trait DumpType
 sealed trait Mode
 
 case class Config(
-    dump: Option[DumpType] = None,
-    output: Option[String] = None,
-    timeout: Option[Long] = None,
-    mode: Mode = Config.DefaultMode,
-    populatorConfig: Option[Path] = None,
-    executorConfig: Option[Path] = None,
-    sequentialConfig: Option[Path] = None,
-    onlyExec: Boolean = false,
-    saveFiles: Boolean = false,
-    exec: Boolean = false,
-    onlyVerify: Boolean = false,
-    onlyCompile: Boolean = false,
-    sourceFile: Option[String] = None,
-    linkedLibraries: List[String] = List.empty,
-    versionString: Option[String] = None
-) {
+                   dump: Option[DumpType] = None,
+                   output: Option[String] = None,
+                   timeout: Option[Long] = None,
+                   mode: Mode = Config.DefaultMode,
+                   config: Option[Path] = None,
+                   onlyExec: Boolean = false,
+                   saveFiles: Boolean = false,
+                   stressLevel: Option[Int] = None,
+                   exec: Boolean = false,
+                   onlyVerify: Boolean = false,
+                   onlyCompile: Boolean = false,
+                   sourceFile: Option[String] = None,
+                   linkedLibraries: List[String] = List.empty,
+                   versionString: Option[String] = None,
+                   nicknameString: Option[String] = None,
+                   hardwareString: Option[String] = None,
+                   dbURLString: Option[String] = None,
+                   dbUserString: Option[String] = None,
+                   dbPassString: Option[String] = None,
+                   recreatePerm: Option[Int] = None,
+                 ) {
   def validate(): Unit = {
     (
       if (dump.isDefined && output.isDefined)
@@ -47,7 +53,7 @@ case class Config(
       else if (versionString.nonEmpty && versionString.get.trim.isEmpty) {
         Some(s"Invalid version string.")
       } else None
-    ).foreach(Config.error)
+      ).foreach(Config.error)
   }
 }
 
@@ -60,13 +66,17 @@ object Config {
 
   case object DefaultMode extends Mode
 
-  case object BenchmarkExecutor extends Mode
+  case object Populate extends Mode
 
-  case object BenchmarkSequential extends Mode
+  case object Execute extends Mode
 
-  case object BenchmarkPopulator extends Mode
+  case object DynamicVerification extends Mode
 
-  case object QuickCheck extends Mode
+  case object FramingVerification extends Mode
+
+  case object Recreate extends Mode
+
+  case object Monitor extends Mode
 
   val help =
     """Usage: gvc0 [OPTION...] SOURCEFILE
@@ -80,25 +90,45 @@ object Config {
       |  -x            --exec                         Execute the compiled file
       |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
       |
-      |                --sequential=<config.xml>      Execute a sequential benchmark using the specified configuration file
-      |                --executor=<config.xml>        Execute a parallel benchmark using the specified configuration file.
-      |                --populator=<config.xml>       Populate the database with permutations of the provided set of sample programs.
-      |                --version=<version>            Specify the version string identifying the current verifier. Overrides any value in a provided config.
-   """
+      |                --config=<config.xml>          Execute a benchmark using the specified configuration file
+      |
+      |                --populate                     Populate the benchmarking database using options from the specified configuration file.
+      |                --execute                      Execute programs and store results in the database using options from the specified configuration file.
+      |                --recreate=<id>                Specify a permutation to recreate from the database  using options from the specified configuration file.
+      |
+      |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
+      |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
+      |                --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
+      |                --db-url=<url>                 Specify the URL for the benchmarking database. Overrides config.
+      |                --db-user=<username>           Specify the user for the benchmarking database. Overrides config.
+      |                --db-pass=<password>           Specify the password for the benchmarking database. Overrides config.
+    """
 
   private val dumpArg = raw"--dump=(.+)".r
+  private val stressArg = raw"--stress=(.+)".r
   private val outputArg = raw"--output=(.+)".r
   private val timeoutArg = raw"--timeout=(.+)".r
   private val timeoutSec = raw"([0-9]+)s".r
   private val timeoutMin = raw"([0-9]+)m".r
-  private val populatorDirectoryArg = raw"--populator=(.+)".r
-  private val executorConfigArg = raw"--executor=(.+)".r
-  private val sequentialConfigArg = raw"--sequential=(.+)".r
+  private val configFileArg = raw"--config=(.+)".r
+
   private val versionString = raw"--version=(.+)".r
-  private val quickcheck = raw"--quickcheck=(.+)".r
+  private val nicknameString = raw"--nickname=(.+)".r
+  private val hardwareString = raw"--hardware=(.+)".r
+
+  private val dbURLString = raw"--db-url=(.+)".r
+  private val dbUserString = raw"--db-user=(.+)".r
+  private val dbPassString = raw"--db-pass=(.+)".r
+
+  private val recreatePermString = raw"--recreate=(.+)".r
 
   def error(message: String): Nothing = {
-    println(message)
+    Output.error(message)
+    sys.exit(1)
+  }
+
+  def prettyPrintException(message: String, throwable: Throwable): Nothing = {
+    Output.error(message + s": ${throwable.getMessage}")
     sys.exit(1)
   }
 
@@ -115,20 +145,21 @@ object Config {
     case _        => error(s"Invalid dump output type: $t")
   }
 
-  def parseIntList(t: String): List[Int] = {
-    if (t.matches("[0-9]+(,[0-9]+)+")) {
-      t.split(',').map(s => s.trim.toInt).toList
-    } else {
-      error(
-        s"Invalid input for --w-list; expected a comma-separated list of integers"
-      )
+  def parseInt(t: String, config: String): Int = {
+    try {
+      t.toInt
+    } catch {
+      case _: NumberFormatException => {
+        error(
+          s"Invalid option for $config; expected an integer but found '$t'.")
+      }
     }
   }
 
   private def parsePath(p: String,
                         isDir: Boolean = false): java.nio.file.Path = {
     try {
-      val toPath = Paths.get(p)
+      val toPath = Paths.get(p).toAbsolutePath
       if (Files.exists(toPath)) {
         if (isDir) {
           if (Files.isDirectory(toPath)) {
@@ -154,29 +185,41 @@ object Config {
 
   @tailrec
   def fromCommandLineArgs(
-      args: List[String],
-      current: Config = Config()
-  ): Config =
+                           args: List[String],
+                           current: Config = Config()
+                         ): Config =
     args match {
+      case stressArg(t) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(stressLevel = Some(parseInt(t, "--stress"))))
+      case hardwareString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(hardwareString = Some(t)))
       case versionString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(versionString = Some(t)))
-      case populatorDirectoryArg(t) :: tail =>
+      case nicknameString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(nicknameString = Some(t)))
+      case dbURLString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(dbURLString = Some(t)))
+      case dbPassString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(dbPassString = Some(t)))
+      case dbUserString(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(dbUserString = Some(t)))
+      case "--monitor" :: tail =>
+        fromCommandLineArgs(tail, current.copy(mode = Monitor))
+      case "--populate" :: tail =>
+        fromCommandLineArgs(tail, current.copy(mode = Populate))
+      case "--execute" :: tail =>
+        fromCommandLineArgs(tail, current.copy(mode = Execute))
+      case recreatePermString(t) :: tail =>
+        fromCommandLineArgs(tail,
+          current.copy(recreatePerm =
+            Some(this.parseInt(t, "--recreate")),
+            mode = Recreate))
+      case configFileArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(populatorConfig = Some(parsePath(t)),
-                       mode = BenchmarkPopulator)
-        )
-      case sequentialConfigArg(t) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(sequentialConfig = Some(parsePath(t)),
-                       mode = BenchmarkSequential)
-        )
-      case executorConfigArg(t) :: tail =>
-        fromCommandLineArgs(
-          tail,
-          current.copy(executorConfig = Some(parsePath(t)),
-                       mode = BenchmarkExecutor)
+          current.copy(config = Some(parsePath(t)))
         )
       case "--only-exec" :: tail =>
         fromCommandLineArgs(
@@ -187,6 +230,16 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(onlyCompile = true)
+        )
+      case "--dynamic" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = DynamicVerification)
+        )
+      case "--framing" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = FramingVerification)
         )
       case "-t" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))

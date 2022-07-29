@@ -3,15 +3,20 @@ package gvc
 import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
+import gvc.benchmarking.Benchmark.injectStress
+import gvc.benchmarking.BenchmarkExecutor.injectAndWrite
 import gvc.transformer._
 import gvc.benchmarking.{
+  BaselineChecker,
   BenchmarkExecutor,
   BenchmarkExternalConfig,
+  BenchmarkMonitor,
   BenchmarkPopulator,
-  BenchmarkSequential,
-  Output
+  BenchmarkRecreator,
+  Output,
+  Timing
 }
-import gvc.weaver.Weaver
+import gvc.weaver.{Weaver, WeaverException}
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
 import viper.silver.ast.Program
@@ -25,13 +30,13 @@ import scala.language.postfixOps
 import viper.silicon.state.BranchCond
 
 case class OutputFileCollection(
-    baseName: String,
-    irFileName: String,
-    silverFileName: String,
-    c0FileName: String,
-    profilingName: String,
-    binaryName: String
-)
+                                 baseName: String,
+                                 irFileName: String,
+                                 silverFileName: String,
+                                 c0FileName: String,
+                                 profilingName: String,
+                                 binaryName: String
+                               )
 
 object Main extends App {
   object Defaults {
@@ -40,6 +45,7 @@ object Main extends App {
     val includeDirectories: List[String] = List(
       Paths.get("src/main/resources").toAbsolutePath.toString + '/')
   }
+
   def getOutputCollection(sourceFile: String): OutputFileCollection = {
     val baseName =
       if (sourceFile.toLowerCase().endsWith(".c0"))
@@ -71,26 +77,55 @@ object Main extends App {
       config.linkedLibraries ++ Defaults.includeDirectories
 
     config.mode match {
-      case Config.BenchmarkSequential =>
-        val benchConfig =
-          BenchmarkExternalConfig.parseSequential(config)
-        Output.printTiming(() => {
-          BenchmarkSequential.mark(
-            config,
-            benchConfig,
-            linkedLibraries
-          )
-        })
 
-      case Config.BenchmarkExecutor =>
+      case Config.Monitor =>
+        val benchConfig =
+          BenchmarkExternalConfig.parseMonitor(config)
+        BenchmarkMonitor.monitor(benchConfig)
+      case Config.DynamicVerification | Config.FramingVerification =>
+        Output.printTiming(() => {
+          val fileNames = getOutputCollection(config.sourceFile.get)
+          val inputSource = readFile(config.sourceFile.get)
+          val onlyFraming = config.mode == Config.FramingVerification
+          val ir = generateIR(inputSource, linkedLibraries)
+          BaselineChecker.check(ir, onlyFraming)
+          val outputC0Source = Paths.get(fileNames.c0FileName)
+          val outputBinary = Paths.get(fileNames.binaryName)
+          injectAndWrite(IRPrinter.print(ir, includeSpecs = false),
+            outputC0Source)
+          Timing.compileTimed(outputC0Source, outputBinary, config, 1)
+          Timing.execTimed(outputBinary,
+            1,
+            List(s"--stress ${config.stressLevel.getOrElse(1)}"))
+        })
+      case Config.Recreate =>
+        val benchConfig =
+          BenchmarkExternalConfig.parseRecreator(config)
+        Output.info(
+          s"Recreating permutation ID=${benchConfig.permToRecreate}...")
+        val recreated =
+          BenchmarkRecreator.recreate(benchConfig, config, linkedLibraries)
+        val recreationName = s"./recreated_${benchConfig.permToRecreate}.c0"
+        Output.success(
+          s"Successfully recreated permutation ID=${benchConfig.permToRecreate}, writing to $recreationName")
+        val inputSource = IRPrinter.print(recreated, includeSpecs = true)
+        val sourcePath =
+          Paths.get(recreationName)
+        Files.writeString(sourcePath, inputSource)
+        val fileNames = getOutputCollection(recreationName)
+        Output.printTiming(() => {
+          val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+          execute(verifiedOutput.c0Source, fileNames)
+        })
+      case Config.Execute =>
         val benchConfig =
           BenchmarkExternalConfig.parseExecutor(config)
-        BenchmarkExecutor.execute(benchConfig, config)
+        BenchmarkExecutor.execute(benchConfig, config, linkedLibraries)
 
-      case Config.BenchmarkPopulator =>
+      case Config.Populate =>
         val benchConfig =
           BenchmarkExternalConfig.parsePopulator(config)
-        BenchmarkPopulator.populate(benchConfig, Defaults.includeDirectories)
+        BenchmarkPopulator.populate(benchConfig, linkedLibraries)
 
       case Config.DefaultMode =>
         val fileNames = getOutputCollection(config.sourceFile.get)
@@ -99,6 +134,7 @@ object Main extends App {
           val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
           execute(verifiedOutput.c0Source, fileNames)
         })
+      case _ =>
     }
   }
 
@@ -150,9 +186,9 @@ object Main extends App {
   }
 
   def generateIR(
-      inputSource: String,
-      librarySearchPaths: List[String]
-  ): IR.Program = {
+                  inputSource: String,
+                  librarySearchPaths: List[String]
+                ): IR.Program = {
     val parsed = Parser.parseProgram(inputSource) match {
       case fail: Failure =>
         Config.error(s"Parse error:\n${fail.trace().longAggregateMsg}")
@@ -171,27 +207,27 @@ object Main extends App {
   }
 
   case class VerifiedOutput(
-      silver: Program,
-      c0Source: String,
-      profiling: ProfilingInfo,
-      timing: VerifierTiming
-  )
+                             silver: Program,
+                             c0Source: String,
+                             profiling: ProfilingInfo,
+                             timing: VerifierTiming
+                           )
 
   case class VerifierTiming(
-      translation: Long,
-      verification: Long,
-      instrumentation: Long
-  )
+                             translation: Long,
+                             verification: Long,
+                             instrumentation: Long
+                           )
 
   case class ProfilingInfo(nConjuncts: Int, nConjunctsEliminated: Int)
 
   class VerifierException(message: String) extends Exception(message)
 
   def verify(
-      inputSource: String,
-      fileNames: OutputFileCollection,
-      config: Config
-  ): VerifiedOutput = {
+              inputSource: String,
+              fileNames: OutputFileCollection,
+              config: Config
+            ): VerifiedOutput = {
 
     val reporter = viper.silver.reporter.StdIOReporter()
     val z3Exe = Config.resolveToolPath("z3", "Z3_EXE")
@@ -240,7 +276,13 @@ object Main extends App {
     if (config.onlyVerify) sys.exit(0)
 
     val weavingStart = System.nanoTime()
-    Weaver.weave(ir, silver)
+    try {
+      Weaver.weave(ir, silver)
+    } catch {
+      case t: Throwable =>
+        throw new WeaverException(t.getMessage)
+
+    }
     val weavingStop = System.nanoTime()
     val weavingTime = weavingStop - weavingStart
 
@@ -263,9 +305,9 @@ object Main extends App {
   }
 
   def execute(
-      verifiedSource: String,
-      fileNames: OutputFileCollection
-  ): Unit = {
+               verifiedSource: String,
+               fileNames: OutputFileCollection
+             ): Unit = {
     val outputExe = cmdConfig.output.getOrElse("a.out")
 
     // TODO: Figure out how we can use the actual resource
