@@ -65,7 +65,7 @@ case class ExecutorConfig(version: String,
 
 case class BenchmarkConfigResults(
     version: String,
-    hardware: String,
+    hardware: Option[String],
     nickname: Option[String],
     credentials: BenchmarkDBCredentials,
     sources: List[Path],
@@ -104,15 +104,20 @@ object BenchmarkExternalConfig {
   def parseExecutor(rootConfig: Config): ExecutorConfig = {
     val resolved = parseConfig(rootConfig)
     resolved.workload match {
-      case Some(value) =>
-        ExecutorConfig(
-          resolved.version,
-          resolved.hardware,
-          resolved.nickname,
-          resolved.credentials,
-          resolved.sources,
-          value
-        )
+      case Some(wValue) =>
+        resolved.hardware match {
+          case Some(hValue) =>
+            ExecutorConfig(
+              resolved.version,
+              hValue,
+              resolved.nickname,
+              resolved.credentials,
+              resolved.sources,
+              wValue
+            )
+          case None => error("A <hardware> must be provided.")
+        }
+
       case None => error("A <workload> must be provided.")
     }
   }
@@ -135,7 +140,9 @@ object BenchmarkExternalConfig {
       val version =
         resolveFallback("version", benchmarkRoot, rootConfig.versionString)
       val hardware =
-        resolveFallback("hardware", benchmarkRoot, rootConfig.hardwareString)
+        resolveFallbackOptional("hardware",
+                                benchmarkRoot,
+                                rootConfig.hardwareString)
       val nickname =
         resolveFallbackOptional("nickname",
                                 benchmarkRoot,
