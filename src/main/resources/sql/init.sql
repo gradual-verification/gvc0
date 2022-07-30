@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS global_configuration
 
 INSERT INTO global_configuration (timeout_minutes, max_paths)
 VALUES (60, 4);
-
+UPDATE global_configuration
+set timeout_minutes = 30;
 
 CREATE TABLE IF NOT EXISTS programs
 (
@@ -411,4 +412,5 @@ BEGIN
     SELECT LAST_INSERT_ID() INTO eid;
 END //
 DELIMITER ;
+
 
