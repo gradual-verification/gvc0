@@ -1,7 +1,8 @@
 package gvc.benchmarking
 
-import gvc.CC0Wrapper.{CommandOutput, Performance}
+import gvc.CC0Wrapper.Performance
 import gvc.Config.error
+import gvc.Main.resolveSilicon
 import gvc.benchmarking.Benchmark.{
   BenchmarkException,
   injectStress,
@@ -13,7 +14,7 @@ import gvc.transformer.IRPrinter
 import gvc.weaver.WeaverException
 import gvc.{Config, Main, VerificationException}
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 import scala.concurrent.TimeoutException
 
 object BenchmarkExecutor {
@@ -42,6 +43,7 @@ object BenchmarkExecutor {
     val globalConfig = DAO.resolveGlobalConfiguration(conn)
     val id = DAO.addOrResolveIdentity(config, conn)
     val modes = DAO.resolveDynamicModes(conn)
+    val silicon = resolveSilicon(baseConfig)
 
     val syncedPrograms =
       BenchmarkPopulator.sync(config.sources, libraries, conn)
@@ -174,12 +176,16 @@ object BenchmarkExecutor {
             Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
 
           val errorType = t match {
-            case _: TimeoutException        => ErrorType.Timeout
+            case _: TimeoutException =>
+              silicon.stop()
+              ErrorType.Timeout
             case _: VerificationException   => ErrorType.Verification
             case _: CC0CompilationException => ErrorType.Compilation
             case _: CC0ExecutionException   => ErrorType.Execution
             case _: WeaverException         => ErrorType.Weaving
-            case _                          => ErrorType.Unknown
+            case _ =>
+              silicon.stop()
+              ErrorType.Unknown
           }
           DAO.logException(id,
                            reserved,

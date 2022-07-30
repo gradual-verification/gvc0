@@ -3,7 +3,6 @@ package gvc
 import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
-import gvc.benchmarking.Benchmark.injectStress
 import gvc.benchmarking.BenchmarkExecutor.injectAndWrite
 import gvc.transformer._
 import gvc.benchmarking.{
@@ -223,19 +222,26 @@ object Main extends App {
 
   class VerifierException(message: String) extends Exception(message)
 
-  def verify(
-      inputSource: String,
-      fileNames: OutputFileCollection,
-      config: Config
-  ): VerifiedOutput = {
-
+  def resolveSilicon(config: Config): Silicon = {
     val reporter = viper.silver.reporter.StdIOReporter()
     val z3Exe = Config.resolveToolPath("z3", "Z3_EXE")
-    val silicon = Silicon.fromPartialCommandLineArguments(
+    Silicon.fromPartialCommandLineArguments(
       Seq("--z3Exe", z3Exe, "--checkTimeout", "0"),
       reporter,
       Seq()
     )
+  }
+
+  def verify(inputSource: String,
+             fileNames: OutputFileCollection,
+             config: Config): VerifiedOutput = {
+    def silicon = resolveSilicon(config)
+    verifySiliconProvided(silicon, inputSource, fileNames, config)
+  }
+  def verifySiliconProvided(silicon: Silicon,
+                            inputSource: String,
+                            fileNames: OutputFileCollection,
+                            config: Config): VerifiedOutput = {
     profilingInfo.reset
     runtimeChecks.reset
 
@@ -270,6 +276,7 @@ object Main extends App {
         throw VerificationException(message)
     }
     silicon.stop()
+    silicon.stop()
     val verificationStop = System.nanoTime()
     val verificationTime = verificationStop - verificationStart
 
@@ -281,7 +288,6 @@ object Main extends App {
     } catch {
       case t: Throwable =>
         throw new WeaverException(t.getMessage)
-
     }
     val weavingStop = System.nanoTime()
     val weavingTime = weavingStop - weavingStart
