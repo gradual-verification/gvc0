@@ -38,9 +38,7 @@ CREATE TABLE IF NOT EXISTS global_configuration
 );
 
 INSERT INTO global_configuration (timeout_minutes, max_paths)
-VALUES (60, 4);
-UPDATE global_configuration
-set timeout_minutes = 30;
+VALUES (30, 4);
 
 CREATE TABLE IF NOT EXISTS programs
 (
@@ -406,10 +404,11 @@ CREATE PROCEDURE sp_gr_Error(IN p_ehash VARCHAR(255), IN p_edesc TEXT, IN p_etim
                              IN p_err_type VARCHAR(255), OUT eid BIGINT UNSIGNED)
 BEGIN
     INSERT IGNORE INTO error_contents (error_hash, error_desc) VALUES (p_ehash, p_edesc);
-    SELECT id INTO @found_error_contents FROM error_contents WHERE error_hash = p_ehash;
+    SELECT id INTO @found_error_contents FROM error_contents WHERE error_hash = p_ehash AND error_desc = p_edesc;
     INSERT INTO error_occurrences (error_contents_id, time_elapsed_seconds, error_type)
     VALUES ((SELECT @found_error_contents), p_etime, p_err_type);
     SELECT LAST_INSERT_ID() INTO eid;
+    SELECT NULL INTO @found_error_contents;
 END //
 DELIMITER ;
 

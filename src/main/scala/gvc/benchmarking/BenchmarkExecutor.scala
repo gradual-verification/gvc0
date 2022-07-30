@@ -13,6 +13,7 @@ import gvc.benchmarking.Timing.{CC0CompilationException, CC0ExecutionException}
 import gvc.transformer.IRPrinter
 import gvc.weaver.WeaverException
 import gvc.{Config, Main, VerificationException}
+import viper.silicon.Silicon
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.TimeoutException
@@ -43,7 +44,7 @@ object BenchmarkExecutor {
     val globalConfig = DAO.resolveGlobalConfiguration(conn)
     val id = DAO.addOrResolveIdentity(config, conn)
     val modes = DAO.resolveDynamicModes(conn)
-    val silicon = resolveSilicon(baseConfig)
+    var currentSiliconInstance: Option[Silicon] = None
 
     val syncedPrograms =
       BenchmarkPopulator.sync(config.sources, libraries, conn)
@@ -121,14 +122,17 @@ object BenchmarkExecutor {
               case DynamicMeasurementMode.Gradual =>
                 () =>
                   {
+                    currentSiliconInstance = Some(resolveSilicon(baseConfig))
                     val reconstructedSourceText =
                       IRPrinter.print(convertedToIR, includeSpecs = true)
 
                     val vOut = Timing.verifyTimed(
+                      currentSiliconInstance.get,
                       reconstructedSourceText,
                       Main.Defaults.outputFileCollection,
                       baseConfig,
                       workload.staticIterations)
+                    currentSiliconInstance = None
 
                     if (!isInjectable(vOut.output.c0Source)) {
                       throw new BenchmarkException(
@@ -174,19 +178,19 @@ object BenchmarkExecutor {
           val timingStop = System.nanoTime()
           val differenceSeconds: Long =
             Math.floor((timingStop - timingStart) * Math.pow(10, 9)).toLong
-
+          currentSiliconInstance match {
+            case Some(silicon) => silicon.stop()
+            case None          =>
+          }
           val errorType = t match {
-            case _: TimeoutException =>
-              silicon.stop()
-              ErrorType.Timeout
+            case _: TimeoutException        => ErrorType.Timeout
             case _: VerificationException   => ErrorType.Verification
             case _: CC0CompilationException => ErrorType.Compilation
             case _: CC0ExecutionException   => ErrorType.Execution
             case _: WeaverException         => ErrorType.Weaving
-            case _ =>
-              silicon.stop()
-              ErrorType.Unknown
+            case _                          => ErrorType.Unknown
           }
+          Output.error(t.getMessage)
           DAO.logException(id,
                            reserved,
                            errorType,

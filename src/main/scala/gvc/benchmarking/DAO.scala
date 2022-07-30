@@ -451,6 +451,7 @@ object DAO {
                    errText: String,
                    timeElapsedSeconds: Long,
                    conn: DBConnection): Unit = {
+
     val nn = id.nid match {
       case Some(value) => value.toString
       case None        => "NULL"
@@ -535,7 +536,9 @@ object DAO {
       case Right(value) => value
     }
   }
+
   case class ResolvedMeasurementMode(id: Long, modeType: String)
+
   def resolveDynamicModes(
       conn: DBConnection): Map[Long, DynamicMeasurementMode] = {
     sql"""SELECT id, measurement_type FROM dynamic_measurement_types;"""

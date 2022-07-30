@@ -2,7 +2,8 @@ package gvc.benchmarking
 
 import gvc.{CC0Options, CC0Wrapper, Config, OutputFileCollection}
 import gvc.CC0Wrapper.{CommandOutput, Performance}
-import gvc.Main.{VerifiedOutput, verify}
+import gvc.Main.{VerifiedOutput, verify, verifySiliconProvided}
+import viper.silicon.Silicon
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
@@ -35,6 +36,7 @@ object Timing {
   }
 
   def verifyTimed(
+      silicon: Silicon,
       inputSource: String,
       fileNames: OutputFileCollection,
       config: Config,
@@ -46,7 +48,7 @@ object Timing {
     val weaverTimings = ListBuffer[Long]()
 
     for (_ <- 0 until iterations) {
-      val out = verify(inputSource, fileNames, config)
+      val out = verifySiliconProvided(silicon, inputSource, fileNames, config)
       val perf = out.timing
       translationTimings += perf.translation
       verifierTimings += perf.verification
@@ -191,7 +193,7 @@ object Timing {
 
   class CapturedOutputException(output: CommandOutput) extends Exception {
     override def getMessage: String = output.output
-    
+
   }
 
   class CC0CompilationException(output: CommandOutput)
