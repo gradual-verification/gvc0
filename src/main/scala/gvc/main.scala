@@ -276,7 +276,6 @@ object Main extends App {
         throw VerificationException(message)
     }
     silicon.stop()
-    silicon.stop()
     val verificationStop = System.nanoTime()
     val verificationTime = verificationStop - verificationStart
 
