@@ -10,8 +10,9 @@ import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import gvc.CC0Wrapper.Performance
-import gvc.Config.{error, prettyPrintException}
+import gvc.Config.prettyPrintException
 import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
+import gvc.benchmarking.BenchmarkPopulator.md5sum
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
 import gvc.benchmarking.Timing.TimedVerification
@@ -454,8 +455,9 @@ object DAO {
       case Some(value) => value.toString
       case None        => "NULL"
     }
+    val errorHash = md5sum(errText)
     (for {
-      _ <- sql"CALL sp_gr_Error($errText, $timeElapsedSeconds, $mode, @eid)".update.run
+      _ <- sql"CALL sp_gr_Error($errorHash, $errText, $timeElapsedSeconds, $mode, @eid)".update.run
       eid <- sql"SELECT @eid".query[Long].unique
       _ <- sql"UPDATE static_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
       u <- sql"UPDATE dynamic_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
@@ -517,7 +519,7 @@ object DAO {
                                      COUNT(DISTINCT error_id) as error_count
                               FROM dynamic_performance
                                        INNER JOIN permutations p on dynamic_performance.permutation_id = p.id
-                                       INNER JOIN errors e on dynamic_performance.error_id = e.id
+                                       INNER JOIN error_occurrences e on dynamic_performance.error_id = e.id
                               GROUP BY version_id, hardware_id, program_id, dynamic_measurement_type, error_type) as errors
                              ON completion.program_id = errors.program_id
                                  AND completion.version_id = errors.version_id AND
@@ -552,8 +554,9 @@ object DAO {
 
   def listErrors(conn: DBConnection): List[PermutationError] = {
     sql"""SELECT permutation_id, version_name, src_filename, measurement_type, time_elapsed_seconds, error_type, error_desc
-         FROM errors
-             INNER JOIN dynamic_performance ON dynamic_performance.error_id = errors.id
+         FROM error_occurrences
+             INNER JOIN dynamic_performance ON dynamic_performance.error_id = error_occurrences.id
+             INNER JOIN error_contents ON error_occurrences.error_contents_id = error_contents.id
              INNER JOIN versions ON dynamic_performance.version_id = versions.id
 INNER JOIN permutations p on dynamic_performance.permutation_id = p.id
 INNER JOIN programs p2 on p.program_id = p2.id

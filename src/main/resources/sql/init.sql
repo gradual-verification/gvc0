@@ -3,7 +3,8 @@ DROP TABLE IF EXISTS static_performance;
 DROP TABLE IF EXISTS dynamic_performance;
 DROP TABLE IF EXISTS measurements;
 DROP TABLE IF EXISTS dynamic_measurement_types;
-DROP TABLE IF EXISTS errors;
+DROP TABLE IF EXISTS error_occurrences;
+DROP TABLE IF EXISTS error_contents;
 DROP TABLE IF EXISTS benchmark_membership;
 DROP TABLE IF EXISTS benchmarks;
 DROP TABLE IF EXISTS steps;
@@ -38,7 +39,8 @@ CREATE TABLE IF NOT EXISTS global_configuration
 
 INSERT INTO global_configuration (timeout_minutes, max_paths)
 VALUES (60, 4);
-
+UPDATE global_configuration
+set timeout_minutes = 30;
 
 CREATE TABLE IF NOT EXISTS programs
 (
@@ -247,13 +249,21 @@ CREATE TABLE IF NOT EXISTS measurements
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS errors
+CREATE TABLE IF NOT EXISTS error_occurrences
 (
     id                   SERIAL,
-    error_desc           TEXT                  DEFAULT NULL,
-    error_date           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    error_type           VARCHAR(255) NOT NULL,
+    error_contents_id    BIGINT UNSIGNED NOT NULL,
+    error_type           VARCHAR(255)    NOT NULL,
+    error_date           DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     time_elapsed_seconds BIGINT UNSIGNED,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS error_contents
+(
+    id         SERIAL,
+    error_hash VARCHAR(255) UNIQUE NOT NULL,
+    error_desc TEXT DEFAULT NULL,
     PRIMARY KEY (id)
 );
 
@@ -278,7 +288,7 @@ CREATE TABLE IF NOT EXISTS static_performance
     FOREIGN KEY (version_id) REFERENCES versions (id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
-    FOREIGN KEY (error_id) REFERENCES errors (id),
+    FOREIGN KEY (error_id) REFERENCES error_occurrences (id),
     PRIMARY KEY (permutation_id, hardware_id, version_id, nickname_id)
 );
 
@@ -344,7 +354,7 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     FOREIGN KEY (version_id) REFERENCES versions (id),
     FOREIGN KEY (dynamic_measurement_type) REFERENCES dynamic_measurement_types (id),
     FOREIGN KEY (measurement_id) REFERENCES measurements (id),
-    FOREIGN KEY (error_id) REFERENCES errors (id),
+    FOREIGN KEY (error_id) REFERENCES error_occurrences (id),
     PRIMARY KEY (permutation_id, version_id, hardware_id, nickname_id, stress, dynamic_measurement_type)
 );
 
@@ -390,18 +400,17 @@ CREATE EVENT delete_reserved_permutations
       AND measurement_id IS NULL
       AND TIMESTAMPDIFF(HOUR, last_updated, CURRENT_TIMESTAMP) > 1;
 
+
 DELIMITER //
-CREATE PROCEDURE sp_gr_Error(IN p_edesc TEXT, IN p_etime BIGINT UNSIGNED,
+CREATE PROCEDURE sp_gr_Error(IN p_ehash VARCHAR(255), IN p_edesc TEXT, IN p_etime BIGINT UNSIGNED,
                              IN p_err_type VARCHAR(255), OUT eid BIGINT UNSIGNED)
 BEGIN
-    INSERT INTO errors (error_desc, time_elapsed_seconds, error_type)
-    VALUES (p_edesc, p_etime, p_err_type)
-    ON DUPLICATE KEY UPDATE time_elapsed_seconds = p_etime, error_date = DEFAULT;
-    SELECT id
-    INTO eid
-    FROM errors
-    WHERE error_desc = p_edesc
-      AND error_type = p_err_type;
+    INSERT IGNORE INTO error_contents (error_hash, error_desc) VALUES (p_ehash, p_edesc);
+    SELECT id INTO @found_error_contents FROM error_contents WHERE error_hash = p_ehash;
+    INSERT INTO error_occurrences (error_contents_id, time_elapsed_seconds, error_type)
+    VALUES ((SELECT @found_error_contents), p_etime, p_err_type);
+    SELECT LAST_INSERT_ID() INTO eid;
 END //
 DELIMITER ;
+
 
