@@ -307,7 +307,7 @@ BEGIN
       AND permutation_id = perm_id
       AND nickname_id = nid
         FOR
-    UPDATE;
+        SHARE;
     IF ((SELECT @ex) IS NOT NULL) THEN
         UPDATE static_performance
         SET translation_perf_id     = tr_id,
