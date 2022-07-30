@@ -89,7 +89,6 @@ object BenchmarkExecutor {
                       IRPrinter.print(convertedToIR, includeSpecs = false)
                     this.injectAndWrite(sourceText, tempSource)
                     Files.deleteIfExists(tempBinary)
-                    throw new CC0ExecutionException(CommandOutput(0, "hello"))
                     Timing.compileTimed(tempSource,
                                         tempBinary,
                                         baseConfig,
