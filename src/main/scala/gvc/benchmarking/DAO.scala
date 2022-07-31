@@ -25,6 +25,10 @@ object DAO {
 
   type DBConnection = Transactor.Aux[IO, Unit]
 
+  object Names {
+    val stressValues = "temporary_stress_values"
+  }
+
   object DynamicMeasurementMode {
     type DynamicMeasurementMode = String
     val Gradual = "gradual"
@@ -89,7 +93,8 @@ object DAO {
 
   private val DB_DRIVER = "com.mysql.cj.jdbc.Driver"
 
-  def connect(credentials: BenchmarkDBCredentials): DBConnection = {
+  def connect(credentials: BenchmarkDBCredentials,
+              config: BenchmarkingConfig): DBConnection = {
     val connection = Transactor.fromDriverManager[IO](
       DB_DRIVER,
       credentials.url, //"jdbc:mysql://localhost:3306/", // connect URL (driver-specific)
@@ -98,6 +103,14 @@ object DAO {
     )
     Output.success(
       s"Connected to database as ${credentials.username}@${credentials.url}")
+    config match {
+      case ExecutorConfig(_, _, _, _, _, workload) =>
+        this.generateWorkloadTable(
+          BenchmarkExternalConfig.generateStressList(workload.stress),
+          connection)
+        Output.success("Initialized stress configuration table.")
+      case _ =>
+    }
     connection
   }
 
@@ -581,4 +594,20 @@ INNER JOIN dynamic_measurement_types dmt on dynamic_performance.dynamic_measurem
                               timeSeconds: Long,
                               errorType: String,
                               errorDesc: String)
+
+  private def generateWorkloadTable(wlist: List[Int],
+                                    conn: DBConnection): Unit = {
+    (for {
+      _ <- sql"CREATE TEMPORARY TABLE ${this.Names.stressValues} (stress BIGINT UNSIGNED UNIQUE);".update.run
+      v <- Update[Int](
+        s"INSERT INTO ${this.Names.stressValues} (stress) VALUES (?);")
+        .updateMany(wlist.toSet.toList)
+    } yield v).transact(conn).attempt.unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          s"Failed to initialize temporary workload values database: ${t.getMessage}",
+          t)
+      case Right(_) =>
+    }
+  }
 }

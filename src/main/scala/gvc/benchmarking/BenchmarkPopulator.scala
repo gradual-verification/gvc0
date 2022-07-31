@@ -35,7 +35,7 @@ object BenchmarkPopulator {
 
   def populate(populatorConfig: PopulatorConfig,
                libraryDirs: List[String]): Unit = {
-    val connection = DAO.connect(populatorConfig.db)
+    val connection = DAO.connect(populatorConfig.db, populatorConfig)
     val globalConfig = DAO.resolveGlobalConfiguration(connection)
     populatePrograms(populatorConfig.sources,
                      libraryDirs,

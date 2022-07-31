@@ -46,6 +46,7 @@ case class RecreatorConfig(version: String,
                            db: BenchmarkDBCredentials,
                            sources: List[Path],
                            permToRecreate: Long)
+    extends BenchmarkingConfig
 
 case class PopulatorConfig(version: String,
                            pathQuantity: Option[Int],
@@ -54,6 +55,7 @@ case class PopulatorConfig(version: String,
     extends BenchmarkingConfig
 
 case class MonitorConfig(db: BenchmarkDBCredentials, outputDirectory: Path)
+    extends BenchmarkingConfig
 
 case class ExecutorConfig(version: String,
                           hardware: String,

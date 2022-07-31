@@ -356,32 +356,85 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     PRIMARY KEY (permutation_id, version_id, hardware_id, nickname_id, stress, dynamic_measurement_type)
 );
 
+DROP PROCEDURE IF EXISTS sp_ReservePermutation;
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
-                                       IN workload BIGINT UNSIGNED,
+                                       IN stress_value_list TEXT,
                                        OUT perm_id BIGINT UNSIGNED,
                                        OUT missing_mode BIGINT UNSIGNED)
 BEGIN
+    DECLARE c_stress BIGINT UNSIGNED;
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE cursor_stress CURSOR FOR SELECT stress FROM filtered_stress;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    DROP TABLE IF EXISTS stress_values;
+    DROP TABLE IF EXISTS filtered_stress;
+    CREATE TEMPORARY TABLE IF NOT EXISTS stress_values
+    (
+        stress BIGINT UNSIGNED UNIQUE
+    );
+    CREATE TEMPORARY TABLE IF NOT EXISTS filtered_stress
+    (
+        stress BIGINT UNSIGNED UNIQUE
+    );
+    set @sql = CONCAT('INSERT INTO stress_values (stress) VALUES (',
+                      REPLACE((SELECT GROUP_CONCAT((SELECT stress_value_list)) AS data), ',', '),('), ');');
+    prepare stmt from @sql;
+    execute stmt;
+
 
     SELECT @found_perm_id := permutations.id,
            @found_missing_mode := dynamic_measurement_types.id
     FROM permutations
-             CROSS JOIN (SELECT vid, hid, workload) AS identity
+             CROSS JOIN (SELECT hid as hid, vid as vid) as identity
+             CROSS JOIN stress_values
              CROSS JOIN dynamic_measurement_types
-             LEFT OUTER JOIN dynamic_performance dp ON dp.permutation_id = permutations.id
-        AND dp.version_id = identity.vid AND dp.hardware_id = identity.hid AND dp.stress = identity.workload
-        AND dp.dynamic_measurement_type = dynamic_measurement_types.id
+             LEFT OUTER JOIN dynamic_performance dp
+                             ON dp.permutation_id = permutations.id AND dp.stress = stress_values.stress
+                                 AND dp.version_id = identity.vid AND dp.hardware_id = identity.hid AND
+                                dp.stress = stress_values.stress
+                                 AND dp.dynamic_measurement_type = dynamic_measurement_types.id
     WHERE dp.permutation_id IS NULL
+      AND dp.stress IS NULL
     LIMIT 1
     FOR
     UPDATE OF permutations SKIP LOCKED;
 
     IF ((SELECT @found_perm_id) IS NOT NULL) THEN
-        INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
-                                         dynamic_measurement_type)
-        VALUES ((SELECT @found_perm_id), vid, hid, nnid, workload, (SELECT @found_missing_mode));
+
+        INSERT INTO filtered_stress (SELECT stress_values.stress
+                                     FROM permutations
+                                              CROSS JOIN (SELECT hid as hid, vid as vid) as identity
+                                              CROSS JOIN stress_values
+                                              CROSS JOIN dynamic_measurement_types
+                                              LEFT OUTER JOIN dynamic_performance dp
+                                                              ON dp.permutation_id = permutations.id AND
+                                                                 dp.stress = stress_values.stress
+                                                                  AND dp.version_id = identity.vid AND
+                                                                 dp.hardware_id = identity.hid
+                                                                  AND dp.dynamic_measurement_type =
+                                                                      dynamic_measurement_types.id
+                                     WHERE dp.permutation_id IS NULL
+                                       AND dp.stress IS NULL
+                                       AND permutations.id = (SELECT @found_perm_id)
+                                       AND dynamic_measurement_types.id = (SELECT @found_missing_mode));
+        OPEN cursor_stress;
+        loop_through_rows:
+        LOOP
+            FETCH cursor_stress INTO c_stress;
+            IF done THEN
+                LEAVE loop_through_rows;
+            ELSE
+                INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
+                                                 dynamic_measurement_type)
+                VALUES ((SELECT @found_perm_id), vid, hid, nnid, c_stress, (SELECT @found_missing_mode));
+            END IF;
+        END LOOP;
+        CLOSE cursor_stress;
         SET perm_id := @found_perm_id;
         SET missing_mode := @found_missing_mode;
+        SELECT * FROM filtered_stress;
     ELSE
         SET perm_id := NULL;
         SET missing_mode := NULL;
@@ -411,5 +464,3 @@ BEGIN
     SELECT NULL INTO @found_error_contents;
 END //
 DELIMITER ;
-
-

@@ -40,7 +40,7 @@ object BenchmarkExecutor {
               baseConfig: Config,
               libraries: List[String]): Unit = {
 
-    val conn = DAO.connect(config.db)
+    val conn = DAO.connect(config.db, config)
     val globalConfig = DAO.resolveGlobalConfiguration(conn)
     val id = DAO.addOrResolveIdentity(config, conn)
     val modes = DAO.resolveDynamicModes(conn)
