@@ -74,6 +74,8 @@ object Config {
 
   case object FramingVerification extends Mode
 
+  case object QuickCheck extends Mode
+
   case object Recreate extends Mode
 
   case object Monitor extends Mode
@@ -242,6 +244,13 @@ object Config {
           tail,
           current.copy(mode = FramingVerification)
         )
+
+      case "--quickcheck" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = QuickCheck)
+        )
+
       case "-t" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case timeoutArg(t) :: tail =>
