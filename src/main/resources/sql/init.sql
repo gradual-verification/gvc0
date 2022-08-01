@@ -475,7 +475,3 @@ BEGIN
     SELECT NULL INTO @found_error_contents;
 END //
 DELIMITER ;
-
-CALL sp_ReservePermutation(1, 1, 1, '8,16,32', @a, @b);
-SELECT *
-FROM dynamic_performance;
