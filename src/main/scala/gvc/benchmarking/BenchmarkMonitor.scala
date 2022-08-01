@@ -16,9 +16,11 @@ object BenchmarkMonitor {
   }
 
   private object Names {
-    val errorListing = csv("errors")
-    val dynamicPerformanceListing = csv("dynamic_performance")
-    val staticPerformanceListing = csv("static_performance")
+    val errorListing: DynamicMeasurementMode = csv("errors")
+    val dynamicPerformanceListing: DynamicMeasurementMode = csv(
+      "dynamic_performance")
+    val staticPerformanceListing: DynamicMeasurementMode = csv(
+      "static_performance")
     val errorContentsColumns =
       "permutation_id,version_name,src_filename,mode,time_elapsed_seconds,error_type,error_desc"
   }
@@ -31,21 +33,24 @@ object BenchmarkMonitor {
     sortedResults.foreach(r => {
       Output.info(s"Version: ${r._1}")
       r._2.foreach(r2 => {
-        Output.info(s"    * Program: ${r2._1}")
+        Output.info(s"    * Hardware: ${r2._1}")
         r2._2.foreach(r3 => {
           Output.info(s"          * Mode: ${r3._1}")
           r3._2.foreach(r4 => {
-            Output.info(s"            * Filename: ${r4._1}")
-            val categoryData = r4._2
-            Output.info(
-              s"              * Success: ${categoryData.totalCompleted}/${categoryData.total} - ${Math
+            Output.info(s"              * Filename: ${r4._1}")
+            r4._2.foreach(r5 => {
+              Output.info(s"                  * Stress: ${r5._1}")
+              val categoryData = r5._2
+              Output.info(s"                        * Success: ${categoryData.totalCompleted}/${categoryData.total} - ${Math
                 .round(categoryData.totalCompleted.toDouble / categoryData.total * 100)
                 .toInt}%")
-            if (categoryData.errorCountListing.nonEmpty) {
-              Output.info(s"              * Errors")
-              categoryData.errorCountListing.foreach(pair =>
-                Output.info(s"                  * ${pair._1}: ${pair._2}"))
-            }
+              if (categoryData.errorCountListing.nonEmpty) {
+                Output.info(s"                        * Errors")
+                categoryData.errorCountListing.foreach(pair =>
+                  Output.info(
+                    s"                          * ${pair._1}: ${pair._2}"))
+              }
+            })
           })
         })
       })
@@ -86,7 +91,8 @@ object BenchmarkMonitor {
   private def sortResults(results: List[DAO.CompletionMetadata])
     : Map[String,
           Map[String,
-              Map[DynamicMeasurementMode, Map[String, CompletedCategory]]]] = {
+              Map[DynamicMeasurementMode,
+                  Map[String, Map[Long, CompletedCategory]]]]] = {
     results
       .groupBy(_.versionName)
       .map(pair => {
@@ -99,12 +105,13 @@ object BenchmarkMonitor {
                 pair3._1 -> pair3._2
                   .groupBy(_.srcFilename)
                   .map(pair4 => {
-                    pair4._1 -> createCategory(pair4._2)
+                    pair4._1 -> pair4._2
+                      .groupBy(_.stress)
+                      .map(pair5 => pair5._1 -> createCategory(pair4._2))
                   })
               })
           })
       })
-
   }
 
   private def createCategory(

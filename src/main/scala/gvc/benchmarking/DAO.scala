@@ -10,7 +10,7 @@ import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import gvc.CC0Wrapper.Performance
-import gvc.Config.prettyPrintException
+import gvc.Config.{error, prettyPrintException}
 import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
 import gvc.benchmarking.BenchmarkPopulator.md5sum
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
@@ -45,13 +45,6 @@ object DAO {
     val Unknown = "unknown"
     val Weaving = "weaving"
   }
-
-  case class Hardware(id: Long, hardwareName: String, dateAdded: String)
-
-  case class StoredProgram(id: Long,
-                           hash: String,
-                           dateAdded: String,
-                           numLabels: Long)
 
   case class GlobalConfiguration(timeoutMinutes: Long, maxPaths: Long)
 
@@ -103,14 +96,6 @@ object DAO {
     )
     Output.success(
       s"Connected to database as ${credentials.username}@${credentials.url}")
-    config match {
-      case ExecutorConfig(_, _, _, _, _, workload) =>
-        this.generateWorkloadTable(
-          BenchmarkExternalConfig.generateStressList(workload.stress),
-          connection)
-        Output.success("Initialized stress configuration table.")
-      case _ =>
-    }
     connection
   }
 
@@ -351,48 +336,52 @@ object DAO {
 
   def reserveProgramForMeasurement(
       id: Identity,
-      workloads: List[Int],
+      worklist: String,
       xa: DBConnection): Option[ReservedProgram] = {
     val nn = id.nid match {
       case Some(value) => value.toString
       case None        => "NULL"
     }
-    for (i <- workloads) {
-      val reservedAttempt = (for {
-        _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $i, @perm, @mode);""".update.run
-        perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
-          .query[Option[Permutation]]
-          .option
-        mode <- sql"""SELECT @mode;"""
-          .query[Option[Long]]
-          .option
-      } yield (perm, mode)).transact(xa).attempt.unsafeRunSync()
-      reservedAttempt match {
-        case Left(value) =>
-          prettyPrintException(
-            "Unable to reserve a new program for benchmarking.",
-            value)
-        case Right(reserved) => {
-          reserved._1 match {
-            case Some(permutationReserved) =>
-              reserved._2 match {
-                case Some(modeReserved) =>
-                  return Some(
-                    ReservedProgram(permutationReserved.get,
-                                    i,
-                                    modeReserved.get))
+    val reservedAttempt = (for {
+      workloads <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $worklist, @perm, @mode);""".update.run
+      perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
+        .query[Option[Permutation]]
+        .unique
+      mode <- sql"""SELECT @mode;"""
+        .query[Option[Long]]
+        .unique
+      worklist <- sql"""SELECT * FROM filtered_stress;"""
+        .query[Int]
+        .to[List]
+    } yield (worklist, perm, mode)).transact(xa).attempt.unsafeRunSync()
+    reservedAttempt match {
+      case Left(value) =>
+        prettyPrintException(
+          "Unable to reserve a new program for benchmarking.",
+          value)
+      case Right(reserved) =>
+        if (reserved._1.nonEmpty) {
+          reserved._2 match {
+            case Some(p) =>
+              reserved._3 match {
+                case Some(m) => Some(ReservedProgram(p, reserved._1, m))
                 case None =>
+                  error(
+                    "Both a valid set of workloads and a permutation were resolved, but a measurement mode wasn't resolved.")
               }
             case None =>
+              error(
+                "A valid set of workloads was resolved, but a permutation wasn't resolved. ")
           }
+        } else {
+          None
         }
-      }
     }
-    None
   }
 
   def completeProgramMeasurement(id: Identity,
                                  reserved: ReservedProgram,
+                                 workload: Int,
                                  iterations: Int,
                                  p: Performance,
                                  xa: DBConnection): Unit = {
@@ -403,7 +392,14 @@ object DAO {
     val result = (for {
       _ <- sql"INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum) VALUES ($iterations, ${p.ninetyFifth}, ${p.fifth}, ${p.median}, ${p.mean}, ${p.stdev}, ${p.minimum}, ${p.maximum});".update.run
       mid <- sql"SELECT LAST_INSERT_ID();".query[Long].unique
-      r <- sql"UPDATE dynamic_performance SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP WHERE permutation_id = ${reserved.perm.id} AND version_id = ${id.vid} AND nickname_id = $nicknameResolved AND hardware_id = ${id.hid} AND dynamic_measurement_type = ${reserved.measurementMode};".update.run
+      r <- sql"""UPDATE dynamic_performance SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP
+        WHERE permutation_id = ${reserved.perm.id}
+          AND version_id = ${id.vid}
+          AND nickname_id = $nicknameResolved
+          AND hardware_id = ${id.hid}
+          AND dynamic_measurement_type = ${reserved.measurementMode}
+          AND stress = $workload;
+        """.update.run
     } yield r).transact(xa).attempt.unsafeRunSync()
     result match {
       case Left(t) =>
@@ -490,7 +486,8 @@ object DAO {
                                 totalCompleted: Long,
                                 total: Long,
                                 errorType: Option[String],
-                                errorCount: Option[Long])
+                                errorCount: Option[Long],
+                                stress: Long)
 
   def listPerformanceResults(conn: DBConnection): List[CompletionMetadata] = {
     sql"""SELECT version_name,
@@ -500,7 +497,8 @@ object DAO {
            total_completed,
            total_perms,
            error_type,
-           error_count
+           error_count,
+           completion.stress
     FROM (SELECT *
           FROM (SELECT program_id, COUNT(permutations.id) as total_perms
                 FROM permutations
@@ -515,7 +513,9 @@ object DAO {
                                       hardware_id,
                                       measurement_type,
                                       dmt.id,
+                                      stress,
                                       COUNT(measurement_id) as total_completed
+
                                FROM versions
                                         INNER JOIN dynamic_performance dp on versions.id = dp.version_id
                                         INNER JOIN permutations p on dp.permutation_id = p.id
@@ -523,18 +523,19 @@ object DAO {
                                         INNER JOIN dynamic_measurement_types dmt on dp.dynamic_measurement_type = dmt.id
                                         INNER JOIN hardware h on dp.hardware_id = h.id
                                WHERE measurement_id IS NOT NULL
-                               GROUP BY program_id, src_filename, version_name, hardware_name, measurement_type) as tblB
+                               GROUP BY program_id, src_filename, version_name, hardware_name, measurement_type, stress) as tblB
                               on tblA.program_id = tblB.pid) as completion
              LEFT OUTER JOIN (SELECT version_id,
                                      hardware_id,
                                      program_id,
                                      dynamic_measurement_type,
                                      error_type,
+                                     stress,
                                      COUNT(DISTINCT error_id) as error_count
                               FROM dynamic_performance
                                        INNER JOIN permutations p on dynamic_performance.permutation_id = p.id
                                        INNER JOIN error_occurrences e on dynamic_performance.error_id = e.id
-                              GROUP BY version_id, hardware_id, program_id, dynamic_measurement_type, error_type) as errors
+                              GROUP BY version_id, hardware_id, program_id, dynamic_measurement_type, error_type, stress) as errors
                              ON completion.program_id = errors.program_id
                                  AND completion.version_id = errors.version_id AND
                                 completion.program_id = errors.program_id AND
@@ -594,20 +595,4 @@ INNER JOIN dynamic_measurement_types dmt on dynamic_performance.dynamic_measurem
                               timeSeconds: Long,
                               errorType: String,
                               errorDesc: String)
-
-  private def generateWorkloadTable(wlist: List[Int],
-                                    conn: DBConnection): Unit = {
-    (for {
-      _ <- sql"CREATE TEMPORARY TABLE ${this.Names.stressValues} (stress BIGINT UNSIGNED UNIQUE);".update.run
-      v <- Update[Int](
-        s"INSERT INTO ${this.Names.stressValues} (stress) VALUES (?);")
-        .updateMany(wlist.toSet.toList)
-    } yield v).transact(conn).attempt.unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException(
-          s"Failed to initialize temporary workload values database: ${t.getMessage}",
-          t)
-      case Right(_) =>
-    }
-  }
 }

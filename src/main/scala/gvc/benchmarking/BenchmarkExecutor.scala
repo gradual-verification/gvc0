@@ -1,6 +1,5 @@
 package gvc.benchmarking
 
-import gvc.CC0Wrapper.Performance
 import gvc.Config.error
 import gvc.Main.resolveSilicon
 import gvc.benchmarking.Benchmark.{
@@ -9,13 +8,18 @@ import gvc.benchmarking.Benchmark.{
   isInjectable
 }
 import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
-import gvc.benchmarking.Timing.{CC0CompilationException, CC0ExecutionException}
-import gvc.transformer.IRPrinter
+import gvc.benchmarking.Timing.{
+  CC0CompilationException,
+  CC0ExecutionException,
+  execTimed
+}
+import gvc.transformer.{IR, IRPrinter}
 import gvc.weaver.WeaverException
 import gvc.{Config, Main, VerificationException}
 import viper.silicon.Silicon
 
 import java.nio.file.{Files, Path}
+
 import scala.concurrent.TimeoutException
 
 object BenchmarkExecutor {
@@ -33,7 +37,7 @@ object BenchmarkExecutor {
   }
 
   case class ReservedProgram(perm: Permutation,
-                             stress: Int,
+                             workloads: List[Int],
                              measurementMode: Long)
 
   def execute(config: ExecutorConfig,
@@ -48,130 +52,32 @@ object BenchmarkExecutor {
 
     val syncedPrograms =
       BenchmarkPopulator.sync(config.sources, libraries, conn)
-
     val workload = config.workload
-
     val tempBinary =
       Files.createTempFile("temp_bin", ".c0")
-
     val tempSource = Files.createTempFile("temp_src", ".c0")
-
     val worklist =
       BenchmarkExternalConfig.generateStressList(config.workload.stress)
+    val worklistString = worklist.mkString(",")
 
     var reservedProgram =
-      DAO.reserveProgramForMeasurement(id, worklist, conn)
+      DAO.reserveProgramForMeasurement(id, worklistString, conn)
 
-    while (reservedProgram.nonEmpty) {
-      val reserved = reservedProgram.get
-      Output.info(
-        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${modes(
-          reserved.measurementMode)} | w=${reserved.stress} | id=${reserved.perm.id}")
-
-      val correspondingProgramLabels =
-        syncedPrograms(reserved.perm.programID).labels
-
-      val asLabelSet =
-        LabelTools.permutationIDToPermutation(correspondingProgramLabels,
-                                              reserved.perm.permutationHash)
-
-      val convertedToIR = new SelectVisitor(
-        syncedPrograms(reserved.perm.programID).ir).visit(asLabelSet)
-
+    def wrapTiming(binary: Path, reserved: ReservedProgram, workload: Int,
+    ): Unit = {
       val timingStart = System.nanoTime()
-
-      val benchmarkingFunction: () => Performance =
-        modes.get(reserved.measurementMode) match {
-          case Some(value) =>
-            value match {
-              case DynamicMeasurementMode.Dynamic =>
-                () =>
-                  {
-                    BaselineChecker.check(convertedToIR)
-                    val sourceText =
-                      IRPrinter.print(convertedToIR, includeSpecs = false)
-                    this.injectAndWrite(sourceText, tempSource)
-                    Files.deleteIfExists(tempBinary)
-                    Timing.compileTimed(tempSource,
-                                        tempBinary,
-                                        baseConfig,
-                                        workload.staticIterations)
-                    Timing.execTimed(tempBinary,
-                                     workload.iterations,
-                                     List(s"--stress ${reserved.stress}"))
-                  }
-              case DynamicMeasurementMode.Framing =>
-                () =>
-                  {
-                    BaselineChecker.check(convertedToIR, onlyFraming = true)
-                    val sourceText =
-                      IRPrinter.print(convertedToIR, includeSpecs = false)
-                    this.injectAndWrite(sourceText, tempSource)
-                    Files.writeString(
-                      tempSource,
-                      IRPrinter.print(convertedToIR, includeSpecs = false))
-                    Files.deleteIfExists(tempBinary)
-                    Timing.compileTimed(tempSource,
-                                        tempBinary,
-                                        baseConfig,
-                                        workload.staticIterations)
-                    Timing.execTimed(tempBinary,
-                                     workload.iterations,
-                                     List(s"--stress ${reserved.stress}"))
-                  }
-              case DynamicMeasurementMode.Gradual =>
-                () =>
-                  {
-                    currentSiliconInstance = Some(resolveSilicon(baseConfig))
-                    val reconstructedSourceText =
-                      IRPrinter.print(convertedToIR, includeSpecs = true)
-
-                    val vOut = Timing.verifyTimed(
-                      currentSiliconInstance.get,
-                      reconstructedSourceText,
-                      Main.Defaults.outputFileCollection,
-                      baseConfig,
-                      workload.staticIterations)
-                    currentSiliconInstance = None
-
-                    if (!isInjectable(vOut.output.c0Source)) {
-                      throw new BenchmarkException(
-                        s"The file doesn't include an assignment of the form 'int stress = ...'."
-                      )
-                    }
-                    val source = injectStress(vOut.output.c0Source)
-                    Files.writeString(tempSource, source)
-                    Files.deleteIfExists(tempBinary)
-
-                    val cOut = Timing.compileTimed(tempSource,
-                                                   tempBinary,
-                                                   baseConfig,
-                                                   workload.staticIterations)
-                    DAO.updateStaticProfiling(id,
-                                              reserved.perm.id,
-                                              workload.staticIterations,
-                                              vOut,
-                                              cOut,
-                                              conn)
-
-                    Timing.execTimed(tempBinary,
-                                     workload.iterations,
-                                     List(s"--stress=${reserved.stress}"))
-                  }
-            }
-          case None =>
-            error(
-              s"Unrecognized dynamic measurement mode with ID ${reserved.measurementMode}")
-        }
-
       try {
-        val performanceResult =
+        val perf =
           Timeout.runWithTimeout(globalConfig.timeoutMinutes * 60 * 1000)(
-            benchmarkingFunction())
+            execTimed(binary,
+                      config.workload.iterations,
+                      List(s"--stress $workload")))
+
         DAO.completeProgramMeasurement(id,
                                        reserved,
-                                       workload.iterations,
-                                       performanceResult,
+                                       workload,
+                                       config.workload.iterations,
+                                       perf,
                                        conn)
       } catch {
         case t: Throwable =>
@@ -197,9 +103,94 @@ object BenchmarkExecutor {
                            t.getMessage,
                            differenceSeconds,
                            conn)
-
       }
-      reservedProgram = DAO.reserveProgramForMeasurement(id, worklist, conn)
+    }
+
+    def benchmarkGradual(ir: IR.Program, reserved: ReservedProgram): Unit = {
+      currentSiliconInstance = Some(resolveSilicon(baseConfig))
+      val reconstructedSourceText =
+        IRPrinter.print(ir, includeSpecs = true)
+
+      val vOut = Timing.verifyTimed(currentSiliconInstance.get,
+                                    reconstructedSourceText,
+                                    Main.Defaults.outputFileCollection,
+                                    baseConfig,
+                                    workload.staticIterations)
+      currentSiliconInstance = None
+
+      if (!isInjectable(vOut.output.c0Source)) {
+        throw new BenchmarkException(
+          s"The file doesn't include an assignment of the form 'int stress = ...'."
+        )
+      }
+      val source = injectStress(vOut.output.c0Source)
+      Files.writeString(tempSource, source)
+      Files.deleteIfExists(tempBinary)
+
+      val cOut = Timing.compileTimed(tempSource,
+                                     tempBinary,
+                                     baseConfig,
+                                     workload.staticIterations)
+      DAO.updateStaticProfiling(id,
+                                reserved.perm.id,
+                                workload.staticIterations,
+                                vOut,
+                                cOut,
+                                conn)
+    }
+
+    def benchmarkBaseline(ir: IR.Program,
+                          reserved: ReservedProgram,
+                          onlyFraming: Boolean): Unit = {
+      BaselineChecker.check(ir, onlyFraming)
+      val sourceText =
+        IRPrinter.print(ir, includeSpecs = false)
+      this.injectAndWrite(sourceText, tempSource)
+      Files.deleteIfExists(tempBinary)
+      Timing.compileTimed(tempSource,
+                          tempBinary,
+                          baseConfig,
+                          workload.staticIterations)
+    }
+
+    while (reservedProgram.nonEmpty) {
+      val reserved = reservedProgram.get
+      Output.info(
+        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${modes(
+          reserved.measurementMode)} | w=[${reserved.workloads
+          .mkString(",")}] | id=${reserved.perm.id}")
+
+      val correspondingProgramLabels =
+        syncedPrograms(reserved.perm.programID).labels
+
+      val asLabelSet =
+        LabelTools.permutationIDToPermutation(correspondingProgramLabels,
+                                              reserved.perm.permutationHash)
+
+      val convertedToIR = new SelectVisitor(
+        syncedPrograms(reserved.perm.programID).ir).visit(asLabelSet)
+
+      modes.get(reserved.measurementMode) match {
+        case Some(value) =>
+          value match {
+            case DynamicMeasurementMode.Dynamic |
+                DynamicMeasurementMode.Framing =>
+              benchmarkBaseline(convertedToIR,
+                                reserved,
+                                value == DynamicMeasurementMode.Framing)
+            case DynamicMeasurementMode.Gradual =>
+              benchmarkGradual(convertedToIR, reserved)
+          }
+        case None =>
+          error(
+            s"Unrecognized dynamic measurement mode with ID ${reserved.measurementMode}")
+      }
+      reserved.workloads
+        .foreach(w => {
+          wrapTiming(tempBinary, reserved, w)
+        })
+      reservedProgram =
+        DAO.reserveProgramForMeasurement(id, worklistString, conn)
     }
   }
 }

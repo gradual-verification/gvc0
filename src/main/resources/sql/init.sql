@@ -434,7 +434,6 @@ BEGIN
         CLOSE cursor_stress;
         SET perm_id := @found_perm_id;
         SET missing_mode := @found_missing_mode;
-        SELECT * FROM filtered_stress;
     ELSE
         SET perm_id := NULL;
         SET missing_mode := NULL;
