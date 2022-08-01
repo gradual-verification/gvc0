@@ -38,10 +38,10 @@ object BenchmarkPopulator {
     val connection = DAO.connect(populatorConfig.db, populatorConfig)
     val globalConfig = DAO.resolveGlobalConfiguration(connection)
     populatePrograms(populatorConfig.sources,
-                     libraryDirs,
-                     globalConfig,
-                     populatorConfig,
-                     connection)
+      libraryDirs,
+      globalConfig,
+      populatorConfig,
+      connection)
   }
 
   def sync(sources: List[Path],
@@ -60,27 +60,27 @@ object BenchmarkPopulator {
         case Success(valueOption) =>
           valueOption match {
             case Some(value) => mapping += value
-            case None        =>
+            case None =>
           }
       }
     mapping.toMap
   }
 
   def populatePrograms(
-      sources: List[Path],
-      libraryDirs: List[String],
-      globalConfig: GlobalConfiguration,
-      populatorConfig: PopulatorConfig,
-      connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
+                        sources: List[Path],
+                        libraryDirs: List[String],
+                        globalConfig: GlobalConfiguration,
+                        populatorConfig: PopulatorConfig,
+                        connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
     val synchronized = allOf(
       sources
         .map(src => {
           Future(
             populateProgram(src,
-                            libraryDirs,
-                            globalConfig,
-                            populatorConfig,
-                            connection))
+              libraryDirs,
+              globalConfig,
+              populatorConfig,
+              connection))
         }))
 
     val mapping = mutable.Map[Long, StoredProgramRepresentation]()
@@ -97,9 +97,9 @@ object BenchmarkPopulator {
   }
 
   private def syncProgram(
-      src: Path,
-      libraries: List[String],
-      xa: DBConnection): Option[(Long, ProgramInformation)] = {
+                           src: Path,
+                           libraries: List[String],
+                           xa: DBConnection): Option[(Long, ProgramInformation)] = {
 
     Output.info(s"Syncing definitions for ${src.getFileName}")
 
@@ -112,20 +112,22 @@ object BenchmarkPopulator {
 
     val insertedProgramID =
       DAO.resolveProgram(fileName,
-                         md5sum(sourceText),
-                         labelOutput.labels.size,
-                         xa)
+        md5sum(sourceText),
+        labelOutput.labels.size,
+        xa)
 
     insertedProgramID match {
       case Some(value) =>
         if (labelOutput.labels.indices.exists(i => {
-              val l = labelOutput.labels(i)
-              DAO.resolveComponent(value, l, xa).isEmpty
-            })) None
+          val l = labelOutput.labels(i)
+          DAO.resolveComponent(value, l, xa).isEmpty
+        })) None
         else {
           Some(value -> programInfo)
         }
-      case None => None
+      case None =>
+        Output.error(s"Program $fileName isn't present in the database.")
+        None
     }
   }
 
@@ -150,7 +152,7 @@ object BenchmarkPopulator {
         .min(globalConfig.maxPaths)
     val configuredMaximum: BigInt = populatorConfig.pathQuantity match {
       case Some(value) => value
-      case None        => baselineMaximum
+      case None => baselineMaximum
     }
     val difference = configuredMaximum - DAO.getNumberOfPaths(programID, xa)
     for (_ <- 0 until difference.intValue()) {
@@ -172,7 +174,7 @@ object BenchmarkPopulator {
           val storedPermutationID =
             DAO.addOrResolvePermutation(programID, currentID, xa)
           pathQuery.addStep(storedPermutationID,
-                            programRep.componentMapping(ordering(labelIndex)))
+            programRep.componentMapping(ordering(labelIndex)))
         }
         queryCollections += pathQuery
 
@@ -200,9 +202,9 @@ object BenchmarkPopulator {
     val programInfo =
       ProgramInformation(sourceText, sourceIR, labelOutput, fileName)
     val insertedProgramID = DAO.addOrResolveProgram(src,
-                                                    md5sum(sourceText),
-                                                    labelOutput.labels.size,
-                                                    xa)
+      md5sum(sourceText),
+      labelOutput.labels.size,
+      xa)
     val componentMapping = mutable.Map[ASTLabel, Long]()
     labelOutput.labels.indices.foreach(i => {
       val l = labelOutput.labels(i)
@@ -215,12 +217,12 @@ object BenchmarkPopulator {
     val programRep =
       StoredProgramRepresentation(programInfo, componentMapping.toMap)
     PopulatedProgram(insertedProgramID,
-                     programRep,
-                     populatePaths(insertedProgramID,
-                                   programRep,
-                                   globalConfiguration,
-                                   populatorConfig,
-                                   xa))
+      programRep,
+      populatePaths(insertedProgramID,
+        programRep,
+        globalConfiguration,
+        populatorConfig,
+        xa))
   }
 
   //https://alvinalexander.com/source-code/scala-method-create-md5-hash-of-string/

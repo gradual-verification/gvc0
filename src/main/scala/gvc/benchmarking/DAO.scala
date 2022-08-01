@@ -184,8 +184,7 @@ object DAO {
       .transact(xa)
       .attempt
       .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException(s"Unable to resolve program $filename", t)
+      case Left(_)      => None
       case Right(value) => value
     }
   }
