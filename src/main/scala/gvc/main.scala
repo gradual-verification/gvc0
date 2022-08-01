@@ -15,7 +15,7 @@ import gvc.benchmarking.{
   Output,
   Timing
 }
-import gvc.quickcheck.QuickCheck
+import gvc.pbt.Checker
 import gvc.weaver.{Weaver, WeaverException}
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -98,7 +98,7 @@ object Main extends App {
                            1,
                            List(s"--stress ${config.stressLevel.getOrElse(1)}"))
         })
-      case Config.QuickCheck =>
+      case Config.Checker =>
         Output.printTiming(() => {
 
         })

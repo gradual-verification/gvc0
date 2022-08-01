@@ -1,4 +1,4 @@
-package gvc.quickcheck
+package gvc.pbt
 
 import gvc.{Config}
 import gvc.Config.error

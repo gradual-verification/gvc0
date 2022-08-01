@@ -1,4 +1,4 @@
-package gvc.quickcheck
+package gvc.pbt
 
 import gvc.CC0Wrapper.Performance
 import gvc.Config.error
@@ -18,7 +18,7 @@ import viper.silicon.Silicon
 import java.nio.file.{Files, Path}
 import scala.concurrent.TimeoutException
 
-object QuickCheck {
+object Checker {
   def isValid() : Unit = {
 
   }
