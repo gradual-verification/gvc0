@@ -33,12 +33,13 @@ CREATE TABLE IF NOT EXISTS global_configuration
 (
     id              ENUM ('1') DEFAULT '1',
     timeout_minutes BIGINT UNSIGNED NOT NULL,
+    timeout_margin  BIGINT UNSIGNED NOT NULL,
     max_paths       BIGINT UNSIGNED NOT NULL,
     PRIMARY KEY (id)
 );
 
-INSERT INTO global_configuration (timeout_minutes, max_paths)
-VALUES (30, 4);
+INSERT INTO global_configuration (timeout_minutes, timeout_margin, max_paths)
+VALUES (30, 1, 128);
 
 CREATE TABLE IF NOT EXISTS programs
 (
@@ -346,6 +347,7 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     measurement_id           BIGINT UNSIGNED          DEFAULT NULL,
     last_updated             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     error_id                 BIGINT UNSIGNED          DEFAULT NULL,
+    timeout_minutes          BIGINT                   DEFAULT 0,
     FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
@@ -365,7 +367,7 @@ CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNS
 BEGIN
     DECLARE c_stress BIGINT UNSIGNED;
     DECLARE done INT DEFAULT FALSE;
-    DECLARE cursor_stress CURSOR FOR SELECT stress FROM filtered_stress;
+    DECLARE cursor_stress CURSOR FOR SELECT stress FROM filtered_stress ORDER BY filtered_stress.stress;
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
     DROP TABLE IF EXISTS stress_values;
@@ -384,8 +386,9 @@ BEGIN
     execute stmt;
 
 
-    SELECT @found_perm_id := permutations.id,
-           @found_missing_mode := dynamic_measurement_types.id
+    SELECT permutations.id, dynamic_measurement_types.id
+    INTO @found_perm_id,
+        @found_missing_mode
     FROM permutations
              CROSS JOIN (SELECT hid as hid, vid as vid) as identity
              CROSS JOIN stress_values
@@ -419,16 +422,25 @@ BEGIN
                                        AND dp.stress IS NULL
                                        AND permutations.id = (SELECT @found_perm_id)
                                        AND dynamic_measurement_types.id = (SELECT @found_missing_mode));
+        SELECT timeout_minutes, timeout_margin
+        INTO @global_timeout_minutes, @global_timeout_margin
+        FROM global_configuration;
+        SELECT (@global_timeout_minutes + @global_timeout_margin) INTO @timeout_boundary;
         OPEN cursor_stress;
+        SET @counter := 0;
         loop_through_rows:
         LOOP
             FETCH cursor_stress INTO c_stress;
             IF done THEN
                 LEAVE loop_through_rows;
             ELSE
+                SELECT DATE_ADD(CURRENT_TIMESTAMP, INTERVAL (SELECT @timeout_boundary * @counter) MINUTE)
+                INTO @shifted_update;
                 INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
-                                                 dynamic_measurement_type)
-                VALUES ((SELECT @found_perm_id), vid, hid, nnid, c_stress, (SELECT @found_missing_mode));
+                                                 dynamic_measurement_type, timeout_minutes, last_updated)
+                VALUES ((SELECT @found_perm_id), vid, hid, nnid, c_stress, (SELECT @found_missing_mode),
+                        (SELECT @timeout_boundary), (SELECT @shifted_update));
+                SET @counter := @counter + 1;
             END IF;
         END LOOP;
         CLOSE cursor_stress;
@@ -448,7 +460,7 @@ CREATE EVENT delete_reserved_permutations
     FROM dynamic_performance
     WHERE error_id IS NULL
       AND measurement_id IS NULL
-      AND TIMESTAMPDIFF(HOUR, last_updated, CURRENT_TIMESTAMP) > 1;
+      AND TIMESTAMPDIFF(MINUTE, last_updated, CURRENT_TIMESTAMP) > dynamic_performance.timeout_minutes;
 
 
 DELIMITER //
@@ -463,3 +475,7 @@ BEGIN
     SELECT NULL INTO @found_error_contents;
 END //
 DELIMITER ;
+
+CALL sp_ReservePermutation(1, 1, 1, '8,16,32', @a, @b);
+SELECT *
+FROM dynamic_performance;

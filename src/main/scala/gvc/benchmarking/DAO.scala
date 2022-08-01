@@ -343,14 +343,14 @@ object DAO {
       case None        => "NULL"
     }
     val reservedAttempt = (for {
-      workloads <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $worklist, @perm, @mode);""".update.run
+      _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $worklist, @perm, @mode);""".update.run
       perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
         .query[Option[Permutation]]
         .unique
       mode <- sql"""SELECT @mode;"""
         .query[Option[Long]]
         .unique
-      worklist <- sql"""SELECT * FROM filtered_stress;"""
+      worklist <- sql"""SELECT * FROM filtered_stress ORDER BY filtered_stress.stress;"""
         .query[Int]
         .to[List]
     } yield (worklist, perm, mode)).transact(xa).attempt.unsafeRunSync()

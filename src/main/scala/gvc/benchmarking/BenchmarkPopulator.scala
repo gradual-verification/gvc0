@@ -40,6 +40,7 @@ object BenchmarkPopulator {
     populatePrograms(populatorConfig.sources,
                      libraryDirs,
                      globalConfig,
+                     populatorConfig,
                      connection)
   }
 
@@ -69,11 +70,17 @@ object BenchmarkPopulator {
       sources: List[Path],
       libraryDirs: List[String],
       globalConfig: GlobalConfiguration,
+      populatorConfig: PopulatorConfig,
       connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
     val synchronized = allOf(
       sources
         .map(src => {
-          Future(populateProgram(src, libraryDirs, globalConfig, connection))
+          Future(
+            populateProgram(src,
+                            libraryDirs,
+                            globalConfig,
+                            populatorConfig,
+                            connection))
         }))
 
     val mapping = mutable.Map[Long, StoredProgramRepresentation]()
@@ -125,6 +132,7 @@ object BenchmarkPopulator {
   private def populatePaths(programID: Long,
                             programRep: StoredProgramRepresentation,
                             globalConfig: GlobalConfiguration,
+                            populatorConfig: PopulatorConfig,
                             xa: DBConnection): List[PathQueryCollection] = {
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
@@ -137,9 +145,14 @@ object BenchmarkPopulator {
 
     val queryCollections = mutable.ListBuffer[PathQueryCollection]()
 
-    val maximum =
-      theoreticalMax.min(globalConfig.maxPaths).min(globalConfig.maxPaths)
-    val difference = maximum - DAO.getNumberOfPaths(programID, xa)
+    val baselineMaximum =
+      theoreticalMax
+        .min(globalConfig.maxPaths)
+    val configuredMaximum: BigInt = populatorConfig.pathQuantity match {
+      case Some(value) => value
+      case None        => baselineMaximum
+    }
+    val difference = configuredMaximum - DAO.getNumberOfPaths(programID, xa)
     for (_ <- 0 until difference.intValue()) {
 
       val ordering = sampler.sample(SamplingHeuristic.Random)
@@ -177,6 +190,7 @@ object BenchmarkPopulator {
   private def populateProgram(src: Path,
                               libraries: List[String],
                               globalConfiguration: GlobalConfiguration,
+                              populatorConfig: PopulatorConfig,
                               xa: DBConnection): PopulatedProgram = {
     Output.info(s"Syncing definitions for ${src.getFileName}")
     val sourceText = Files.readString(src)
@@ -200,10 +214,13 @@ object BenchmarkPopulator {
 
     val programRep =
       StoredProgramRepresentation(programInfo, componentMapping.toMap)
-    PopulatedProgram(
-      insertedProgramID,
-      programRep,
-      populatePaths(insertedProgramID, programRep, globalConfiguration, xa))
+    PopulatedProgram(insertedProgramID,
+                     programRep,
+                     populatePaths(insertedProgramID,
+                                   programRep,
+                                   globalConfiguration,
+                                   populatorConfig,
+                                   xa))
   }
 
   //https://alvinalexander.com/source-code/scala-method-create-md5-hash-of-string/
