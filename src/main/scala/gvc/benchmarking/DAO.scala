@@ -17,6 +17,7 @@ import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
 import gvc.benchmarking.Timing.TimedVerification
 
+import java.sql.SQLTransactionRollbackException
 import scala.collection.mutable
 
 class DBException(message: String) extends Exception(message)
@@ -333,7 +334,6 @@ object DAO {
       case Right(_) =>
     }
   }
-
   def reserveProgramForMeasurement(
       id: Identity,
       worklist: String,
@@ -342,29 +342,27 @@ object DAO {
       case Some(value) => value.toString
       case None        => "NULL"
     }
-    val reservedAttempt = (for {
-      _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $worklist, @perm, @mode);""".update.run
-      perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
-        .query[Option[Permutation]]
-        .unique
-      mode <- sql"""SELECT @mode;"""
-        .query[Option[Long]]
-        .unique
-      worklist <- sql"""SELECT * FROM filtered_stress ORDER BY filtered_stress.stress;"""
-        .query[Int]
-        .to[List]
-    } yield (worklist, perm, mode)).transact(xa).attempt.unsafeRunSync()
-    reservedAttempt match {
-      case Left(value) =>
-        prettyPrintException(
-          "Unable to reserve a new program for benchmarking.",
-          value)
-      case Right(reserved) =>
+    var succeeded = false
+    while (!succeeded) {
+      try {
+        succeeded = true
+        val reserved = (for {
+          _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $worklist, @perm, @mode);""".update.run
+          perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
+            .query[Option[Permutation]]
+            .unique
+          mode <- sql"""SELECT @mode;"""
+            .query[Option[Long]]
+            .unique
+          worklist <- sql"""SELECT * FROM filtered_stress ORDER BY filtered_stress.stress;"""
+            .query[Int]
+            .to[List]
+        } yield (worklist, perm, mode)).transact(xa).unsafeRunSync()
         if (reserved._1.nonEmpty) {
           reserved._2 match {
             case Some(p) =>
               reserved._3 match {
-                case Some(m) => Some(ReservedProgram(p, reserved._1, m))
+                case Some(m) => return Some(ReservedProgram(p, reserved._1, m))
                 case None =>
                   error(
                     "Both a valid set of workloads and a permutation were resolved, but a measurement mode wasn't resolved.")
@@ -374,9 +372,18 @@ object DAO {
                 "A valid set of workloads was resolved, but a permutation wasn't resolved. ")
           }
         } else {
-          None
+          error("No workloads were returned");
         }
+      } catch {
+        case _: SQLTransactionRollbackException =>
+          succeeded = false
+          Thread.sleep(50)
+        case t: Throwable =>
+          prettyPrintException("Unable to reserve permutation for benchmarking",
+                               t)
+      }
     }
+    None
   }
 
   def completeProgramMeasurement(id: Identity,
