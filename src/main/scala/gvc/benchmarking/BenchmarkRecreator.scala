@@ -9,7 +9,7 @@ object BenchmarkRecreator {
   def recreate(config: RecreatorConfig,
                baseConfig: Config,
                libraries: List[String]): IR.Program = {
-    val conn = DAO.connect(config.db, config)
+    val conn = DAO.connect(config.db)
     val syncedPrograms =
       BenchmarkPopulator.sync(config.sources, libraries, conn)
     val permutation = DAO.resolvePermutation(config.permToRecreate, conn)

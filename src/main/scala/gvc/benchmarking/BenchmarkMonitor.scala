@@ -10,7 +10,7 @@ import java.util.Calendar
 object BenchmarkMonitor {
 
   def monitor(config: MonitorConfig): Unit = {
-    val conn = DAO.connect(config.db, config)
+    val conn = DAO.connect(config.db)
     printContentsSummary(conn)
     logStatistics(config, conn)
   }

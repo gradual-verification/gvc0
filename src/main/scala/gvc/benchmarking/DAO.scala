@@ -11,7 +11,7 @@ import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import gvc.CC0Wrapper.Performance
 import gvc.Config.{error, prettyPrintException}
-import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
+import gvc.benchmarking.BenchmarkExecutor.{ReservedProgram, WorkloadEntry}
 import gvc.benchmarking.BenchmarkPopulator.md5sum
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
@@ -25,10 +25,6 @@ class DBException(message: String) extends Exception(message)
 object DAO {
 
   type DBConnection = Transactor.Aux[IO, Unit]
-
-  object Names {
-    val stressValues = "temporary_stress_values"
-  }
 
   object DynamicMeasurementMode {
     type DynamicMeasurementMode = String
@@ -87,8 +83,7 @@ object DAO {
 
   private val DB_DRIVER = "com.mysql.cj.jdbc.Driver"
 
-  def connect(credentials: BenchmarkDBCredentials,
-              config: BenchmarkingConfig): DBConnection = {
+  def connect(credentials: BenchmarkDBCredentials): DBConnection = {
     val connection = Transactor.fromDriverManager[IO](
       DB_DRIVER,
       credentials.url, //"jdbc:mysql://localhost:3306/", // connect URL (driver-specific)
@@ -174,8 +169,7 @@ object DAO {
     }
   }
 
-  def resolveProgram(filename: String,
-                     hash: String,
+  def resolveProgram(hash: String,
                      numLabels: Long,
                      xa: transactor.Transactor.Aux[IO, Unit]): Option[Long] = {
     sql"SELECT id FROM programs WHERE num_labels = $numLabels AND src_hash = $hash"
@@ -333,35 +327,41 @@ object DAO {
       case Right(_) =>
     }
   }
+
   def reserveProgramForMeasurement(
       id: Identity,
-      worklist: String,
+      workloadEntries: List[WorkloadEntry],
       xa: DBConnection): Option[ReservedProgram] = {
-    val nn = id.nid match {
-      case Some(value) => value.toString
-      case None        => "NULL"
-    }
     var succeeded = false
     while (!succeeded) {
       try {
         succeeded = true
         val reserved = (for {
-          _ <- sql"""CALL sp_ReservePermutation(${id.vid}, ${id.hid}, $nn, $worklist, @perm, @mode);""".update.run
-          perm <- sql"""SELECT * FROM permutations WHERE id = (SELECT @perm);"""
+          _ <- sql"""CREATE TEMPORARY TABLE temporary_stress_values (
+                program_id BIGINT UNSIGNED NOT NULL,
+                stress BIGINT UNSIGNED NOT NULL
+            );""".update.run
+          _ <- Update[WorkloadEntry](
+            s"INSERT INTO temporary_stress_values (program_id, stress) VALUES (?, ?)")
+            .updateMany(workloadEntries)
+          _ <- sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid}, @perm, @mode);".update.run
+          perm <- sql"SELECT * FROM permutations WHERE id = (SELECT @perm);"
             .query[Option[Permutation]]
             .unique
-          mode <- sql"""SELECT @mode;"""
+          mode <- sql"SELECT @mode;"
             .query[Option[Long]]
             .unique
-          worklist <- sql"""SELECT * FROM filtered_stress ORDER BY filtered_stress.stress;"""
+          worklist <- sql"SELECT * FROM filtered_stress ORDER BY filtered_stress.stress;"
             .query[Int]
             .to[List]
         } yield (worklist, perm, mode)).transact(xa).unsafeRunSync()
+
         if (reserved._1.nonEmpty) {
           reserved._2 match {
             case Some(p) =>
               reserved._3 match {
-                case Some(m) => return Some(ReservedProgram(p, reserved._1, m))
+                case Some(m) =>
+                  return Some(ReservedProgram(p, reserved._1, m))
                 case None =>
                   error(
                     "Both a valid set of workloads and a permutation were resolved, but a measurement mode wasn't resolved.")

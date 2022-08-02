@@ -1,7 +1,8 @@
 package gvc.benchmarking
 
-import gvc.{Config}
+import gvc.Config
 import gvc.Config.error
+
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{NodeSeq, XML}
 
@@ -22,8 +23,14 @@ case class BenchmarkWorkload(
     iterations: Int,
     staticIterations: Int,
     nPaths: Int,
-    stress: StressConfiguration
+    stress: Option[StressConfiguration],
+    programCases: List[WorkloadProgramEntry]
 )
+
+case class WorkloadProgramEntry(matches: List[String],
+                                iterations: Option[Int],
+                                workload: StressConfiguration,
+                                isDefault: Boolean)
 
 trait StressConfiguration
 
@@ -171,7 +178,7 @@ object BenchmarkExternalConfig {
         case None        => c0SourceFiles
       }
 
-      val outputDir = (benchmarkRoot \ "output-dir")
+      val outputDir = benchmarkRoot \ "output-dir"
       val outputDirText =
         if (outputDir.isEmpty || outputDir.text.trim.isEmpty) None
         else Some(outputDir.text.trim)
@@ -197,7 +204,7 @@ object BenchmarkExternalConfig {
   def generateStressList(stress: StressConfiguration): List[Int] = {
     val stepList = stress match {
       case singular: StressSingular => List(singular.stressValue)
-      case list: StressList         => list.wList
+      case list: StressList         => list.wList.distinct
       case stepwise: StressBounded =>
         (stepwise.wLower to stepwise.wUpper by stepwise.wStep).toList
     }
@@ -220,6 +227,10 @@ object BenchmarkExternalConfig {
         }
       }
     }
+  }
+
+  private def resolveStringList(xml: NodeSeq): List[String] = {
+    xml.text.split(',').map(_.trim).toList
   }
 
   private def resolveFallbackOptional(field: String,
@@ -323,6 +334,10 @@ object BenchmarkExternalConfig {
       val paths = workloadRoot \ "paths"
       val iterations = workloadRoot \ "iterations"
       val staticIterations = workloadRoot \ "static-iterations"
+      val byProgram: List[WorkloadProgramEntry] =
+        (workloadRoot \\ "by-program" \\ "p").toList
+          .map(parseWorkloadProgramEntry)
+
       val iterQuantity =
         if (iterations.isEmpty) 1
         else
@@ -341,29 +356,64 @@ object BenchmarkExternalConfig {
           intOrError(
             paths,
             s"Expected an integer for <paths>, but found: '${paths.text}'")
-      val stress = workloadRoot \\ "stress"
+      val stress = parseStress(workloadRoot \ "stress")
+
+      val numberDefault = byProgram.count(e => e.isDefault)
+      if (numberDefault > 1) {
+        error("Multiple <by-program> entries match everything ('*').")
+      }
+      if (numberDefault == 0 && stress.isEmpty) {
+        error(
+          "No default stress configuration was provided, either as top-level <stress> under <workload> or the use of a wildcard ('*') in <match> under <by-program>")
+      }
       Some(
         BenchmarkWorkload(iterQuantity,
                           staticIterQuantity,
                           pathQuantity,
-                          parseStress(stress)))
+                          stress,
+                          byProgram))
     }
   }
 
-  private def parseStress(xml: NodeSeq): StressConfiguration = {
+  def parseWorkloadProgramEntry(xml: NodeSeq): WorkloadProgramEntry = {
+    val names = resolveStringList(xml \ "match")
+    val namesFiltered = names.map(n => n.replace("\\*", "*"))
+    val isDefault = namesFiltered.contains("*")
+    val namesWithoutWildcard = namesFiltered.filter(i => i != "*")
+
+    val stress = parseStress(xml \\ "stress")
+    val iterations = intOption(xml \ "iterations")
+    if (names.isEmpty) {
+      error(
+        "At least one program name must be provided in <match> for each <p> under <by-program>.")
+    }
+    if (stress.isEmpty) {
+      error(
+        s"No stress configuration was provided for <match>${names.mkString(",")}</match>")
+    }
+    WorkloadProgramEntry(namesWithoutWildcard,
+                         iterations,
+                         stress.get,
+                         isDefault)
+  }
+
+  private def parseStress(xml: NodeSeq): Option[StressConfiguration] = {
     val listed = parseStressListed(xml \ "list")
     val singular = parseStressSingular(xml \ "singular")
     val bounded = parseStressBounded(xml \ "bounded")
-
     val specified = List(listed, singular, bounded).filter(_.nonEmpty)
     if (specified.length > 1) {
       error(
         "Only one workload specification method can be used for <stress>; multiple were found.")
     } else {
-      specified.head match {
-        case Some(value) => value
-        case None =>
-          error("Missing workload specification under <stress>")
+      if (specified.nonEmpty) {
+        specified.head match {
+          case Some(value) => Some(value)
+          case None =>
+            error("Missing workload specification under <stress>")
+        }
+      } else {
+        None
       }
     }
   }

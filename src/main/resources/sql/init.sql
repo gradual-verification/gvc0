@@ -26,6 +26,8 @@ DROP PROCEDURE IF EXISTS sp_gr_Version;
 DROP PROCEDURE IF EXISTS sp_gr_Nickname;
 DROP PROCEDURE IF EXISTS sp_gr_Program;
 DROP PROCEDURE IF EXISTS sp_UpdateStatic;
+DROP PROCEDURE IF EXISTS sp_ReservePermutation;
+DROP PROCEDURE IF EXISTS sp_TableExists;
 
 DROP EVENT IF EXISTS delete_reserved_permutations;
 
@@ -358,10 +360,8 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     PRIMARY KEY (permutation_id, version_id, hardware_id, nickname_id, stress, dynamic_measurement_type)
 );
 
-DROP PROCEDURE IF EXISTS sp_ReservePermutation;
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
-                                       IN stress_value_list TEXT,
                                        OUT perm_id BIGINT UNSIGNED,
                                        OUT missing_mode BIGINT UNSIGNED)
 BEGIN
@@ -370,50 +370,43 @@ BEGIN
     DECLARE cursor_stress CURSOR FOR SELECT stress FROM filtered_stress ORDER BY filtered_stress.stress;
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
-    DROP TABLE IF EXISTS stress_values;
     DROP TABLE IF EXISTS filtered_stress;
-    CREATE TEMPORARY TABLE IF NOT EXISTS stress_values
-    (
-        stress BIGINT UNSIGNED UNIQUE
-    );
     CREATE TEMPORARY TABLE IF NOT EXISTS filtered_stress
     (
         stress BIGINT UNSIGNED UNIQUE
     );
-    set @sql = CONCAT('INSERT INTO stress_values (stress) VALUES (',
-                      REPLACE((SELECT GROUP_CONCAT((SELECT stress_value_list)) AS data), ',', '),('), ');');
-    prepare stmt from @sql;
-    execute stmt;
 
-
-    SELECT permutations.id, dynamic_measurement_types.id
+    SELECT permutations.id, dynamic_measurement_types.id, program_id
     INTO @found_perm_id,
-        @found_missing_mode
+        @found_missing_mode,
+        @found_program_id
     FROM permutations
              CROSS JOIN (SELECT hid as hid, vid as vid) as identity
-             CROSS JOIN stress_values
              CROSS JOIN dynamic_measurement_types
              LEFT OUTER JOIN dynamic_performance dp
-                             ON dp.permutation_id = permutations.id AND dp.stress = stress_values.stress
-                                 AND dp.version_id = identity.vid AND dp.hardware_id = identity.hid AND
-                                dp.stress = stress_values.stress
+                             ON dp.permutation_id = permutations.id
+                                 AND dp.version_id = identity.vid AND dp.hardware_id = identity.hid
                                  AND dp.dynamic_measurement_type = dynamic_measurement_types.id
     WHERE dp.permutation_id IS NULL
       AND dp.stress IS NULL
+      AND permutations.program_id IN (SELECT program_id FROM temporary_stress_values)
+    ORDER BY RAND()
     LIMIT 1
     FOR
     UPDATE OF permutations SKIP LOCKED;
 
     IF ((SELECT @found_perm_id) IS NOT NULL) THEN
 
-        INSERT INTO filtered_stress (SELECT stress_values.stress
+        DELETE FROM temporary_stress_values WHERE program_id != (SELECT @found_program_id);
+
+        INSERT INTO filtered_stress (SELECT tsv.stress
                                      FROM permutations
                                               CROSS JOIN (SELECT hid as hid, vid as vid) as identity
-                                              CROSS JOIN stress_values
+                                              CROSS JOIN temporary_stress_values tsv on permutations.program_id = tsv.program_id
                                               CROSS JOIN dynamic_measurement_types
                                               LEFT OUTER JOIN dynamic_performance dp
                                                               ON dp.permutation_id = permutations.id AND
-                                                                 dp.stress = stress_values.stress
+                                                                 dp.stress = tsv.stress
                                                                   AND dp.version_id = identity.vid AND
                                                                  dp.hardware_id = identity.hid
                                                                   AND dp.dynamic_measurement_type =
