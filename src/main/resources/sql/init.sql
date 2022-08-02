@@ -393,25 +393,25 @@ BEGIN
     FOR
     UPDATE OF permutations SKIP LOCKED;
 
-    IF ((SELECT @found_perm_id) IS NOT NULL) THEN
+    IF ((SELECT @found_perm_id) IS NOT NULL AND (SELECT @found_missing_mode) IS NOT NULL AND
+        (SELECT @found_program_id) IS NOT NULL) THEN
 
         DELETE FROM temporary_stress_values WHERE program_id != (SELECT @found_program_id);
 
-        INSERT INTO filtered_stress (SELECT tsv.stress
-                                     FROM permutations
+        INSERT INTO filtered_stress (SELECT DISTINCT tsv.stress
+                                     FROM temporary_stress_values as tsv
+                                              INNER JOIN permutations p ON p.program_id = tsv.program_id
                                               CROSS JOIN (SELECT hid as hid, vid as vid) as identity
-                                              CROSS JOIN temporary_stress_values tsv on permutations.program_id = tsv.program_id
                                               CROSS JOIN dynamic_measurement_types
-                                              LEFT OUTER JOIN dynamic_performance dp
-                                                              ON dp.permutation_id = permutations.id AND
-                                                                 dp.stress = tsv.stress
-                                                                  AND dp.version_id = identity.vid AND
-                                                                 dp.hardware_id = identity.hid
-                                                                  AND dp.dynamic_measurement_type =
-                                                                      dynamic_measurement_types.id
+                                              LEFT OUTER JOIN dynamic_performance dp on p.id = dp.permutation_id
+                                         AND dp.stress = tsv.stress
+                                         AND dp.version_id = identity.vid
+                                         AND dp.hardware_id = identity.hid
+                                         AND dp.dynamic_measurement_type = dynamic_measurement_types.id
                                      WHERE dp.permutation_id IS NULL
                                        AND dp.stress IS NULL
-                                       AND permutations.id = (SELECT @found_perm_id)
+                                       AND p.id = (SELECT @found_perm_id)
+                                       AND p.program_id = (SELECT @found_program_id)
                                        AND dynamic_measurement_types.id = (SELECT @found_missing_mode));
         SELECT timeout_minutes, timeout_margin
         INTO @global_timeout_minutes, @global_timeout_margin
