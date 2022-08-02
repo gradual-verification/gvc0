@@ -575,7 +575,7 @@ object DAO {
   }
 
   def listErrors(conn: DBConnection): List[PermutationError] = {
-    sql"""SELECT permutation_id, version_name, src_filename, measurement_type, time_elapsed_seconds, error_type, error_desc
+    sql"""SELECT permutation_id, version_name, src_filename, measurement_type, error_type, error_desc
          FROM error_occurrences
              INNER JOIN dynamic_performance ON dynamic_performance.error_id = error_occurrences.id
              INNER JOIN error_contents ON error_occurrences.error_contents_id = error_contents.id

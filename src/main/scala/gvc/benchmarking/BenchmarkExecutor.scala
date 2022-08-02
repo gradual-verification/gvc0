@@ -1,4 +1,5 @@
 package gvc.benchmarking
+
 import gvc.Config.error
 import gvc.Main.resolveSilicon
 import gvc.benchmarking.Benchmark.{
@@ -45,7 +46,7 @@ object BenchmarkExecutor {
     val id = DAO.addOrResolveIdentity(config, conn)
     val modes = DAO.resolveDynamicModes(conn)
     var currentSiliconInstance: Option[Silicon] = None
-    var ongoingProcesses = mutable.ListBuffer[scala.sys.process.Process]()
+    val ongoingProcesses = mutable.ListBuffer[scala.sys.process.Process]()
 
     val syncedPrograms =
       BenchmarkPopulator.sync(config.sources, libraries, conn)
@@ -188,7 +189,22 @@ object BenchmarkExecutor {
         case Some(value) =>
           reserved.workloads
             .foreach(w => {
-              wrapTiming(value, reserved, w)
+              val perfOption = wrapTiming(
+                Timing.execTimed(value,
+                                 List(s"--stress $w"),
+                                 config.workload.iterations,
+                                 ongoingProcesses))
+              perfOption match {
+                case Left(t) => reportError(reserved, t)
+                case Right(p) =>
+                  DAO.completeProgramMeasurement(id,
+                                                 reserved,
+                                                 w,
+                                                 config.workload.iterations,
+                                                 p,
+                                                 conn)
+              }
+
             })
         case None =>
       }

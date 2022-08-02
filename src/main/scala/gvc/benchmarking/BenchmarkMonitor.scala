@@ -22,7 +22,7 @@ object BenchmarkMonitor {
     val staticPerformanceListing: DynamicMeasurementMode = csv(
       "static_performance")
     val errorContentsColumns =
-      "permutation_id,version_name,src_filename,mode,time_elapsed_seconds,error_type,error_desc"
+      "permutation_id,version_name,src_filename,mode,error_type,error_desc"
   }
 
   private def printContentsSummary(conn: DBConnection): Unit = {
