@@ -2,7 +2,7 @@ package gvc.benchmarking
 
 import gvc.{CC0Options, CC0Wrapper, Config, OutputFileCollection}
 import gvc.CC0Wrapper.{CommandOutput, Performance}
-import gvc.Main.{VerifiedOutput, verify, verifySiliconProvided}
+import gvc.Main.{VerifiedOutput, verifySiliconProvided}
 import viper.silicon.Silicon
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -29,9 +29,12 @@ object Timing {
                      binary: Path,
                      config: Config,
                      args: List[String],
-                     iterations: Int): (Performance, Performance) = {
-    val compilationPerf = compileTimed(input, binary, config, iterations)
-    val execPerf = execTimed(binary, iterations, args)
+                     iterations: Int,
+                     ongoingProcesses: mutable.ListBuffer[Process])
+    : (Performance, Performance) = {
+    val compilationPerf =
+      compileTimed(input, binary, config, iterations, ongoingProcesses)
+    val execPerf = execTimed(binary, args, iterations, ongoingProcesses)
     (compilationPerf, execPerf)
   }
 
@@ -70,7 +73,9 @@ object Timing {
       input: Path,
       binary: Path,
       config: Config,
-      iterations: Int
+      iterations: Int = 1,
+      ongoingProcesses: mutable.ListBuffer[Process] =
+        mutable.ListBuffer[Process]()
   ): Performance = {
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
@@ -95,30 +100,36 @@ object Timing {
     runTimedCommand(
       iterations,
       compilationCommand,
-      compileOnError
+      compileOnError,
+      ongoingProcesses
     )
   }
 
   private def runTimedCommand(
       iterations: Int,
       command: String,
-      onNonzero: CommandOutput => Unit
+      onNonzero: CommandOutput => Unit,
+      ongoingProcesses: mutable.ListBuffer[scala.sys.process.Process]
   ): Performance = {
     var capture = ""
     val logger = ProcessLogger(
       (o: String) => capture += o,
       (e: String) => capture += e
     )
-
+    val commandAsProcess = Process(command)
     val timings = mutable.ListBuffer[Long]()
     for (_ <- 0 until iterations) {
       val start = System.nanoTime()
-      val result = command ! logger
+      ongoingProcesses += commandAsProcess.run(logger)
+      val awaitExit = ongoingProcesses.last.exitValue()
       val end = System.nanoTime()
-      if (result != 0) {
-        onNonzero(CommandOutput(result, capture))
+      ongoingProcesses.trimEnd(1)
+
+      if (awaitExit != 0) {
+        onNonzero(CommandOutput(awaitExit, capture))
       }
       timings += end - start
+
     }
     generatePerformanceStats(timings.toList)
   }
@@ -138,8 +149,9 @@ object Timing {
 
   def execTimed(
       binary: Path,
-      iterations: Int,
-      args: List[String]
+      args: List[String],
+      iterations: Int = 1,
+      ongoingProcesses: mutable.ListBuffer[Process] = mutable.ListBuffer()
   ): Performance = {
     val command = (List(binary.toAbsolutePath.toString) ++ args).mkString(" ")
 
@@ -147,7 +159,7 @@ object Timing {
       throw new CC0ExecutionException(output)
     }
 
-    runTimedCommand(iterations, command, execNonzero)
+    runTimedCommand(iterations, command, execNonzero, ongoingProcesses)
   }
 
   private def percentile(values: List[Long], percentile: Double): BigDecimal = {

@@ -92,9 +92,8 @@ object Main extends App {
           val outputBinary = Paths.get(fileNames.binaryName)
           injectAndWrite(IRPrinter.print(ir, includeSpecs = false),
                          outputC0Source)
-          Timing.compileTimed(outputC0Source, outputBinary, config, 1)
+          Timing.compileTimed(outputC0Source, outputBinary, config)
           Timing.execTimed(outputBinary,
-                           1,
                            List(s"--stress ${config.stressLevel.getOrElse(1)}"))
         })
       case Config.Recreate =>

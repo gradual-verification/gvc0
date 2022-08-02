@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS global_configuration
 );
 
 INSERT INTO global_configuration (timeout_minutes, timeout_margin, max_paths)
-VALUES (30, 1, 128);
+VALUES (45, 1, 128);
 
 CREATE TABLE IF NOT EXISTS programs
 (
@@ -252,11 +252,10 @@ CREATE TABLE IF NOT EXISTS measurements
 
 CREATE TABLE IF NOT EXISTS error_occurrences
 (
-    id                   SERIAL,
-    error_contents_id    BIGINT UNSIGNED NOT NULL,
-    error_type           VARCHAR(255)    NOT NULL,
-    error_date           DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    time_elapsed_seconds BIGINT UNSIGNED,
+    id                SERIAL,
+    error_contents_id BIGINT UNSIGNED NOT NULL,
+    error_type        VARCHAR(255)    NOT NULL,
+    error_date        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
@@ -349,7 +348,6 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     measurement_id           BIGINT UNSIGNED          DEFAULT NULL,
     last_updated             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     error_id                 BIGINT UNSIGNED          DEFAULT NULL,
-    timeout_minutes          BIGINT                   DEFAULT 0,
     FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
@@ -427,12 +425,9 @@ BEGIN
             IF done THEN
                 LEAVE loop_through_rows;
             ELSE
-                SELECT DATE_ADD(CURRENT_TIMESTAMP, INTERVAL (SELECT @timeout_boundary * @counter) MINUTE)
-                INTO @shifted_update;
                 INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
-                                                 dynamic_measurement_type, timeout_minutes, last_updated)
-                VALUES ((SELECT @found_perm_id), vid, hid, nnid, c_stress, (SELECT @found_missing_mode),
-                        (SELECT @timeout_boundary), (SELECT @shifted_update));
+                                                 dynamic_measurement_type)
+                VALUES ((SELECT @found_perm_id), vid, hid, nnid, c_stress, (SELECT @found_missing_mode));
                 SET @counter := @counter + 1;
             END IF;
         END LOOP;
@@ -446,24 +441,14 @@ BEGIN
 END //
 DELIMITER ;
 
-CREATE EVENT delete_reserved_permutations
-    ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 15 MINUTE
-    DO
-    DELETE
-    FROM dynamic_performance
-    WHERE error_id IS NULL
-      AND measurement_id IS NULL
-      AND TIMESTAMPDIFF(MINUTE, last_updated, CURRENT_TIMESTAMP) > dynamic_performance.timeout_minutes;
-
-
 DELIMITER //
-CREATE PROCEDURE sp_gr_Error(IN p_ehash VARCHAR(255), IN p_edesc TEXT, IN p_etime BIGINT UNSIGNED,
+CREATE PROCEDURE sp_gr_Error(IN p_ehash VARCHAR(255), IN p_edesc TEXT,
                              IN p_err_type VARCHAR(255), OUT eid BIGINT UNSIGNED)
 BEGIN
     INSERT IGNORE INTO error_contents (error_hash, error_desc) VALUES (p_ehash, p_edesc);
     SELECT id INTO @found_error_contents FROM error_contents WHERE error_hash = p_ehash AND error_desc = p_edesc;
-    INSERT INTO error_occurrences (error_contents_id, time_elapsed_seconds, error_type)
-    VALUES ((SELECT @found_error_contents), p_etime, p_err_type);
+    INSERT INTO error_occurrences (error_contents_id, error_type)
+    VALUES ((SELECT @found_error_contents), p_err_type);
     SELECT LAST_INSERT_ID() INTO eid;
     SELECT NULL INTO @found_error_contents;
 END //

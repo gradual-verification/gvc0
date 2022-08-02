@@ -464,7 +464,6 @@ object DAO {
                    reserved: ReservedProgram,
                    mode: ErrorType,
                    errText: String,
-                   timeElapsedSeconds: Long,
                    conn: DBConnection): Unit = {
 
     val nn = id.nid match {
@@ -473,7 +472,7 @@ object DAO {
     }
     val errorHash = md5sum(errText)
     (for {
-      _ <- sql"CALL sp_gr_Error($errorHash, $errText, $timeElapsedSeconds, $mode, @eid)".update.run
+      _ <- sql"CALL sp_gr_Error($errorHash, $errText, $mode, @eid)".update.run
       eid <- sql"SELECT @eid".query[Long].unique
       _ <- sql"UPDATE static_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
       u <- sql"UPDATE dynamic_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
