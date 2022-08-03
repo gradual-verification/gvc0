@@ -10,7 +10,10 @@ import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import gvc.Config.prettyPrintException
+import gvc.benchmarking.BenchmarkRequest.TaskRequest
+import gvc.benchmarking.BenchmarkResult.DistributorSignature
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
+
 import scala.collection.mutable
 
 class DBException(message: String) extends Exception(message)
@@ -419,6 +422,31 @@ object DAO {
       .unsafeRunSync()
   }
 
+  def reservePermutations(ds: DistributorSignature,
+                          nRequested: Int,
+                          conn: DBConnection): List[TaskRequest] = {
+    List()
+  }
+
+  def releaseReservedPermutations(ds: DistributorSignature,
+                                  xa: DBConnection): Unit = {
+    val result =
+      sql"""
+        DELETE FROM dynamic_performance
+            WHERE version_id = ${ds.id.vid}
+                AND hardware_id = ${ds.id.hid}
+                AND nickname_id = ${ds.id.nid};""".update.run
+        .transact(xa)
+        .attempt
+        .unsafeRunSync()
+    result match {
+      case Left(t) =>
+        prettyPrintException(
+          s"Failed to release reserved permutations held by ${ds.execSig.toString}",
+          t)
+      case Right(_) =>
+    }
+  }
   class PathQueryCollection(hash: Array[Byte],
                             programID: Long,
                             bottomPermutationID: Long) {

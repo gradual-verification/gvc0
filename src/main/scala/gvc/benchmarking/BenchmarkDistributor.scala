@@ -2,9 +2,16 @@ package gvc.benchmarking
 
 import gvc.CC0Wrapper.Performance
 import gvc.benchmarking.BenchmarkRequest.{TaskRequest, TerminationRequest}
+import gvc.benchmarking.BenchmarkResult.DistributorSignature
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
-import gvc.benchmarking.DAO.Identity
+import gvc.benchmarking.DAO.{
+  DBConnection,
+  Identity,
+  releaseReservedPermutations
+}
+
+import scala.collection.JavaConverters._
 import upickle.default
 import upickle.default._
 
@@ -13,7 +20,7 @@ import java.net.{ServerSocket, Socket}
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 import scala.collection.mutable
 
-sealed trait BenchmarkRequest;
+sealed trait BenchmarkRequest
 
 object BenchmarkRequest {
   implicit val readWriter: ReadWriter[BenchmarkRequest] = ReadWriter.merge(
@@ -48,6 +55,8 @@ object BenchmarkResult {
 
   case class StaticFailure(error: BenchmarkError) extends BenchmarkResult
 
+  case class DistributorSignature(id: Identity, execSig: ExecutorSignature)
+
   case class DynamicResults(failures: Map[Int, BenchmarkError],
                             successes: Map[Int, Performance])
       extends BenchmarkResult
@@ -62,18 +71,18 @@ object BenchmarkError {
 
 class BenchmarkDistributor(config: DistributorConfig) {
 
-  val conn = DAO.connect(config.db)
+  private val conn: DBConnection = DAO.connect(config.db)
 
   Output.info(s"Starting distribution server on port: ${config.queue.port}")
-  val server = new ServerSocket(config.queue.port)
+  private val server = new ServerSocket(config.queue.port)
 
-  val synchronizedMap =
-    new ConcurrentHashMap[ExecutorSignature,
+  private val synchronizedMap =
+    new ConcurrentHashMap[DistributorSignature,
                           LinkedBlockingQueue[BenchmarkRequest]]()
-  val connectedClients =
-    new ConcurrentHashMap[ExecutorSignature, Unit]()
+  private val connectedClients =
+    new ConcurrentHashMap[DistributorSignature, Unit]()
 
-  val resultsQueue = new LinkedBlockingQueue[Option[TaggedResult]]()
+  private val resultsQueue = new LinkedBlockingQueue[Option[TaggedResult]]()
 
   def distribute(): Unit = {
     Output.info("Starting job queue population.")
@@ -87,7 +96,7 @@ class BenchmarkDistributor(config: DistributorConfig) {
     }
   }
 
-  class BenchmarkRunner(socket: Socket) extends Runnable {
+  private class BenchmarkRunner(socket: Socket) extends Runnable {
 
     val queue = new LinkedBlockingQueue[BenchmarkRequest]()
     private var workRemains = false
@@ -99,8 +108,9 @@ class BenchmarkDistributor(config: DistributorConfig) {
         val os = new DataOutputStream(socket.getOutputStream)
         val signature = read[ExecutorSignature](is.readUTF())
         val resolvedID = DAO.addOrResolveIdentity(signature, conn)
-        synchronizedMap.put(signature, this.queue)
-        connectedClients.put(signature, Unit)
+        val distribSignature = DistributorSignature(resolvedID, signature)
+        synchronizedMap.put(distribSignature, this.queue)
+        connectedClients.put(distribSignature, Unit)
         Output.success(
           s"Accepted connection from client: ${signature.toString}@${socket.getInetAddress.getHostAddress}")
         while (socket.isConnected && workRemains) {
@@ -135,20 +145,26 @@ class BenchmarkDistributor(config: DistributorConfig) {
     }
   }
 
-  class BenchmarkProducer(config: BenchmarkQueueConfig) extends Runnable {
+  private class BenchmarkProducer(config: BenchmarkQueueConfig)
+      extends Runnable {
     def run(): Unit = {
       while (true) {
         synchronizedMap.synchronized {
-          val toRemove = mutable.ListBuffer[ExecutorSignature]()
+          val toRemove = mutable.ListBuffer[DistributorSignature]()
           synchronizedMap.keySet.forEach(k => {
             if (connectedClients.contains(k)) {
               val queue = synchronizedMap.get(k)
               if (queue.size() < config.queueLength) {
-                // TODO: add query to reserve (n) entries from the database.
-                // if less than N are present, add a termination request to the queue
+                val differenceToRepopulate = config.queueLength - queue.size()
+                val reservedTasks =
+                  DAO.reservePermutations(k, differenceToRepopulate, conn)
+                queue.addAll(reservedTasks.asJavaCollection)
+                if (reservedTasks.size < differenceToRepopulate) {
+                  queue.put(TerminationRequest())
+                }
               }
             } else {
-              // TODO: add query to unreserve temporary entries from the database.
+              releaseReservedPermutations(k, conn)
               toRemove += k
             }
           })
@@ -159,16 +175,15 @@ class BenchmarkDistributor(config: DistributorConfig) {
     }
   }
 
-  class BenchmarkConsumer() extends Runnable {
+  private class BenchmarkConsumer() extends Runnable {
     private var resultsRemaining = true
 
     def run(): Unit = {
       while (resultsRemaining) {
         val result = resultsQueue.take()
         result match {
-          case Some(r) => {
+          case Some(r) =>
             DAO.processTaggedResult(r)
-          }
           case None => resultsRemaining = false
         }
       }
