@@ -82,6 +82,7 @@ object Main extends App {
         val benchConfig =
           BenchmarkExternalConfig.parseMonitor(config)
         BenchmarkMonitor.monitor(benchConfig)
+
       case Config.DynamicVerification | Config.FramingVerification =>
         Output.printTiming(() => {
           val fileNames = getOutputCollection(config.sourceFile.get)
@@ -99,8 +100,11 @@ object Main extends App {
                            List(s"--stress ${config.stressLevel.getOrElse(1)}"))
         })
       case Config.Checker =>
+        val fileNames = getOutputCollection(config.sourceFile.get)
+        val inputSource = readFile(config.sourceFile.get)
         Output.printTiming(() => {
-
+          val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+          execute(verifiedOutput.c0Source, fileNames)
         })
       case Config.Recreate =>
         val benchConfig =

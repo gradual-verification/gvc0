@@ -19,6 +19,14 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.TimeoutException
 
 object Checker {
+  /*
+  1. External Structure: input.c0 file -> match main.scala Config.Checker -> call isValid:gvc/pbt/Checker.scala
+  2. isValid: main.generateIR()
+    First Branch: main.verify -> gradual .c0 file -> queue wait in compile & execute
+    Second Branch: BaselineChecker.check() & onlyFraming = false -> Dynamic IR -> IRPrinter.print & includeSpecs = false -> queue into compile & execute
+  3. Compile and Execute with --stress
+  4. .equals string comparison and output
+   */
   def isValid() : Unit = {
 
   }
