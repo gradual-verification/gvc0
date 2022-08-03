@@ -9,15 +9,8 @@ import doobie.implicits._
 import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
-import gvc.CC0Wrapper.Performance
-import gvc.Config.{error, prettyPrintException}
-import gvc.benchmarking.OldBenchmarkExecutor.{ReservedProgram, WorkloadEntry}
-import gvc.benchmarking.BenchmarkPopulator.md5sum
+import gvc.Config.prettyPrintException
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
-import gvc.benchmarking.DAO.ErrorType.ErrorType
-import gvc.benchmarking.Timing.TimedVerification
-
-import java.sql.SQLTransactionRollbackException
 import scala.collection.mutable
 
 class DBException(message: String) extends Exception(message)
@@ -45,7 +38,7 @@ object DAO {
 
   case class GlobalConfiguration(timeoutMinutes: Long, maxPaths: Long)
 
-  case class Identity(vid: Long, hid: Long, nid: Option[Long])
+  case class Identity(vid: Long, hid: Long, nid: Long)
 
   case class Version(id: Long, versionName: String, dateAdded: String)
 
@@ -110,16 +103,15 @@ object DAO {
     }
   }
 
-  def addOrResolveIdentity(config: ExecutorConfig,
+  def addOrResolveIdentity(signature: ExecutorSignature,
                            xa: DBConnection): Identity = {
-    val hid = addOrResolveHardware(config.hardware, xa)
-    val vid = addOrResolveVersion(config.version, xa)
-    val nid = config.nickname match {
-      case Some(value) => Some(addOrResolveNickname(value, xa))
-      case None        => None
-    }
+    val hid = addOrResolveHardware(signature.hardware, xa)
+    val vid = addOrResolveVersion(signature.version, xa)
+    val nid = addOrResolveNickname(signature.nickname, xa)
     Identity(vid, hid, nid)
   }
+
+  def processTaggedResult(rt: TaggedResult): Unit = {}
 
   def addOrResolveNickname(name: String,
                            xa: transactor.Transactor.Aux[IO, Unit]): Long = {
@@ -292,6 +284,7 @@ object DAO {
       case Right(value) => value
     }
   }
+  /*
 
   def updateStaticProfiling(id: Identity,
                             pid: Long,
@@ -414,7 +407,7 @@ object DAO {
           t)
       case Right(_) =>
     }
-  }
+  }*/
 
   def containsPath(programID: Long,
                    pathHash: Array[Byte],
@@ -459,30 +452,25 @@ object DAO {
       massUpdate.transact(xa).unsafeRunSync()
     }
   }
-
+  /*
   def logException(id: Identity,
                    reserved: ReservedProgram,
                    mode: ErrorType,
                    errText: String,
                    conn: DBConnection): Unit = {
-
-    val nn = id.nid match {
-      case Some(value) => value.toString
-      case None        => "NULL"
-    }
     val errorHash = md5sum(errText)
     (for {
       _ <- sql"CALL sp_gr_Error($errorHash, $errText, $mode, @eid)".update.run
       eid <- sql"SELECT @eid".query[Long].unique
-      _ <- sql"UPDATE static_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
-      u <- sql"UPDATE dynamic_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = $nn AND permutation_id = ${reserved.perm.id}".update.run
+      _ <- sql"UPDATE static_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = ${id.nid} AND permutation_id = ${reserved.perm.id}".update.run
+      u <- sql"UPDATE dynamic_performance SET error_id = $eid WHERE hardware_id = ${id.hid} AND version_id = ${id.vid} AND nickname_id = ${id.nid} AND permutation_id = ${reserved.perm.id}".update.run
     } yield u).transact(conn).attempt.unsafeRunSync() match {
       case Left(t) =>
         prettyPrintException(s"Unable to log error with mode $mode.\n $errText",
                              t)
       case Right(_) =>
     }
-  }
+  }*/
 
   case class CompletionMetadata(versionName: String,
                                 hardwareName: String,

@@ -337,7 +337,21 @@ BEGIN
 END //
 DELIMITER ;
 
-CREATE TABLE IF NOT EXISTS dynamic_performance
+CREATE TABLE IF NOT EXISTS ongoing_dynamic_performance
+(
+    permutation_id           BIGINT UNSIGNED NOT NULL,
+    version_id               BIGINT UNSIGNED NOT NULL,
+    hardware_id              BIGINT UNSIGNED NOT NULL,
+    stress                   INTEGER         NOT NULL,
+    dynamic_measurement_type BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (permutation_id, version_id, hardware_id, stress, dynamic_measurement_type),
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
+    FOREIGN KEY (version_id) REFERENCES versions (id),
+    FOREIGN KEY (hardware_id) REFERENCES hardware (id),
+    FOREIGN KEY (dynamic_measurement_type) REFERENCES dynamic_measurement_types (id)
+);
+
+CREATE TABLE IF NOT EXISTS completed_dynamic_performance
 (
     permutation_id           BIGINT UNSIGNED NOT NULL,
     version_id               BIGINT UNSIGNED NOT NULL,
@@ -367,13 +381,11 @@ BEGIN
     DECLARE done INT DEFAULT FALSE;
     DECLARE cursor_stress CURSOR FOR SELECT stress FROM filtered_stress ORDER BY filtered_stress.stress;
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-
     DROP TABLE IF EXISTS filtered_stress;
     CREATE TEMPORARY TABLE IF NOT EXISTS filtered_stress
     (
         stress BIGINT UNSIGNED UNIQUE
     );
-
     SELECT permutations.id, dynamic_measurement_types.id, program_id
     INTO @found_perm_id,
         @found_missing_mode,
@@ -391,13 +403,11 @@ BEGIN
     ORDER BY RAND()
     LIMIT 1
     FOR
-    UPDATE OF permutations SKIP LOCKED;
+    UPDATE OF permutations;
 
     IF ((SELECT @found_perm_id) IS NOT NULL AND (SELECT @found_missing_mode) IS NOT NULL AND
         (SELECT @found_program_id) IS NOT NULL) THEN
-
         DELETE FROM temporary_stress_values WHERE program_id != (SELECT @found_program_id);
-
         INSERT INTO filtered_stress (SELECT DISTINCT tsv.stress
                                      FROM temporary_stress_values as tsv
                                               INNER JOIN permutations p ON p.program_id = tsv.program_id
@@ -413,10 +423,6 @@ BEGIN
                                        AND p.id = (SELECT @found_perm_id)
                                        AND p.program_id = (SELECT @found_program_id)
                                        AND dynamic_measurement_types.id = (SELECT @found_missing_mode));
-        SELECT timeout_minutes, timeout_margin
-        INTO @global_timeout_minutes, @global_timeout_margin
-        FROM global_configuration;
-        SELECT (@global_timeout_minutes + @global_timeout_margin) INTO @timeout_boundary;
         OPEN cursor_stress;
         SET @counter := 0;
         loop_through_rows:
@@ -440,6 +446,7 @@ BEGIN
     END IF;
 END //
 DELIMITER ;
+
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Error(IN p_ehash VARCHAR(255), IN p_edesc TEXT,
