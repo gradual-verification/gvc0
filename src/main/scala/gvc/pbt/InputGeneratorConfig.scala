@@ -5,9 +5,9 @@ import gvc.Config.error
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{NodeSeq, XML}
 
-class QuickCheckConfigException(message: String) extends Exception(message)
+class InputGeneratorException(message: String) extends Exception(message)
 
-object QuickCheckConfig {
+object InputGeneratorConfig {
 
 //  private object Names {
 //    val defaultOutputDirectory = "./data"

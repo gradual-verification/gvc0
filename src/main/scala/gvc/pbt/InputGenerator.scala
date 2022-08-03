@@ -1,7 +1,7 @@
 package gvc.pbt
 
 object InputGenerator {
-  def isValid() : Unit = {
+  def notValid() : Unit = {
 
   }
 //  def injectAndWrite(c0: String, dest: Path): Unit = {
