@@ -3,10 +3,11 @@ package gvc
 import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
-import gvc.benchmarking.BenchmarkExecutor.injectAndWrite
+import gvc.benchmarking.Benchmark.injectAndWrite
 import gvc.transformer._
 import gvc.benchmarking.{
   BaselineChecker,
+  BenchmarkDistributor,
   BenchmarkExecutor,
   BenchmarkExternalConfig,
   BenchmarkMonitor,
@@ -76,7 +77,10 @@ object Main extends App {
       config.linkedLibraries ++ Defaults.includeDirectories
 
     config.mode match {
-
+      case Config.Distribute =>
+        val distributor = new BenchmarkDistributor(
+          BenchmarkExternalConfig.parseDistributor(config))
+        distributor.distribute()
       case Config.Monitor =>
         val benchConfig =
           BenchmarkExternalConfig.parseMonitor(config)
@@ -118,8 +122,8 @@ object Main extends App {
       case Config.Execute =>
         val benchConfig =
           BenchmarkExternalConfig.parseExecutor(config)
-        BenchmarkExecutor.execute(benchConfig, config, linkedLibraries)
-
+        val executor = new BenchmarkExecutor(benchConfig, config)
+        executor.execute()
       case Config.Populate =>
         val benchConfig =
           BenchmarkExternalConfig.parsePopulator(config)

@@ -11,7 +11,7 @@ import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import gvc.CC0Wrapper.Performance
 import gvc.Config.{error, prettyPrintException}
-import gvc.benchmarking.BenchmarkExecutor.{ReservedProgram, WorkloadEntry}
+import gvc.benchmarking.OldBenchmarkExecutor.{ReservedProgram, WorkloadEntry}
 import gvc.benchmarking.BenchmarkPopulator.md5sum
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType

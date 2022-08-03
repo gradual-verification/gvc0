@@ -3,6 +3,7 @@ package gvc.benchmarking
 import gvc.Config
 import gvc.Config.error
 
+import java.net.{MalformedURLException, URL}
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{NodeSeq, XML}
 
@@ -13,6 +14,10 @@ case class BenchmarkDBCredentials(
     username: String,
     password: String
 )
+
+object Defaults {
+  val benchmarkQueueConfig = BenchmarkQueueConfig(1000, 10, 3030)
+}
 
 case class BenchmarkIO(
     outputDir: java.nio.file.Path,
@@ -41,13 +46,21 @@ case class StressList(wList: List[Int]) extends StressConfiguration
 
 case class StressSingular(stressValue: Int) extends StressConfiguration
 
-case class PlatformIdentification(versionID: String, hardwareID: String)
-
 trait BenchmarkingConfig
 
 case class PipelineModifiers(onlyVerify: Boolean,
                              onlyCompile: Boolean,
                              disableBaseline: Boolean)
+
+case class DistributorConfig(db: BenchmarkDBCredentials,
+                             sources: List[Path],
+                             queue: BenchmarkQueueConfig)
+
+case class BenchmarkQueueConfig(
+    repopulationDelay: Int,
+    queueLength: Int,
+    port: Int
+)
 
 case class RecreatorConfig(version: String,
                            db: BenchmarkDBCredentials,
@@ -67,7 +80,7 @@ case class MonitorConfig(db: BenchmarkDBCredentials, outputDirectory: Path)
 case class ExecutorConfig(version: String,
                           hardware: String,
                           nickname: Option[String],
-                          db: BenchmarkDBCredentials,
+                          jobServerURL: URL,
                           sources: List[Path],
                           workload: BenchmarkWorkload)
     extends BenchmarkingConfig
@@ -76,12 +89,14 @@ case class BenchmarkConfigResults(
     version: String,
     hardware: Option[String],
     nickname: Option[String],
+    serverURL: Option[URL],
     credentials: BenchmarkDBCredentials,
     sources: List[Path],
     workload: Option[BenchmarkWorkload],
     pathQuantity: Option[Int],
     modifiers: PipelineModifiers,
-    outputDir: Option[String]
+    outputDir: Option[String],
+    queue: BenchmarkQueueConfig
 )
 
 object BenchmarkExternalConfig {
@@ -116,17 +131,20 @@ object BenchmarkExternalConfig {
       case Some(wValue) =>
         resolved.hardware match {
           case Some(hValue) =>
-            ExecutorConfig(
-              resolved.version,
-              hValue,
-              resolved.nickname,
-              resolved.credentials,
-              resolved.sources,
-              wValue
-            )
+            resolved.serverURL match {
+              case Some(sURL) =>
+                ExecutorConfig(
+                  resolved.version,
+                  hValue,
+                  resolved.nickname,
+                  sURL,
+                  resolved.sources,
+                  wValue
+                )
+              case None => error("A <job-server> must be provided.")
+            }
           case None => error("A <hardware> must be provided.")
         }
-
       case None => error("A <workload> must be provided.")
     }
   }
@@ -137,6 +155,15 @@ object BenchmarkExternalConfig {
                     resolved.pathQuantity,
                     resolved.credentials,
                     resolved.sources)
+  }
+
+  def parseDistributor(rootConfig: Config): DistributorConfig = {
+    val resolved = parseConfig(rootConfig)
+    DistributorConfig(
+      resolved.credentials,
+      resolved.sources,
+      resolved.queue
+    )
   }
 
   private def parseConfig(rootConfig: Config): BenchmarkConfigResults = {
@@ -185,19 +212,25 @@ object BenchmarkExternalConfig {
 
       val credentials = parseDB(benchmarkRoot \\ "db", rootConfig)
 
+      val serverURL = urlOption("job-server", benchmarkRoot)
+
       val workload = parseWorkload(benchmarkRoot \\ "workload")
+
+      val queue = parseQueue(benchmarkRoot \\ "queue")
 
       val modifiers = parsePipelineModifiers(benchmarkRoot)
 
       BenchmarkConfigResults(version,
                              hardware,
                              nickname,
+                             serverURL,
                              credentials,
                              fileCollection,
                              workload,
                              quantity,
                              modifiers,
-                             outputDirText)
+                             outputDirText,
+                             queue)
     }
   }
 
@@ -213,19 +246,17 @@ object BenchmarkExternalConfig {
 
   private def resolveFallback(field: String,
                               xml: NodeSeq,
-                              fallback: Option[String]) = {
+                              fallback: Option[String]): String = {
     fallback match {
       case Some(value) => value
-      case None => {
+      case None =>
         val provided = xml \ field
         if (provided.nonEmpty) {
           provided.text.trim
-
         } else {
           error(
             s"No $field string has been provided, either as a command line argument (--$field) or configuration file field.")
         }
-      }
     }
   }
 
@@ -242,7 +273,6 @@ object BenchmarkExternalConfig {
         val provided = xml \ field
         if (provided.nonEmpty) {
           Some(provided.text.trim)
-
         } else {
           None
         }
@@ -275,6 +305,20 @@ object BenchmarkExternalConfig {
     } catch {
       case _: NumberFormatException =>
         error(errorText)
+    }
+  }
+
+  private def urlOption(field: String, xml: NodeSeq): Option[URL] = {
+    val node = xml \ field
+    if (node.text.trim.nonEmpty) {
+      try {
+        Some(new URL(node.text.trim))
+      } catch {
+        case _: MalformedURLException =>
+          error(s"The provided url for <$field> is invalid: ${node.text.trim}")
+      }
+    } else {
+      None
     }
   }
 
@@ -326,8 +370,24 @@ object BenchmarkExternalConfig {
     }
   }
 
-  private def parseWorkload(xml: NodeSeq): Option[BenchmarkWorkload] = {
-    val workloadRoot = xml \\ "workload"
+  private def parseQueue(xml: NodeSeq): BenchmarkQueueConfig = {
+    val queueRoot = xml \\ "queue"
+    if (queueRoot.isEmpty) {
+      Defaults.benchmarkQueueConfig
+    } else {
+      val delay = intOption(queueRoot \ "delay-ms")
+      val length = intOption(queueRoot \ "length")
+      val port = intOption(queueRoot \ "port")
+      BenchmarkQueueConfig(
+        delay.getOrElse(Defaults.benchmarkQueueConfig.repopulationDelay),
+        length.getOrElse(Defaults.benchmarkQueueConfig.queueLength),
+        port.getOrElse(Defaults.benchmarkQueueConfig.port)
+      )
+    }
+  }
+
+  private def parseWorkload(
+      workloadRoot: NodeSeq): Option[BenchmarkWorkload] = {
     if (workloadRoot.isEmpty) {
       None
     } else {

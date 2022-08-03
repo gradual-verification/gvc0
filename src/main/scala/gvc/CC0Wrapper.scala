@@ -1,5 +1,7 @@
 package gvc
 
+import upickle.default
+
 import java.io.ByteArrayOutputStream
 import java.nio.file.Paths
 import sys.process._
@@ -76,7 +78,7 @@ object CC0Wrapper {
       perf: Option[Performance]
   )
 
-  class Performance(
+  case class Performance(
       p95: BigDecimal,
       p5: BigDecimal,
       med: BigDecimal,
@@ -85,6 +87,7 @@ object CC0Wrapper {
       min: Long,
       max: Long
   ) {
+
     val median = med
     val mean = mn
     val ninetyFifth = p95
@@ -96,6 +99,10 @@ object CC0Wrapper {
     override def toString: String = {
       s"$p95,$p5,$median,$mean,$stdev,$min,$max"
     }
+  }
+  object Performance {
+    implicit val rw: default.ReadWriter[Performance] =
+      default.macroRW[Performance]
   }
 
   def exec_output(

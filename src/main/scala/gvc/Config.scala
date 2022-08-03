@@ -68,6 +68,7 @@ object Config {
 
   case object Populate extends Mode
 
+  case object Distribute extends Mode
   case object Execute extends Mode
 
   case object DynamicVerification extends Mode
@@ -95,7 +96,8 @@ object Config {
       |                --populate                     Populate the benchmarking database using options from the specified configuration file.
       |                --execute                      Execute programs and store results in the database using options from the specified configuration file.
       |                --recreate=<id>                Specify a permutation to recreate from the database  using options from the specified configuration file.
-      |
+      |                --distribute           
+      |                
       |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
       |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
       |                --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
@@ -212,6 +214,8 @@ object Config {
         fromCommandLineArgs(tail, current.copy(mode = Populate))
       case "--execute" :: tail =>
         fromCommandLineArgs(tail, current.copy(mode = Execute))
+      case "--distribute" :: tail =>
+        fromCommandLineArgs(tail, current.copy(mode = Distribute))
       case recreatePermString(t) :: tail =>
         fromCommandLineArgs(tail,
                             current.copy(recreatePerm =

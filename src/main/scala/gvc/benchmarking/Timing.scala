@@ -43,7 +43,7 @@ object Timing {
       inputSource: String,
       fileNames: OutputFileCollection,
       config: Config,
-      iterations: Int
+      iterations: Int = 1
   ): TimedVerification = {
     var verifiedOutput: Option[VerifiedOutput] = None
     val translationTimings = ListBuffer[Long]()

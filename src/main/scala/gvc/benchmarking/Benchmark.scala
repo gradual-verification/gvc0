@@ -2,6 +2,7 @@ package gvc.benchmarking
 
 import gvc.benchmarking.Benchmark.Extensions.{c0, csv, log, out}
 
+import java.nio.file.{Files, Path}
 import scala.util.matching.Regex
 
 object Benchmark {
@@ -84,4 +85,18 @@ object Benchmark {
       .findAllMatchIn(source)
       .nonEmpty
   }
+
+  def injectAndWrite(c0: String, dest: Path): Unit = {
+    if (!isInjectable(c0)) {
+      throw new BenchmarkException(
+        s"The file doesn't include an assignment of the form 'int stress = ...'."
+      )
+    }
+    val source = injectStress(c0)
+    Files.writeString(
+      dest,
+      source
+    )
+  }
+
 }
