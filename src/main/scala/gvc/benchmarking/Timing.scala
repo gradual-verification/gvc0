@@ -43,7 +43,7 @@ object Timing {
       inputSource: String,
       fileNames: OutputFileCollection,
       config: Config,
-      iterations: Int
+      iterations: Int = 1
   ): TimedVerification = {
     var verifiedOutput: Option[VerifiedOutput] = None
     val translationTimings = ListBuffer[Long]()
@@ -75,7 +75,7 @@ object Timing {
       config: Config,
       iterations: Int = 1,
       ongoingProcesses: mutable.ListBuffer[Process] =
-        mutable.ListBuffer[Process]()
+        mutable.ListBuffer[Process](),
   ): Performance = {
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
@@ -151,7 +151,7 @@ object Timing {
       binary: Path,
       args: List[String],
       iterations: Int = 1,
-      ongoingProcesses: mutable.ListBuffer[Process] = mutable.ListBuffer()
+      ongoingProcesses: mutable.ListBuffer[Process] = mutable.ListBuffer(),
   ): Performance = {
     val command = (List(binary.toAbsolutePath.toString) ++ args).mkString(" ")
 

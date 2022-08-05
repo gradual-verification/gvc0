@@ -32,6 +32,8 @@ case class WorkloadProgramEntry(matches: List[String],
                                 workload: StressConfiguration,
                                 isDefault: Boolean)
 
+case class IterConfiguration(static: Int, dynamic: Int)
+
 trait StressConfiguration
 
 case class StressBounded(wLower: Int, wUpper: Int, wStep: Int)
@@ -58,7 +60,8 @@ case class RecreatorConfig(version: String,
 case class PopulatorConfig(version: String,
                            pathQuantity: Option[Int],
                            db: BenchmarkDBCredentials,
-                           sources: List[Path])
+                           sources: List[Path],
+                           workload: BenchmarkWorkload)
     extends BenchmarkingConfig
 
 case class MonitorConfig(db: BenchmarkDBCredentials, outputDirectory: Path)
@@ -67,9 +70,9 @@ case class MonitorConfig(db: BenchmarkDBCredentials, outputDirectory: Path)
 case class ExecutorConfig(version: String,
                           hardware: String,
                           nickname: Option[String],
+                          iter: IterConfiguration,
                           db: BenchmarkDBCredentials,
-                          sources: List[Path],
-                          workload: BenchmarkWorkload)
+                          sources: List[Path])
     extends BenchmarkingConfig
 
 case class BenchmarkConfigResults(
@@ -81,7 +84,8 @@ case class BenchmarkConfigResults(
     workload: Option[BenchmarkWorkload],
     pathQuantity: Option[Int],
     modifiers: PipelineModifiers,
-    outputDir: Option[String]
+    outputDir: Option[String],
+    iter: IterConfiguration
 )
 
 object BenchmarkExternalConfig {
@@ -112,31 +116,31 @@ object BenchmarkExternalConfig {
 
   def parseExecutor(rootConfig: Config): ExecutorConfig = {
     val resolved = parseConfig(rootConfig)
-    resolved.workload match {
-      case Some(wValue) =>
-        resolved.hardware match {
-          case Some(hValue) =>
-            ExecutorConfig(
-              resolved.version,
-              hValue,
-              resolved.nickname,
-              resolved.credentials,
-              resolved.sources,
-              wValue
-            )
-          case None => error("A <hardware> must be provided.")
-        }
-
-      case None => error("A <workload> must be provided.")
+    resolved.hardware match {
+      case Some(hValue) =>
+        ExecutorConfig(
+          resolved.version,
+          hValue,
+          resolved.nickname,
+          resolved.iter,
+          resolved.credentials,
+          resolved.sources
+        )
+      case None => error("A <hardware> must be provided.")
     }
   }
 
   def parsePopulator(rootConfig: Config): PopulatorConfig = {
     val resolved = parseConfig(rootConfig)
-    PopulatorConfig(resolved.version,
-                    resolved.pathQuantity,
-                    resolved.credentials,
-                    resolved.sources)
+    resolved.workload match {
+      case Some(wValue) =>
+        PopulatorConfig(resolved.version,
+                        resolved.pathQuantity,
+                        resolved.credentials,
+                        resolved.sources,
+                        wValue)
+      case None => error("A <workload> must be provided.")
+    }
   }
 
   private def parseConfig(rootConfig: Config): BenchmarkConfigResults = {
@@ -187,6 +191,8 @@ object BenchmarkExternalConfig {
 
       val workload = parseWorkload(benchmarkRoot \\ "workload")
 
+      val iter = parseIter(benchmarkRoot \\ "iter")
+
       val modifiers = parsePipelineModifiers(benchmarkRoot)
 
       BenchmarkConfigResults(version,
@@ -197,7 +203,8 @@ object BenchmarkExternalConfig {
                              workload,
                              quantity,
                              modifiers,
-                             outputDirText)
+                             outputDirText,
+                             iter)
     }
   }
 
@@ -326,8 +333,8 @@ object BenchmarkExternalConfig {
     }
   }
 
-  private def parseWorkload(xml: NodeSeq): Option[BenchmarkWorkload] = {
-    val workloadRoot = xml \\ "workload"
+  private def parseWorkload(
+      workloadRoot: NodeSeq): Option[BenchmarkWorkload] = {
     if (workloadRoot.isEmpty) {
       None
     } else {
@@ -453,6 +460,12 @@ object BenchmarkExternalConfig {
         s"Expected a single integer for <singular>; found: '${xml.text}'")
       Some(StressSingular(singular))
     }
+  }
+
+  private def parseIter(xml: NodeSeq): IterConfiguration = {
+    val static = intOption(xml \ "static")
+    val dynamic = intOption(xml \ "dynamic")
+    IterConfiguration(static.getOrElse(1), dynamic.getOrElse(10))
   }
 
   private def parseStressListed(xml: NodeSeq): Option[StressConfiguration] = {

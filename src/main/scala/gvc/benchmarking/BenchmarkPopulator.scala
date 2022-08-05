@@ -1,11 +1,7 @@
 package gvc.benchmarking
 
 import gvc.Config.error
-import gvc.benchmarking.DAO.{
-  DBConnection,
-  GlobalConfiguration,
-  PathQueryCollection
-}
+import gvc.benchmarking.DAO.{DBConnection, PathQueryCollection}
 import gvc.transformer.IR.Program
 import gvc.Main
 import gvc.benchmarking.Benchmark.BenchmarkException
@@ -37,10 +33,8 @@ object BenchmarkPopulator {
   def populate(populatorConfig: PopulatorConfig,
                libraryDirs: List[String]): Unit = {
     val connection = DAO.connect(populatorConfig.db)
-    val globalConfig = DAO.resolveGlobalConfiguration(connection)
     populatePrograms(populatorConfig.sources,
                      libraryDirs,
-                     globalConfig,
                      populatorConfig,
                      connection)
   }
@@ -74,17 +68,19 @@ object BenchmarkPopulator {
   def populatePrograms(
       sources: List[Path],
       libraryDirs: List[String],
-      globalConfig: GlobalConfiguration,
       populatorConfig: PopulatorConfig,
       connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
+
+    val stressTable = new StressTable(populatorConfig.workload)
+
     val synchronized = allOf(
       sources
         .map(src => {
           Future(
             populateProgram(src,
                             libraryDirs,
-                            globalConfig,
                             populatorConfig,
+                            stressTable,
                             connection))
         }))
 
@@ -104,7 +100,7 @@ object BenchmarkPopulator {
   private def syncProgram(
       src: Path,
       libraries: List[String],
-      xa: DBConnection): Option[(Long, ProgramInformation)] = {
+      conn: DBConnection): Option[(Long, ProgramInformation)] = {
 
     Output.info(s"Syncing definitions for ${src.getFileName}")
 
@@ -116,13 +112,13 @@ object BenchmarkPopulator {
       ProgramInformation(sourceText, sourceIR, labelOutput, fileName)
 
     val insertedProgramID =
-      DAO.resolveProgram(md5sum(sourceText), labelOutput.labels.size, xa)
+      DAO.resolveProgram(md5sum(sourceText), labelOutput.labels.size, conn)
 
     insertedProgramID match {
       case Some(value) =>
         if (labelOutput.labels.indices.exists(i => {
               val l = labelOutput.labels(i)
-              DAO.resolveComponent(value, l, xa).isEmpty
+              DAO.resolveComponent(value, l, conn).isEmpty
             })) None
         else {
           Some(value -> programInfo)
@@ -135,9 +131,10 @@ object BenchmarkPopulator {
 
   private def populatePaths(programID: Long,
                             programRep: StoredProgramRepresentation,
-                            globalConfig: GlobalConfiguration,
                             populatorConfig: PopulatorConfig,
-                            xa: DBConnection): List[PathQueryCollection] = {
+                            stressList: List[Int],
+                            conn: DBConnection): List[PathQueryCollection] = {
+
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
     val sampler = new Sampler(programRep.info.labels)
@@ -145,28 +142,30 @@ object BenchmarkPopulator {
     val bottomPermutationHash =
       new LabelPermutation(programRep.info.labels).idArray
     val bottomPerm =
-      DAO.addOrResolvePermutation(programID, bottomPermutationHash, xa)
-
+      DAO.addOrResolvePermutation(programID,
+                                  bottomPermutationHash,
+                                  stressList,
+                                  conn)
+    Output.success(
+      s"Resolved bottom permutation for program '${programRep.info.fileName}'")
     val queryCollections = mutable.ListBuffer[PathQueryCollection]()
 
     val baselineMaximum =
       theoreticalMax
-        .min(globalConfig.maxPaths)
+        .min(conn.gConfig.maxPaths)
     val configuredMaximum: BigInt = populatorConfig.pathQuantity match {
       case Some(value) => value
       case None        => baselineMaximum
     }
-    val difference = configuredMaximum - DAO.getNumberOfPaths(programID, xa)
-    for (_ <- 0 until difference.intValue()) {
-
+    val difference = configuredMaximum - DAO.getNumberOfPaths(programID, conn)
+    for (i <- 0 until difference.intValue()) {
       val ordering = sampler.sample(SamplingHeuristic.Random)
       val pathHash =
         LabelTools
           .hashPath(programRep.info.labels.labels, ordering)
-      if (!DAO.containsPath(programID, pathHash, xa)) {
+      if (!DAO.containsPath(programID, pathHash, conn)) {
         val pathQuery =
           new DAO.PathQueryCollection(pathHash, programID, bottomPerm)
-
         val currentPermutation =
           new LabelPermutation(programRep.info.labels)
 
@@ -174,12 +173,13 @@ object BenchmarkPopulator {
           currentPermutation.addLabel(ordering(labelIndex))
           val currentID = currentPermutation.idArray
           val storedPermutationID =
-            DAO.addOrResolvePermutation(programID, currentID, xa)
+            DAO.addOrResolvePermutation(programID, currentID, stressList, conn)
           pathQuery.addStep(storedPermutationID,
                             programRep.componentMapping(ordering(labelIndex)))
         }
         queryCollections += pathQuery
-
+        Output.success(s"Assembled path query ${i + 1}/${difference
+          .intValue()} for program '${programRep.info.fileName}'")
       }
     }
     Output.success(
@@ -193,8 +193,8 @@ object BenchmarkPopulator {
 
   private def populateProgram(src: Path,
                               libraries: List[String],
-                              globalConfiguration: GlobalConfiguration,
                               populatorConfig: PopulatorConfig,
+                              stressTable: StressTable,
                               xa: DBConnection): PopulatedProgram = {
     Output.info(s"Syncing definitions for ${src.getFileName}")
     val sourceText = Files.readString(src)
@@ -212,6 +212,7 @@ object BenchmarkPopulator {
       val l = labelOutput.labels(i)
       val insertedComponentID =
         DAO.addOrResolveComponent(insertedProgramID, l, xa)
+      Output.success(s"Resolved component ${l.hash}")
       componentMapping += (l -> insertedComponentID)
     })
     Output.success(s"Completed syncing ${src.getFileName}")
@@ -222,8 +223,8 @@ object BenchmarkPopulator {
                      programRep,
                      populatePaths(insertedProgramID,
                                    programRep,
-                                   globalConfiguration,
                                    populatorConfig,
+                                   stressTable.get(src),
                                    xa))
   }
 
@@ -242,4 +243,33 @@ object BenchmarkPopulator {
     prependWithZeros(hashedPassword)
   }
 
+  class StressTable(workload: BenchmarkWorkload) {
+    private val defaultStressValues = workload.stress match {
+      case Some(value) => BenchmarkExternalConfig.generateStressList(value)
+      case None =>
+        workload.programCases.find(p => p.isDefault) match {
+          case Some(value) =>
+            BenchmarkExternalConfig.generateStressList(value.workload)
+          case None => error("Unable to resolve default stress configuration.")
+        }
+    }
+    private val userConfiguredStressMappings = workload.programCases
+      .flatMap(c => {
+        val stressValues =
+          BenchmarkExternalConfig.generateStressList(c.workload)
+        for {
+          i1: String <- c.matches
+        } yield i1 -> stressValues
+      })
+      .toMap
+
+    def get(src: Path): List[Int] = {
+      val fileName = src.getFileName.toString
+      val baseName = fileName.substring(0, fileName.lastIndexOf(".c0"))
+      userConfiguredStressMappings.get(baseName) match {
+        case Some(value) => value
+        case None        => defaultStressValues
+      }
+    }
+  }
 }

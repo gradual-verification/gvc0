@@ -5,13 +5,12 @@ import gvc.benchmarking.DAO.{CompletionMetadata, DBConnection}
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 
 import java.nio.file.Files
-import java.util.Calendar
 
 object BenchmarkMonitor {
 
   def monitor(config: MonitorConfig): Unit = {
     val conn = DAO.connect(config.db)
-    printContentsSummary(conn)
+    //printContentsSummary(conn)
     logStatistics(config, conn)
   }
 
@@ -24,7 +23,7 @@ object BenchmarkMonitor {
     val errorContentsColumns =
       "permutation_id,version_name,src_filename,mode,error_type,error_desc"
   }
-
+  /*
   private def printContentsSummary(conn: DBConnection): Unit = {
     val results = DAO.listPerformanceResults(conn)
     val sortedResults = sortResults(results)
@@ -56,16 +55,16 @@ object BenchmarkMonitor {
       })
     })
   }
-
+   */
   private def logStatistics(config: MonitorConfig, conn: DBConnection): Unit = {
     if (Files.notExists(config.outputDirectory)) {
       Files.createDirectories(config.outputDirectory)
     }
 
     val errors = config.outputDirectory.resolve(this.Names.errorListing)
-    Files.writeString(errors, this.generateErrorCSV(conn))
+    //Files.writeString(errors, this.generateErrorCSV(conn))
   }
-
+  /*
   private def generateErrorCSV(conn: DBConnection): String = {
     val errors = DAO.listErrors(conn)
 
@@ -81,7 +80,7 @@ object BenchmarkMonitor {
                e.errorDesc).mkString(",")
         }))
       .mkString("\n")
-  }
+  }*/
 
   private case class CompletedCategory(srcFileName: String,
                                        errorCountListing: Map[String, Long],

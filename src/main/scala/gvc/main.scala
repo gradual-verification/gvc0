@@ -71,12 +71,10 @@ object Main extends App {
   run(cmdConfig)
 
   def run(config: Config): Unit = {
-
     val linkedLibraries =
       config.linkedLibraries ++ Defaults.includeDirectories
 
     config.mode match {
-
       case Config.Monitor =>
         val benchConfig =
           BenchmarkExternalConfig.parseMonitor(config)

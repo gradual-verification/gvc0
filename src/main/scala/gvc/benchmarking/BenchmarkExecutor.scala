@@ -7,14 +7,12 @@ import gvc.benchmarking.Benchmark.{
   injectStress,
   isInjectable
 }
-import gvc.benchmarking.BenchmarkPopulator.ProgramInformation
 import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
 import gvc.benchmarking.Timing.{CC0CompilationException, CC0ExecutionException}
 import gvc.transformer.{IR, IRPrinter}
 import gvc.weaver.WeaverException
 import gvc.{Config, Main, VerificationException}
 import viper.silicon.Silicon
-
 import java.nio.file.{Files, Path}
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
@@ -34,7 +32,7 @@ object BenchmarkExecutor {
   }
 
   case class ReservedProgram(perm: Permutation,
-                             workloads: List[Int],
+                             workloads: Map[Long, Long],
                              measurementMode: Long)
 
   def execute(config: ExecutorConfig,
@@ -42,19 +40,12 @@ object BenchmarkExecutor {
               libraries: List[String]): Unit = {
 
     val conn = DAO.connect(config.db)
-    val globalConfig = DAO.resolveGlobalConfiguration(conn)
     val id = DAO.addOrResolveIdentity(config, conn)
-    val modes = DAO.resolveDynamicModes(conn)
     var currentSiliconInstance: Option[Silicon] = None
     val ongoingProcesses = mutable.ListBuffer[scala.sys.process.Process]()
 
     val syncedPrograms =
       BenchmarkPopulator.sync(config.sources, libraries, conn)
-
-    val stressEntries =
-      this.createTemporaryStressEntries(syncedPrograms, config.workload)
-
-    val workload = config.workload
 
     val tempBinary =
       Files.createTempFile("temp_bin", ".out")
@@ -63,12 +54,12 @@ object BenchmarkExecutor {
       Files.createTempFile("temp_src", ".c0")
 
     var reservedProgram =
-      DAO.reserveProgramForMeasurement(id, stressEntries, conn)
+      DAO.reserveProgramForMeasurement(id, conn)
 
     def wrapTiming[T](f: => T): Either[Throwable, T] = {
       try {
         Right(
-          Timeout.runWithTimeout(globalConfig.timeoutMinutes * 60 * 1000)(f))
+          Timeout.runWithTimeout(conn.gConfig.timeoutMinutes * 60 * 1000)(f))
       } catch {
         case t: Throwable =>
           while (ongoingProcesses.nonEmpty) {
@@ -106,8 +97,7 @@ object BenchmarkExecutor {
         Timing.verifyTimed(currentSiliconInstance.get,
                            reconstructedSourceText,
                            Main.Defaults.outputFileCollection,
-                           baseConfig,
-                           workload.staticIterations))
+                           baseConfig))
       currentSiliconInstance = None
 
       vOut match {
@@ -127,11 +117,11 @@ object BenchmarkExecutor {
           val cOut = Timing.compileTimed(tempSource,
                                          tempBinary,
                                          baseConfig,
-                                         workload.staticIterations,
+                                         config.iter.static,
                                          ongoingProcesses)
           DAO.updateStaticProfiling(id,
                                     reserved.perm.id,
-                                    workload.staticIterations,
+                                    config.iter.static,
                                     verified,
                                     cOut,
                                     conn)
@@ -149,7 +139,7 @@ object BenchmarkExecutor {
       Timing.compileTimed(tempSource,
                           tempBinary,
                           baseConfig,
-                          workload.staticIterations,
+                          config.iter.static,
                           ongoingProcesses)
       Some(tempBinary)
     }
@@ -157,8 +147,8 @@ object BenchmarkExecutor {
     while (reservedProgram.nonEmpty) {
       val reserved = reservedProgram.get
       Output.info(
-        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${modes(
-          reserved.measurementMode)} | w=[${reserved.workloads
+        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${conn
+          .dynamicModes(reserved.measurementMode)} | w=[${reserved.workloads
           .mkString(",")}] | id=${reserved.perm.id}")
 
       val correspondingProgramLabels =
@@ -171,28 +161,29 @@ object BenchmarkExecutor {
       val convertedToIR = new SelectVisitor(
         syncedPrograms(reserved.perm.programID).ir).visit(asLabelSet)
 
-      val binaryToExecute = modes.get(reserved.measurementMode) match {
-        case Some(value) =>
-          value match {
-            case DynamicMeasurementMode.Dynamic |
-                DynamicMeasurementMode.Framing =>
-              benchmarkBaseline(convertedToIR,
-                                value == DynamicMeasurementMode.Framing)
-            case DynamicMeasurementMode.Gradual =>
-              benchmarkGradual(convertedToIR, reserved)
-          }
-        case None =>
-          error(
-            s"Unrecognized dynamic measurement mode with ID ${reserved.measurementMode}")
-      }
+      val binaryToExecute =
+        conn.dynamicModes.get(reserved.measurementMode) match {
+          case Some(value) =>
+            value match {
+              case DynamicMeasurementMode.Dynamic |
+                  DynamicMeasurementMode.Framing =>
+                benchmarkBaseline(convertedToIR,
+                                  value == DynamicMeasurementMode.Framing)
+              case DynamicMeasurementMode.Gradual =>
+                benchmarkGradual(convertedToIR, reserved)
+            }
+          case None =>
+            error(
+              s"Unrecognized dynamic measurement mode with ID ${reserved.measurementMode}")
+        }
       binaryToExecute match {
         case Some(value) =>
-          reserved.workloads
+          reserved.workloads.keySet
             .foreach(w => {
               val perfOption = wrapTiming(
                 Timing.execTimed(value,
                                  List(s"--stress $w"),
-                                 config.workload.iterations,
+                                 config.iter.dynamic,
                                  ongoingProcesses))
               perfOption match {
                 case Left(t) => reportError(reserved, t)
@@ -200,60 +191,14 @@ object BenchmarkExecutor {
                   DAO.completeProgramMeasurement(id,
                                                  reserved,
                                                  w,
-                                                 config.workload.iterations,
+                                                 config.iter.static,
                                                  p,
                                                  conn)
               }
-
             })
         case None =>
       }
-      reservedProgram =
-        DAO.reserveProgramForMeasurement(id, stressEntries, conn)
+      reservedProgram = DAO.reserveProgramForMeasurement(id, conn)
     }
-  }
-
-  case class WorkloadEntry(programID: Long, workloadValue: Int)
-
-  def createTemporaryStressEntries(
-      programs: Map[Long, ProgramInformation],
-      workload: BenchmarkWorkload): List[WorkloadEntry] = {
-
-    val programNamesToIDs = programs.map(f => {
-      val withoutExtention =
-        f._2.fileName.substring(0, f._2.fileName.lastIndexOf('.'))
-      withoutExtention -> f._1
-    })
-
-    val defaultStressValues = workload.stress match {
-      case Some(value) => BenchmarkExternalConfig.generateStressList(value)
-      case None =>
-        workload.programCases.find(p => p.isDefault) match {
-          case Some(value) =>
-            BenchmarkExternalConfig.generateStressList(value.workload)
-          case None => error("Unable to resolve default stress configuration.")
-        }
-    }
-    val unspecifiedButExistingPrograms = programNamesToIDs.keySet
-      .filter(k => !workload.programCases.exists(cs => cs.matches.contains(k)))
-      .map(programNamesToIDs(_))
-
-    val defaultStressMappings = (for {
-      i1: Long <- unspecifiedButExistingPrograms
-      i2: Int <- defaultStressValues
-    } yield WorkloadEntry(i1, i2)).toList
-
-    val userConfiguredStressMappings = workload.programCases
-      .flatMap(c => {
-        val stressValues =
-          BenchmarkExternalConfig.generateStressList(c.workload)
-        for {
-          i1: Long <- c.matches
-            .filter(programNamesToIDs.contains)
-            .map(programNamesToIDs)
-          i2: Int <- stressValues
-        } yield WorkloadEntry(i1, i2)
-      })
-    defaultStressMappings ++ userConfiguredStressMappings
   }
 }
