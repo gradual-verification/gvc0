@@ -22,7 +22,7 @@ object BenchmarkRecreator {
 
           val asLabelSet =
             LabelTools.permutationIDToPermutation(correspondingProgramLabels,
-                                                  perm.permutationHash)
+                                                  perm.permutationContents)
           new SelectVisitor(syncedPrograms(perm.programID).ir).visit(asLabelSet)
 
         } else {

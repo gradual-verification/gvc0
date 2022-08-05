@@ -51,7 +51,8 @@ object DAO {
 
   case class Permutation(id: Long,
                          programID: Long,
-                         permutationHash: Array[Byte],
+                         permutationHash: String,
+                         permutationContents: Array[Byte],
                          dateAdded: String)
 
   case class Step(pathID: Long, permutationID: Long, levelID: Long)

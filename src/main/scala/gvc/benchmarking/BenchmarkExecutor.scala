@@ -148,7 +148,7 @@ object BenchmarkExecutor {
       val reserved = reservedProgram.get
       Output.info(
         s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${conn
-          .dynamicModes(reserved.measurementMode)} | w=[${reserved.workloads
+          .dynamicModes(reserved.measurementMode)} | w=[${reserved.workloads.keySet
           .mkString(",")}] | id=${reserved.perm.id}")
 
       val correspondingProgramLabels =
@@ -156,7 +156,7 @@ object BenchmarkExecutor {
 
       val asLabelSet =
         LabelTools.permutationIDToPermutation(correspondingProgramLabels,
-                                              reserved.perm.permutationHash)
+                                              reserved.perm.permutationContents)
 
       val convertedToIR = new SelectVisitor(
         syncedPrograms(reserved.perm.programID).ir).visit(asLabelSet)

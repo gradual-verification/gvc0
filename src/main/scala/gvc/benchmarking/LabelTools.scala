@@ -3,8 +3,6 @@ package gvc.benchmarking
 import gvc.benchmarking.Benchmark.BenchmarkException
 import gvc.benchmarking.SamplingHeuristic.SamplingHeuristic
 import gvc.transformer.IR.{Expression, Method, Predicate}
-
-import java.math.BigInteger
 import java.nio.{ByteBuffer, ByteOrder}
 import scala.collection.mutable
 
@@ -13,15 +11,11 @@ object SamplingHeuristic extends Enumeration {
   val Random, None = Value
 }
 
-case class SamplingInfo(heuristic: SamplingHeuristic, nSamples: Int)
-
 class Sampler(labelOutput: LabelOutput) {
   private val rng = new scala.util.Random
   rng.setSeed(41141441)
   private val prevSamples: mutable.Set[Array[Byte]] =
     mutable.Set[Array[Byte]]()
-
-  def numSampled: Int = prevSamples.size
 
   private val specImprecisionLabels = labelOutput.labels
     .filter(p => p.exprType == ExprType.Imprecision)
@@ -34,8 +28,6 @@ class Sampler(labelOutput: LabelOutput) {
       .diff(specImprecisionLabels.values.toSet)
       .filter(p => p.exprType != ExprType.Absent)
       .toList
-
-  case class ImprecisionRemovalPoint(specIndex: Int, insertionIndex: Int)
 
   def findInsertionPoints(
       listOfComponents: List[ASTLabel]
@@ -140,13 +132,11 @@ object LabelTools {
     perm
   }
 
-  val hexRegex = "[0-9A-Fa-f]+"
-
   //N!
   def theoreticalMaxPaths(n: Int): BigInt = {
     var f: BigInt = 1
     for (i <- 1 to n) {
-      f = f * i;
+      f = f * i
     }
     f
   }
@@ -164,23 +154,6 @@ object LabelTools {
       .toArray
   }
 
-  def parseID(input: String): Option[BigInteger] = {
-    if (input.matches(hexRegex)) {
-      Some(new BigInteger(input, 16))
-    } else {
-      None
-    }
-  }
-
-  def appendPathComment(
-      str: String,
-      labels: List[ASTLabel]
-  ): String = {
-    "/*\n" +
-      labels.foldLeft("")(_ + _.hash + '\n') +
-      "*/\n" +
-      str
-  }
 }
 
 class LabelPermutation(
@@ -217,20 +190,6 @@ class LabelPermutation(
   def labels: List[ASTLabel] = contents.toList
 
   def indices: Set[Int] = orderedIndices.toSet
-
-  def imprecisionStatusList: List[Int] = {
-    labelOutput.specsToSpecIndices.values.toList.sorted
-      .map(index => {
-        if (completedSpecs.contains(index)) 1 else 0
-      })
-  }
-
-  def specStatusList: List[Int] = {
-    labelOutput.labels
-      .map(label => {
-        if (this.labels.contains(label)) 1 else 0
-      })
-  }
 
   def exprIsComplete(template: Expression): Boolean =
     completedSpecs.nonEmpty &&
