@@ -1,7 +1,10 @@
+DROP VIEW IF EXISTS dynamic_jobs;
+
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS static_performance;
 DROP TABLE IF EXISTS results;
-DROP TABLE IF EXISTS dynamic_performance;
+DROP TABLE IF EXISTS dynamic_results;
+DROP TABLE IF EXISTS stress_assignments;
 DROP TABLE IF EXISTS measurements;
 DROP TABLE IF EXISTS dynamic_measurement_types;
 DROP TABLE IF EXISTS error_occurrences;
@@ -30,6 +33,8 @@ DROP PROCEDURE IF EXISTS sp_gr_Path;
 DROP PROCEDURE IF EXISTS sp_UpdateStatic;
 DROP PROCEDURE IF EXISTS sp_ReservePermutation;
 DROP PROCEDURE IF EXISTS sp_AddMeasurement;
+
+DROP TABLE IF EXISTS reserved_jobs;
 
 DROP EVENT IF EXISTS delete_reserved_permutations;
 
@@ -340,81 +345,99 @@ BEGIN
     END IF;
 END //
 DELIMITER ;
-CREATE TABLE IF NOT EXISTS dynamic_performance
+
+CREATE TABLE IF NOT EXISTS stress_assignments
 (
-    id                       SERIAL,
-    permutation_id           BIGINT UNSIGNED NOT NULL,
-    stress                   INTEGER         NOT NULL,
-    dynamic_measurement_type BIGINT UNSIGNED NOT NULL,
-    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
-    FOREIGN KEY (dynamic_measurement_type) REFERENCES dynamic_measurement_types (id),
-    PRIMARY KEY (permutation_id, stress, dynamic_measurement_type)
+    program_id BIGINT UNSIGNED NOT NULL,
+    stress     BIGINT UNSIGNED NOT NULL,
+    FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
-CREATE TABLE IF NOT EXISTS results
+CREATE TABLE IF NOT EXISTS dynamic_results
 (
-    stress_config_id BIGINT UNSIGNED NOT NULL,
-    hardware_id      BIGINT UNSIGNED NOT NULL,
-    version_id       BIGINT UNSIGNED NOT NULL,
-    nickname_id      BIGINT UNSIGNED NOT NULL,
-    measurement_id   BIGINT UNSIGNED          DEFAULT NULL,
-    error_id         BIGINT UNSIGNED          DEFAULT NULL,
-    last_updated     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (stress_config_id, hardware_id, version_id, nickname_id),
-    FOREIGN KEY (stress_config_id) REFERENCES dynamic_performance (id),
+    permutation_id      BIGINT UNSIGNED NOT NULL,
+    measurement_type_id BIGINT UNSIGNED NOT NULL,
+    stress              BIGINT UNSIGNED NOT NULL,
+    hardware_id         BIGINT UNSIGNED NOT NULL,
+    version_id          BIGINT UNSIGNED NOT NULL,
+    nickname_id         BIGINT UNSIGNED NOT NULL,
+    measurement_id      BIGINT UNSIGNED UNIQUE   DEFAULT NULL,
+    error_id            BIGINT UNSIGNED          DEFAULT NULL,
+    last_updated        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (permutation_id, stress, measurement_type_id, hardware_id, version_id, nickname_id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
-    FOREIGN KEY (measurement_id) REFERENCES measurements (id)
+    FOREIGN KEY (measurement_id) REFERENCES measurements (id),
+    FOREIGN KEY (measurement_type_id) REFERENCES dynamic_measurement_types (id)
 );
+
+CREATE VIEW dynamic_jobs AS
+(
+SELECT pm.program_id,
+       pm.id  as permutation_id,
+       dmt.id as measurement_type_id,
+       vr.id  as version_id,
+       hw.id  as hardware_id
+FROM permutations pm
+         INNER JOIN stress_assignments sa on pm.program_id = sa.program_id
+         CROSS JOIN dynamic_measurement_types dmt
+         CROSS JOIN versions vr
+         CROSS JOIN hardware hw
+         LEFT OUTER JOIN dynamic_results dr ON
+            dr.measurement_type_id = dmt.id AND
+            dr.version_id = vr.id AND
+            dr.hardware_id = hw.id AND
+            dr.permutation_id = pm.id
+WHERE dr.permutation_id IS NULL
+    );
+
+
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED)
 BEGIN
-    DECLARE c_reserved BIGINT UNSIGNED;
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE cursor_reserved CURSOR FOR SELECT id FROM reserved_jobs ORDER BY reserved_jobs.stress;
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    DO GET_LOCK('sp_ReservePermutation', -1);
     DROP TABLE IF EXISTS reserved_jobs;
     CREATE TEMPORARY TABLE reserved_jobs
     (
-        id                       BIGINT UNSIGNED UNIQUE NOT NULL,
         permutation_id           BIGINT UNSIGNED        NOT NULL,
         stress                   BIGINT UNSIGNED UNIQUE NOT NULL,
         dynamic_measurement_type BIGINT UNSIGNED        NOT NULL
     );
-    SELECT DISTINCT permutation_id, dynamic_measurement_type
-    INTO @found_perm_id, @found_type_id
-    FROM dynamic_performance
-             LEFT OUTER JOIN results ON dynamic_performance.id = results.stress_config_id
-        AND results.version_id = vid
-        AND results.nickname_id = nnid
-        AND results.hardware_id = hid
-    WHERE results.stress_config_id IS NULL
-    LIMIT 1
-    FOR
-    UPDATE OF dynamic_performance SKIP LOCKED;
 
-    INSERT INTO reserved_jobs (SELECT *
-                               FROM dynamic_performance
-                               where dynamic_performance.permutation_id = @found_perm_id
-                                 AND dynamic_performance.dynamic_measurement_type = @found_type_id);
-    IF ((SELECT COUNT(*) FROM reserved_jobs) > 0) THEN
-        OPEN cursor_reserved;
-        SET @counter := 0;
-        loop_through_rows:
-        LOOP
-            FETCH cursor_reserved INTO c_reserved;
-            IF done THEN
-                LEAVE loop_through_rows;
-            ELSE
-                INSERT INTO results (stress_config_id, hardware_id, version_id, nickname_id)
-                VALUES (c_reserved, hid, vid, nnid);
-                SET @counter := @counter + 1;
-            END IF;
-        END LOOP;
-        CLOSE cursor_reserved;
+    SELECT program_id, permutation_id, measurement_type_id
+    INTO @found_program_id, @found_perm_id, @found_measurement_type_id
+    FROM dynamic_jobs
+    WHERE version_id = vid
+      AND hardware_id = hid
+    ORDER BY RAND()
+    LIMIT 1;
+
+    IF ((SELECT @found_perm_id IS NOT NULL) AND (SELECT @found_measurement_type_id IS NOT NULL)) THEN
+        INSERT INTO reserved_jobs (SELECT DISTINCT @found_perm_id, sa.stress, @found_measurement_type_id
+                                   FROM stress_assignments sa
+                                            LEFT OUTER JOIN dynamic_results dr ON
+                                               dr.hardware_id = hid AND
+                                               dr.version_id = vid AND
+                                               dr.permutation_id = @found_perm_id AND
+                                               dr.measurement_type_id = @found_measurement_type_id
+                                   WHERE sa.program_id = @found_program_id
+                                     AND dr.stress IS NULL);
+        SELECT * FROM reserved_jobs;
+        INSERT INTO dynamic_results
+        SELECT @found_perm_id,
+               @found_measurement_type_id,
+               stress,
+               hid,
+               vid,
+               nnid,
+               NULL,
+               NULL,
+               CURRENT_TIMESTAMP
+        FROM reserved_jobs;
+        SELECT * FROM reserved_jobs;
     END IF;
-    SELECT * FROM reserved_jobs;
+    DO RELEASE_LOCK('sp_ReservePermutation');
 END //
 DELIMITER ;
 

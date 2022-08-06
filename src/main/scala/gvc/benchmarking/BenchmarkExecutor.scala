@@ -32,7 +32,7 @@ object BenchmarkExecutor {
   }
 
   case class ReservedProgram(perm: Permutation,
-                             workloads: Map[Long, Long],
+                             workloads: List[Int],
                              measurementMode: Long)
 
   def execute(config: ExecutorConfig,
@@ -148,7 +148,7 @@ object BenchmarkExecutor {
       val reserved = reservedProgram.get
       Output.info(
         s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${conn
-          .dynamicModes(reserved.measurementMode)} | w=[${reserved.workloads.keySet
+          .dynamicModes(reserved.measurementMode)} | w=[${reserved.workloads
           .mkString(",")}] | id=${reserved.perm.id}")
 
       val correspondingProgramLabels =
@@ -178,7 +178,7 @@ object BenchmarkExecutor {
         }
       binaryToExecute match {
         case Some(value) =>
-          reserved.workloads.keySet
+          reserved.workloads
             .foreach(w => {
               val perfOption = wrapTiming(
                 Timing.execTimed(value,

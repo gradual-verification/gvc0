@@ -134,6 +134,28 @@ object DAO {
     }
   }
 
+  def addProgramWorkloadMappings(programID: Long,
+                                 workloads: List[Int],
+                                 c: DBConnection): Unit = {
+    case class WorkloadEntry(pid: Long, stressValue: Int)
+    Update[WorkloadEntry](
+      s"INSERT INTO stress_assignments (program_id, stress) VALUES (?, ?);")
+      .updateMany(
+        for {
+          w <- workloads
+        } yield WorkloadEntry(programID, w)
+      )
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          s"Unable to add workload entries for PID=$programID",
+          t)
+      case Right(_) =>
+    }
+  }
+
   def addOrResolveIdentity(config: ExecutorConfig,
                            c: DBConnection): Identity = {
     val hid = addOrResolveHardware(config.hardware, c)
@@ -288,41 +310,22 @@ object DAO {
                               workloads: List[Int],
                               c: DBConnection): Long = {
     val checksum = md5sum(permutationContents.toString)
-    val pid =
-      sql"""CALL sp_gr_Permutation($programID, $checksum, $permutationContents);"""
-        .query[Long]
-        .to[List]
-        .transact(c.xa)
-        .attempt
-        .unsafeRunSync() match {
-        case Left(t) =>
-          prettyPrintException(
-            s"Unable to add or resolve permutation $programID",
-            t)
-        case Right(value) =>
-          if (value.size != 1) {
-            error("More than one resolved permutation was recorded.")
-          } else {
-            value.head
-          }
-      }
-    (for {
-      w <- workloads
-      k <- c.dynamicModes.keySet
-    } yield (w, k)).foreach(p => {
-      sql"""INSERT INTO dynamic_performance (permutation_id, stress, dynamic_measurement_type)
-            VALUES($pid, ${p._1}, ${p._2})""".update.run
-        .transact(c.xa)
-        .attempt
-        .unsafeRunSync() match {
-        case Left(t) =>
-          prettyPrintException(
-            s"Unable to add dynamic performance job request for PID=${pid}, workload=${p._1}",
-            t)
-        case Right(_) =>
-      }
-    })
-    pid
+    sql"""CALL sp_gr_Permutation($programID, $checksum, $permutationContents);"""
+      .query[Long]
+      .to[List]
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(s"Unable to add or resolve permutation $programID",
+                             t)
+      case Right(value) =>
+        if (value.size != 1) {
+          error("More than one resolved permutation was recorded.")
+        } else {
+          value.head
+        }
+    }
   }
 
   def getNumberOfPaths(programID: Long, c: DBConnection): Int = {
@@ -380,14 +383,16 @@ object DAO {
     }
   }
 
-  case class ReservedProgramEntry(jobID: Long,
-                                  permID: Long,
-                                  stress: Long,
+  case class ReservedProgramEntry(permID: Long,
+                                  stress: Int,
                                   measurementID: Long)
 
   def reserveProgramForMeasurement(id: Identity,
                                    c: DBConnection): Option[ReservedProgram] = {
+    Output.info(s"Beginning reservation query...")
+    val startTime = System.nanoTime()
     var finished = false
+    var result: Option[ReservedProgram] = None
     while (!finished) {
       finished = true
       sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid});"
@@ -408,9 +413,9 @@ object DAO {
           }
         case Right(value) =>
           if (value.isEmpty) {
-            return None
+            finished = true
           } else {
-            val workloads = value.map(v => v.stress -> v.jobID).toMap
+            val workloads = value.map(v => v.stress)
             val permID = value.head.permID
             sql"SELECT * FROM permutations WHERE id = $permID;"
               .query[Permutation]
@@ -423,13 +428,19 @@ object DAO {
                   s"Unable to resolve reserved permutation ID=$permID",
                   t)
               case Right(perm) =>
-                return Some(
+                result = Some(
                   ReservedProgram(perm, workloads, value.head.measurementID))
+                finished = true
             }
           }
       }
     }
-    None
+    val stopTime = System.nanoTime()
+    val differenceInSeconds = Math
+      .round(((stopTime - startTime).toDouble / Math.pow(10, 9)) * 100)
+      .toDouble / 100
+    Output.info(s"Finished reservation query in $differenceInSeconds sec.")
+    result
   }
 
   def completeProgramMeasurement(id: Identity,
@@ -438,30 +449,25 @@ object DAO {
                                  iterations: Int,
                                  p: Performance,
                                  c: DBConnection): Unit = {
-    val jobIDOption = reserved.workloads.get(workload) match {
-      case Some(jobID) =>
-        val result = (for {
-          mid <- sql"""CALL sp_AddMeasurement($iterations, ${p.ninetyFifth}, ${p.fifth}, ${p.median}, ${p.mean},
-            ${p.stdev}, ${p.minimum}, ${p.maximum});"""
-            .query[Long]
-            .unique
-          r <- sql"""UPDATE results SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP
-            WHERE stress_config_id = $jobID
-              AND version_id = ${id.vid}
-              AND nickname_id = ${id.nid}
-              AND hardware_id = ${id.hid}
-            """.update.run
-        } yield r).transact(c.xa).attempt.unsafeRunSync()
-        result match {
-          case Left(t) =>
-            prettyPrintException(
-              s"Unable to update performance measurement for permutation ${reserved.perm.id}.",
-              t)
-          case Right(_) =>
-        }
-      case None =>
-        error(
-          s"Unable to resolve job ID for permutation ID=${reserved.perm.id}, workload=$workload")
+    val result = (for {
+      mid <- sql"""CALL sp_AddMeasurement($iterations, ${p.ninetyFifth}, ${p.fifth}, ${p.median}, ${p.mean},
+          ${p.stdev}, ${p.minimum}, ${p.maximum});"""
+        .query[Long]
+        .unique
+      r <- sql"""UPDATE dynamic_results SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP
+          WHERE permutation_id = ${reserved.perm.id}
+            AND version_id = ${id.vid}
+            AND nickname_id = ${id.nid}
+            AND hardware_id = ${id.hid}
+            AND stress = $workload
+          """.update.run
+    } yield r).transact(c.xa).attempt.unsafeRunSync()
+    result match {
+      case Left(t) =>
+        prettyPrintException(
+          s"Unable to update performance measurement for permutation ${reserved.perm.id}.",
+          t)
+      case Right(_) =>
     }
   }
 
@@ -538,9 +544,10 @@ object DAO {
           t)
       case Right(_) =>
     }
-    reserved.workloads.keySet.foreach(jid => {
-      sql"""UPDATE results SET error_id = $eid
-           WHERE stress_config_id = $jid
+    reserved.workloads.foreach(w => {
+      sql"""UPDATE dynamic_results SET error_id = $eid
+           WHERE permutation_id = ${reserved.perm.id}
+             AND stress = $w
              AND version_id = ${id.vid}
              AND hardware_id = ${id.hid}
              AND nickname_id = ${id.nid};""".update.run
@@ -549,7 +556,7 @@ object DAO {
         .unsafeRunSync() match {
         case Left(t) =>
           prettyPrintException(
-            s"Unable to update results entry with error ID for exception '$errText', ID=$eid, RID=$jid",
+            s"Unable to update results entry with error ID for exception '$errText', ID=$eid, stress=$w",
             t)
         case Right(_) =>
       }

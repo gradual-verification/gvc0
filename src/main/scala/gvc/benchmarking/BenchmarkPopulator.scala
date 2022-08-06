@@ -207,6 +207,8 @@ object BenchmarkPopulator {
                                                     md5sum(sourceText),
                                                     labelOutput.labels.size,
                                                     xa)
+    DAO.addProgramWorkloadMappings(insertedProgramID, stressTable.get(src), xa)
+    
     val componentMapping = mutable.Map[ASTLabel, Long]()
     labelOutput.labels.indices.foreach(i => {
       val l = labelOutput.labels(i)
