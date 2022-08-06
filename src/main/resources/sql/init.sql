@@ -1,11 +1,12 @@
 DROP VIEW IF EXISTS dynamic_jobs;
 
 DROP TABLE IF EXISTS global_configuration;
-DROP TABLE IF EXISTS static_performance;
-DROP TABLE IF EXISTS results;
-DROP TABLE IF EXISTS dynamic_results;
 DROP TABLE IF EXISTS stress_assignments;
+DROP TABLE IF EXISTS static_performance;
+DROP TABLE IF EXISTS static_conjuncts;
+DROP TABLE IF EXISTS dynamic_performance;
 DROP TABLE IF EXISTS measurements;
+DROP TABLE IF EXISTS static_measurement_types;
 DROP TABLE IF EXISTS dynamic_measurement_types;
 DROP TABLE IF EXISTS error_occurrences;
 DROP TABLE IF EXISTS error_contents;
@@ -30,6 +31,8 @@ DROP PROCEDURE IF EXISTS sp_gr_Nickname;
 DROP PROCEDURE IF EXISTS sp_gr_Program;
 DROP PROCEDURE IF EXISTS sp_gr_Path;
 
+DROP PROCEDURE IF EXISTS sp_UpdateStaticPerformance;
+DROP PROCEDURE IF EXISTS sp_UpdateStaticConjuncts;
 DROP PROCEDURE IF EXISTS sp_UpdateStatic;
 DROP PROCEDURE IF EXISTS sp_ReservePermutation;
 DROP PROCEDURE IF EXISTS sp_AddMeasurement;
@@ -245,6 +248,21 @@ VALUES ('framing');
 INSERT INTO dynamic_measurement_types (measurement_type)
 VALUES ('dynamic');
 
+CREATE TABLE IF NOT EXISTS static_measurement_types
+(
+    id               SERIAL,
+    measurement_type VARCHAR(255) NOT NULL UNIQUE,
+    PRIMARY KEY (id)
+);
+INSERT INTO static_measurement_types (measurement_type)
+VALUES ('translation');
+INSERT INTO static_measurement_types (measurement_type)
+VALUES ('verification');
+INSERT INTO static_measurement_types (measurement_type)
+VALUES ('instrumentation');
+INSERT INTO static_measurement_types (measurement_type)
+VALUES ('compilation');
+
 CREATE TABLE IF NOT EXISTS measurements
 (
     id           SERIAL,
@@ -276,73 +294,54 @@ CREATE TABLE IF NOT EXISTS error_contents
     PRIMARY KEY (id)
 );
 
+CREATE TABLE IF NOT EXISTS static_conjuncts
+(
+    permutation_id  BIGINT UNSIGNED NOT NULL,
+    version_id      BIGINT UNSIGNED NOT NULL,
+    conj_total      BIGINT UNSIGNED NOT NULL,
+    conj_eliminated BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (permutation_id, version_id),
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
+    FOREIGN KEY (version_id) REFERENCES versions (id)
+);
+
 CREATE TABLE IF NOT EXISTS static_performance
 (
-    permutation_id          BIGINT UNSIGNED NOT NULL,
-    version_id              BIGINT UNSIGNED NOT NULL,
-    hardware_id             BIGINT UNSIGNED NOT NULL,
-    nickname_id             BIGINT UNSIGNED NOT NULL,
-    translation_perf_id     BIGINT UNSIGNED NOT NULL,
-    verification_perf_id    BIGINT UNSIGNED NOT NULL,
-    instrumentation_perf_id BIGINT UNSIGNED NOT NULL,
-    compilation_perf_id     BIGINT UNSIGNED NOT NULL,
-    conj_total              BIGINT UNSIGNED NOT NULL,
-    conj_eliminated         BIGINT UNSIGNED NOT NULL,
-    error_id                BIGINT UNSIGNED DEFAULT NULL,
-    FOREIGN KEY (translation_perf_id) REFERENCES measurements (id),
-    FOREIGN KEY (verification_perf_id) REFERENCES measurements (id),
-    FOREIGN KEY (instrumentation_perf_id) REFERENCES measurements (id),
-    FOREIGN KEY (compilation_perf_id) REFERENCES measurements (id),
+    permutation_id             BIGINT UNSIGNED        NOT NULL,
+    version_id                 BIGINT UNSIGNED        NOT NULL,
+    hardware_id                BIGINT UNSIGNED        NOT NULL,
+    nickname_id                BIGINT UNSIGNED        NOT NULL,
+    measurement_id             BIGINT UNSIGNED UNIQUE NOT NULL,
+    static_measurement_type_id BIGINT UNSIGNED        NOT NULL,
+    error_id                   BIGINT UNSIGNED DEFAULT NULL,
     FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
     FOREIGN KEY (error_id) REFERENCES error_occurrences (id),
-    PRIMARY KEY (permutation_id, hardware_id, version_id, nickname_id)
+    PRIMARY KEY (permutation_id, hardware_id, version_id, static_measurement_type_id)
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_UpdateStatic(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nid BIGINT UNSIGNED,
-                                 IN perm_id BIGINT UNSIGNED, IN tr_id BIGINT UNSIGNED, IN vf_id BIGINT UNSIGNED,
-                                 IN inst_id BIGINT UNSIGNED, IN cp_id BIGINT UNSIGNED, IN total_cond BIGINT UNSIGNED,
-                                 IN elim_cond BIGINT UNSIGNED)
+CREATE PROCEDURE sp_UpdateStaticPerformance(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nid BIGINT UNSIGNED,
+                                            IN perm_id BIGINT UNSIGNED, IN m_id BIGINT UNSIGNED,
+                                            IN m_type_id BIGINT UNSIGNED)
 BEGIN
-    SELECT @ex = version_id,
-           @ex_tr = translation_perf_id,
-           @ex_vf = verification_perf_id,
-           @ex_inst = instrumentation_perf_id,
-           @ex_cp = compilation_perf_id
-    FROM static_performance
-    WHERE version_id = vid
-      AND hardware_id = hid
-      AND permutation_id = perm_id
-      AND nickname_id = nid
-        FOR
-        SHARE;
-    IF ((SELECT @ex) IS NOT NULL) THEN
-        UPDATE static_performance
-        SET translation_perf_id     = tr_id,
-            verification_perf_id    = vf_id,
-            instrumentation_perf_id = inst_id,
-            compilation_perf_id     = cp_id,
-            conj_total              = total_cond,
-            conj_eliminated         = elim_cond,
-            error_id                = NULL
-        WHERE version_id = vid
-          AND hardware_id = hid
-          AND permutation_id = perm_id
-          AND nickname_id = nid;
+    INSERT INTO static_performance (permutation_id, version_id, hardware_id, nickname_id, measurement_id,
+                                    static_measurement_type_id)
+    VALUES (perm_id, vid, hid, nid, m_id, m_type_id)
+    ON DUPLICATE KEY UPDATE nickname_id = nid, measurement_id = m_id;
+END //
+DELIMITER ;
 
-        DELETE FROM measurements WHERE id = (SELECT @ex_tr);
-        DELETE FROM measurements WHERE id = (SELECT @ex_vf);
-        DELETE FROM measurements WHERE id = (SELECT @ex_inst);
-        DELETE FROM measurements WHERE id = (SELECT @ex_cp);
-    ELSE
-        INSERT INTO static_performance (permutation_id, version_id, hardware_id, nickname_id, translation_perf_id,
-                                        verification_perf_id, instrumentation_perf_id, compilation_perf_id, conj_total,
-                                        conj_eliminated, error_id)
-        VALUES (perm_id, vid, hid, nid, tr_id, vf_id, inst_id, cp_id, total_cond, elim_cond, NULL);
-    END IF;
+DELIMITER //
+CREATE PROCEDURE sp_UpdateStaticConjuncts(IN vid BIGINT UNSIGNED,
+                                          IN perm_id BIGINT UNSIGNED, IN n_total BIGINT UNSIGNED,
+                                          IN n_elim BIGINT UNSIGNED)
+BEGIN
+    INSERT INTO static_conjuncts (permutation_id, version_id, conj_total, conj_eliminated)
+    VALUES (perm_id, vid, n_total, n_elim)
+    ON DUPLICATE KEY UPDATE conj_total = n_total, conj_eliminated = n_elim;
 END //
 DELIMITER ;
 
@@ -353,7 +352,7 @@ CREATE TABLE IF NOT EXISTS stress_assignments
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
-CREATE TABLE IF NOT EXISTS dynamic_results
+CREATE TABLE IF NOT EXISTS dynamic_performance
 (
     permutation_id      BIGINT UNSIGNED NOT NULL,
     measurement_type_id BIGINT UNSIGNED NOT NULL,
@@ -390,7 +389,7 @@ BEGIN
              CROSS JOIN dynamic_measurement_types dmt
              CROSS JOIN versions vr
              CROSS JOIN hardware hw
-             LEFT OUTER JOIN dynamic_results dr ON
+             LEFT OUTER JOIN dynamic_performance dr ON
                 dr.measurement_type_id = dmt.id AND
                 dr.version_id = vr.id AND
                 dr.hardware_id = hw.id AND
@@ -409,12 +408,12 @@ BEGIN
         DELETE
         FROM reserved_jobs
         WHERE stress IN (SELECT stress
-                         FROM dynamic_results dr
+                         FROM dynamic_performance dr
                          where dr.measurement_type_id = @found_measurement_type_id
                            AND dr.permutation_id = @found_perm_id
-                           AND dr.version_id = 1
-                           AND dr.hardware_id = 1);
-        INSERT INTO dynamic_results
+                           AND dr.version_id = vid
+                           AND dr.hardware_id = hid);
+        INSERT INTO dynamic_performance
         SELECT @found_perm_id,
                @found_measurement_type_id,
                stress,
