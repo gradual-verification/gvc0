@@ -101,7 +101,7 @@ object DAO {
   }
 
   private def resolveGlobalConfiguration(
-      conn: Transactor.Aux[IO, Unit]): GlobalConfiguration = {
+                                          conn: Transactor.Aux[IO, Unit]): GlobalConfiguration = {
     sql"SELECT timeout_minutes, max_paths FROM global_configuration LIMIT 1"
       .query[GlobalConfiguration]
       .unique
@@ -119,7 +119,7 @@ object DAO {
   private case class ResolvedMeasurementMode(id: Long, modeType: String)
 
   private def resolveDynamicModes(
-      conn: Transactor.Aux[IO, Unit]): Map[Long, DynamicMeasurementMode] = {
+                                   conn: Transactor.Aux[IO, Unit]): Map[Long, DynamicMeasurementMode] = {
     sql"""SELECT id, measurement_type FROM dynamic_measurement_types;"""
       .query[ResolvedMeasurementMode]
       .to[List]
@@ -162,7 +162,7 @@ object DAO {
     val vid = addOrResolveVersion(config.version, c)
     val nid = config.nickname match {
       case Some(value) => Some(addOrResolveNickname(value, c))
-      case None        => None
+      case None => None
     }
     Identity(vid, hid, nid)
   }
@@ -215,7 +215,7 @@ object DAO {
       .transact(c.xa)
       .attempt
       .unsafeRunSync() match {
-      case Left(_)      => None
+      case Left(_) => None
       case Right(value) => value
     }
   }
@@ -249,7 +249,7 @@ object DAO {
                        astLabel: ASTLabel,
                        conn: DBConnection): Option[Long] = {
     val contextName = astLabel.parent match {
-      case Left(value)  => value.name
+      case Left(value) => value.name
       case Right(value) => value.name
     }
     sql"""SELECT id FROM components
@@ -274,7 +274,7 @@ object DAO {
                             astLabel: ASTLabel,
                             c: DBConnection): Long = {
     val contextName = astLabel.parent match {
-      case Left(value)  => value.name
+      case Left(value) => value.name
       case Right(value) => value.name
     }
     sql"""CALL sp_gr_Component($programID, $contextName, ${astLabel.specType},
@@ -306,10 +306,9 @@ object DAO {
   }
 
   def addOrResolvePermutation(programID: Long,
+                              checksum: String,
                               permutationContents: Array[Byte],
-                              workloads: List[Int],
                               c: DBConnection): Long = {
-    val checksum = md5sum(permutationContents.toString)
     sql"""CALL sp_gr_Permutation($programID, $checksum, $permutationContents);"""
       .query[Long]
       .to[List]
@@ -318,7 +317,7 @@ object DAO {
       .unsafeRunSync() match {
       case Left(t) =>
         prettyPrintException(s"Unable to add or resolve permutation $programID",
-                             t)
+          t)
       case Right(value) =>
         if (value.size != 1) {
           error("More than one resolved permutation was recorded.")
@@ -371,7 +370,8 @@ object DAO {
         ${cp.median}, ${cp.mean}, ${cp.stdev}, ${cp.minimum}, ${cp.maximum});"""
         .query[Long]
         .unique
-      r <- sql"""CALL sp_UpdateStatic(${id.vid}, ${id.hid}, ${id.nid}, $pid, $tr_id, $vf_id, $in_id,
+      r <-
+        sql"""CALL sp_UpdateStatic(${id.vid}, ${id.hid}, ${id.nid}, $pid, $tr_id, $vf_id, $in_id,
             $cp_id, ${profiling.nConjuncts}, ${profiling.nConjunctsEliminated});""".update.run
     } yield r).transact(c.xa).attempt.unsafeRunSync()
     attemptedUpdate match {
@@ -409,7 +409,7 @@ object DAO {
               finished = false
             case _ =>
               prettyPrintException("Unable to reserve program for benchmarking",
-                                   t)
+                t)
           }
         case Right(value) =>
           if (value.isEmpty) {
@@ -449,16 +449,19 @@ object DAO {
                                  iterations: Int,
                                  p: Performance,
                                  c: DBConnection): Unit = {
+
     val result = (for {
       mid <- sql"""CALL sp_AddMeasurement($iterations, ${p.ninetyFifth}, ${p.fifth}, ${p.median}, ${p.mean},
           ${p.stdev}, ${p.minimum}, ${p.maximum});"""
         .query[Long]
         .unique
-      r <- sql"""UPDATE dynamic_results SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP
+      r <-
+        sql"""UPDATE dynamic_results SET measurement_id = $mid, last_updated = CURRENT_TIMESTAMP
           WHERE permutation_id = ${reserved.perm.id}
             AND version_id = ${id.vid}
             AND nickname_id = ${id.nid}
             AND hardware_id = ${id.hid}
+            AND measurement_type_id = ${reserved.measurementMode}
             AND stress = $workload
           """.update.run
     } yield r).transact(c.xa).attempt.unsafeRunSync()
@@ -499,7 +502,8 @@ object DAO {
     def exec(c: DBConnection): Unit = {
       val massUpdate = for {
         pid <- sql"CALL sp_gr_Path($programID, $hash);".query[Long].unique
-        _ <- sql"""INSERT INTO steps (permutation_id, level_id, path_id)
+        _ <-
+          sql"""INSERT INTO steps (permutation_id, level_id, path_id)
                VALUES ($bottomPermutationID, 0, $pid)""".update.run
         v <- Update[Step](
           s"INSERT INTO steps (permutation_id, level_id, component_id, path_id) VALUES (?, ?, ?, ?)")

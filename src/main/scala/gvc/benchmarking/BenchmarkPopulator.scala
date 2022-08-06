@@ -141,15 +141,18 @@ object BenchmarkPopulator {
     Output.info(s"Generating paths for ${programRep.info.fileName}")
     val bottomPermutationHash =
       new LabelPermutation(programRep.info.labels).idArray
+
+    val checksum = md5sum(bottomPermutationHash.toString)
     val bottomPerm =
       DAO.addOrResolvePermutation(programID,
+                                  checksum,
                                   bottomPermutationHash,
-                                  stressList,
                                   conn)
     Output.success(
       s"Resolved bottom permutation for program '${programRep.info.fileName}'")
     val queryCollections = mutable.ListBuffer[PathQueryCollection]()
 
+    val alreadyCreatedPermutations = mutable.Map[String, Long]()
     val baselineMaximum =
       theoreticalMax
         .min(conn.gConfig.maxPaths)
@@ -172,8 +175,18 @@ object BenchmarkPopulator {
         for (labelIndex <- ordering.indices) {
           currentPermutation.addLabel(ordering(labelIndex))
           val currentID = currentPermutation.idArray
+          val checksum = md5sum(currentID.toString)
           val storedPermutationID =
-            DAO.addOrResolvePermutation(programID, currentID, stressList, conn)
+            if (alreadyCreatedPermutations.contains(checksum)) {
+              alreadyCreatedPermutations(checksum)
+            } else {
+              val id = DAO.addOrResolvePermutation(programID,
+                                                   checksum,
+                                                   currentID,
+                                                   conn)
+              alreadyCreatedPermutations += (checksum -> id)
+              id
+            }
           pathQuery.addStep(storedPermutationID,
                             programRep.componentMapping(ordering(labelIndex)))
         }
@@ -208,7 +221,7 @@ object BenchmarkPopulator {
                                                     labelOutput.labels.size,
                                                     xa)
     DAO.addProgramWorkloadMappings(insertedProgramID, stressTable.get(src), xa)
-    
+
     val componentMapping = mutable.Map[ASTLabel, Long]()
     labelOutput.labels.indices.foreach(i => {
       val l = labelOutput.labels(i)
