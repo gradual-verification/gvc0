@@ -16,6 +16,7 @@ import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
 import gvc.benchmarking.Timing.TimedVerification
 
+import java.sql.SQLTransactionRollbackException
 import scala.collection.mutable
 
 class DBException(message: String) extends Exception(message)
@@ -386,35 +387,49 @@ object DAO {
 
   def reserveProgramForMeasurement(id: Identity,
                                    c: DBConnection): Option[ReservedProgram] = {
-    sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid});"
-      .query[ReservedProgramEntry]
-      .to[List]
-      .transact(c.xa)
-      .attempt
-      .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException("Unable to reserve program for benchmarking", t)
-      case Right(value) =>
-        if (value.isEmpty) {
-          None
-        } else {
-          val workloads = value.map(v => v.stress -> v.jobID).toMap
-          val permID = value.head.permID
-          sql"SELECT * FROM permutations WHERE id = $permID;"
-            .query[Permutation]
-            .unique
-            .transact(c.xa)
-            .attempt
-            .unsafeRunSync() match {
-            case Left(t) =>
-              prettyPrintException(
-                s"Unable to resolve reserved permutation ID=$permID",
-                t)
-            case Right(perm) =>
-              Some(ReservedProgram(perm, workloads, value.head.measurementID))
+    var finished = false
+    while (!finished) {
+      finished = true
+      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid});"
+        .query[ReservedProgramEntry]
+        .to[List]
+        .transact(c.xa)
+        .attempt
+        .unsafeRunSync() match {
+        case Left(t) =>
+          t match {
+            case _: SQLTransactionRollbackException =>
+              Output.info("Deadlock detected; pausing and retrying...")
+              Thread.sleep(50)
+              finished = false
+            case _ =>
+              prettyPrintException("Unable to reserve program for benchmarking",
+                                   t)
           }
-        }
+        case Right(value) =>
+          if (value.isEmpty) {
+            return None
+          } else {
+            val workloads = value.map(v => v.stress -> v.jobID).toMap
+            val permID = value.head.permID
+            sql"SELECT * FROM permutations WHERE id = $permID;"
+              .query[Permutation]
+              .unique
+              .transact(c.xa)
+              .attempt
+              .unsafeRunSync() match {
+              case Left(t) =>
+                prettyPrintException(
+                  s"Unable to resolve reserved permutation ID=$permID",
+                  t)
+              case Right(perm) =>
+                return Some(
+                  ReservedProgram(perm, workloads, value.head.measurementID))
+            }
+          }
+      }
     }
+    None
   }
 
   def completeProgramMeasurement(id: Identity,
@@ -490,6 +505,7 @@ object DAO {
       massUpdate.transact(c.xa).unsafeRunSync()
     }
   }
+
   def logException(id: Identity,
                    reserved: ReservedProgram,
                    mode: ErrorType,
