@@ -372,27 +372,6 @@ CREATE TABLE IF NOT EXISTS dynamic_results
     FOREIGN KEY (measurement_type_id) REFERENCES dynamic_measurement_types (id)
 );
 
-CREATE VIEW dynamic_jobs AS
-(
-SELECT pm.program_id,
-       pm.id  as permutation_id,
-       dmt.id as measurement_type_id,
-       vr.id  as version_id,
-       hw.id  as hardware_id
-FROM permutations pm
-         INNER JOIN stress_assignments sa on pm.program_id = sa.program_id
-         CROSS JOIN dynamic_measurement_types dmt
-         CROSS JOIN versions vr
-         CROSS JOIN hardware hw
-         LEFT OUTER JOIN dynamic_results dr ON
-            dr.measurement_type_id = dmt.id AND
-            dr.version_id = vr.id AND
-            dr.hardware_id = hw.id AND
-            dr.permutation_id = pm.id
-WHERE dr.permutation_id IS NULL
-    );
-
-
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED)
 BEGIN
@@ -404,26 +383,37 @@ BEGIN
         stress                   BIGINT UNSIGNED UNIQUE NOT NULL,
         dynamic_measurement_type BIGINT UNSIGNED        NOT NULL
     );
-
-    SELECT program_id, permutation_id, measurement_type_id
+    SELECT permutations.program_id, permutations.id, dmt.id
     INTO @found_program_id, @found_perm_id, @found_measurement_type_id
-    FROM dynamic_jobs
-    WHERE version_id = vid
-      AND hardware_id = hid
+    FROM permutations
+             CROSS JOIN stress_assignments sa on permutations.program_id = sa.program_id
+             CROSS JOIN dynamic_measurement_types dmt
+             CROSS JOIN versions vr
+             CROSS JOIN hardware hw
+             LEFT OUTER JOIN dynamic_results dr ON
+                dr.measurement_type_id = dmt.id AND
+                dr.version_id = vr.id AND
+                dr.hardware_id = hw.id AND
+                dr.permutation_id = permutations.id AND
+                dr.stress = sa.stress
+    WHERE dr.permutation_id IS NULL
+      AND vr.id = vid
+      AND hw.id = hid
     ORDER BY RAND()
     LIMIT 1;
-
-    IF ((SELECT @found_perm_id IS NOT NULL) AND (SELECT @found_measurement_type_id IS NOT NULL)) THEN
+    IF ((SELECT @found_perm_id IS NOT NULL) AND (SELECT @found_measurement_type_id IS NOT NULL) AND
+        (SELECT @found_program_id IS NOT NULL)) THEN
         INSERT INTO reserved_jobs (SELECT DISTINCT @found_perm_id, sa.stress, @found_measurement_type_id
                                    FROM stress_assignments sa
-                                            LEFT OUTER JOIN dynamic_results dr ON
-                                               dr.hardware_id = hid AND
-                                               dr.version_id = vid AND
-                                               dr.permutation_id = @found_perm_id AND
-                                               dr.measurement_type_id = @found_measurement_type_id
-                                   WHERE sa.program_id = @found_program_id
-                                     AND dr.stress IS NULL);
-        SELECT * FROM reserved_jobs;
+                                   WHERE sa.program_id = @found_program_id);
+        DELETE
+        FROM reserved_jobs
+        WHERE stress IN (SELECT stress
+                         FROM dynamic_results dr
+                         where dr.measurement_type_id = @found_measurement_type_id
+                           AND dr.permutation_id = @found_perm_id
+                           AND dr.version_id = 1
+                           AND dr.hardware_id = 1);
         INSERT INTO dynamic_results
         SELECT @found_perm_id,
                @found_measurement_type_id,
@@ -435,9 +425,10 @@ BEGIN
                NULL,
                CURRENT_TIMESTAMP
         FROM reserved_jobs;
+        DO RELEASE_LOCK('sp_ReservePermutation');
         SELECT * FROM reserved_jobs;
     END IF;
-    DO RELEASE_LOCK('sp_ReservePermutation');
+
 END //
 DELIMITER ;
 
