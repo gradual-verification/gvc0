@@ -425,9 +425,8 @@ BEGIN
                CURRENT_TIMESTAMP
         FROM reserved_jobs;
         DO RELEASE_LOCK('sp_ReservePermutation');
-        SELECT * FROM reserved_jobs;
     END IF;
-
+    SELECT * FROM reserved_jobs;
 END //
 DELIMITER ;
 
