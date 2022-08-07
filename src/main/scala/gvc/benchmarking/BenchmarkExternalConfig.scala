@@ -187,11 +187,11 @@ object BenchmarkExternalConfig {
         if (outputDir.isEmpty || outputDir.text.trim.isEmpty) None
         else Some(outputDir.text.trim)
 
-      val credentials = parseDB(benchmarkRoot \\ "db", rootConfig)
+      val credentials = parseDB(benchmarkRoot \ "db", rootConfig)
 
-      val workload = parseWorkload(benchmarkRoot \\ "workload")
+      val workload = parseWorkload(benchmarkRoot \ "workload")
 
-      val iter = parseIter(benchmarkRoot \\ "iter")
+      val iter = parseIter(benchmarkRoot \ "iter")
 
       val modifiers = parsePipelineModifiers(benchmarkRoot)
 
@@ -342,7 +342,7 @@ object BenchmarkExternalConfig {
       val iterations = workloadRoot \ "iterations"
       val staticIterations = workloadRoot \ "static-iterations"
       val byProgram: List[WorkloadProgramEntry] =
-        (workloadRoot \\ "by-program" \\ "p").toList
+        (workloadRoot \ "by-program" \ "p").toList
           .map(parseWorkloadProgramEntry)
 
       val iterQuantity =
@@ -388,7 +388,7 @@ object BenchmarkExternalConfig {
     val isDefault = namesFiltered.contains("*")
     val namesWithoutWildcard = namesFiltered.filter(i => i != "*")
 
-    val stress = parseStress(xml \\ "stress")
+    val stress = parseStress(xml \ "stress")
     val iterations = intOption(xml \ "iterations")
     if (names.isEmpty) {
       error(
