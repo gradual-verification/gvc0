@@ -1,5 +1,3 @@
-DROP VIEW IF EXISTS dynamic_jobs;
-
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS stress_assignments;
 DROP TABLE IF EXISTS static_performance;
