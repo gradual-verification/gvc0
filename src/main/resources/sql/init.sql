@@ -1,3 +1,4 @@
+use gvc0;
 DROP VIEW IF EXISTS dynamic_jobs;
 
 DROP TABLE IF EXISTS global_configuration;

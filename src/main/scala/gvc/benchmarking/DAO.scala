@@ -441,9 +441,8 @@ object DAO {
                                    t)
           }
         case Right(value) =>
-          if (value.isEmpty) {
-            finished = true
-          } else {
+          finished = true
+          if (value.nonEmpty) {
             val workloads = value.map(v => v.stress)
             val permID = value.head.permID
             sql"SELECT * FROM permutations WHERE id = $permID;"
@@ -459,7 +458,6 @@ object DAO {
               case Right(perm) =>
                 result = Some(
                   ReservedProgram(perm, workloads, value.head.measurementID))
-                finished = true
             }
           }
       }
@@ -593,6 +591,7 @@ object DAO {
       }
     })
   }
+
   case class CompletionMetadata(versionName: String,
                                 hardwareName: String,
                                 srcFilename: String,
