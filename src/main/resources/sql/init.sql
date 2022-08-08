@@ -18,7 +18,6 @@ DROP TABLE IF EXISTS permutations;
 DROP TABLE IF EXISTS components;
 DROP TABLE IF EXISTS paths;
 DROP TABLE IF EXISTS programs;
-DROP TABLE IF EXISTS concurrent_accesses;
 DROP TABLE IF EXISTS nicknames;
 DROP TABLE IF EXISTS hardware;
 DROP TABLE IF EXISTS versions;
@@ -38,6 +37,8 @@ DROP PROCEDURE IF EXISTS sp_UpdateStaticPerformance;
 DROP PROCEDURE IF EXISTS sp_UpdateStaticConjuncts;
 DROP PROCEDURE IF EXISTS sp_ReservePermutation;
 DROP PROCEDURE IF EXISTS sp_AddMeasurement;
+DROP PROCEDURE IF EXISTS sp_AddProgramToBenchmark;
+DROP PROCEDURE IF EXISTS sp_AddBenchmark;
 
 DROP TABLE IF EXISTS reserved_jobs;
 
@@ -134,12 +135,12 @@ BEGIN
 END //
 DELIMITER ;
 
-
 CREATE TABLE IF NOT EXISTS paths
 (
     id         SERIAL,
     path_hash  BLOB            NOT NULL,
     program_id BIGINT UNSIGNED NOT NULL,
+    path_date  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, program_id),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
@@ -151,7 +152,6 @@ BEGIN
     SELECT id FROM paths WHERE program_id = p_program_id AND path_hash = p_path_hash;
 END //
 DELIMITER ;
-
 
 CREATE TABLE IF NOT EXISTS steps
 (
@@ -182,7 +182,6 @@ END //
 
 DELIMITER ;
 
-
 CREATE TABLE IF NOT EXISTS hardware
 (
     id            SERIAL,
@@ -190,7 +189,6 @@ CREATE TABLE IF NOT EXISTS hardware
     hardware_date DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, hardware_name)
 );
-
 
 DELIMITER //
 CREATE PROCEDURE sp_gr_Hardware(IN p_name VARCHAR(255))
@@ -222,10 +220,12 @@ CREATE TABLE IF NOT EXISTS benchmarks
     id             SERIAL,
     benchmark_name VARCHAR(255),
     benchmark_desc TEXT,
+    benchmark_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, benchmark_name)
 );
+
 INSERT INTO benchmarks (benchmark_name, benchmark_desc)
-VALUES ('default', 'the first path generated for each program.');
+VALUES ('default', 'Permutations corresponding to 20, 40, 60, and 80% increments along the first path inserted.');
 
 CREATE TABLE IF NOT EXISTS benchmark_membership
 (
@@ -256,6 +256,7 @@ CREATE TABLE IF NOT EXISTS static_measurement_types
     measurement_type VARCHAR(255) NOT NULL UNIQUE,
     PRIMARY KEY (id)
 );
+
 INSERT INTO static_measurement_types (measurement_type)
 VALUES ('translation');
 INSERT INTO static_measurement_types (measurement_type)
@@ -306,8 +307,6 @@ CREATE TABLE IF NOT EXISTS static_conjuncts
     FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (version_id) REFERENCES versions (id)
 );
-
-
 
 CREATE TABLE IF NOT EXISTS static_performance
 (
@@ -376,7 +375,8 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED)
+CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
+                                       IN bonly BOOLEAN)
 BEGIN
     SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
     IF ((SELECT @lock_status) != 1) THEN
@@ -386,6 +386,7 @@ BEGIN
             SET MESSAGE_TEXT = @message_text;
     END IF;
     START TRANSACTION;
+
     DROP TABLE IF EXISTS reserved_jobs;
     CREATE TEMPORARY TABLE reserved_jobs
     (
@@ -393,12 +394,6 @@ BEGIN
         stress                   BIGINT UNSIGNED UNIQUE NOT NULL,
         dynamic_measurement_type BIGINT UNSIGNED        NOT NULL
     );
-    IF ((SELECT COUNT(*) FROM concurrent_accesses) > 1) THEN
-        SELECT CONCAT('Reservation failed, another executor already entered the procedure.')
-        INTO @message_text;
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = @message_text;
-    END IF;
 
     SELECT permutations.program_id, permutations.id, dmt.id
     INTO @found_program_id, @found_perm_id, @found_measurement_type_id
@@ -416,8 +411,10 @@ BEGIN
     WHERE dr.permutation_id IS NULL
       AND vr.id = vid
       AND hw.id = hid
+      AND (NOT bonly OR permutations.id IN (SELECT permutation_id FROM benchmark_membership))
     ORDER BY RAND()
     LIMIT 1;
+
     IF ((SELECT @found_perm_id IS NOT NULL) AND (SELECT @found_measurement_type_id IS NOT NULL) AND
         (SELECT @found_program_id IS NOT NULL)) THEN
         INSERT INTO reserved_jobs (SELECT DISTINCT @found_perm_id, sa.stress, @found_measurement_type_id
@@ -541,3 +538,22 @@ FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
          INNER JOIN error_occurrences ON p_errors.error_id = error_occurrences.id
          INNER JOIN error_contents ON error_contents.id = error_occurrences.error_contents_id = error_contents.id
     );
+
+DELIMITER //
+CREATE PROCEDURE sp_ResetBenchmark(IN p_bench_name BIGINT UNSIGNED, IN p_bench_desc BIGINT UNSIGNED)
+BEGIN
+    INSERT INTO benchmarks (benchmark_name, benchmark_desc)
+    VALUES (p_bench_name, p_bench_desc)
+    ON DUPLICATE KEY UPDATE benchmark_desc = p_bench_desc;
+    SELECT id INTO @found_id FROM benchmarks WHERE benchmark_name = p_bench_name AND benchmark_desc = p_bench_desc;
+    DELETE FROM benchmark_membership WHERE benchmark_id = @found_id;
+    SELECT @found_id;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE sp_AddProgramToBenchmark(IN p_perm_id BIGINT UNSIGNED, IN p_benchmark_id BIGINT UNSIGNED)
+BEGIN
+    INSERT IGNORE INTO benchmark_membership (benchmark_id, permutation_id) VALUES (p_perm_id, p_benchmark_id);
+END //
+DELIMITER ;

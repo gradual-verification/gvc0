@@ -23,6 +23,7 @@ case class Config(
     exec: Boolean = false,
     onlyVerify: Boolean = false,
     onlyCompile: Boolean = false,
+    onlyBenchmark: Boolean = false,
     sourceFile: Option[String] = None,
     linkedLibraries: List[String] = List.empty,
     versionString: Option[String] = None,
@@ -94,8 +95,10 @@ object Config {
       |
       |                --populate                     Populate the benchmarking database using options from the specified configuration file.
       |                --execute                      Execute programs and store results in the database using options from the specified configuration file.
-      |                --recreate=<id>                Specify a permutation to recreate from the database  using options from the specified configuration file.
-      |
+      |                --execute-benchmark            Identical to --execute, but only selects programs belonging to pre-configured benchmark sets.
+      |                --recreate=<id>                Specify a permutation to recreate from the database using options from the specified configuration file.
+      |                --export=<dir>                 Specify a directory to export data to. Data is filtered using options from the specified configuration file.
+      |                 
       |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
       |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
       |                --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
@@ -120,7 +123,6 @@ object Config {
   private val dbURLString = raw"--db-url=(.+)".r
   private val dbUserString = raw"--db-user=(.+)".r
   private val dbPassString = raw"--db-pass=(.+)".r
-
   private val recreatePermString = raw"--recreate=(.+)".r
 
   def error(message: String): Nothing = {
@@ -236,6 +238,11 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(mode = DynamicVerification)
+        )
+      case "--execute-benchmark" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = Execute, onlyBenchmark = true),
         )
       case "--framing" :: tail =>
         fromCommandLineArgs(

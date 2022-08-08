@@ -49,7 +49,8 @@ trait BenchmarkingConfig
 
 case class PipelineModifiers(onlyVerify: Boolean,
                              onlyCompile: Boolean,
-                             disableBaseline: Boolean)
+                             disableBaseline: Boolean,
+                             onlyBenchmark: Boolean)
 
 case class RecreatorConfig(version: String,
                            db: BenchmarkDBCredentials,
@@ -72,6 +73,7 @@ case class ExecutorConfig(version: String,
                           nickname: Option[String],
                           iter: IterConfiguration,
                           db: BenchmarkDBCredentials,
+                          modifiers: PipelineModifiers,
                           sources: List[Path])
     extends BenchmarkingConfig
 
@@ -124,6 +126,7 @@ object BenchmarkExternalConfig {
           resolved.nickname,
           resolved.iter,
           resolved.credentials,
+          resolved.modifiers,
           resolved.sources
         )
       case None => error("A <hardware> must be provided.")
@@ -258,9 +261,10 @@ object BenchmarkExternalConfig {
 
   private def parsePipelineModifiers(xml: NodeSeq): PipelineModifiers = {
     PipelineModifiers(
-      onlyVerify = false,
-      onlyCompile = false,
-      disableBaseline = false
+      onlyVerify = xml.contains("only-verify"),
+      onlyCompile = xml.contains("only-compile"),
+      disableBaseline = xml.contains("disable-baseline"),
+      onlyBenchmark = xml.contains("only-benchmark")
     )
   }
 

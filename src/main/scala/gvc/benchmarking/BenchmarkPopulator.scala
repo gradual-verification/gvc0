@@ -37,6 +37,9 @@ object BenchmarkPopulator {
                      libraryDirs,
                      populatorConfig,
                      connection)
+    DAO.populateIncrementalBenchmark(DAO.Defaults.DefaultBenchmarkName,
+                                     DAO.Defaults.DefaultBenchmarkIncrements,
+                                     connection)
   }
 
   def sync(sources: List[Path],
@@ -64,15 +67,12 @@ object BenchmarkPopulator {
       mapping.toMap
     }
   }
-
   def populatePrograms(
       sources: List[Path],
       libraryDirs: List[String],
       populatorConfig: PopulatorConfig,
       connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
-
     val stressTable = new StressTable(populatorConfig.workload)
-
     val synchronized = allOf(
       sources
         .map(src => {
@@ -83,7 +83,6 @@ object BenchmarkPopulator {
                             stressTable,
                             connection))
         }))
-
     val mapping = mutable.Map[Long, StoredProgramRepresentation]()
     Await
       .result(synchronized, Duration.Inf)
@@ -128,13 +127,11 @@ object BenchmarkPopulator {
         None
     }
   }
-
   private def populatePaths(programID: Long,
                             programRep: StoredProgramRepresentation,
                             populatorConfig: PopulatorConfig,
                             stressList: List[Int],
                             conn: DBConnection): List[PathQueryCollection] = {
-
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
     val sampler = new Sampler(programRep.info.labels)
@@ -151,7 +148,6 @@ object BenchmarkPopulator {
     Output.success(
       s"Resolved bottom permutation for program '${programRep.info.fileName}'")
     val queryCollections = mutable.ListBuffer[PathQueryCollection]()
-
     val alreadyCreatedPermutations = mutable.Map[String, Long]()
     val baselineMaximum =
       theoreticalMax
@@ -161,6 +157,7 @@ object BenchmarkPopulator {
       case None        => baselineMaximum
     }
     val difference = configuredMaximum - DAO.getNumberOfPaths(programID, conn)
+
     for (i <- 0 until difference.intValue()) {
       val ordering = sampler.sample(SamplingHeuristic.Random)
       val pathHash =
@@ -171,7 +168,6 @@ object BenchmarkPopulator {
           new DAO.PathQueryCollection(pathHash, programID, bottomPerm)
         val currentPermutation =
           new LabelPermutation(programRep.info.labels)
-
         for (labelIndex <- ordering.indices) {
           currentPermutation.addLabel(ordering(labelIndex))
           val currentID = currentPermutation.idArray

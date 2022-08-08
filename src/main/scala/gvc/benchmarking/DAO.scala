@@ -54,6 +54,11 @@ object DAO {
     val Weaving = "weaving"
   }
 
+  object Defaults {
+    val DefaultBenchmarkName = "default"
+    val DefaultBenchmarkIncrements = List(20, 40, 60, 80)
+  }
+
   case class GlobalConfiguration(timeoutMinutes: Long, maxPaths: Long)
 
   case class Identity(vid: Long, hid: Long, nid: Option[Long])
@@ -417,13 +422,14 @@ object DAO {
                                   measurementID: Long)
 
   def reserveProgramForMeasurement(id: Identity,
+                                   onlyBenchmark: Boolean,
                                    c: DBConnection): Option[ReservedProgram] = {
     val startTime = System.nanoTime()
     var finished = false
     var result: Option[ReservedProgram] = None
     while (!finished) {
       finished = true
-      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid});"
+      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid}, $onlyBenchmark);"
         .query[ReservedProgramEntry]
         .to[List]
         .transact(c.xa)
@@ -653,6 +659,71 @@ object DAO {
                              completion,
                              programErrorCounts)
         })
+    }
+  }
+
+  def populateIncrementalBenchmark(benchmarkName: String,
+                                   increments: List[Int],
+                                   c: DBConnection): Unit = {
+    case class ProgramStepCount(programID: Long, numSteps: Long)
+    case class BenchmarkEntry(levelID: Long, pathID: Long, programID: Long)
+    val benchmarkEntries: List[BenchmarkEntry] =
+      sql"SELECT program_id, COUNT(DISTINCT components.id) FROM components GROUP BY program_id;"
+        .query[ProgramStepCount]
+        .to[List]
+        .transact(c.xa)
+        .attempt
+        .unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException(
+            "Unable to resolve step count per path for each program.",
+            t)
+        case Right(programList) => {
+          programList.flatMap(p => {
+            val indices =
+              increments.map(i =>
+                Math.round(i.toDouble / 100 * (p.numSteps - 1)).toInt)
+            val minPathIndex =
+              sql"SELECT MIN(id) FROM paths WHERE program_id = ${p.programID};"
+                .query[Option[Int]]
+                .unique
+                .transact(c.xa)
+                .attempt
+                .unsafeRunSync() match {
+                case Left(t) =>
+                  prettyPrintException(
+                    s"Unable to resolve minimum path ID for program ID=${p.programID}",
+                    t)
+                case Right(value) =>
+                  value match {
+                    case Some(value) => value
+                    case None =>
+                      error(
+                        s"No paths have been entered for program ID=${p.programID}")
+                  }
+              }
+            indices.map(idc => {
+              BenchmarkEntry(p.programID, idc, minPathIndex)
+            })
+          })
+        }
+      }
+    (for {
+      bid <- sql"CALL sp_AddBenchmark($benchmarkName, ${increments.mkString(",")});"
+        .query[Long]
+        .unique
+      u <- Update[BenchmarkEntry](
+        s"""INSERT IGNORE INTO benchmark_membership (benchmark_id, permutation_id)
+                 | SELECT $bid, id FROM permutations INNER JOIN steps s on permutations.id = s.permutation_id
+                 | WHERE s.level_id = ? AND s.path_id = ? AND s.program_id = ?;""".stripMargin)
+        .updateMany(
+          benchmarkEntries
+        )
+    } yield u).transact(c.xa).attempt.unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException("Unable to complete benchmark population query.",
+                             t)
+      case Right(_) =>
     }
   }
 }

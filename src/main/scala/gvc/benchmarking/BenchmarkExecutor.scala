@@ -30,11 +30,9 @@ object BenchmarkExecutor {
       source
     )
   }
-
   case class ReservedProgram(perm: Permutation,
                              workloads: List[Int],
                              measurementMode: Long)
-
   def execute(config: ExecutorConfig,
               baseConfig: Config,
               libraries: List[String]): Unit = {
@@ -54,7 +52,7 @@ object BenchmarkExecutor {
       Files.createTempFile("temp_src", ".c0")
 
     var reservedProgram =
-      DAO.reserveProgramForMeasurement(id, conn)
+      DAO.reserveProgramForMeasurement(id, config.modifiers.onlyBenchmark, conn)
 
     def wrapTiming[T](f: => T): Either[Throwable, T] = {
       try {
@@ -198,7 +196,10 @@ object BenchmarkExecutor {
             })
         case None =>
       }
-      reservedProgram = DAO.reserveProgramForMeasurement(id, conn)
+      reservedProgram = DAO.reserveProgramForMeasurement(
+        id,
+        config.modifiers.onlyBenchmark,
+        conn)
     }
   }
 }
