@@ -256,9 +256,11 @@ DELIMITER ;
 CREATE TABLE executor_stress_values
 (
     hostname_id BIGINT UNSIGNED NOT NULL,
+    nickname_id BIGINT UNSIGNED NOT NULL,
     program_id  BIGINT UNSIGNED NOT NULL,
     stress      INT UNSIGNED    NOT NULL,
-    PRIMARY KEY (hostname_id, program_id, stress),
+    PRIMARY KEY (nickname_id, hostname_id, program_id, stress),
+    FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
     FOREIGN KEY (hostname_id) REFERENCES hostnames (id),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
@@ -345,13 +347,6 @@ BEGIN
 END //
 DELIMITER ;
 
-CREATE TABLE IF NOT EXISTS stress_assignments
-(
-    program_id BIGINT UNSIGNED NOT NULL,
-    stress     BIGINT UNSIGNED NOT NULL,
-    FOREIGN KEY (program_id) REFERENCES programs (id)
-);
-
 CREATE TABLE IF NOT EXISTS dynamic_performance
 (
     permutation_id      BIGINT UNSIGNED NOT NULL,
@@ -410,6 +405,7 @@ BEGIN
       AND vr.id = vid
       AND hw.id = hid
       AND sa.hostname_id = hsid
+      AND sa.nickname_id = nnid
       AND (NOT bonly OR permutations.id IN (SELECT permutation_id FROM benchmark_membership))
     ORDER BY RAND()
     LIMIT 1;
@@ -419,7 +415,8 @@ BEGIN
         INSERT INTO reserved_jobs (SELECT DISTINCT @found_perm_id, sa.stress, @found_measurement_type_id
                                    FROM executor_stress_values sa
                                    WHERE sa.program_id = @found_program_id
-                                     AND sa.hostname_id = hsid);
+                                     AND sa.hostname_id = hsid
+                                     AND sa.nickname_id = nnid);
         DELETE
         FROM reserved_jobs
         WHERE stress IN (SELECT stress
@@ -485,7 +482,7 @@ BEGIN
              CROSS JOIN versions
              CROSS JOIN hardware
              CROSS JOIN dynamic_measurement_types
-             CROSS JOIN stress_assignments sa on permutations.program_id = sa.program_id
+             CROSS JOIN executor_stress_values sa on permutations.program_id = sa.program_id
              LEFT OUTER JOIN
          dynamic_performance dp on dynamic_measurement_types.id = dp.measurement_type_id
              AND dp.permutation_id = permutations.id AND dp.hardware_id = hardware.id AND dp.version_id = versions.id
@@ -503,7 +500,7 @@ BEGIN
              CROSS JOIN versions
              CROSS JOIN hardware
              CROSS JOIN dynamic_measurement_types
-             CROSS JOIN stress_assignments sa on permutations.program_id = sa.program_id
+             CROSS JOIN executor_stress_values sa on permutations.program_id = sa.program_id
              LEFT OUTER JOIN
          dynamic_performance dp on dynamic_measurement_types.id = dp.measurement_type_id
              AND dp.permutation_id = permutations.id AND dp.hardware_id = hardware.id AND dp.version_id = versions.id

@@ -207,9 +207,9 @@ object DAO {
       })
       .toList
     (for {
-      _ <- sql"DELETE FROM executor_stress_values WHERE hostname_id = ${id.hsid};".update.run
+      _ <- sql"DELETE FROM executor_stress_values WHERE hostname_id = ${id.hsid} AND nickname_id = ${id.nid};".update.run
       u <- Update[StressEntry](
-        s"INSERT INTO executor_stress_values (hostname_id, program_id, stress) VALUES (${id.hsid}, ?, ?);")
+        s"INSERT INTO executor_stress_values (hostname_id, nickname_id, program_id, stress) VALUES (${id.hsid}, ${id.nid}, ?, ?);")
         .updateMany(entries)
     } yield u).transact(c.xa).attempt.unsafeRunSync() match {
       case Left(t) =>
