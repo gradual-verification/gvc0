@@ -424,7 +424,9 @@ object DAO {
     while (!finished) {
       finished = true
       (for {
-        _ <- sql"SELECT GET_LOCK('sp_ReservePermutation', -1);".update.run
+        _ <- sql"SELECT GET_LOCK('sp_ReservePermutation', -1);"
+          .query[Option[Int]]
+          .unique
         rows <- sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid});"
           .query[ReservedProgramEntry]
           .to[List]
@@ -601,12 +603,26 @@ object DAO {
 
   case class CompletionMetadata(versionName: String,
                                 hardwareName: String,
-                                srcFilename: String,
-                                measurementMode: String,
-                                totalCompleted: Long,
-                                total: Long,
-                                errorType: Option[String],
-                                errorCount: Option[Long],
-                                stress: Long)
+                                percentCompleted: Double,
+                                errorMapping: Map[String, Int])
 
+  case class VersionHardwareCombinations(versionName: String,
+                                         versionID: Int,
+                                         hardwareName: String,
+                                         hardwareID: Int)
+
+  def printCompletionData(c: DBConnection): Unit = {
+    sql"SELECT version_name, versions.id, hardware_name, hardware.id FROM versions CROSS JOIN hardware WHERE EXISTS"
+      .query[VersionHardwareCombinations]
+      .to[List]
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException("Unable to acquire list of hardware and versions.",
+                             t)
+      case Right(value) => ???
+    }
+
+  }
 }
