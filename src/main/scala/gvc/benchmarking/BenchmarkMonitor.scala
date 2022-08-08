@@ -38,7 +38,7 @@ object BenchmarkMonitor {
       println(k)
       structured(k).foreach(m => {
         println(
-          "\t\t" + m + s" — %${Math.round(m._2.head.percentCompleted * 10) / 10}")
+          "\t\t" + m._1 + s" — %${Math.round(m._2.head.percentCompleted * 10) / 10}")
         println("\t\t\t Errors:")
         m._2.head.errorMapping.foreach(em => {
           println(s"\t\t\t${em._1} — ${em._2}")

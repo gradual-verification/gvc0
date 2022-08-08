@@ -497,8 +497,9 @@ DELIMITER ;
 DELIMITER //
 CREATE PROCEDURE sp_GetProgramErrorCounts(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED)
 BEGIN
-    SELECT permutations.program_id, COUNT(error_id)
+    SELECT src_filename, COUNT(error_id)
     FROM permutations
+             INNER JOIN programs p on permutations.program_id = p.id
              CROSS JOIN versions
              CROSS JOIN hardware
              CROSS JOIN dynamic_measurement_types
