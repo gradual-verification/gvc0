@@ -374,12 +374,6 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     FOREIGN KEY (measurement_id) REFERENCES measurements (id),
     FOREIGN KEY (measurement_type_id) REFERENCES dynamic_measurement_types (id)
 );
-DROP TABLE IF EXISTS concurrent_accesses;
-CREATE TABLE concurrent_accesses
-(
-    nickname_id BIGINT UNSIGNED UNIQUE NOT NULL,
-    FOREIGN KEY (nickname_id) REFERENCES nicknames (id)
-);
 
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED)
@@ -392,7 +386,6 @@ BEGIN
             SET MESSAGE_TEXT = @message_text;
     END IF;
     START TRANSACTION;
-    INSERT INTO concurrent_accesses (nickname_id) VALUES (nnid);
     DROP TABLE IF EXISTS reserved_jobs;
     CREATE TEMPORARY TABLE reserved_jobs
     (
@@ -457,7 +450,6 @@ BEGIN
                CURRENT_TIMESTAMP
         FROM reserved_jobs;
     END IF;
-    DELETE FROM concurrent_accesses WHERE nickname_id = nnid;
     COMMIT;
     DO RELEASE_LOCK('sp_ReservePermutation');
     SELECT * FROM reserved_jobs;
