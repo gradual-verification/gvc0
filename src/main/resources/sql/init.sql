@@ -372,7 +372,11 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED)
 BEGIN
-    DO GET_LOCK('sp_ReservePermutation', -1);
+    SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
+    IF (SELECT @lock_status IS NULL) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Failed to acquire lock.';
+    END IF;
     DROP TABLE IF EXISTS reserved_jobs;
     CREATE TEMPORARY TABLE reserved_jobs
     (
@@ -414,7 +418,8 @@ BEGIN
         IF ((SELECT COUNT(*) FROM reserved_jobs) < 1) THEN
             SIGNAL SQLSTATE '45000'
                 SET MESSAGE_TEXT =
-                        'Attempted to reserve a job, but it was already present in the table.', MYSQL_ERRNO = 1001;
+                        CONCAT('Reservation failed. PID=', @found_perm_id, ' MTID=',
+                               @found_measurement_type_id);
         END IF;
         INSERT INTO dynamic_performance
         SELECT @found_perm_id,
