@@ -418,24 +418,18 @@ object DAO {
 
   def reserveProgramForMeasurement(id: Identity,
                                    c: DBConnection): Option[ReservedProgram] = {
-    Output.info(s"Beginning reservation query...")
-    sql"SELECT GET_LOCK('sp_ReservePermutation', -1);"
-      .query[Option[Int]]
-      .unique
-      .transact(c.xa)
-      .unsafeRunSync() match {
-      case Some(_) =>
-      case None    => error("Unable to acquire lock.")
-    }
-
     val startTime = System.nanoTime()
     var finished = false
     var result: Option[ReservedProgram] = None
     while (!finished) {
       finished = true
-      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid});"
-        .query[ReservedProgramEntry]
-        .to[List]
+      (for {
+        _ <- sql"SELECT GET_LOCK('sp_ReservePermutation', -1);".update.run
+        rows <- sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid});"
+          .query[ReservedProgramEntry]
+          .to[List]
+        _ <- sql"DO RELEASE_LOCK('sp_ReservePermutation');".update.run
+      } yield rows)
         .transact(c.xa)
         .attempt
         .unsafeRunSync() match {
@@ -475,10 +469,6 @@ object DAO {
       .round(((stopTime - startTime).toDouble / Math.pow(10, 9)) * 100)
       .toDouble / 100
     Output.info(s"Finished reservation query in $differenceInSeconds sec.")
-
-    sql"DO RELEASE_LOCK('sp_ReservePermutation');".update.run
-      .transact(c.xa)
-      .unsafeRunSync()
     result
   }
 

@@ -368,10 +368,17 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     FOREIGN KEY (measurement_id) REFERENCES measurements (id),
     FOREIGN KEY (measurement_type_id) REFERENCES dynamic_measurement_types (id)
 );
+DROP TABLE IF EXISTS concurrent_accesses;
+CREATE TABLE concurrent_accesses
+(
+    nickname_id BIGINT UNSIGNED UNIQUE NOT NULL,
+    FOREIGN KEY (nickname_id) REFERENCES nicknames (id)
+);
 
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED)
 BEGIN
+    INSERT INTO concurrent_accesses (nickname_id) VALUES (nnid);
     DROP TABLE IF EXISTS reserved_jobs;
     CREATE TEMPORARY TABLE reserved_jobs
     (
@@ -379,6 +386,13 @@ BEGIN
         stress                   BIGINT UNSIGNED UNIQUE NOT NULL,
         dynamic_measurement_type BIGINT UNSIGNED        NOT NULL
     );
+    IF ((SELECT COUNT(*) FROM concurrent_accesses) > 1) THEN
+        SELECT CONCAT('Reservation failed, another executor already entered the procedure.')
+        INTO @message_text;
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = @message_text;
+    END IF;
+
     SELECT permutations.program_id, permutations.id, dmt.id
     INTO @found_program_id, @found_perm_id, @found_measurement_type_id
     FROM permutations
@@ -429,6 +443,7 @@ BEGIN
                CURRENT_TIMESTAMP
         FROM reserved_jobs;
     END IF;
+    DELETE FROM concurrent_accesses WHERE nickname_id = nnid;
     SELECT * FROM reserved_jobs;
 END //
 DELIMITER ;
