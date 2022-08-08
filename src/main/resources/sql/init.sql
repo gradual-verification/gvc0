@@ -303,6 +303,8 @@ CREATE TABLE IF NOT EXISTS static_conjuncts
     FOREIGN KEY (version_id) REFERENCES versions (id)
 );
 
+
+
 CREATE TABLE IF NOT EXISTS static_performance
 (
     permutation_id             BIGINT UNSIGNED        NOT NULL,
@@ -378,7 +380,13 @@ CREATE TABLE concurrent_accesses
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED)
 BEGIN
-    SELECT GET_LOCK('sp_ReservePermutation', -1);
+    SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
+    IF ((SELECT @lock_status) != 1) THEN
+        SELECT CONCAT('Reservation failed, unable to acquire lock.')
+        INTO @message_text;
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = @message_text;
+    END IF;
     START TRANSACTION;
     INSERT INTO concurrent_accesses (nickname_id) VALUES (nnid);
     DROP TABLE IF EXISTS reserved_jobs;
@@ -511,3 +519,19 @@ BEGIN
     GROUP BY permutations.program_id;
 END //
 DELIMITER ;
+
+
+CREATE VIEW path_step_index AS
+(
+SELECT *
+FROM paths
+         CROSS JOIN steps s ON paths.id = s.path_id
+         CROSS JOIN permutations p on s.permutation_id = p.id);
+CREATE VIEW dynamic_errors AS
+(
+SELECT permutation_id, eo.error_type, eo.error_date, ec.error_desc
+FROM dynamic_performance
+         INNER JOIN error_occurrences eo ON dynamic_performance.error_id = eo.id
+         INNER JOIN error_contents ec on eo.error_contents_id = ec.id)
+
+SELECT id FROM permutations WHERE id IN (SELECT permutation_id FROM static_performance WHERE error_id IS NOT NULL) OR id IN (SELECT permutation_id FROM static_performance WHERE error_id IS NOT NULL);
