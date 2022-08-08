@@ -1,4 +1,5 @@
 DROP VIEW IF EXISTS path_step_index;
+DROP VIEW IF EXISTS all_errors;
 
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS stress_assignments;
@@ -529,3 +530,22 @@ SELECT p.program_id, paths.id as path_id, s.id as step_id, p.id as permutation_i
 FROM paths
          CROSS JOIN steps s ON paths.id = s.path_id
          CROSS JOIN permutations p on s.permutation_id = p.id);
+
+CREATE VIEW all_errors AS
+(
+SELECT version_id,
+       hardware_id,
+       permutation_id,
+       error_occurrences.error_type,
+       error_contents.error_desc,
+       error_occurrences.error_date
+FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
+      FROM static_performance
+      WHERE error_id IS NOT NULL
+      UNION ALL
+      SELECT version_id, hardware_id, permutation_id, error_id
+      FROM dynamic_performance
+      WHERE error_id IS NOT NULL) as p_errors
+         INNER JOIN error_occurrences ON p_errors.error_id = error_occurrences.id
+         INNER JOIN error_contents ON error_contents.id = error_occurrences.error_contents_id = error_contents.id
+    );
