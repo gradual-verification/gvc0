@@ -411,6 +411,11 @@ BEGIN
                            AND dr.permutation_id = @found_perm_id
                            AND dr.version_id = vid
                            AND dr.hardware_id = hid);
+        IF ((SELECT COUNT(*) FROM reserved_jobs) < 1) THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT =
+                        'Attempted to reserve a job, but it was already present in the table.', MYSQL_ERRNO = 1001;
+        END IF;
         INSERT INTO dynamic_performance
         SELECT @found_perm_id,
                @found_measurement_type_id,
