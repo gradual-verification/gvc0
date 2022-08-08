@@ -2,7 +2,7 @@ DROP VIEW IF EXISTS path_step_index;
 DROP VIEW IF EXISTS all_errors;
 
 DROP TABLE IF EXISTS global_configuration;
-DROP TABLE IF EXISTS stress_assignments;
+DROP TABLE IF EXISTS executor_stress_values;
 DROP TABLE IF EXISTS static_performance;
 DROP TABLE IF EXISTS static_conjuncts;
 DROP TABLE IF EXISTS dynamic_performance;
@@ -31,6 +31,7 @@ DROP PROCEDURE IF EXISTS sp_gr_Version;
 DROP PROCEDURE IF EXISTS sp_gr_Nickname;
 DROP PROCEDURE IF EXISTS sp_gr_Program;
 DROP PROCEDURE IF EXISTS sp_gr_Path;
+DROP PROCEDURE IF EXISTS sp_gr_Hostname;
 DROP PROCEDURE IF EXISTS sp_GetCompletionPercentage;
 DROP PROCEDURE IF EXISTS sp_GetProgramErrorCounts;
 DROP PROCEDURE IF EXISTS sp_UpdateStaticPerformance;
@@ -67,18 +68,6 @@ CREATE TABLE IF NOT EXISTS programs
     UNIQUE KEY contents (src_filename, src_hash, num_labels)
 );
 
-DELIMITER //
-CREATE PROCEDURE sp_gr_Program(IN p_name VARCHAR(255), IN p_hash VARCHAR(255), IN p_labels BIGINT UNSIGNED)
-BEGIN
-    INSERT IGNORE INTO programs (src_filename, src_hash, num_labels) VALUES (p_name, p_hash, p_labels);
-    SELECT id
-    FROM programs
-    WHERE src_filename = p_name
-      AND src_hash = p_hash
-      AND num_labels = p_labels;
-END //
-DELIMITER ;
-
 CREATE TABLE IF NOT EXISTS components
 (
     id             SERIAL,
@@ -93,25 +82,6 @@ CREATE TABLE IF NOT EXISTS components
     UNIQUE KEY contents (program_id, spec_type, spec_index, expr_type, expr_index),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
-
-DELIMITER //
-CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255),
-                                 IN p_stype VARCHAR(255),
-                                 IN p_sindex BIGINT UNSIGNED, IN p_etype VARCHAR(255),
-                                 IN p_eindex BIGINT UNSIGNED)
-BEGIN
-    INSERT IGNORE INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
-    VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
-    SELECT id
-    FROM components
-    WHERE program_id = p_id
-      AND context_name = p_cname
-      AND spec_type = p_stype
-      AND spec_index = p_sindex
-      AND expr_type = p_etype
-      AND expr_index = p_eindex;
-END //
-DELIMITER ;
 
 CREATE TABLE IF NOT EXISTS permutations
 (
@@ -263,6 +233,36 @@ VALUES ('instrumentation');
 INSERT INTO static_measurement_types (measurement_type)
 VALUES ('compilation');
 
+
+CREATE TABLE IF NOT EXISTS hostnames
+(
+    id             SERIAL,
+    hostname       VARCHAR(512) UNIQUE NOT NULL,
+    last_connected DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+DELIMITER //
+CREATE PROCEDURE sp_gr_Hostname()
+BEGIN
+    SELECT SUBSTRING_INDEX(USER(), '@', -1) INTO @found_hostname;
+    INSERT INTO hostnames (hostname)
+    VALUES (@found_hostname)
+    ON DUPLICATE KEY UPDATE last_connected = CURRENT_TIMESTAMP;
+    SELECT id FROM hostnames WHERE hostname = @found_hostname;
+END //
+DELIMITER ;
+
+CREATE TABLE executor_stress_values
+(
+    hostname_id BIGINT UNSIGNED NOT NULL,
+    program_id  BIGINT UNSIGNED NOT NULL,
+    stress      INT UNSIGNED    NOT NULL,
+    PRIMARY KEY (hostname_id, program_id, stress),
+    FOREIGN KEY (hostname_id) REFERENCES hostnames (id),
+    FOREIGN KEY (program_id) REFERENCES programs (id)
+);
+
 CREATE TABLE IF NOT EXISTS measurements
 (
     id           SERIAL,
@@ -373,6 +373,7 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
 
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
+                                       IN hsid BIGINT UNSIGNED,
                                        IN bonly BOOLEAN)
 BEGIN
     SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
@@ -395,7 +396,7 @@ BEGIN
     SELECT permutations.program_id, permutations.id, dmt.id
     INTO @found_program_id, @found_perm_id, @found_measurement_type_id
     FROM permutations
-             CROSS JOIN stress_assignments sa on permutations.program_id = sa.program_id
+             CROSS JOIN executor_stress_values sa on permutations.program_id = sa.program_id
              CROSS JOIN dynamic_measurement_types dmt
              CROSS JOIN versions vr
              CROSS JOIN hardware hw
@@ -408,6 +409,7 @@ BEGIN
     WHERE dr.permutation_id IS NULL
       AND vr.id = vid
       AND hw.id = hid
+      AND sa.hostname_id = hsid
       AND (NOT bonly OR permutations.id IN (SELECT permutation_id FROM benchmark_membership))
     ORDER BY RAND()
     LIMIT 1;
@@ -415,8 +417,9 @@ BEGIN
     IF ((SELECT @found_perm_id IS NOT NULL) AND (SELECT @found_measurement_type_id IS NOT NULL) AND
         (SELECT @found_program_id IS NOT NULL)) THEN
         INSERT INTO reserved_jobs (SELECT DISTINCT @found_perm_id, sa.stress, @found_measurement_type_id
-                                   FROM stress_assignments sa
-                                   WHERE sa.program_id = @found_program_id);
+                                   FROM executor_stress_values sa
+                                   WHERE sa.program_id = @found_program_id
+                                     AND sa.hostname_id = hsid);
         DELETE
         FROM reserved_jobs
         WHERE stress IN (SELECT stress
@@ -552,5 +555,36 @@ DELIMITER //
 CREATE PROCEDURE sp_AddProgramToBenchmark(IN p_perm_id BIGINT UNSIGNED, IN p_benchmark_id BIGINT UNSIGNED)
 BEGIN
     INSERT INTO benchmark_membership (benchmark_id, permutation_id) VALUES (p_benchmark_id, p_perm_id);
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE sp_gr_Program(IN p_name VARCHAR(255), IN p_hash VARCHAR(255), IN p_labels BIGINT UNSIGNED)
+BEGIN
+    INSERT IGNORE INTO programs (src_filename, src_hash, num_labels) VALUES (p_name, p_hash, p_labels);
+    SELECT id
+    FROM programs
+    WHERE src_filename = p_name
+      AND src_hash = p_hash
+      AND num_labels = p_labels;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255),
+                                 IN p_stype VARCHAR(255),
+                                 IN p_sindex BIGINT UNSIGNED, IN p_etype VARCHAR(255),
+                                 IN p_eindex BIGINT UNSIGNED)
+BEGIN
+    INSERT IGNORE INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
+    VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
+    SELECT id
+    FROM components
+    WHERE program_id = p_id
+      AND context_name = p_cname
+      AND spec_type = p_stype
+      AND spec_index = p_sindex
+      AND expr_type = p_etype
+      AND expr_index = p_eindex;
 END //
 DELIMITER ;

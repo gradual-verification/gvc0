@@ -49,7 +49,6 @@ trait BenchmarkingConfig
 
 case class PipelineModifiers(onlyVerify: Boolean,
                              onlyCompile: Boolean,
-                             disableBaseline: Boolean,
                              onlyBenchmark: Boolean)
 
 case class RecreatorConfig(version: String,
@@ -61,8 +60,7 @@ case class RecreatorConfig(version: String,
 case class PopulatorConfig(version: String,
                            pathQuantity: Option[Int],
                            db: BenchmarkDBCredentials,
-                           sources: List[Path],
-                           workload: BenchmarkWorkload)
+                           sources: List[Path])
     extends BenchmarkingConfig
 
 case class MonitorConfig(db: BenchmarkDBCredentials, outputDirectory: Path)
@@ -71,7 +69,7 @@ case class MonitorConfig(db: BenchmarkDBCredentials, outputDirectory: Path)
 case class ExecutorConfig(version: String,
                           hardware: String,
                           nickname: Option[String],
-                          iter: IterConfiguration,
+                          workload: BenchmarkWorkload,
                           db: BenchmarkDBCredentials,
                           modifiers: PipelineModifiers,
                           sources: List[Path])
@@ -120,30 +118,32 @@ object BenchmarkExternalConfig {
     val resolved = parseConfig(rootConfig)
     resolved.hardware match {
       case Some(hValue) =>
-        ExecutorConfig(
-          resolved.version,
-          hValue,
-          resolved.nickname,
-          resolved.iter,
-          resolved.credentials,
-          resolved.modifiers,
-          resolved.sources
-        )
+        resolved.workload match {
+          case Some(wValue) =>
+            ExecutorConfig(
+              resolved.version,
+              hValue,
+              resolved.nickname,
+              wValue,
+              resolved.credentials,
+              resolved.modifiers,
+              resolved.sources
+            )
+          case None => error("A <workload> must be provided.")
+        }
+
       case None => error("A <hardware> must be provided.")
     }
   }
 
   def parsePopulator(rootConfig: Config): PopulatorConfig = {
     val resolved = parseConfig(rootConfig)
-    resolved.workload match {
-      case Some(wValue) =>
-        PopulatorConfig(resolved.version,
-                        resolved.pathQuantity,
-                        resolved.credentials,
-                        resolved.sources,
-                        wValue)
-      case None => error("A <workload> must be provided.")
-    }
+
+    PopulatorConfig(resolved.version,
+                    resolved.pathQuantity,
+                    resolved.credentials,
+                    resolved.sources)
+
   }
 
   private def parseConfig(rootConfig: Config): BenchmarkConfigResults = {
@@ -196,7 +196,7 @@ object BenchmarkExternalConfig {
 
       val iter = parseIter(benchmarkRoot \ "iter")
 
-      val modifiers = parsePipelineModifiers(benchmarkRoot)
+      val modifiers = parsePipelineModifiers(rootConfig, benchmarkRoot)
 
       BenchmarkConfigResults(version,
                              hardware,
@@ -259,12 +259,12 @@ object BenchmarkExternalConfig {
     }
   }
 
-  private def parsePipelineModifiers(xml: NodeSeq): PipelineModifiers = {
+  private def parsePipelineModifiers(config: Config,
+                                     xml: NodeSeq): PipelineModifiers = {
     PipelineModifiers(
-      onlyVerify = xml.contains("only-verify"),
-      onlyCompile = xml.contains("only-compile"),
-      disableBaseline = xml.contains("disable-baseline"),
-      onlyBenchmark = xml.contains("only-benchmark")
+      onlyVerify = xml.contains("only-verify") || config.onlyVerify,
+      onlyCompile = xml.contains("only-compile") || config.onlyCompile,
+      onlyBenchmark = xml.contains("only-benchmark") || config.onlyBenchmark
     )
   }
 

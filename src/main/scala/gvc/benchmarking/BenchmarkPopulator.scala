@@ -70,21 +70,16 @@ object BenchmarkPopulator {
       mapping.toMap
     }
   }
+
   def populatePrograms(
       sources: List[Path],
       libraryDirs: List[String],
       populatorConfig: PopulatorConfig,
       connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
-    val stressTable = new StressTable(populatorConfig.workload)
     val synchronized = allOf(
       sources
         .map(src => {
-          Future(
-            populateProgram(src,
-                            libraryDirs,
-                            populatorConfig,
-                            stressTable,
-                            connection))
+          Future(populateProgram(src, libraryDirs, populatorConfig, connection))
         }))
     val mapping = mutable.Map[Long, StoredProgramRepresentation]()
     Await
@@ -130,10 +125,10 @@ object BenchmarkPopulator {
         None
     }
   }
+
   private def populatePaths(programID: Long,
                             programRep: StoredProgramRepresentation,
                             populatorConfig: PopulatorConfig,
-                            stressList: List[Int],
                             conn: DBConnection): List[PathQueryCollection] = {
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
@@ -205,7 +200,6 @@ object BenchmarkPopulator {
   private def populateProgram(src: Path,
                               libraries: List[String],
                               populatorConfig: PopulatorConfig,
-                              stressTable: StressTable,
                               xa: DBConnection): PopulatedProgram = {
     Output.info(s"Syncing definitions for ${src.getFileName}")
     val sourceText = Files.readString(src)
@@ -218,7 +212,6 @@ object BenchmarkPopulator {
                                                     md5sum(sourceText),
                                                     labelOutput.labels.size,
                                                     xa)
-    DAO.addProgramWorkloadMappings(insertedProgramID, stressTable.get(src), xa)
 
     val componentMapping = mutable.Map[ASTLabel, Long]()
     labelOutput.labels.indices.foreach(i => {
@@ -232,13 +225,10 @@ object BenchmarkPopulator {
 
     val programRep =
       StoredProgramRepresentation(programInfo, componentMapping.toMap)
-    PopulatedProgram(insertedProgramID,
-                     programRep,
-                     populatePaths(insertedProgramID,
-                                   programRep,
-                                   populatorConfig,
-                                   stressTable.get(src),
-                                   xa))
+    PopulatedProgram(
+      insertedProgramID,
+      programRep,
+      populatePaths(insertedProgramID, programRep, populatorConfig, xa))
   }
 
   //https://alvinalexander.com/source-code/scala-method-create-md5-hash-of-string/
@@ -256,33 +246,4 @@ object BenchmarkPopulator {
     prependWithZeros(hashedPassword)
   }
 
-  class StressTable(workload: BenchmarkWorkload) {
-    private val defaultStressValues = workload.stress match {
-      case Some(value) => BenchmarkExternalConfig.generateStressList(value)
-      case None =>
-        workload.programCases.find(p => p.isDefault) match {
-          case Some(value) =>
-            BenchmarkExternalConfig.generateStressList(value.workload)
-          case None => error("Unable to resolve default stress configuration.")
-        }
-    }
-    private val userConfiguredStressMappings = workload.programCases
-      .flatMap(c => {
-        val stressValues =
-          BenchmarkExternalConfig.generateStressList(c.workload)
-        for {
-          i1: String <- c.matches
-        } yield i1 -> stressValues
-      })
-      .toMap
-
-    def get(src: Path): List[Int] = {
-      val fileName = src.getFileName.toString
-      val baseName = fileName.substring(0, fileName.lastIndexOf(".c0"))
-      userConfiguredStressMappings.get(baseName) match {
-        case Some(value) => value
-        case None        => defaultStressValues
-      }
-    }
-  }
 }

@@ -1,4 +1,4 @@
-name: Executor
+name: Executor - Mass Data Collection
 on: [ workflow_dispatch ]
 permissions:
   contents: read

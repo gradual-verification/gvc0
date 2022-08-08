@@ -7,43 +7,43 @@ import gvc.benchmarking.Benchmark.{
   injectStress,
   isInjectable
 }
-import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
+import gvc.benchmarking.BenchmarkPopulator.ProgramInformation
+import gvc.benchmarking.DAO.{
+  DBConnection,
+  DynamicMeasurementMode,
+  ErrorType,
+  Identity,
+  Permutation
+}
 import gvc.benchmarking.Timing.{CC0CompilationException, CC0ExecutionException}
 import gvc.transformer.{IR, IRPrinter}
 import gvc.weaver.WeaverException
 import gvc.{Config, Main, VerificationException}
 import viper.silicon.Silicon
+
 import java.nio.file.{Files, Path}
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 
 object BenchmarkExecutor {
-  def injectAndWrite(c0: String, dest: Path): Unit = {
-    if (!isInjectable(c0)) {
-      throw new BenchmarkException(
-        s"The file doesn't include an assignment of the form 'int stress = ...'."
-      )
-    }
-    val source = injectStress(c0)
-    Files.writeString(
-      dest,
-      source
-    )
-  }
+
   case class ReservedProgram(perm: Permutation,
                              workloads: List[Int],
                              measurementMode: Long)
+
   def execute(config: ExecutorConfig,
               baseConfig: Config,
               libraries: List[String]): Unit = {
-
+    if (config.modifiers.onlyBenchmark) {
+      Output.info("Targeting only benchmarks.")
+    } else {
+      Output.info("Targeting all available programs.")
+    }
     val conn = DAO.connect(config.db)
     val id = DAO.addOrResolveIdentity(config, conn)
     var currentSiliconInstance: Option[Silicon] = None
     val ongoingProcesses = mutable.ListBuffer[scala.sys.process.Process]()
-
-    val syncedPrograms =
-      BenchmarkPopulator.sync(config.sources, libraries, conn)
+    val syncedPrograms = this.syncProgramsAndStress(id, config, libraries, conn)
 
     val tempBinary =
       Files.createTempFile("temp_bin", ".out")
@@ -115,11 +115,11 @@ object BenchmarkExecutor {
           val cOut = Timing.compileTimed(tempSource,
                                          tempBinary,
                                          baseConfig,
-                                         config.iter.static,
+                                         config.workload.staticIterations,
                                          ongoingProcesses)
           DAO.updateStaticProfiling(id,
                                     reserved.perm.id,
-                                    config.iter.static,
+                                    config.workload.staticIterations,
                                     verified,
                                     cOut,
                                     conn)
@@ -137,7 +137,7 @@ object BenchmarkExecutor {
       Timing.compileTimed(tempSource,
                           tempBinary,
                           baseConfig,
-                          config.iter.static,
+                          config.workload.staticIterations,
                           ongoingProcesses)
       Some(tempBinary)
     }
@@ -181,17 +181,18 @@ object BenchmarkExecutor {
               val perfOption = wrapTiming(
                 Timing.execTimed(value,
                                  List(s"--stress $w"),
-                                 config.iter.dynamic,
+                                 config.workload.iterations,
                                  ongoingProcesses))
               perfOption match {
                 case Left(t) => reportError(reserved, t)
                 case Right(p) =>
-                  DAO.completeProgramMeasurement(id,
-                                                 reserved,
-                                                 w,
-                                                 config.iter.static,
-                                                 p,
-                                                 conn)
+                  DAO.completeProgramMeasurement(
+                    id,
+                    reserved,
+                    w,
+                    config.workload.staticIterations,
+                    p,
+                    conn)
               }
             })
         case None =>
@@ -201,5 +202,55 @@ object BenchmarkExecutor {
         config.modifiers.onlyBenchmark,
         conn)
     }
+  }
+
+  def injectAndWrite(c0: String, dest: Path): Unit = {
+    if (!isInjectable(c0)) {
+      throw new BenchmarkException(
+        s"The file doesn't include an assignment of the form 'int stress = ...'."
+      )
+    }
+    val source = injectStress(c0)
+    Files.writeString(
+      dest,
+      source
+    )
+  }
+
+  private def syncProgramsAndStress(
+      id: Identity,
+      config: ExecutorConfig,
+      libraries: List[String],
+      conn: DBConnection): Map[Long, ProgramInformation] = {
+    val syncedPrograms =
+      BenchmarkPopulator.sync(config.sources, libraries, conn)
+    val workload = config.workload
+
+    val defaultStressValues = workload.stress match {
+      case Some(value) => BenchmarkExternalConfig.generateStressList(value)
+      case None =>
+        workload.programCases.find(p => p.isDefault) match {
+          case Some(value) =>
+            BenchmarkExternalConfig.generateStressList(value.workload)
+          case None => error("Unable to resolve default stress configuration.")
+        }
+    }
+    val userConfiguredStressMappings = workload.programCases
+      .flatMap(c => {
+        val stressValues =
+          BenchmarkExternalConfig.generateStressList(c.workload)
+        for {
+          i1: String <- c.matches
+        } yield i1 -> stressValues
+      })
+      .toMap
+    val translatedIDMapping = syncedPrograms.map(p => {
+      val withoutExtension =
+        p._2.fileName.substring(0, p._2.fileName.lastIndexOf(".c0"))
+      p._1 -> userConfiguredStressMappings.getOrElse(withoutExtension,
+                                                     defaultStressValues)
+    })
+    DAO.resolveStressValues(id, translatedIDMapping, conn)
+    syncedPrograms
   }
 }

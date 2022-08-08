@@ -61,7 +61,7 @@ object DAO {
 
   case class GlobalConfiguration(timeoutMinutes: Long, maxPaths: Long)
 
-  case class Identity(vid: Long, hid: Long, nid: Option[Long])
+  case class Identity(vid: Long, hwid: Long, nid: Option[Long], hsid: Long)
 
   case class Version(id: Long, versionName: String, dateAdded: String)
 
@@ -167,28 +167,6 @@ object DAO {
     }
   }
 
-  def addProgramWorkloadMappings(programID: Long,
-                                 workloads: List[Int],
-                                 c: DBConnection): Unit = {
-    case class WorkloadEntry(pid: Long, stressValue: Int)
-    Update[WorkloadEntry](
-      s"INSERT INTO stress_assignments (program_id, stress) VALUES (?, ?);")
-      .updateMany(
-        for {
-          w <- workloads
-        } yield WorkloadEntry(programID, w)
-      )
-      .transact(c.xa)
-      .attempt
-      .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException(
-          s"Unable to add workload entries for PID=$programID",
-          t)
-      case Right(_) =>
-    }
-  }
-
   def addOrResolveIdentity(config: ExecutorConfig,
                            c: DBConnection): Identity = {
     val hid = addOrResolveHardware(config.hardware, c)
@@ -197,7 +175,49 @@ object DAO {
       case Some(value) => Some(addOrResolveNickname(value, c))
       case None        => None
     }
-    Identity(vid, hid, nid)
+    val hostnameID = addOrResolveHostname(c)
+    Identity(vid, hid, nid, hostnameID)
+  }
+
+  def addOrResolveHostname(c: DBConnection): Long = {
+    sql"CALL sp_gr_Hostname();"
+      .query[Long]
+      .unique
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          "Unable to resolve hostname for connected session.",
+          t)
+      case Right(value) => value
+    }
+  }
+
+  def resolveStressValues(id: Identity,
+                          stressMapping: Map[Long, List[Int]],
+                          c: DBConnection): Unit = {
+    case class StressEntry(programID: Long, stress: Int)
+
+    val entries = stressMapping
+      .flatMap(p => {
+        for {
+          w <- p._2
+        } yield StressEntry(p._1, w)
+      })
+      .toList
+    (for {
+      _ <- sql"DELETE FROM executor_stress_values WHERE hostname_id = ${id.hsid};".update.run
+      u <- Update[StressEntry](
+        s"INSERT INTO executor_stress_values (hostname_id, program_id, stress) VALUES (${id.hsid}, ?, ?);")
+        .updateMany(entries)
+    } yield u).transact(c.xa).attempt.unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          "Unable to populate table with configured stress values.",
+          t)
+      case Right(_) =>
+    }
   }
 
   def addOrResolveNickname(name: String, c: DBConnection): Long = {
@@ -393,7 +413,7 @@ object DAO {
                ${m.median}, ${m.mean}, ${m.stdev}, ${m.minimum}, ${m.maximum});"""
             .query[Long]
             .unique
-          u <- sql"CALL sp_UpdateStaticPerformance(${id.vid}, ${id.hid}, ${id.nid}, $pid, $mid, ${c
+          u <- sql"CALL sp_UpdateStaticPerformance(${id.vid}, ${id.hwid}, ${id.nid}, $pid, $mid, ${c
             .staticModes(p._2)});".update.run
         } yield u).transact(c.xa).attempt.unsafeRunSync() match {
           case Left(t) =>
@@ -429,7 +449,7 @@ object DAO {
     var result: Option[ReservedProgram] = None
     while (!finished) {
       finished = true
-      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid}, $onlyBenchmark);"
+      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hwid}, ${id.nid}, $onlyBenchmark);"
         .query[ReservedProgramEntry]
         .to[List]
         .transact(c.xa)
@@ -490,7 +510,7 @@ object DAO {
           WHERE permutation_id = ${reserved.perm.id}
             AND version_id = ${id.vid}
             AND nickname_id = ${id.nid}
-            AND hardware_id = ${id.hid}
+            AND hardware_id = ${id.hwid}
             AND measurement_type_id = ${reserved.measurementMode}
             AND stress = $workload
           """.update.run
@@ -568,7 +588,7 @@ object DAO {
       case Right(value) => value
     }
     sql"""UPDATE static_performance SET error_id = $eid
-                              WHERE hardware_id = ${id.hid}
+                              WHERE hardware_id = ${id.hwid}
                                 AND version_id = ${id.vid}
                                 AND nickname_id = ${id.nid}
                                 AND permutation_id = ${reserved.perm.id}""".update.run
@@ -587,7 +607,7 @@ object DAO {
              AND measurement_type_id = ${reserved.measurementMode}
              AND stress = $w
              AND version_id = ${id.vid}
-             AND hardware_id = ${id.hid}
+             AND hardware_id = ${id.hwid}
              AND nickname_id = ${id.nid};""".update.run
         .transact(conn.xa)
         .attempt
@@ -714,8 +734,8 @@ object DAO {
         .unique
       u <- Update[BenchmarkEntry](
         s"""INSERT INTO benchmark_membership (benchmark_id, permutation_id)
-                 | SELECT $bid, permutations.id FROM permutations INNER JOIN steps s on permutations.id = s.permutation_id
-                 | WHERE s.level_id = ? AND s.path_id = ? AND permutations.program_id = ?;""".stripMargin)
+           | SELECT $bid, permutations.id FROM permutations INNER JOIN steps s on permutations.id = s.permutation_id
+           | WHERE s.level_id = ? AND s.path_id = ? AND permutations.program_id = ?;""".stripMargin)
         .updateMany(
           benchmarkEntries
         )
