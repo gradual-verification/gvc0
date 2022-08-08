@@ -1,3 +1,5 @@
+DROP VIEW IF EXISTS path_step_index;
+
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS stress_assignments;
 DROP TABLE IF EXISTS static_performance;
@@ -15,6 +17,7 @@ DROP TABLE IF EXISTS permutations;
 DROP TABLE IF EXISTS components;
 DROP TABLE IF EXISTS paths;
 DROP TABLE IF EXISTS programs;
+DROP TABLE IF EXISTS concurrent_accesses;
 DROP TABLE IF EXISTS nicknames;
 DROP TABLE IF EXISTS hardware;
 DROP TABLE IF EXISTS versions;
@@ -520,18 +523,9 @@ BEGIN
 END //
 DELIMITER ;
 
-
 CREATE VIEW path_step_index AS
 (
-SELECT *
+SELECT p.program_id, paths.id as path_id, s.id as step_id, p.id as permutation_id
 FROM paths
          CROSS JOIN steps s ON paths.id = s.path_id
          CROSS JOIN permutations p on s.permutation_id = p.id);
-CREATE VIEW dynamic_errors AS
-(
-SELECT permutation_id, eo.error_type, eo.error_date, ec.error_desc
-FROM dynamic_performance
-         INNER JOIN error_occurrences eo ON dynamic_performance.error_id = eo.id
-         INNER JOIN error_contents ec on eo.error_contents_id = ec.id)
-
-SELECT id FROM permutations WHERE id IN (SELECT permutation_id FROM static_performance WHERE error_id IS NOT NULL) OR id IN (SELECT permutation_id FROM static_performance WHERE error_id IS NOT NULL);
