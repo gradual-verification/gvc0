@@ -441,7 +441,6 @@ object DAO {
                                    t)
           }
         case Right(value) =>
-          finished = true
           if (value.nonEmpty) {
             val workloads = value.map(v => v.stress)
             val permID = value.head.permID
@@ -576,6 +575,7 @@ object DAO {
     reserved.workloads.foreach(w => {
       sql"""UPDATE dynamic_performance SET error_id = $eid
            WHERE permutation_id = ${reserved.perm.id}
+             AND measurement_type_id = ${reserved.measurementMode}
              AND stress = $w
              AND version_id = ${id.vid}
              AND hardware_id = ${id.hid}
