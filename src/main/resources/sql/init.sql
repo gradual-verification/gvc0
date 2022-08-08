@@ -28,10 +28,10 @@ DROP PROCEDURE IF EXISTS sp_gr_Version;
 DROP PROCEDURE IF EXISTS sp_gr_Nickname;
 DROP PROCEDURE IF EXISTS sp_gr_Program;
 DROP PROCEDURE IF EXISTS sp_gr_Path;
-
+DROP PROCEDURE IF EXISTS sp_GetCompletionPercentage;
+DROP PROCEDURE IF EXISTS sp_GetProgramErrorCounts;
 DROP PROCEDURE IF EXISTS sp_UpdateStaticPerformance;
 DROP PROCEDURE IF EXISTS sp_UpdateStaticConjuncts;
-DROP PROCEDURE IF EXISTS sp_UpdateStatic;
 DROP PROCEDURE IF EXISTS sp_ReservePermutation;
 DROP PROCEDURE IF EXISTS sp_AddMeasurement;
 
@@ -378,6 +378,8 @@ CREATE TABLE concurrent_accesses
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED)
 BEGIN
+    SELECT GET_LOCK('sp_ReservePermutation', -1);
+    START TRANSACTION;
     INSERT INTO concurrent_accesses (nickname_id) VALUES (nnid);
     DROP TABLE IF EXISTS reserved_jobs;
     CREATE TEMPORARY TABLE reserved_jobs
@@ -444,6 +446,8 @@ BEGIN
         FROM reserved_jobs;
     END IF;
     DELETE FROM concurrent_accesses WHERE nickname_id = nnid;
+    COMMIT;
+    DO RELEASE_LOCK('sp_ReservePermutation');
     SELECT * FROM reserved_jobs;
 END //
 DELIMITER ;
@@ -469,5 +473,41 @@ BEGIN
     INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum)
     VALUES (p_iterations, p_ninety_fifth, p_fifth, p_median, p_mean, p_stdev, p_max, p_min);
     SELECT LAST_INSERT_ID();
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE sp_GetCompletionPercentage(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED)
+BEGIN
+    SELECT (COUNT(measurement_id) + COUNT(error_id)) / COUNT(*) * 100
+    FROM permutations
+             CROSS JOIN versions
+             CROSS JOIN hardware
+             CROSS JOIN dynamic_measurement_types
+             CROSS JOIN stress_assignments sa on permutations.program_id = sa.program_id
+             LEFT OUTER JOIN
+         dynamic_performance dp on dynamic_measurement_types.id = dp.measurement_type_id
+             AND dp.permutation_id = permutations.id AND dp.hardware_id = hardware.id AND dp.version_id = versions.id
+             AND dp.stress = sa.stress
+    WHERE version_id = vid
+      AND hardware_id = hid;
+END //
+DELIMITER ;
+DELIMITER //
+CREATE PROCEDURE sp_GetProgramErrorCounts(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED)
+BEGIN
+    SELECT permutations.program_id, COUNT(error_id)
+    FROM permutations
+             CROSS JOIN versions
+             CROSS JOIN hardware
+             CROSS JOIN dynamic_measurement_types
+             CROSS JOIN stress_assignments sa on permutations.program_id = sa.program_id
+             LEFT OUTER JOIN
+         dynamic_performance dp on dynamic_measurement_types.id = dp.measurement_type_id
+             AND dp.permutation_id = permutations.id AND dp.hardware_id = hardware.id AND dp.version_id = versions.id
+             AND dp.stress = sa.stress
+    WHERE version_id = vid
+      AND hardware_id = hid
+    GROUP BY permutations.program_id;
 END //
 DELIMITER ;

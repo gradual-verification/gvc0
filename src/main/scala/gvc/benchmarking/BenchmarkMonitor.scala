@@ -1,19 +1,14 @@
 package gvc.benchmarking
 
 import gvc.benchmarking.Benchmark.Extensions.csv
-import gvc.benchmarking.DAO.{CompletionMetadata, DBConnection}
+import gvc.benchmarking.DAO.DBConnection
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 
-import java.nio.file.Files
-
 object BenchmarkMonitor {
-
   def monitor(config: MonitorConfig): Unit = {
     val conn = DAO.connect(config.db)
-    //printContentsSummary(conn)
     logStatistics(config, conn)
   }
-
   private object Names {
     val errorListing: DynamicMeasurementMode = csv("errors")
     val dynamicPerformanceListing: DynamicMeasurementMode = csv(
@@ -24,80 +19,31 @@ object BenchmarkMonitor {
       "permutation_id,version_name,src_filename,mode,error_type,error_desc"
   }
 
-  private def printContentsSummary(conn: DBConnection): Unit = {}
-
   private def logStatistics(config: MonitorConfig, conn: DBConnection): Unit = {
-    if (Files.notExists(config.outputDirectory)) {
-      Files.createDirectories(config.outputDirectory)
-    }
-
-    val errors = config.outputDirectory.resolve(this.Names.errorListing)
-    //Files.writeString(errors, this.generateErrorCSV(conn))
+    val metadata = DAO.getCompletionMetadata(conn)
+    printResults(metadata)
   }
-  /*
-  private def generateErrorCSV(conn: DBConnection): String = {
-    val errors = DAO.listErrors(conn)
 
-    (List(Names.errorContentsColumns) ++
-      errors
-        .map(e => {
-          List(e.pid,
-               e.versionName,
-               e.programName,
-               e.measurementMode,
-               e.timeSeconds,
-               e.errorType,
-               e.errorDesc).mkString(",")
-        }))
-      .mkString("\n")
-  }*/
-
-  private case class CompletedCategory(srcFileName: String,
-                                       errorCountListing: Map[String, Long],
-                                       totalCompleted: Long,
-                                       total: Long)
-  /*
-  private def sortResults(results: List[DAO.CompletionMetadata])
-  : Map[String,
-    Map[String,
-      Map[DynamicMeasurementMode,
-        Map[String, Map[Long, CompletedCategory]]]]] = {
-    results
+  private def printResults(metadata: List[DAO.CompletionMetadata]): Unit = {
+    val structured = metadata
       .groupBy(_.versionName)
-      .map(pair => {
-        pair._1 -> pair._2
+      .map(g => {
+        g._1 -> g._2
           .groupBy(_.hardwareName)
-          .map(pair2 => {
-            pair2._1 -> pair2._2
-              .groupBy(_.measurementMode)
-              .map(pair3 => {
-                pair3._1 -> pair3._2
-                  .groupBy(_.srcFilename)
-                  .map(pair4 => {
-                    pair4._1 -> pair4._2
-                      .groupBy(_.stress)
-                      .map(pair5 => pair5._1 -> createCategory(pair4._2))
-                  })
-              })
+          .map(h => {
+            h._1 -> h._2
           })
       })
-  }
-
-  private def createCategory(
-                              completion: List[CompletionMetadata]): CompletedCategory = {
-
-    val errorCountMapping = completion
-      .filter(c => c.errorType.nonEmpty && c.errorCount.nonEmpty)
-      .map(c => {
-        c.errorType.get -> c.errorCount.get
+    structured.keySet.foreach(k => {
+      println(k)
+      structured(k).foreach(m => {
+        println(
+          "\t\t" + m + s" — %${Math.round(m._2.head.percentCompleted * 10) / 10}")
+        println("\t\t\t Errors:")
+        m._2.head.errorMapping.foreach(em => {
+          println(s"\t\t\t${em._1} — ${em._2}")
+        })
       })
-      .toMap
-    val modifiedCompleted = completion.head.totalCompleted - errorCountMapping.values.sum
-    CompletedCategory(completion.head.srcFilename,
-      errorCountMapping,
-      modifiedCompleted,
-      completion.head.total)
+    })
   }
-
- */
 }

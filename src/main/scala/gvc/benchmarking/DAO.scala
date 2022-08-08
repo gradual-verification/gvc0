@@ -423,15 +423,9 @@ object DAO {
     var result: Option[ReservedProgram] = None
     while (!finished) {
       finished = true
-      (for {
-        _ <- sql"SELECT GET_LOCK('sp_ReservePermutation', -1);"
-          .query[Option[Int]]
-          .unique
-        rows <- sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid});"
-          .query[ReservedProgramEntry]
-          .to[List]
-        _ <- sql"DO RELEASE_LOCK('sp_ReservePermutation');".update.run
-      } yield rows)
+      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hid}, ${id.nid});"
+        .query[ReservedProgramEntry]
+        .to[List]
         .transact(c.xa)
         .attempt
         .unsafeRunSync() match {
@@ -606,13 +600,17 @@ object DAO {
                                 percentCompleted: Double,
                                 errorMapping: Map[String, Int])
 
-  case class VersionHardwareCombinations(versionName: String,
-                                         versionID: Int,
-                                         hardwareName: String,
-                                         hardwareID: Int)
+  def getCompletionMetadata(c: DBConnection): List[CompletionMetadata] = {
+    case class VersionHardwareCombinations(versionName: String,
+                                           versionID: Int,
+                                           hardwareName: String,
+                                           hardwareID: Int)
+    case class ProgramErrorCount(srcFilename: String, errorCount: Int)
 
-  def printCompletionData(c: DBConnection): Unit = {
-    sql"SELECT version_name, versions.id, hardware_name, hardware.id FROM versions CROSS JOIN hardware WHERE EXISTS"
+    sql"""SELECT DISTINCT version_name, version_id, hardware_name, hardware_id
+                FROM dynamic_performance
+                    INNER JOIN hardware h on dynamic_performance.hardware_id = h.id
+                    INNER JOIN versions v on dynamic_performance.version_id = v.id"""
       .query[VersionHardwareCombinations]
       .to[List]
       .transact(c.xa)
@@ -621,8 +619,40 @@ object DAO {
       case Left(t) =>
         prettyPrintException("Unable to acquire list of hardware and versions.",
                              t)
-      case Right(value) => ???
+      case Right(value) =>
+        value.map(v => {
+          val completion =
+            sql"CALL sp_GetCompletionPercentage(${v.versionID}, ${v.hardwareID});"
+              .query[Double]
+              .unique
+              .transact(c.xa)
+              .attempt
+              .unsafeRunSync() match {
+              case Left(t) =>
+                prettyPrintException(
+                  s"Unable to acquire completion percentage for VID=${v.versionID}, HWID=${v.hardwareID}.",
+                  t)
+              case Right(value) => value
+            }
+          val programErrorCounts =
+            sql"CALL sp_GetProgramErrorCounts(${v.versionID}, ${v.hardwareID});"
+              .query[ProgramErrorCount]
+              .to[List]
+              .transact(c.xa)
+              .attempt
+              .unsafeRunSync() match {
+              case Left(t) =>
+                prettyPrintException(
+                  s"Unable to acquire error countsVID=${v.versionID}, HWID=${v.hardwareID}.",
+                  t)
+              case Right(ecs) =>
+                ecs.map(cs => cs.srcFilename -> cs.errorCount).toMap
+            }
+          CompletionMetadata(v.versionName,
+                             v.hardwareName,
+                             completion,
+                             programErrorCounts)
+        })
     }
-
   }
 }
