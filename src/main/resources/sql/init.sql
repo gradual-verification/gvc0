@@ -372,11 +372,6 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED)
 BEGIN
-    SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
-    IF (SELECT @lock_status IS NULL) THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Failed to acquire lock.';
-    END IF;
     DROP TABLE IF EXISTS reserved_jobs;
     CREATE TEMPORARY TABLE reserved_jobs
     (
@@ -434,7 +429,6 @@ BEGIN
                CURRENT_TIMESTAMP
         FROM reserved_jobs;
     END IF;
-    DO RELEASE_LOCK('sp_ReservePermutation');
     SELECT * FROM reserved_jobs;
 END //
 DELIMITER ;
