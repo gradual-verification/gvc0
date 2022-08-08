@@ -38,7 +38,7 @@ DROP PROCEDURE IF EXISTS sp_UpdateStaticConjuncts;
 DROP PROCEDURE IF EXISTS sp_ReservePermutation;
 DROP PROCEDURE IF EXISTS sp_AddMeasurement;
 DROP PROCEDURE IF EXISTS sp_AddProgramToBenchmark;
-DROP PROCEDURE IF EXISTS sp_AddBenchmark;
+DROP PROCEDURE IF EXISTS sp_ResetBenchmark;
 
 DROP TABLE IF EXISTS reserved_jobs;
 
@@ -223,9 +223,6 @@ CREATE TABLE IF NOT EXISTS benchmarks
     benchmark_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, benchmark_name)
 );
-
-INSERT INTO benchmarks (benchmark_name, benchmark_desc)
-VALUES ('default', 'Permutations corresponding to 20, 40, 60, and 80% increments along the first path inserted.');
 
 CREATE TABLE IF NOT EXISTS benchmark_membership
 (
@@ -540,7 +537,7 @@ FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
     );
 
 DELIMITER //
-CREATE PROCEDURE sp_ResetBenchmark(IN p_bench_name BIGINT UNSIGNED, IN p_bench_desc BIGINT UNSIGNED)
+CREATE PROCEDURE sp_ResetBenchmark(IN p_bench_name VARCHAR(255), IN p_bench_desc TEXT)
 BEGIN
     INSERT INTO benchmarks (benchmark_name, benchmark_desc)
     VALUES (p_bench_name, p_bench_desc)
@@ -554,6 +551,6 @@ DELIMITER ;
 DELIMITER //
 CREATE PROCEDURE sp_AddProgramToBenchmark(IN p_perm_id BIGINT UNSIGNED, IN p_benchmark_id BIGINT UNSIGNED)
 BEGIN
-    INSERT IGNORE INTO benchmark_membership (benchmark_id, permutation_id) VALUES (p_perm_id, p_benchmark_id);
+    INSERT INTO benchmark_membership (benchmark_id, permutation_id) VALUES (p_benchmark_id, p_perm_id);
 END //
 DELIMITER ;

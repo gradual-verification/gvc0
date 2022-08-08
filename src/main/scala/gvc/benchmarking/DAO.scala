@@ -703,19 +703,19 @@ object DAO {
                   }
               }
             indices.map(idc => {
-              BenchmarkEntry(p.programID, idc, minPathIndex)
+              BenchmarkEntry(idc, minPathIndex, p.programID)
             })
           })
         }
       }
     (for {
-      bid <- sql"CALL sp_AddBenchmark($benchmarkName, ${increments.mkString(",")});"
+      bid <- sql"CALL sp_ResetBenchmark($benchmarkName, ${increments.mkString(",")});"
         .query[Long]
         .unique
       u <- Update[BenchmarkEntry](
-        s"""INSERT IGNORE INTO benchmark_membership (benchmark_id, permutation_id)
-                 | SELECT $bid, id FROM permutations INNER JOIN steps s on permutations.id = s.permutation_id
-                 | WHERE s.level_id = ? AND s.path_id = ? AND s.program_id = ?;""".stripMargin)
+        s"""INSERT INTO benchmark_membership (benchmark_id, permutation_id)
+                 | SELECT $bid, permutations.id FROM permutations INNER JOIN steps s on permutations.id = s.permutation_id
+                 | WHERE s.level_id = ? AND s.path_id = ? AND permutations.program_id = ?;""".stripMargin)
         .updateMany(
           benchmarkEntries
         )

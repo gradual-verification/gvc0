@@ -37,9 +37,12 @@ object BenchmarkPopulator {
                      libraryDirs,
                      populatorConfig,
                      connection)
+    Output.info("Populating default benchmark...")
     DAO.populateIncrementalBenchmark(DAO.Defaults.DefaultBenchmarkName,
                                      DAO.Defaults.DefaultBenchmarkIncrements,
                                      connection)
+    Output.info("Successfully populated default benchmark.")
+
   }
 
   def sync(sources: List[Path],
@@ -157,7 +160,6 @@ object BenchmarkPopulator {
       case None        => baselineMaximum
     }
     val difference = configuredMaximum - DAO.getNumberOfPaths(programID, conn)
-
     for (i <- 0 until difference.intValue()) {
       val ordering = sampler.sample(SamplingHeuristic.Random)
       val pathHash =
