@@ -416,10 +416,11 @@ BEGIN
                            AND dr.version_id = vid
                            AND dr.hardware_id = hid);
         IF ((SELECT COUNT(*) FROM reserved_jobs) < 1) THEN
+            SELECT CONCAT('Reservation failed. PID=', @found_perm_id, ' MTID=',
+                          @found_measurement_type_id)
+            INTO @message_text;
             SIGNAL SQLSTATE '45000'
-                SET MESSAGE_TEXT =
-                        CONCAT('Reservation failed. PID=', @found_perm_id, ' MTID=',
-                               @found_measurement_type_id);
+                SET MESSAGE_TEXT = @message_text;
         END IF;
         INSERT INTO dynamic_performance
         SELECT @found_perm_id,
