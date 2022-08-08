@@ -16,6 +16,7 @@ case class Config(
     output: Option[String] = None,
     timeout: Option[Long] = None,
     mode: Mode = Config.DefaultMode,
+    exportDirectory: Option[String] = None,
     config: Option[Path] = None,
     onlyExec: Boolean = false,
     saveFiles: Boolean = false,
@@ -79,6 +80,8 @@ object Config {
 
   case object Monitor extends Mode
 
+  case object Export extends Mode
+
   val help =
     """Usage: gvc0 [OPTION...] SOURCEFILE
       |where OPTION is
@@ -97,7 +100,8 @@ object Config {
       |                --execute                      Execute programs and store results in the database using options from the specified configuration file.
       |                --execute-benchmark            Identical to --execute, but only selects programs belonging to pre-configured benchmark sets.
       |                --recreate=<id>                Specify a permutation to recreate from the database using options from the specified configuration file.
-      |                --export=<dir>                 Specify a directory to export data to. Data is filtered using options from the specified configuration file.
+      |                --export                       Data is filtered using options from the specified configuration file.
+      |                --export=<dir>                 Specify a directory to export data to instead of the default './export'.
       |                 
       |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
       |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
@@ -119,6 +123,8 @@ object Config {
   private val versionString = raw"--version=(.+)".r
   private val nicknameString = raw"--nickname=(.+)".r
   private val hardwareString = raw"--hardware=(.+)".r
+
+  private val exportString = raw"--export=(.+)".r
 
   private val dbURLString = raw"--db-url=(.+)".r
   private val dbUserString = raw"--db-user=(.+)".r
@@ -152,10 +158,9 @@ object Config {
     try {
       t.toInt
     } catch {
-      case _: NumberFormatException => {
+      case _: NumberFormatException =>
         error(
           s"Invalid option for $config; expected an integer but found '$t'.")
-      }
     }
   }
 
@@ -192,6 +197,10 @@ object Config {
       current: Config = Config()
   ): Config =
     args match {
+      case exportString(t) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = Export, exportDirectory = Some(t)))
       case stressArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
@@ -223,6 +232,11 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(config = Some(parsePath(t)))
+        )
+      case "--export" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = Export)
         )
       case "--only-exec" :: tail =>
         fromCommandLineArgs(

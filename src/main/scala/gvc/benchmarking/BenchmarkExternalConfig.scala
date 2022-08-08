@@ -75,6 +75,14 @@ case class ExecutorConfig(version: String,
                           sources: List[Path])
     extends BenchmarkingConfig
 
+case class ExportConfig(version: String,
+                        hardware: String,
+                        workload: Option[BenchmarkWorkload],
+                        quantity: Option[Int],
+                        modifiers: PipelineModifiers,
+                        benchmarkDBCredentials: BenchmarkDBCredentials,
+                        outputDir: Option[String])
+
 case class BenchmarkConfigResults(
     version: String,
     hardware: Option[String],
@@ -129,10 +137,10 @@ object BenchmarkExternalConfig {
               resolved.modifiers,
               resolved.sources
             )
-          case None => error("A <workload> must be provided.")
+          case None => error("A <workload> configuration must be provided.")
         }
 
-      case None => error("A <hardware> must be provided.")
+      case None => error("A <hardware> ID must be provided.")
     }
   }
 
@@ -144,6 +152,25 @@ object BenchmarkExternalConfig {
                     resolved.credentials,
                     resolved.sources)
 
+  }
+
+  def parseExport(rootConfig: Config): ExportConfig = {
+    val resolved = parseConfig(rootConfig)
+    val optionalOutputDirectory = resolved.outputDir match {
+      case Some(oValue) => Some(oValue)
+      case None         => rootConfig.exportDirectory
+    }
+    resolved.hardware match {
+      case Some(hValue) =>
+        ExportConfig(resolved.version,
+                     hValue,
+                     resolved.workload,
+                     resolved.pathQuantity,
+                     resolved.modifiers,
+                     resolved.credentials,
+                     optionalOutputDirectory)
+      case None => error("A <hardware> ID must be provided.")
+    }
   }
 
   private def parseConfig(rootConfig: Config): BenchmarkConfigResults = {

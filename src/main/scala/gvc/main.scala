@@ -8,6 +8,7 @@ import gvc.transformer._
 import gvc.benchmarking.{
   BaselineChecker,
   BenchmarkExecutor,
+  BenchmarkExporter,
   BenchmarkExternalConfig,
   BenchmarkMonitor,
   BenchmarkPopulator,
@@ -117,6 +118,10 @@ object Main extends App {
         val benchConfig =
           BenchmarkExternalConfig.parseExecutor(config)
         BenchmarkExecutor.execute(benchConfig, config, linkedLibraries)
+
+      case Config.Export =>
+        val exportConfig = BenchmarkExternalConfig.parseExport(config)
+        BenchmarkExporter.export(exportConfig)
 
       case Config.Populate =>
         val benchConfig =
@@ -233,8 +238,10 @@ object Main extends App {
              fileNames: OutputFileCollection,
              config: Config): VerifiedOutput = {
     def silicon = resolveSilicon(config)
+
     verifySiliconProvided(silicon, inputSource, fileNames, config)
   }
+
   def verifySiliconProvided(silicon: Silicon,
                             inputSource: String,
                             fileNames: OutputFileCollection,
