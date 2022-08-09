@@ -823,15 +823,18 @@ object DAO {
   case class CompletedBenchmark(version: String,
                                 hardware: String,
                                 benchmark: String,
-                                stress: Int)
+                                stress: Int,
+                                measurementMode: String,
+  )
 
   def getCompletedBenchmarks(c: DBConnection): List[CompletedBenchmark] = {
 
-    sql"""SELECT version_name, hardware_name, benchmark_name, stress
+    sql"""SELECT version_name, hardware_name, benchmark_name, stress, measurement_type
          FROM completed_benchmarks cb
              INNER JOIN versions v ON cb.version_id = v.id
              INNER JOIN hardware ON cb.hardware_id = hardware.id
-             INNER JOIN benchmarks ON cb.benchmark_id = benchmarks.id;"""
+             INNER JOIN benchmarks ON cb.benchmark_id = benchmarks.id
+             INNER JOIN dynamic_measurement_types dmt on cb.measurement_type_id = dmt.id;"""
       .query[CompletedBenchmark]
       .to[List]
       .transact(c.xa)
@@ -899,16 +902,18 @@ object DAO {
                                    hardware: String,
                                    src_filename: String,
                                    workload: Int,
+                                   measurementMode: String,
                                    num_paths: Int)
 
   def getCompletedPathList(conn: DBConnection): List[CompletedPathMetadata] = {
-    sql"""SELECT version_name, hardware_name, src_filename, stress, COUNT(DISTINCT completed_paths.path_id)
+    sql"""SELECT version_name, hardware_name, src_filename, stress, measurement_type, COUNT(DISTINCT completed_paths.path_id)
         FROM completed_paths
                  INNER JOIN paths ON completed_paths.path_id = paths.id
                  INNER JOIN programs p2 on paths.program_id = p2.id
                  INNER JOIN versions v ON completed_paths.version_id = v.id
                  INNER JOIN hardware h ON completed_paths.hardware_id = h.id
-        GROUP BY version_name, hardware_name, src_filename, stress;"""
+        INNER JOIN dynamic_measurement_types dmt on completed_paths.measurement_type_id = dmt.id
+        GROUP BY version_name, hardware_name, src_filename, stress, measurement_type;"""
       .query[CompletedPathMetadata]
       .to[List]
       .transact(conn.xa)

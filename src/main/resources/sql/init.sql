@@ -2,7 +2,7 @@ DROP VIEW IF EXISTS path_step_index;
 DROP VIEW IF EXISTS all_errors;
 DROP VIEW IF EXISTS completed_benchmarks;
 DROP VIEW IF EXISTS completed_paths;
-
+DROP VIEW IF EXISTS completed_programs;
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS executor_stress_values;
 DROP TABLE IF EXISTS static_performance;
@@ -541,13 +541,18 @@ FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
 
 CREATE VIEW completed_paths AS
 (
-SELECT path_id, version_id, hardware_id, stress
-FROM (SELECT path_id, version_id, hardware_id, stress, COUNT(DISTINCT dp.permutation_id) AS completed
+SELECT path_id, version_id, hardware_id, stress, measurement_type_id
+FROM (SELECT path_id,
+             version_id,
+             hardware_id,
+             stress,
+             measurement_type_id,
+             COUNT(DISTINCT dp.permutation_id) AS completed
       FROM dynamic_performance dp
                CROSS JOIN steps ON steps.permutation_id = dp.permutation_id
                INNER JOIN paths p on steps.path_id = p.id
       WHERE dp.measurement_id IS NOT NULL
-      GROUP BY path_id, version_id, hardware_id, stress) counts
+      GROUP BY path_id, version_id, hardware_id, stress, measurement_type_id) counts
          INNER JOIN paths ON counts.path_id = paths.id
          INNER JOIN (SELECT program_id, COUNT(*) AS maximum FROM components GROUP BY(program_id))
     AS max_counts ON paths.program_id = max_counts.program_id
@@ -555,15 +560,50 @@ WHERE counts.completed = max_counts.maximum);
 
 CREATE VIEW completed_benchmarks AS
 (
-SELECT counts.benchmark_id, version_id, hardware_id, stress
-FROM (SELECT benchmark_id, version_id, hardware_id, stress, COUNT(DISTINCT dp.permutation_id) AS completed
+SELECT counts.benchmark_id, version_id, hardware_id, stress, measurement_type_id
+FROM (SELECT benchmark_id,
+             version_id,
+             hardware_id,
+             stress,
+             measurement_type_id,
+             COUNT(DISTINCT dp.permutation_id) AS completed
       FROM dynamic_performance dp
                CROSS JOIN benchmark_membership bm on dp.permutation_id = bm.permutation_id
       WHERE dp.measurement_id IS NOT NULL
-      GROUP BY benchmark_id, version_id, hardware_id, stress) as counts
+      GROUP BY benchmark_id, version_id, hardware_id, stress, measurement_type_id) as counts
          INNER JOIN (SELECT benchmark_id, COUNT(*) AS maximum FROM benchmark_membership GROUP BY(benchmark_id))
     AS max_counts ON counts.benchmark_id = max_counts.benchmark_id
 WHERE counts.completed = max_counts.maximum);
+
+CREATE VIEW completed_programs AS
+(
+SELECT A.program_id, A.version_id, A.hardware_id, A.stress, completed, errored, total
+FROM (SELECT program_id,
+             version_id,
+             hardware_id,
+             stress,
+             measurement_type_id,
+             COUNT(DISTINCT dp.permutation_id) AS completed
+      FROM dynamic_performance dp
+               INNER JOIN permutations p2 on dp.permutation_id = p2.id
+      WHERE dp.measurement_id IS NOT NULL
+      GROUP BY program_id, version_id, hardware_id, stress, measurement_type_id) AS A
+         LEFT OUTER JOIN
+     (SELECT program_id,
+             version_id,
+             hardware_id,
+             stress,
+             measurement_type_id,
+             COUNT(DISTINCT dp.permutation_id) AS errored
+      FROM dynamic_performance dp
+               INNER JOIN permutations p2 on dp.permutation_id = p2.id
+      WHERE dp.error_id IS NOT NULL
+      GROUP BY program_id, version_id, hardware_id, stress, measurement_type_id) AS B
+     ON A.program_id = B.program_id AND A.stress = B.stress AND A.hardware_id = B.hardware_id AND
+        A.version_id = b.version_id
+         INNER JOIN (SELECT program_id, COUNT(*) AS total FROM permutations GROUP BY program_id) AS C
+                    ON A.program_id = C.program_id
+    );
 
 DELIMITER //
 CREATE PROCEDURE sp_ResetBenchmark(IN p_bench_name VARCHAR(255), IN p_bench_desc TEXT)
@@ -616,11 +656,3 @@ BEGIN
       AND expr_index = p_eindex;
 END //
 DELIMITER ;
-
-SELECT version_name, hardware_name, src_filename, stress, COUNT(DISTINCT completed_paths.path_id)
-FROM completed_paths
-         INNER JOIN paths ON completed_paths.path_id = paths.id
-         INNER JOIN programs p2 on paths.program_id = p2.id
-         INNER JOIN versions v ON completed_paths.version_id = v.id
-         INNER JOIN hardware h ON completed_paths.hardware_id = h.id
-GROUP BY version_name, hardware_name, src_filename, stress;
