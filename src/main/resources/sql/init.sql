@@ -616,3 +616,11 @@ BEGIN
       AND expr_index = p_eindex;
 END //
 DELIMITER ;
+
+SELECT version_name, hardware_name, src_filename, stress, COUNT(DISTINCT completed_paths.path_id)
+FROM completed_paths
+         INNER JOIN paths ON completed_paths.path_id = paths.id
+         INNER JOIN programs p2 on paths.program_id = p2.id
+         INNER JOIN versions v ON completed_paths.version_id = v.id
+         INNER JOIN hardware h ON completed_paths.hardware_id = h.id
+GROUP BY version_name, hardware_name, src_filename, stress;

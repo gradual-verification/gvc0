@@ -651,7 +651,7 @@ object DAO {
                                 percentCompleted: Double,
                                 errorMapping: Map[String, Int])
 
-  def getCompletionMetadata(c: DBConnection): List[CompletionMetadata] = {
+  def getIncompleteMetadata(c: DBConnection): List[CompletionMetadata] = {
     case class VersionHardwareCombinations(versionName: String,
                                            versionID: Int,
                                            hardwareName: String,
@@ -820,6 +820,31 @@ object DAO {
     }
   }
 
+  case class CompletedBenchmark(version: String,
+                                hardware: String,
+                                benchmark: String,
+                                stress: Int)
+
+  def getCompletedBenchmarks(c: DBConnection): List[CompletedBenchmark] = {
+
+    sql"""SELECT version_name, hardware_name, benchmark_name, stress
+         FROM completed_benchmarks cb
+             INNER JOIN versions v ON cb.version_id = v.id
+             INNER JOIN hardware ON cb.hardware_id = hardware.id
+             INNER JOIN benchmarks ON cb.benchmark_id = benchmarks.id;"""
+      .query[CompletedBenchmark]
+      .to[List]
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          "Unable to acquire list of completed preconfigured benchmarks.",
+          t)
+      case Right(value) => value
+    }
+  }
+
   def resolveHardware(name: String, c: DBConnection): Option[Long] = {
     sql"SELECT id FROM hardware WHERE hardware_name = $name;"
       .query[Option[Long]]
@@ -868,5 +893,73 @@ object DAO {
             t)
         case Right(_) =>
       }
+  }
+
+  case class CompletedPathMetadata(version: String,
+                                   hardware: String,
+                                   src_filename: String,
+                                   workload: Int,
+                                   num_paths: Int)
+
+  def getCompletedPathList(conn: DBConnection): List[CompletedPathMetadata] = {
+    sql"""SELECT version_name, hardware_name, src_filename, stress, COUNT(DISTINCT completed_paths.path_id)
+        FROM completed_paths
+                 INNER JOIN paths ON completed_paths.path_id = paths.id
+                 INNER JOIN programs p2 on paths.program_id = p2.id
+                 INNER JOIN versions v ON completed_paths.version_id = v.id
+                 INNER JOIN hardware h ON completed_paths.hardware_id = h.id
+        GROUP BY version_name, hardware_name, src_filename, stress;"""
+      .query[CompletedPathMetadata]
+      .to[List]
+      .transact(conn.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException("Unable to get list of completed paths", t)
+      case Right(value) => value
+    }
+  }
+
+  case class BenchmarkMetadata(name: String, desc: String, numPrograms: Int)
+
+  def getBenchmarkList(conn: DBConnection): List[BenchmarkMetadata] = {
+    sql"""SELECT benchmark_name, benchmark_desc, num_programs
+                FROM (SELECT benchmark_id, COUNT(*) AS num_programs
+                      FROM benchmark_membership GROUP BY benchmark_id) AS A INNER JOIN
+                benchmarks ON A.benchmark_id = benchmarks.id;"""
+      .query[BenchmarkMetadata]
+      .to[List]
+      .transact(conn.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t)      => prettyPrintException("Unable to get benchmark list", t)
+      case Right(value) => value
+    }
+  }
+
+  case class ProgramMetadata(name: String,
+                             numPrograms: Int,
+                             numPaths: Int,
+                             numPerPath: Int)
+
+  def getProgramList(conn: DBConnection): List[ProgramMetadata] = {
+    sql"""SELECT programs.src_filename, A.num_programs, B.num_paths, C.num_per_Path
+            FROM (SELECT program_id, COUNT(*) AS num_programs FROM permutations GROUP BY program_id) AS A
+                INNER JOIN (SELECT program_id, COUNT(*) AS num_paths FROM paths GROUP BY program_id) AS B
+                    ON A.program_id = B.program_id
+                INNER JOIN (SELECT program_id, COUNT(*) AS num_per_Path FROM components GROUP BY program_id) AS C
+                    ON B.program_id = C.program_id
+                INNER JOIN programs ON programs.id = A.program_id;
+       """
+      .query[ProgramMetadata]
+      .to[List]
+      .transact(conn.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException("Unable to get list of program metadata", t)
+      case Right(value) => value
+
+    }
   }
 }
