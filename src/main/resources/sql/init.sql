@@ -574,10 +574,16 @@ FROM (SELECT benchmark_id,
          INNER JOIN (SELECT benchmark_id, COUNT(*) AS maximum FROM benchmark_membership GROUP BY(benchmark_id))
     AS max_counts ON counts.benchmark_id = max_counts.benchmark_id
 WHERE counts.completed = max_counts.maximum);
-
 CREATE VIEW completed_programs AS
 (
-SELECT A.program_id, A.version_id, A.hardware_id, A.stress, completed, errored, total
+SELECT A.program_id,
+       A.version_id,
+       A.hardware_id,
+       A.stress,
+       A.measurement_type_id,
+       completed,
+       IFNULL(errored, 0) AS errored,
+       total
 FROM (SELECT program_id,
              version_id,
              hardware_id,
@@ -600,6 +606,7 @@ FROM (SELECT program_id,
       WHERE dp.error_id IS NOT NULL
       GROUP BY program_id, version_id, hardware_id, stress, measurement_type_id) AS B
      ON A.program_id = B.program_id AND A.stress = B.stress AND A.hardware_id = B.hardware_id AND
+        A.measurement_type_id = B.measurement_type_id AND
         A.version_id = b.version_id
          INNER JOIN (SELECT program_id, COUNT(*) AS total FROM permutations GROUP BY program_id) AS C
                     ON A.program_id = C.program_id

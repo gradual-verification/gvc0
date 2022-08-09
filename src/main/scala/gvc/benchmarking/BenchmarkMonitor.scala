@@ -39,6 +39,9 @@ object BenchmarkMonitor {
     Output.title("Database Contents")
     printContents(conn)
 
+    Output.title("Completed Programs")
+    printCompletedPrograms(conn)
+
     Output.title("Completed Mass Benchmarks")
     printCompletedPaths(conn)
 
@@ -48,8 +51,49 @@ object BenchmarkMonitor {
   }
 
   private def printCompletedPrograms(conn: DBConnection): Unit = {
-
-
+    val completed = DAO.getCompletedProgramList(conn)
+    if (completed.nonEmpty) {
+      val grouped = completed
+        .groupBy(_.versionName)
+        .map(g1 => {
+          g1._1 -> g1._2
+            .groupBy(_.hwName)
+            .map(g2 => {
+              g2._1 -> g2._2
+                .groupBy(_.stress)
+                .map(g3 => {
+                  g3._1 -> g3._2
+                    .groupBy(_.measurementType)
+                    .map(g4 => {
+                      g4._1 -> g4._2
+                    })
+                })
+            })
+        })
+      grouped.keySet.foreach(k => {
+        println(s"* V: $k")
+        grouped(k).foreach(p => {
+          println(s"\t* HW: ${p._1}")
+          val m = p._2
+          m.foreach(p1 => {
+            println(s"\t\t* w = ${p1._1}")
+            val m2 = p1._2
+            m2.foreach(p2 => {
+              val elem = p2._2.head
+              val completionPercentage = Math.round(
+                ((elem.completed / elem.total) * 100) * 100) / 100
+              val errorPercentage = Math.round(
+                ((elem.errored / elem.total) * 100) * 100) / 100
+              println(s"\t\t\t* ${p2._1}: ${green(
+                completionPercentage.toString + "%")}, (${elem.completed} total) - ${red(
+                errorPercentage.toString + "%")}, (${elem.errored} total)")
+            })
+          })
+        })
+      })
+    } else {
+      println("N/A\n")
+    }
   }
 
   private def printCompletedPaths(conn: DBConnection): Unit = {

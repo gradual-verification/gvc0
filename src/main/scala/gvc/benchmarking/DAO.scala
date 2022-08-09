@@ -925,6 +925,31 @@ object DAO {
     }
   }
 
+  case class CompletedProgramMetadata(versionName: String,
+                                      hwName: String,
+                                      stress: Int,
+                                      measurementType: String,
+                                      completed: Int,
+                                      errored: Int,
+                                      total: Int)
+  def getCompletedProgramList(
+      conn: DBConnection): List[CompletedProgramMetadata] = {
+    sql"""SELECT version_name, hardware_name, stress, measurement_type, completed, errored, total
+    FROM completed_programs
+             INNER JOIN versions v ON completed_programs.version_id = v.id
+             INNER JOIN hardware h ON completed_programs.hardware_id = h.id
+    INNER JOIN dynamic_measurement_types dmt on completed_programs.measurement_type_id = dmt.id"""
+      .query[CompletedProgramMetadata]
+      .to[List]
+      .transact(conn.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException("Unable to get list of completed programs", t)
+      case Right(value) => value
+    }
+  }
+
   case class BenchmarkMetadata(name: String, desc: String, numPrograms: Int)
 
   def getBenchmarkList(conn: DBConnection): List[BenchmarkMetadata] = {
