@@ -218,16 +218,8 @@ object BenchmarkExecutor {
     )
   }
 
-  private def syncProgramsAndStress(
-      id: Identity,
-      config: ExecutorConfig,
-      libraries: List[String],
-      conn: DBConnection): Map[Long, ProgramInformation] = {
-    val syncedPrograms =
-      BenchmarkPopulator.sync(config.sources, libraries, conn)
-    val workload = config.workload
-
-    val defaultStressValues = workload.stress match {
+  class StressTable(workload: BenchmarkWorkload) {
+    private val defaultStressValues = workload.stress match {
       case Some(value) => BenchmarkExternalConfig.generateStressList(value)
       case None =>
         workload.programCases.find(p => p.isDefault) match {
@@ -236,7 +228,7 @@ object BenchmarkExecutor {
           case None => error("Unable to resolve default stress configuration.")
         }
     }
-    val userConfiguredStressMappings = workload.programCases
+    private val userConfiguredStressValues = workload.programCases
       .flatMap(c => {
         val stressValues =
           BenchmarkExternalConfig.generateStressList(c.workload)
@@ -245,11 +237,23 @@ object BenchmarkExecutor {
         } yield i1 -> stressValues
       })
       .toMap
+
+    def get(filename: String): List[Int] = {
+      userConfiguredStressValues.getOrElse(filename, defaultStressValues)
+    }
+  }
+  private def syncProgramsAndStress(
+      id: Identity,
+      config: ExecutorConfig,
+      libraries: List[String],
+      conn: DBConnection): Map[Long, ProgramInformation] = {
+    val syncedPrograms =
+      BenchmarkPopulator.sync(config.sources, libraries, conn)
+    val stressTable = new StressTable(config.workload)
     val translatedIDMapping = syncedPrograms.map(p => {
       val withoutExtension =
         p._2.fileName.substring(0, p._2.fileName.lastIndexOf(".c0"))
-      p._1 -> userConfiguredStressMappings.getOrElse(withoutExtension,
-                                                     defaultStressValues)
+      p._1 -> stressTable.get(withoutExtension)
     })
     DAO.resolveStressValues(id, translatedIDMapping, conn)
     syncedPrograms

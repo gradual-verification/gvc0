@@ -10,7 +10,7 @@ import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import gvc.CC0Wrapper.Performance
 import gvc.Config.{error, prettyPrintException}
-import gvc.benchmarking.BenchmarkExecutor.ReservedProgram
+import gvc.benchmarking.BenchmarkExecutor.{ReservedProgram, StressTable}
 import gvc.benchmarking.BenchmarkPopulator.md5sum
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
@@ -167,30 +167,6 @@ object DAO {
     }
   }
 
-  def addOrResolveIdentity(config: ExecutorConfig,
-                           c: DBConnection): Identity = {
-    val hid = addOrResolveHardware(config.hardware, c)
-    val vid = addOrResolveVersion(config.version, c)
-    val nid = addOrResolveNickname(config.nickname, c)
-    val hostnameID = addOrResolveHostname(c)
-    Identity(vid, hid, nid, hostnameID)
-  }
-
-  def addOrResolveHostname(c: DBConnection): Long = {
-    sql"CALL sp_gr_Hostname();"
-      .query[Long]
-      .unique
-      .transact(c.xa)
-      .attempt
-      .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException(
-          "Unable to resolve hostname for connected session.",
-          t)
-      case Right(value) => value
-    }
-  }
-
   def resolveStressValues(id: Identity,
                           stressMapping: Map[Long, List[Int]],
                           c: DBConnection): Unit = {
@@ -238,6 +214,30 @@ object DAO {
           t)
       case Right(_) =>
     }
+  }
+
+  def addOrResolveHostname(c: DBConnection): Long = {
+    sql"CALL sp_gr_Hostname();"
+      .query[Long]
+      .unique
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          "Unable to resolve hostname for connected session.",
+          t)
+      case Right(value) => value
+    }
+  }
+
+  def addOrResolveIdentity(config: ExecutorConfig,
+                           c: DBConnection): Identity = {
+    val hid = addOrResolveHardware(config.hardware, c)
+    val vid = addOrResolveVersion(config.version, c)
+    val nid = addOrResolveNickname(config.nickname, c)
+    val hostnameID = addOrResolveHostname(c)
+    Identity(vid, hid, nid, hostnameID)
   }
 
   def addOrResolveNickname(name: String, c: DBConnection): Long = {
@@ -297,7 +297,12 @@ object DAO {
                           hash: String,
                           numLabels: Long,
                           c: DBConnection): Long = {
-    sql"CALL sp_gr_Program(${filename.getFileName.toString}, $hash, $numLabels);"
+
+    val basenameWithExtension = filename.getFileName.toString
+    val extensionRemoved = basenameWithExtension.substring(
+      0,
+      basenameWithExtension.lastIndexOf(".c0"))
+    sql"CALL sp_gr_Program(${extensionRemoved}, $hash, $numLabels);"
       .query[Long]
       .unique
       .transact(c.xa)
@@ -765,5 +770,103 @@ object DAO {
                              t)
       case Right(_) =>
     }
+  }
+
+  def getErrorList(vid: Long, hid: Long, conn: DBConnection): String = {
+    case class ErrorEntry(versionName: String,
+                          hardwareName: String,
+                          permutationID: Long,
+                          errorType: String,
+                          errorDesc: String,
+                          errorDate: String)
+    sql"""SELECT version_name, hardware_name, permutation_id, error_type, error_desc, error_date
+            FROM all_errors
+                INNER JOIN versions v ON all_errors.version_id = v.id
+                INNER JOIN hardware h ON all_errors.hardware_id = h.id
+            WHERE version_id = $vid AND hardware_id = $hid;"""
+      .query[ErrorEntry]
+      .to[List]
+      .transact(conn.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          s"Unable to resolve versions for VID=$vid, HID=$hid",
+          t)
+      case Right(eList) =>
+        eList
+          .map(
+            e =>
+              List(e.versionName,
+                   e.hardwareName,
+                   e.errorType,
+                   e.errorDate,
+                   e.errorDate).mkString(","))
+          .mkString("\n")
+    }
+
+  }
+
+  def resolveVersion(name: String, c: DBConnection): Option[Long] = {
+    sql"SELECT id FROM versions WHERE version_name = $name;"
+      .query[Option[Long]]
+      .unique
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(s"Unable to query for version '$name'", t)
+      case Right(value) => value
+    }
+  }
+
+  def resolveHardware(name: String, c: DBConnection): Option[Long] = {
+    sql"SELECT id FROM hardware WHERE hardware_name = $name;"
+      .query[Option[Long]]
+      .unique
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(s"Unable to query for hardware '$name'", t)
+      case Right(value) => value
+    }
+  }
+
+  def selectCompletedPathIDs(versionID: Long,
+                             hardwareID: Long,
+                             quantity: Int,
+                             connection: DBConnection): Unit = {}
+
+  def createTemporaryStressValueTable(stressTable: StressTable,
+                                      c: DBConnection): Unit = {
+    case class ProgramEntry(filename: String, programID: Long)
+    case class ProgramStressEntry(programID: Long, stress: Int)
+
+    val entries =
+      (for {
+        e <- sql"SELECT src_filename, id FROM programs;"
+          .query[ProgramEntry]
+          .to[List]
+        _ <- sql"CREATE TEMPORARY TABLE configured_stress_values (program_id BIGINT UNSIGNED NOT NULL, stress INT UNSIGNED NOT NULL);".update.run
+        u <- Update[ProgramStressEntry](
+          "INSERT INTO configured_stress_values (program_id, stress) VALUES (?, ?);")
+          .updateMany(
+            e.map(e => e.filename -> e.programID)
+              .toMap
+              .flatMap(p => {
+                for {
+                  w <- stressTable.get(p._1)
+                } yield ProgramStressEntry(p._2, w)
+              })
+              .toList)
+
+      } yield u).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException(
+            "Unable to populate stress value temporary table",
+            t)
+        case Right(_) =>
+      }
   }
 }

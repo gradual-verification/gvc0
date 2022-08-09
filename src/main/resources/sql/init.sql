@@ -1,5 +1,7 @@
 DROP VIEW IF EXISTS path_step_index;
 DROP VIEW IF EXISTS all_errors;
+DROP VIEW IF EXISTS completed_benchmarks;
+DROP VIEW IF EXISTS completed_paths;
 
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS executor_stress_values;
@@ -21,6 +23,7 @@ DROP TABLE IF EXISTS programs;
 DROP TABLE IF EXISTS nicknames;
 DROP TABLE IF EXISTS hardware;
 DROP TABLE IF EXISTS versions;
+DROP TABLE IF EXISTS hostnames;
 
 DROP PROCEDURE IF EXISTS sp_gr_Program;
 DROP PROCEDURE IF EXISTS sp_gr_Permutation;
@@ -233,7 +236,6 @@ VALUES ('instrumentation');
 INSERT INTO static_measurement_types (measurement_type)
 VALUES ('compilation');
 
-
 CREATE TABLE IF NOT EXISTS hostnames
 (
     id             SERIAL,
@@ -404,8 +406,8 @@ BEGIN
     WHERE dr.permutation_id IS NULL
       AND vr.id = vid
       AND hw.id = hid
-      AND sa.hostname_id = hsid
       AND sa.nickname_id = nnid
+      AND sa.hostname_id = hsid
       AND (NOT bonly OR permutations.id IN (SELECT permutation_id FROM benchmark_membership))
     ORDER BY RAND()
     LIMIT 1;
@@ -415,8 +417,8 @@ BEGIN
         INSERT INTO reserved_jobs (SELECT DISTINCT @found_perm_id, sa.stress, @found_measurement_type_id
                                    FROM executor_stress_values sa
                                    WHERE sa.program_id = @found_program_id
-                                     AND sa.hostname_id = hsid
-                                     AND sa.nickname_id = nnid);
+                                     AND sa.nickname_id = nnid
+                                     AND sa.hostname_id = hsid);
         DELETE
         FROM reserved_jobs
         WHERE stress IN (SELECT stress
@@ -536,6 +538,32 @@ FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
          INNER JOIN error_occurrences ON p_errors.error_id = error_occurrences.id
          INNER JOIN error_contents ON error_contents.id = error_occurrences.error_contents_id = error_contents.id
     );
+
+CREATE VIEW completed_paths AS
+(
+SELECT path_id, version_id, hardware_id, stress
+FROM (SELECT path_id, version_id, hardware_id, stress, COUNT(DISTINCT dp.permutation_id) AS completed
+      FROM dynamic_performance dp
+               CROSS JOIN steps ON steps.permutation_id = dp.permutation_id
+               INNER JOIN paths p on steps.path_id = p.id
+      WHERE dp.measurement_id IS NOT NULL
+      GROUP BY path_id, version_id, hardware_id, stress) counts
+         INNER JOIN paths ON counts.path_id = paths.id
+         INNER JOIN (SELECT program_id, COUNT(*) AS maximum FROM components GROUP BY(program_id))
+    AS max_counts ON paths.program_id = max_counts.program_id
+WHERE counts.completed = max_counts.maximum);
+
+CREATE VIEW completed_benchmarks AS
+(
+SELECT counts.benchmark_id, version_id, hardware_id, stress
+FROM (SELECT benchmark_id, version_id, hardware_id, stress, COUNT(DISTINCT dp.permutation_id) AS completed
+      FROM dynamic_performance dp
+               CROSS JOIN benchmark_membership bm on dp.permutation_id = bm.permutation_id
+      WHERE dp.measurement_id IS NOT NULL
+      GROUP BY benchmark_id, version_id, hardware_id, stress) as counts
+         INNER JOIN (SELECT benchmark_id, COUNT(*) AS maximum FROM benchmark_membership GROUP BY(benchmark_id))
+    AS max_counts ON counts.benchmark_id = max_counts.benchmark_id
+WHERE counts.completed = max_counts.maximum);
 
 DELIMITER //
 CREATE PROCEDURE sp_ResetBenchmark(IN p_bench_name VARCHAR(255), IN p_bench_desc TEXT)

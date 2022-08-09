@@ -49,7 +49,8 @@ trait BenchmarkingConfig
 
 case class PipelineModifiers(onlyVerify: Boolean,
                              onlyCompile: Boolean,
-                             onlyBenchmark: Boolean)
+                             onlyBenchmark: Boolean,
+                             onlyErrors: Boolean)
 
 case class RecreatorConfig(version: String,
                            db: BenchmarkDBCredentials,
@@ -77,7 +78,7 @@ case class ExecutorConfig(version: String,
 
 case class ExportConfig(version: String,
                         hardware: String,
-                        workload: Option[BenchmarkWorkload],
+                        workload: BenchmarkWorkload,
                         quantity: Option[Int],
                         modifiers: PipelineModifiers,
                         benchmarkDBCredentials: BenchmarkDBCredentials,
@@ -167,13 +168,17 @@ object BenchmarkExternalConfig {
     }
     resolved.hardware match {
       case Some(hValue) =>
-        ExportConfig(resolved.version,
-                     hValue,
-                     resolved.workload,
-                     resolved.pathQuantity,
-                     resolved.modifiers,
-                     resolved.credentials,
-                     optionalOutputDirectory)
+        resolved.workload match {
+          case Some(wValue) =>
+            ExportConfig(resolved.version,
+                         hValue,
+                         wValue,
+                         resolved.pathQuantity,
+                         resolved.modifiers,
+                         resolved.credentials,
+                         optionalOutputDirectory)
+          case None => error("A <workload> configuration must be provided.")
+        }
       case None => error("A <hardware> ID must be provided.")
     }
   }
@@ -296,7 +301,8 @@ object BenchmarkExternalConfig {
     PipelineModifiers(
       onlyVerify = xml.contains("only-verify") || config.onlyVerify,
       onlyCompile = xml.contains("only-compile") || config.onlyCompile,
-      onlyBenchmark = xml.contains("only-benchmark") || config.onlyBenchmark
+      onlyBenchmark = xml.contains("only-benchmark") || config.onlyBenchmark,
+      onlyErrors = xml.contains("only-errors")
     )
   }
 
