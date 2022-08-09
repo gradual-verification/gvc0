@@ -540,11 +540,13 @@ FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
 DELIMITER //
 CREATE PROCEDURE sp_ResetBenchmark(IN p_bench_name VARCHAR(255), IN p_bench_desc TEXT)
 BEGIN
-    INSERT INTO benchmarks (benchmark_name, benchmark_desc)
-    VALUES (p_bench_name, p_bench_desc)
-    ON DUPLICATE KEY UPDATE benchmark_desc = p_bench_desc;
-    SELECT id INTO @found_id FROM benchmarks WHERE benchmark_name = p_bench_name AND benchmark_desc = p_bench_desc;
-    DELETE FROM benchmark_membership WHERE benchmark_id = @found_id;
+    SELECT id INTO @original_id FROM benchmarks WHERE benchmark_name = p_bench_name;
+    IF (SELECT @original_id IS NOT NULL) THEN
+        DELETE FROM benchmark_membership WHERE benchmark_id = @original_id;
+        DELETE FROM benchmarks WHERE id = @original_id;
+    END IF;
+    INSERT INTO benchmarks (benchmark_name, benchmark_desc) VALUES (p_bench_name, p_bench_desc);
+    SELECT LAST_INSERT_ID() INTO @found_id;
     SELECT @found_id;
 END //
 DELIMITER ;

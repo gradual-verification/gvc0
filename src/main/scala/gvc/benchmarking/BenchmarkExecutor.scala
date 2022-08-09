@@ -202,6 +202,7 @@ object BenchmarkExecutor {
         config.modifiers.onlyBenchmark,
         conn)
     }
+    DAO.cleanupStressValues(id, conn)
   }
 
   def injectAndWrite(c0: String, dest: Path): Unit = {

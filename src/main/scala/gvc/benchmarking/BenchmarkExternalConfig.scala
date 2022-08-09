@@ -68,7 +68,7 @@ case class MonitorConfig(db: BenchmarkDBCredentials, outputDirectory: Path)
 
 case class ExecutorConfig(version: String,
                           hardware: String,
-                          nickname: Option[String],
+                          nickname: String,
                           workload: BenchmarkWorkload,
                           db: BenchmarkDBCredentials,
                           modifiers: PipelineModifiers,
@@ -128,15 +128,20 @@ object BenchmarkExternalConfig {
       case Some(hValue) =>
         resolved.workload match {
           case Some(wValue) =>
-            ExecutorConfig(
-              resolved.version,
-              hValue,
-              resolved.nickname,
-              wValue,
-              resolved.credentials,
-              resolved.modifiers,
-              resolved.sources
-            )
+            resolved.nickname match {
+              case Some(nValue) =>
+                ExecutorConfig(
+                  resolved.version,
+                  hValue,
+                  nValue,
+                  wValue,
+                  resolved.credentials,
+                  resolved.modifiers,
+                  resolved.sources
+                )
+              case None => error("A <nickname> must be provided.")
+            }
+
           case None => error("A <workload> configuration must be provided.")
         }
 
