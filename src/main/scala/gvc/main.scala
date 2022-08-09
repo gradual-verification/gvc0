@@ -103,8 +103,8 @@ object Main extends App {
         val fileNames = getOutputCollection(config.sourceFile.get)
         val inputSource = readFile(config.sourceFile.get)
         val onlyFraming = config.mode == Config.FramingVerification
-        var gradualIR = generateIR(inputSource, linkedLibraries)
-        var dynamicIR = generateIR(inputSource, linkedLibraries)
+        val gradualIR = generateIR(inputSource, linkedLibraries)
+        val dynamicIR = generateIR(inputSource, linkedLibraries)
         BaselineChecker.check(dynamicIR, onlyFraming)
         Output.printTiming(() => {
           val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
