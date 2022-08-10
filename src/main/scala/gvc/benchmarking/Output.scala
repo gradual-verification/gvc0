@@ -9,6 +9,9 @@ object Output {
 
   def success(input: String): Unit = println(formatSuccess(input))
 
+  def title(input: String): Unit =
+    println(s"-------<[ ${purple(input)} ]>-------")
+
   def formatSuccess(input: String): String = s"$successHeader $input"
 
   def error(input: String): Unit = println(formatError(input))

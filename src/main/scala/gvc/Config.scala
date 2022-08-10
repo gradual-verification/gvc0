@@ -16,6 +16,7 @@ case class Config(
     output: Option[String] = None,
     timeout: Option[Long] = None,
     mode: Mode = Config.DefaultMode,
+    exportDirectory: Option[String] = None,
     config: Option[Path] = None,
     onlyExec: Boolean = false,
     saveFiles: Boolean = false,
@@ -23,6 +24,7 @@ case class Config(
     exec: Boolean = false,
     onlyVerify: Boolean = false,
     onlyCompile: Boolean = false,
+    onlyBenchmark: Boolean = false,
     sourceFile: Option[String] = None,
     linkedLibraries: List[String] = List.empty,
     versionString: Option[String] = None,
@@ -80,6 +82,8 @@ object Config {
 
   case object Monitor extends Mode
 
+  case object Export extends Mode
+
   val help =
     """Usage: gvc0 [OPTION...] SOURCEFILE
       |where OPTION is
@@ -96,8 +100,11 @@ object Config {
       |
       |                --populate                     Populate the benchmarking database using options from the specified configuration file.
       |                --execute                      Execute programs and store results in the database using options from the specified configuration file.
-      |                --recreate=<id>                Specify a permutation to recreate from the database  using options from the specified configuration file.
-      |
+      |                --execute-benchmark            Identical to --execute, but only selects programs belonging to pre-configured benchmark sets.
+      |                --recreate=<id>                Specify a permutation to recreate from the database using options from the specified configuration file.
+      |                --export                       Data is filtered using options from the specified configuration file.
+      |                --export-benchmark             Identical to --export, but only selects data corresponding to pre-configured benchmark sets.
+      |                 
       |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
       |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
       |                --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
@@ -119,10 +126,11 @@ object Config {
   private val nicknameString = raw"--nickname=(.+)".r
   private val hardwareString = raw"--hardware=(.+)".r
 
+  private val exportString = raw"--export=(.+)".r
+
   private val dbURLString = raw"--db-url=(.+)".r
   private val dbUserString = raw"--db-user=(.+)".r
   private val dbPassString = raw"--db-pass=(.+)".r
-
   private val recreatePermString = raw"--recreate=(.+)".r
 
   def error(message: String): Nothing = {
@@ -152,10 +160,9 @@ object Config {
     try {
       t.toInt
     } catch {
-      case _: NumberFormatException => {
+      case _: NumberFormatException =>
         error(
           s"Invalid option for $config; expected an integer but found '$t'.")
-      }
     }
   }
 
@@ -192,6 +199,10 @@ object Config {
       current: Config = Config()
   ): Config =
     args match {
+      case exportString(t) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = Export, exportDirectory = Some(t)))
       case stressArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
@@ -224,6 +235,17 @@ object Config {
           tail,
           current.copy(config = Some(parsePath(t)))
         )
+      case "--export" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = Export)
+        )
+
+      case "--export-benchmark" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = Export, onlyBenchmark = true)
+        )
       case "--only-exec" :: tail =>
         fromCommandLineArgs(
           tail,
@@ -238,6 +260,11 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(mode = DynamicVerification)
+        )
+      case "--execute-benchmark" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = Execute, onlyBenchmark = true),
         )
       case "--framing" :: tail =>
         fromCommandLineArgs(

@@ -1,7 +1,14 @@
+DROP VIEW IF EXISTS path_step_index;
+DROP VIEW IF EXISTS all_errors;
+DROP VIEW IF EXISTS completed_benchmarks;
+DROP VIEW IF EXISTS completed_paths;
+DROP VIEW IF EXISTS completed_programs;
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS static_performance;
+DROP TABLE IF EXISTS static_conjuncts;
 DROP TABLE IF EXISTS dynamic_performance;
 DROP TABLE IF EXISTS measurements;
+DROP TABLE IF EXISTS static_measurement_types;
 DROP TABLE IF EXISTS dynamic_measurement_types;
 DROP TABLE IF EXISTS error_occurrences;
 DROP TABLE IF EXISTS error_contents;
@@ -17,7 +24,6 @@ DROP TABLE IF EXISTS hardware;
 DROP TABLE IF EXISTS versions;
 
 DROP PROCEDURE IF EXISTS sp_gr_Program;
-DROP PROCEDURE IF EXISTS sp_ReservePermutation;
 DROP PROCEDURE IF EXISTS sp_gr_Permutation;
 DROP PROCEDURE IF EXISTS sp_gr_Component;
 DROP PROCEDURE IF EXISTS sp_gr_Error;
@@ -25,7 +31,15 @@ DROP PROCEDURE IF EXISTS sp_gr_Hardware;
 DROP PROCEDURE IF EXISTS sp_gr_Version;
 DROP PROCEDURE IF EXISTS sp_gr_Nickname;
 DROP PROCEDURE IF EXISTS sp_gr_Program;
-DROP PROCEDURE IF EXISTS sp_UpdateStatic;
+DROP PROCEDURE IF EXISTS sp_gr_Path;
+DROP PROCEDURE IF EXISTS sp_UpdateStaticPerformance;
+DROP PROCEDURE IF EXISTS sp_UpdateStaticConjuncts;
+DROP PROCEDURE IF EXISTS sp_ReservePermutation;
+DROP PROCEDURE IF EXISTS sp_AddMeasurement;
+DROP PROCEDURE IF EXISTS sp_AddProgramToBenchmark;
+DROP PROCEDURE IF EXISTS sp_ResetBenchmark;
+
+DROP TABLE IF EXISTS reserved_jobs;
 
 DROP EVENT IF EXISTS delete_reserved_permutations;
 
@@ -33,12 +47,13 @@ CREATE TABLE IF NOT EXISTS global_configuration
 (
     id              ENUM ('1') DEFAULT '1',
     timeout_minutes BIGINT UNSIGNED NOT NULL,
+    timeout_margin  BIGINT UNSIGNED NOT NULL,
     max_paths       BIGINT UNSIGNED NOT NULL,
     PRIMARY KEY (id)
 );
 
-INSERT INTO global_configuration (timeout_minutes, max_paths)
-VALUES (30, 4);
+INSERT INTO global_configuration (timeout_minutes, timeout_margin, max_paths)
+VALUES (45, 1, 128);
 
 CREATE TABLE IF NOT EXISTS programs
 (
@@ -50,20 +65,6 @@ CREATE TABLE IF NOT EXISTS programs
     PRIMARY KEY (id),
     UNIQUE KEY contents (src_filename, src_hash, num_labels)
 );
-
-DELIMITER //
-CREATE PROCEDURE sp_gr_Program(IN p_name VARCHAR(255), IN p_hash VARCHAR(255), IN p_labels BIGINT UNSIGNED,
-                               OUT p_id BIGINT UNSIGNED)
-BEGIN
-    INSERT IGNORE INTO programs (src_filename, src_hash, num_labels) VALUES (p_name, p_hash, p_labels);
-    SELECT id
-    INTO p_id
-    FROM programs
-    WHERE src_filename = p_name
-      AND src_hash = p_hash
-      AND num_labels = p_labels;
-END //
-DELIMITER ;
 
 CREATE TABLE IF NOT EXISTS components
 (
@@ -80,61 +81,45 @@ CREATE TABLE IF NOT EXISTS components
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
 
-DELIMITER //
-CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255),
-                                 IN p_stype VARCHAR(255),
-                                 IN p_sindex BIGINT UNSIGNED, IN p_etype VARCHAR(255),
-                                 IN p_eindex BIGINT UNSIGNED,
-                                 OUT c_id BIGINT UNSIGNED)
-BEGIN
-    INSERT IGNORE INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
-    VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
-    SELECT id
-    INTO c_id
-    FROM components
-    WHERE program_id = p_id
-      AND context_name = p_cname
-      AND spec_type = p_stype
-      AND spec_index = p_sindex
-      AND expr_type = p_etype
-      AND expr_index = p_eindex;
-END //
-DELIMITER ;
-
 CREATE TABLE IF NOT EXISTS permutations
 (
-    id               SERIAL,
-    program_id       BIGINT UNSIGNED NOT NULL,
-    permutation_hash BLOB            NOT NULL,
-    permutation_date DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id                   SERIAL,
+    program_id           BIGINT UNSIGNED NOT NULL,
+    permutation_hash     VARCHAR(255)    NOT NULL,
+    permutation_contents BLOB            NOT NULL,
+    permutation_date     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    FOREIGN KEY (program_id) REFERENCES programs (id)
+    FOREIGN KEY (program_id) REFERENCES programs (id),
+    UNIQUE KEY (permutation_hash, program_id)
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash BLOB, OUT p_id BIGINT UNSIGNED)
+CREATE PROCEDURE sp_gr_Permutation(IN p_program_id BIGINT UNSIGNED, IN p_perm_hash VARCHAR(255),
+                                   IN p_perm_contents BLOB)
 BEGIN
-    SELECT id
-    INTO p_id
-    FROM permutations
-    WHERE program_id = p_program_id
-      AND permutation_hash = p_perm_hash;
-    IF ((SELECT p_id) IS NULL) THEN
-        INSERT INTO permutations (program_id, permutation_hash) VALUES (p_program_id, p_perm_hash);
-        SELECT LAST_INSERT_ID() INTO p_id;
-    END IF;
+    INSERT IGNORE INTO permutations (program_id, permutation_hash, permutation_contents)
+    VALUES (p_program_id, p_perm_hash, p_perm_contents);
+    SELECT id FROM permutations WHERE program_id = p_program_id AND permutation_hash = p_perm_hash;
 END //
 DELIMITER ;
-
 
 CREATE TABLE IF NOT EXISTS paths
 (
     id         SERIAL,
     path_hash  BLOB            NOT NULL,
     program_id BIGINT UNSIGNED NOT NULL,
+    path_date  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, program_id),
     FOREIGN KEY (program_id) REFERENCES programs (id)
 );
+
+DELIMITER //
+CREATE PROCEDURE sp_gr_Path(IN p_program_id BIGINT UNSIGNED, IN p_path_hash BLOB)
+BEGIN
+    INSERT IGNORE INTO paths (program_id, path_hash) VALUES (p_program_id, p_path_hash);
+    SELECT id FROM paths WHERE program_id = p_program_id AND path_hash = p_path_hash;
+END //
+DELIMITER ;
 
 CREATE TABLE IF NOT EXISTS steps
 (
@@ -157,14 +142,13 @@ CREATE TABLE IF NOT EXISTS versions
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_gr_Version(IN p_name VARCHAR(255), OUT v_id BIGINT UNSIGNED)
+CREATE PROCEDURE sp_gr_Version(IN p_name VARCHAR(255))
 BEGIN
     INSERT IGNORE INTO versions (version_name) VALUES (p_name);
-    SELECT id INTO v_id FROM versions WHERE version_name = p_name;
+    SELECT id FROM versions WHERE version_name = p_name;
 END //
 
 DELIMITER ;
-
 
 CREATE TABLE IF NOT EXISTS hardware
 (
@@ -174,12 +158,11 @@ CREATE TABLE IF NOT EXISTS hardware
     PRIMARY KEY (id, hardware_name)
 );
 
-
 DELIMITER //
-CREATE PROCEDURE sp_gr_Hardware(IN p_name VARCHAR(255), OUT h_id BIGINT UNSIGNED)
+CREATE PROCEDURE sp_gr_Hardware(IN p_name VARCHAR(255))
 BEGIN
     INSERT IGNORE INTO hardware (hardware_name) VALUES (p_name);
-    SELECT id INTO h_id FROM hardware WHERE hardware_name = p_name;
+    SELECT id FROM hardware WHERE hardware_name = p_name;
 END //
 DELIMITER ;
 
@@ -192,10 +175,10 @@ CREATE TABLE IF NOT EXISTS nicknames
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_gr_Nickname(IN p_nname VARCHAR(255), OUT n_id BIGINT UNSIGNED)
+CREATE PROCEDURE sp_gr_Nickname(IN p_nname VARCHAR(255))
 BEGIN
     INSERT IGNORE INTO nicknames (nickname) VALUES (p_nname);
-    SELECT id INTO n_id FROM nicknames WHERE nickname = p_nname;
+    SELECT id FROM nicknames WHERE nickname = p_nname;
 END //
 DELIMITER ;
 
@@ -205,10 +188,9 @@ CREATE TABLE IF NOT EXISTS benchmarks
     id             SERIAL,
     benchmark_name VARCHAR(255),
     benchmark_desc TEXT,
+    benchmark_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, benchmark_name)
 );
-INSERT INTO benchmarks (benchmark_name, benchmark_desc)
-VALUES ('default', 'the first path generated for each program.');
 
 CREATE TABLE IF NOT EXISTS benchmark_membership
 (
@@ -233,6 +215,22 @@ VALUES ('framing');
 INSERT INTO dynamic_measurement_types (measurement_type)
 VALUES ('dynamic');
 
+CREATE TABLE IF NOT EXISTS static_measurement_types
+(
+    id               SERIAL,
+    measurement_type VARCHAR(255) NOT NULL UNIQUE,
+    PRIMARY KEY (id)
+);
+
+INSERT INTO static_measurement_types (measurement_type)
+VALUES ('translation');
+INSERT INTO static_measurement_types (measurement_type)
+VALUES ('verification');
+INSERT INTO static_measurement_types (measurement_type)
+VALUES ('instrumentation');
+INSERT INTO static_measurement_types (measurement_type)
+VALUES ('compilation');
+
 CREATE TABLE IF NOT EXISTS measurements
 (
     id           SERIAL,
@@ -249,11 +247,10 @@ CREATE TABLE IF NOT EXISTS measurements
 
 CREATE TABLE IF NOT EXISTS error_occurrences
 (
-    id                   SERIAL,
-    error_contents_id    BIGINT UNSIGNED NOT NULL,
-    error_type           VARCHAR(255)    NOT NULL,
-    error_date           DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    time_elapsed_seconds BIGINT UNSIGNED,
+    id                SERIAL,
+    error_contents_id BIGINT UNSIGNED NOT NULL,
+    error_type        VARCHAR(255)    NOT NULL,
+    error_date        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
@@ -265,151 +262,333 @@ CREATE TABLE IF NOT EXISTS error_contents
     PRIMARY KEY (id)
 );
 
+CREATE TABLE IF NOT EXISTS static_conjuncts
+(
+    permutation_id  BIGINT UNSIGNED NOT NULL,
+    version_id      BIGINT UNSIGNED NOT NULL,
+    conj_total      BIGINT UNSIGNED NOT NULL,
+    conj_eliminated BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (permutation_id, version_id),
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
+    FOREIGN KEY (version_id) REFERENCES versions (id)
+);
+
 CREATE TABLE IF NOT EXISTS static_performance
 (
-    permutation_id          BIGINT UNSIGNED NOT NULL,
-    version_id              BIGINT UNSIGNED NOT NULL,
-    hardware_id             BIGINT UNSIGNED NOT NULL,
-    nickname_id             BIGINT UNSIGNED NOT NULL,
-    translation_perf_id     BIGINT UNSIGNED NOT NULL,
-    verification_perf_id    BIGINT UNSIGNED NOT NULL,
-    instrumentation_perf_id BIGINT UNSIGNED NOT NULL,
-    compilation_perf_id     BIGINT UNSIGNED NOT NULL,
-    conj_total              BIGINT UNSIGNED NOT NULL,
-    conj_eliminated         BIGINT UNSIGNED NOT NULL,
-    error_id                BIGINT UNSIGNED DEFAULT NULL,
-    FOREIGN KEY (translation_perf_id) REFERENCES measurements (id),
-    FOREIGN KEY (verification_perf_id) REFERENCES measurements (id),
-    FOREIGN KEY (instrumentation_perf_id) REFERENCES measurements (id),
-    FOREIGN KEY (compilation_perf_id) REFERENCES measurements (id),
+    permutation_id             BIGINT UNSIGNED        NOT NULL,
+    version_id                 BIGINT UNSIGNED        NOT NULL,
+    hardware_id                BIGINT UNSIGNED        NOT NULL,
+    nickname_id                BIGINT UNSIGNED        NOT NULL,
+    measurement_id             BIGINT UNSIGNED UNIQUE NOT NULL,
+    static_measurement_type_id BIGINT UNSIGNED        NOT NULL,
+    error_id                   BIGINT UNSIGNED DEFAULT NULL,
     FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
     FOREIGN KEY (error_id) REFERENCES error_occurrences (id),
-    PRIMARY KEY (permutation_id, hardware_id, version_id, nickname_id)
+    PRIMARY KEY (permutation_id, hardware_id, version_id, static_measurement_type_id)
 );
 
 DELIMITER //
-CREATE PROCEDURE sp_UpdateStatic(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nid BIGINT UNSIGNED,
-                                 IN perm_id BIGINT UNSIGNED, IN tr_id BIGINT UNSIGNED, IN vf_id BIGINT UNSIGNED,
-                                 IN inst_id BIGINT UNSIGNED, IN cp_id BIGINT UNSIGNED, IN total_cond BIGINT UNSIGNED,
-                                 IN elim_cond BIGINT UNSIGNED)
+CREATE PROCEDURE sp_UpdateStaticPerformance(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nid BIGINT UNSIGNED,
+                                            IN perm_id BIGINT UNSIGNED, IN m_id BIGINT UNSIGNED,
+                                            IN m_type_id BIGINT UNSIGNED)
 BEGIN
-    SELECT @ex = version_id,
-           @ex_tr = translation_perf_id,
-           @ex_vf = verification_perf_id,
-           @ex_inst = instrumentation_perf_id,
-           @ex_cp = compilation_perf_id
-    FROM static_performance
-    WHERE version_id = vid
-      AND hardware_id = hid
-      AND permutation_id = perm_id
-      AND nickname_id = nid
-        FOR
-        SHARE;
-    IF ((SELECT @ex) IS NOT NULL) THEN
-        UPDATE static_performance
-        SET translation_perf_id     = tr_id,
-            verification_perf_id    = vf_id,
-            instrumentation_perf_id = inst_id,
-            compilation_perf_id     = cp_id,
-            conj_total              = total_cond,
-            conj_eliminated         = elim_cond,
-            error_id                = NULL
-        WHERE version_id = vid
-          AND hardware_id = hid
-          AND permutation_id = perm_id
-          AND nickname_id = nid;
+    INSERT INTO static_performance (permutation_id, version_id, hardware_id, nickname_id, measurement_id,
+                                    static_measurement_type_id)
+    VALUES (perm_id, vid, hid, nid, m_id, m_type_id)
+    ON DUPLICATE KEY UPDATE nickname_id = nid, measurement_id = m_id;
+END //
+DELIMITER ;
 
-        DELETE FROM measurements WHERE id = (SELECT @ex_tr);
-        DELETE FROM measurements WHERE id = (SELECT @ex_vf);
-        DELETE FROM measurements WHERE id = (SELECT @ex_inst);
-        DELETE FROM measurements WHERE id = (SELECT @ex_cp);
-    ELSE
-        INSERT INTO static_performance (permutation_id, version_id, hardware_id, nickname_id, translation_perf_id,
-                                        verification_perf_id, instrumentation_perf_id, compilation_perf_id, conj_total,
-                                        conj_eliminated, error_id)
-        VALUES (perm_id, vid, hid, nid, tr_id, vf_id, inst_id, cp_id, total_cond, elim_cond, NULL);
-    END IF;
+DELIMITER //
+CREATE PROCEDURE sp_UpdateStaticConjuncts(IN vid BIGINT UNSIGNED,
+                                          IN perm_id BIGINT UNSIGNED, IN n_total BIGINT UNSIGNED,
+                                          IN n_elim BIGINT UNSIGNED)
+BEGIN
+    INSERT INTO static_conjuncts (permutation_id, version_id, conj_total, conj_eliminated)
+    VALUES (perm_id, vid, n_total, n_elim)
+    ON DUPLICATE KEY UPDATE conj_total = n_total, conj_eliminated = n_elim;
 END //
 DELIMITER ;
 
 CREATE TABLE IF NOT EXISTS dynamic_performance
 (
-    permutation_id           BIGINT UNSIGNED NOT NULL,
-    version_id               BIGINT UNSIGNED NOT NULL,
-    hardware_id              BIGINT UNSIGNED NOT NULL,
-    nickname_id              BIGINT UNSIGNED NOT NULL,
-    stress                   INTEGER         NOT NULL,
-    dynamic_measurement_type BIGINT UNSIGNED NOT NULL,
-    measurement_id           BIGINT UNSIGNED          DEFAULT NULL,
-    last_updated             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    error_id                 BIGINT UNSIGNED          DEFAULT NULL,
-    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
-    FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
+    permutation_id      BIGINT UNSIGNED NOT NULL,
+    measurement_type_id BIGINT UNSIGNED NOT NULL,
+    stress              BIGINT UNSIGNED NOT NULL,
+    hardware_id         BIGINT UNSIGNED NOT NULL,
+    version_id          BIGINT UNSIGNED NOT NULL,
+    nickname_id         BIGINT UNSIGNED NOT NULL,
+    measurement_id      BIGINT UNSIGNED UNIQUE   DEFAULT NULL,
+    error_id            BIGINT UNSIGNED          DEFAULT NULL,
+    last_updated        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (permutation_id, stress, measurement_type_id, hardware_id, version_id, nickname_id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
-    FOREIGN KEY (dynamic_measurement_type) REFERENCES dynamic_measurement_types (id),
+    FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
     FOREIGN KEY (measurement_id) REFERENCES measurements (id),
-    FOREIGN KEY (error_id) REFERENCES error_occurrences (id),
-    PRIMARY KEY (permutation_id, version_id, hardware_id, nickname_id, stress, dynamic_measurement_type)
+    FOREIGN KEY (measurement_type_id) REFERENCES dynamic_measurement_types (id)
 );
+
 
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
-                                       IN workload BIGINT UNSIGNED,
-                                       OUT perm_id BIGINT UNSIGNED,
-                                       OUT missing_mode BIGINT UNSIGNED)
+                                       IN bonly BOOLEAN, IN locks_enabled BOOLEAN)
 BEGIN
-
-    SELECT @found_perm_id := permutations.id,
-           @found_missing_mode := dynamic_measurement_types.id
-    FROM permutations
-             CROSS JOIN (SELECT vid, hid, workload) AS identity
-             CROSS JOIN dynamic_measurement_types
-             LEFT OUTER JOIN dynamic_performance dp ON dp.permutation_id = permutations.id
-        AND dp.version_id = identity.vid AND dp.hardware_id = identity.hid AND dp.stress = identity.workload
-        AND dp.dynamic_measurement_type = dynamic_measurement_types.id
-    WHERE dp.permutation_id IS NULL
-    LIMIT 1
-    FOR
-    UPDATE OF permutations SKIP LOCKED;
-
-    IF ((SELECT @found_perm_id) IS NOT NULL) THEN
-        INSERT INTO dynamic_performance (permutation_id, version_id, hardware_id, nickname_id, stress,
-                                         dynamic_measurement_type)
-        VALUES ((SELECT @found_perm_id), vid, hid, nnid, workload, (SELECT @found_missing_mode));
-        SET perm_id := @found_perm_id;
-        SET missing_mode := @found_missing_mode;
-    ELSE
-        SET perm_id := NULL;
-        SET missing_mode := NULL;
+    IF (locks_enabled) THEN
+        SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
+        IF ((SELECT @lock_status) != 1) THEN
+            SELECT CONCAT('Reservation failed, unable to acquire lock.')
+            INTO @message_text;
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = @message_text;
+        END IF;
     END IF;
+
+    START TRANSACTION;
+
+    DROP TABLE IF EXISTS reserved_jobs;
+    CREATE TEMPORARY TABLE reserved_jobs
+    (
+        permutation_id           BIGINT UNSIGNED        NOT NULL,
+        stress                   BIGINT UNSIGNED UNIQUE NOT NULL,
+        dynamic_measurement_type BIGINT UNSIGNED        NOT NULL
+    );
+
+    SELECT permutations.program_id, permutations.id, dmt.id
+    INTO @found_program_id, @found_perm_id, @found_measurement_type_id
+    FROM permutations
+             CROSS JOIN configured_stress_values sa on permutations.program_id = sa.program_id
+             CROSS JOIN dynamic_measurement_types dmt
+             CROSS JOIN versions vr
+             CROSS JOIN hardware hw
+             LEFT OUTER JOIN dynamic_performance dr ON
+                dr.measurement_type_id = dmt.id AND
+                dr.version_id = vr.id AND
+                dr.hardware_id = hw.id AND
+                dr.permutation_id = permutations.id AND
+                dr.stress = sa.stress
+    WHERE dr.permutation_id IS NULL
+      AND vr.id = vid
+      AND hw.id = hid
+      AND (NOT bonly OR permutations.id IN (SELECT permutation_id FROM benchmark_membership))
+    ORDER BY RAND()
+    LIMIT 1;
+
+    IF ((SELECT @found_perm_id IS NOT NULL) AND (SELECT @found_measurement_type_id IS NOT NULL) AND
+        (SELECT @found_program_id IS NOT NULL)) THEN
+        INSERT INTO reserved_jobs (SELECT DISTINCT @found_perm_id, sa.stress, @found_measurement_type_id
+                                   FROM configured_stress_values sa
+                                   WHERE sa.program_id = @found_program_id);
+        DELETE
+        FROM reserved_jobs
+        WHERE stress IN (SELECT stress
+                         FROM dynamic_performance dr
+                         where dr.measurement_type_id = @found_measurement_type_id
+                           AND dr.permutation_id = @found_perm_id
+                           AND dr.version_id = vid
+                           AND dr.hardware_id = hid);
+        IF ((SELECT COUNT(*) FROM reserved_jobs) < 1) THEN
+            SELECT CONCAT('Reservation failed. PID=', @found_perm_id, ' MTID=',
+                          @found_measurement_type_id)
+            INTO @message_text;
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = @message_text;
+        END IF;
+        INSERT INTO dynamic_performance
+        SELECT @found_perm_id,
+               @found_measurement_type_id,
+               stress,
+               hid,
+               vid,
+               nnid,
+               NULL,
+               NULL,
+               CURRENT_TIMESTAMP
+        FROM reserved_jobs;
+    END IF;
+    COMMIT;
+
+    IF (locks_enabled) THEN
+        DO RELEASE_LOCK('sp_ReservePermutation');
+    END IF;
+    SELECT * FROM reserved_jobs;
 END //
 DELIMITER ;
 
-CREATE EVENT delete_reserved_permutations
-    ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 15 MINUTE
-    DO
-    DELETE
-    FROM dynamic_performance
-    WHERE error_id IS NULL
-      AND measurement_id IS NULL
-      AND TIMESTAMPDIFF(HOUR, last_updated, CURRENT_TIMESTAMP) > 1;
-
-
 DELIMITER //
-CREATE PROCEDURE sp_gr_Error(IN p_ehash VARCHAR(255), IN p_edesc TEXT, IN p_etime BIGINT UNSIGNED,
-                             IN p_err_type VARCHAR(255), OUT eid BIGINT UNSIGNED)
+CREATE PROCEDURE sp_gr_Error(IN p_ehash VARCHAR(255), IN p_edesc TEXT,
+                             IN p_err_type VARCHAR(255))
 BEGIN
     INSERT IGNORE INTO error_contents (error_hash, error_desc) VALUES (p_ehash, p_edesc);
     SELECT id INTO @found_error_contents FROM error_contents WHERE error_hash = p_ehash AND error_desc = p_edesc;
-    INSERT INTO error_occurrences (error_contents_id, time_elapsed_seconds, error_type)
-    VALUES ((SELECT @found_error_contents), p_etime, p_err_type);
-    SELECT LAST_INSERT_ID() INTO eid;
-    SELECT NULL INTO @found_error_contents;
+    INSERT INTO error_occurrences (error_contents_id, error_type)
+    VALUES ((SELECT @found_error_contents), p_err_type);
+    SELECT LAST_INSERT_ID();
 END //
 DELIMITER ;
 
+DELIMITER //
+CREATE PROCEDURE sp_AddMeasurement(IN p_iterations INT UNSIGNED, IN p_ninety_fifth DOUBLE PRECISION,
+                                   IN p_fifth DOUBLE PRECISION, IN p_median DOUBLE PRECISION,
+                                   IN p_mean DOUBLE PRECISION,
+                                   IN p_stdev DOUBLE PRECISION, IN p_max DOUBLE PRECISION, IN p_min DOUBLE PRECISION)
+BEGIN
+    INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum)
+    VALUES (p_iterations, p_ninety_fifth, p_fifth, p_median, p_mean, p_stdev, p_max, p_min);
+    SELECT LAST_INSERT_ID();
+END //
+DELIMITER ;
 
+CREATE VIEW path_step_index AS
+(
+SELECT p.program_id, p.id as permutation_id, paths.id as path_id, s.level_id as level_id
+FROM paths
+         CROSS JOIN steps s ON paths.id = s.path_id
+         CROSS JOIN permutations p on s.permutation_id = p.id);
+
+CREATE VIEW all_errors AS
+(
+SELECT version_id,
+       hardware_id,
+       permutation_id,
+       error_occurrences.error_type,
+       error_contents.error_desc,
+       error_occurrences.error_date
+FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
+      FROM static_performance
+      WHERE error_id IS NOT NULL
+      UNION ALL
+      SELECT version_id, hardware_id, permutation_id, error_id
+      FROM dynamic_performance
+      WHERE error_id IS NOT NULL) as p_errors
+         INNER JOIN error_occurrences ON p_errors.error_id = error_occurrences.id
+         INNER JOIN error_contents ON error_contents.id = error_occurrences.error_contents_id = error_contents.id
+    );
+
+CREATE VIEW completed_paths AS
+(
+SELECT paths.program_id, path_id, version_id, hardware_id, stress, measurement_type_id
+FROM (SELECT path_id,
+             version_id,
+             hardware_id,
+             stress,
+             measurement_type_id,
+             COUNT(DISTINCT dp.permutation_id) AS completed
+      FROM dynamic_performance dp
+               CROSS JOIN steps ON steps.permutation_id = dp.permutation_id
+               INNER JOIN paths p on steps.path_id = p.id
+      WHERE dp.measurement_id IS NOT NULL
+      GROUP BY path_id, version_id, hardware_id, stress, measurement_type_id) counts
+         INNER JOIN paths ON counts.path_id = paths.id
+         INNER JOIN (SELECT program_id, COUNT(*) AS maximum FROM components GROUP BY(program_id))
+    AS max_counts ON paths.program_id = max_counts.program_id
+WHERE counts.completed = (max_counts.maximum + 1));
+
+CREATE VIEW completed_benchmarks AS
+(
+SELECT counts.benchmark_id, version_id, hardware_id, stress, measurement_type_id
+FROM (SELECT benchmark_id,
+             version_id,
+             hardware_id,
+             stress,
+             measurement_type_id,
+             COUNT(DISTINCT dp.permutation_id) AS completed
+      FROM dynamic_performance dp
+               CROSS JOIN benchmark_membership bm on dp.permutation_id = bm.permutation_id
+      WHERE dp.measurement_id IS NOT NULL
+      GROUP BY benchmark_id, version_id, hardware_id, stress, measurement_type_id) as counts
+         INNER JOIN (SELECT benchmark_id, COUNT(*) AS maximum FROM benchmark_membership GROUP BY(benchmark_id))
+    AS max_counts ON counts.benchmark_id = max_counts.benchmark_id
+WHERE counts.completed = max_counts.maximum);
+CREATE VIEW completed_programs AS
+(
+SELECT A.program_id,
+       A.version_id,
+       A.hardware_id,
+       A.stress,
+       A.measurement_type_id,
+       completed,
+       IFNULL(errored, 0) AS errored,
+       total
+FROM (SELECT program_id,
+             version_id,
+             hardware_id,
+             stress,
+             measurement_type_id,
+             COUNT(DISTINCT dp.permutation_id) AS completed
+      FROM dynamic_performance dp
+               INNER JOIN permutations p2 on dp.permutation_id = p2.id
+      WHERE dp.measurement_id IS NOT NULL
+      GROUP BY program_id, version_id, hardware_id, stress, measurement_type_id) AS A
+         LEFT OUTER JOIN
+     (SELECT program_id,
+             version_id,
+             hardware_id,
+             stress,
+             measurement_type_id,
+             COUNT(DISTINCT dp.permutation_id) AS errored
+      FROM dynamic_performance dp
+               INNER JOIN permutations p2 on dp.permutation_id = p2.id
+      WHERE dp.error_id IS NOT NULL
+      GROUP BY program_id, version_id, hardware_id, stress, measurement_type_id) AS B
+     ON A.program_id = B.program_id AND A.stress = B.stress AND A.hardware_id = B.hardware_id AND
+        A.measurement_type_id = B.measurement_type_id AND
+        A.version_id = B.version_id
+         INNER JOIN (SELECT program_id, COUNT(*) AS total FROM permutations GROUP BY program_id) AS C
+                    ON A.program_id = C.program_id
+    );
+
+DELIMITER //
+CREATE PROCEDURE sp_ResetBenchmark(IN p_bench_name VARCHAR(255), IN p_bench_desc TEXT)
+BEGIN
+    SELECT id INTO @original_id FROM benchmarks WHERE benchmark_name = p_bench_name;
+    IF (SELECT @original_id IS NOT NULL) THEN
+        DELETE FROM benchmark_membership WHERE benchmark_id = @original_id;
+        DELETE FROM benchmarks WHERE id = @original_id;
+    END IF;
+    INSERT INTO benchmarks (benchmark_name, benchmark_desc) VALUES (p_bench_name, p_bench_desc);
+    SELECT LAST_INSERT_ID() INTO @found_id;
+    SELECT @found_id;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE sp_AddProgramToBenchmark(IN p_perm_id BIGINT UNSIGNED, IN p_benchmark_id BIGINT UNSIGNED)
+BEGIN
+    INSERT INTO benchmark_membership (benchmark_id, permutation_id) VALUES (p_benchmark_id, p_perm_id);
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE sp_gr_Program(IN p_name VARCHAR(255), IN p_hash VARCHAR(255), IN p_labels BIGINT UNSIGNED)
+BEGIN
+    INSERT IGNORE INTO programs (src_filename, src_hash, num_labels) VALUES (p_name, p_hash, p_labels);
+    SELECT id
+    FROM programs
+    WHERE src_filename = p_name
+      AND src_hash = p_hash
+      AND num_labels = p_labels;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE sp_gr_Component(IN p_id BIGINT UNSIGNED, IN p_cname VARCHAR(255),
+                                 IN p_stype VARCHAR(255),
+                                 IN p_sindex BIGINT UNSIGNED, IN p_etype VARCHAR(255),
+                                 IN p_eindex BIGINT UNSIGNED)
+BEGIN
+    INSERT IGNORE INTO components (program_id, context_name, spec_type, spec_index, expr_type, expr_index)
+    VALUES (p_id, p_cname, p_stype, p_sindex, p_etype, p_eindex);
+    SELECT id
+    FROM components
+    WHERE program_id = p_id
+      AND context_name = p_cname
+      AND spec_type = p_stype
+      AND spec_index = p_sindex
+      AND expr_type = p_etype
+      AND expr_index = p_eindex;
+END //
+DELIMITER ;

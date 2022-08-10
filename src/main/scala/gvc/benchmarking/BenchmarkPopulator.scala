@@ -1,10 +1,7 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.DAO.{
-  DBConnection,
-  GlobalConfiguration,
-  PathQueryCollection
-}
+import gvc.Config.error
+import gvc.benchmarking.DAO.{DBConnection, PathQueryCollection}
 import gvc.transformer.IR.Program
 import gvc.Main
 import gvc.benchmarking.Benchmark.BenchmarkException
@@ -36,11 +33,16 @@ object BenchmarkPopulator {
   def populate(populatorConfig: PopulatorConfig,
                libraryDirs: List[String]): Unit = {
     val connection = DAO.connect(populatorConfig.db)
-    val globalConfig = DAO.resolveGlobalConfiguration(connection)
     populatePrograms(populatorConfig.sources,
                      libraryDirs,
-                     globalConfig,
+                     populatorConfig,
                      connection)
+    Output.info("Populating default benchmark...")
+    DAO.populateIncrementalBenchmark(DAO.Defaults.DefaultBenchmarkName,
+                                     DAO.Defaults.DefaultBenchmarkIncrements,
+                                     connection)
+    Output.info("Successfully populated default benchmark.")
+
   }
 
   def sync(sources: List[Path],
@@ -62,20 +64,23 @@ object BenchmarkPopulator {
             case None        =>
           }
       }
-    mapping.toMap
+    if (mapping.isEmpty) {
+      error("Failed to resolve any programs.")
+    } else {
+      mapping.toMap
+    }
   }
 
   def populatePrograms(
       sources: List[Path],
       libraryDirs: List[String],
-      globalConfig: GlobalConfiguration,
+      populatorConfig: PopulatorConfig,
       connection: DBConnection): Map[Long, StoredProgramRepresentation] = {
     val synchronized = allOf(
       sources
         .map(src => {
-          Future(populateProgram(src, libraryDirs, globalConfig, connection))
+          Future(populateProgram(src, libraryDirs, populatorConfig, connection))
         }))
-
     val mapping = mutable.Map[Long, StoredProgramRepresentation]()
     Await
       .result(synchronized, Duration.Inf)
@@ -92,7 +97,7 @@ object BenchmarkPopulator {
   private def syncProgram(
       src: Path,
       libraries: List[String],
-      xa: DBConnection): Option[(Long, ProgramInformation)] = {
+      conn: DBConnection): Option[(Long, ProgramInformation)] = {
 
     Output.info(s"Syncing definitions for ${src.getFileName}")
 
@@ -104,65 +109,83 @@ object BenchmarkPopulator {
       ProgramInformation(sourceText, sourceIR, labelOutput, fileName)
 
     val insertedProgramID =
-      DAO.resolveProgram(fileName,
-                         md5sum(sourceText),
-                         labelOutput.labels.size,
-                         xa)
+      DAO.resolveProgram(md5sum(sourceText), labelOutput.labels.size, conn)
 
     insertedProgramID match {
       case Some(value) =>
         if (labelOutput.labels.indices.exists(i => {
               val l = labelOutput.labels(i)
-              DAO.resolveComponent(value, l, xa).isEmpty
+              DAO.resolveComponent(value, l, conn).isEmpty
             })) None
         else {
           Some(value -> programInfo)
         }
-      case None => None
+      case None =>
+        Output.error(s"Program $fileName isn't present in the database.")
+        None
     }
   }
 
   private def populatePaths(programID: Long,
                             programRep: StoredProgramRepresentation,
-                            globalConfig: GlobalConfiguration,
-                            xa: DBConnection): List[PathQueryCollection] = {
+                            populatorConfig: PopulatorConfig,
+                            conn: DBConnection): List[PathQueryCollection] = {
     val theoreticalMax =
       LabelTools.theoreticalMaxPaths(programRep.info.labels.labels.size)
     val sampler = new Sampler(programRep.info.labels)
     Output.info(s"Generating paths for ${programRep.info.fileName}")
     val bottomPermutationHash =
       new LabelPermutation(programRep.info.labels).idArray
+
+    val checksum = md5sum(bottomPermutationHash.toString)
     val bottomPerm =
-      DAO.addOrResolvePermutation(programID, bottomPermutationHash, xa)
-
+      DAO.addOrResolvePermutation(programID,
+                                  checksum,
+                                  bottomPermutationHash,
+                                  conn)
+    Output.success(
+      s"Resolved bottom permutation for program '${programRep.info.fileName}'")
     val queryCollections = mutable.ListBuffer[PathQueryCollection]()
-
-    val maximum =
-      theoreticalMax.min(globalConfig.maxPaths).min(globalConfig.maxPaths)
-    val difference = maximum - DAO.getNumberOfPaths(programID, xa)
-    for (_ <- 0 until difference.intValue()) {
-
+    val alreadyCreatedPermutations = mutable.Map[String, Long]()
+    val baselineMaximum =
+      theoreticalMax
+        .min(conn.gConfig.maxPaths)
+    val configuredMaximum: BigInt = populatorConfig.pathQuantity match {
+      case Some(value) => value
+      case None        => baselineMaximum
+    }
+    val difference = configuredMaximum - DAO.getNumberOfPaths(programID, conn)
+    for (i <- 0 until difference.intValue()) {
       val ordering = sampler.sample(SamplingHeuristic.Random)
       val pathHash =
         LabelTools
           .hashPath(programRep.info.labels.labels, ordering)
-      if (!DAO.containsPath(programID, pathHash, xa)) {
+      if (!DAO.containsPath(programID, pathHash, conn)) {
         val pathQuery =
           new DAO.PathQueryCollection(pathHash, programID, bottomPerm)
-
         val currentPermutation =
           new LabelPermutation(programRep.info.labels)
-
         for (labelIndex <- ordering.indices) {
           currentPermutation.addLabel(ordering(labelIndex))
           val currentID = currentPermutation.idArray
+          val checksum = md5sum(currentID.toString)
           val storedPermutationID =
-            DAO.addOrResolvePermutation(programID, currentID, xa)
+            if (alreadyCreatedPermutations.contains(checksum)) {
+              alreadyCreatedPermutations(checksum)
+            } else {
+              val id = DAO.addOrResolvePermutation(programID,
+                                                   checksum,
+                                                   currentID,
+                                                   conn)
+              alreadyCreatedPermutations += (checksum -> id)
+              id
+            }
           pathQuery.addStep(storedPermutationID,
                             programRep.componentMapping(ordering(labelIndex)))
         }
         queryCollections += pathQuery
-
+        Output.success(s"Assembled path query ${i + 1}/${difference
+          .intValue()} for program '${programRep.info.fileName}'")
       }
     }
     Output.success(
@@ -176,7 +199,7 @@ object BenchmarkPopulator {
 
   private def populateProgram(src: Path,
                               libraries: List[String],
-                              globalConfiguration: GlobalConfiguration,
+                              populatorConfig: PopulatorConfig,
                               xa: DBConnection): PopulatedProgram = {
     Output.info(s"Syncing definitions for ${src.getFileName}")
     val sourceText = Files.readString(src)
@@ -189,11 +212,13 @@ object BenchmarkPopulator {
                                                     md5sum(sourceText),
                                                     labelOutput.labels.size,
                                                     xa)
+
     val componentMapping = mutable.Map[ASTLabel, Long]()
     labelOutput.labels.indices.foreach(i => {
       val l = labelOutput.labels(i)
       val insertedComponentID =
         DAO.addOrResolveComponent(insertedProgramID, l, xa)
+      Output.success(s"Resolved component ${l.hash}")
       componentMapping += (l -> insertedComponentID)
     })
     Output.success(s"Completed syncing ${src.getFileName}")
@@ -203,7 +228,7 @@ object BenchmarkPopulator {
     PopulatedProgram(
       insertedProgramID,
       programRep,
-      populatePaths(insertedProgramID, programRep, globalConfiguration, xa))
+      populatePaths(insertedProgramID, programRep, populatorConfig, xa))
   }
 
   //https://alvinalexander.com/source-code/scala-method-create-md5-hash-of-string/

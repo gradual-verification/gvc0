@@ -9,13 +9,13 @@
             <p>
                 <match>*</match>
                 <stress>
-                    <list>8,16,32</list>
+                    <singular>8</singular>
                 </stress>
             </p>
             <p>
                 <match>list</match>
                 <stress>
-                    <list>16,32,64</list>
+                    <singular>16</singular>
                 </stress>
             </p>
         </by-program>

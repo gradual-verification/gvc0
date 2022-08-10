@@ -8,6 +8,7 @@ import gvc.transformer._
 import gvc.benchmarking.{
   BaselineChecker,
   BenchmarkExecutor,
+  BenchmarkExporter,
   BenchmarkExternalConfig,
   BenchmarkMonitor,
   BenchmarkPopulator,
@@ -72,12 +73,10 @@ object Main extends App {
   run(cmdConfig)
 
   def run(config: Config): Unit = {
-
     val linkedLibraries =
       config.linkedLibraries ++ Defaults.includeDirectories
 
     config.mode match {
-
       case Config.Monitor =>
         val benchConfig =
           BenchmarkExternalConfig.parseMonitor(config)
@@ -94,9 +93,8 @@ object Main extends App {
           val outputBinary = Paths.get(fileNames.binaryName)
           injectAndWrite(IRPrinter.print(ir, includeSpecs = false),
                          outputC0Source)
-          Timing.compileTimed(outputC0Source, outputBinary, config, 1)
+          Timing.compileTimed(outputC0Source, outputBinary, config)
           Timing.execTimed(outputBinary,
-                           1,
                            List(s"--stress ${config.stressLevel.getOrElse(1)}"))
         })
       case Config.Checker =>
@@ -133,6 +131,10 @@ object Main extends App {
         val benchConfig =
           BenchmarkExternalConfig.parseExecutor(config)
         BenchmarkExecutor.execute(benchConfig, config, linkedLibraries)
+
+      case Config.Export =>
+        val exportConfig = BenchmarkExternalConfig.parseExport(config)
+        BenchmarkExporter.export(exportConfig)
 
       case Config.Populate =>
         val benchConfig =
@@ -249,8 +251,10 @@ object Main extends App {
              fileNames: OutputFileCollection,
              config: Config): VerifiedOutput = {
     def silicon = resolveSilicon(config)
+
     verifySiliconProvided(silicon, inputSource, fileNames, config)
   }
+
   def verifySiliconProvided(silicon: Silicon,
                             inputSource: String,
                             fileNames: OutputFileCollection,

@@ -5,7 +5,6 @@ import gvc.Config.error
 import gvc.transformer.IR
 
 object BenchmarkRecreator {
-
   def recreate(config: RecreatorConfig,
                baseConfig: Config,
                libraries: List[String]): IR.Program = {
@@ -22,7 +21,7 @@ object BenchmarkRecreator {
 
           val asLabelSet =
             LabelTools.permutationIDToPermutation(correspondingProgramLabels,
-                                                  perm.permutationHash)
+                                                  perm.permutationContents)
           new SelectVisitor(syncedPrograms(perm.programID).ir).visit(asLabelSet)
 
         } else {
@@ -33,6 +32,5 @@ object BenchmarkRecreator {
         error(
           s"A permutation with ID=${baseConfig.recreatePerm.get} does not exist in the database.")
     }
-
   }
 }
