@@ -64,8 +64,7 @@ case class PopulatorConfig(version: String,
                            sources: List[Path])
     extends BenchmarkingConfig
 
-case class MonitorConfig(db: BenchmarkDBCredentials, outputDirectory: Path)
-    extends BenchmarkingConfig
+case class MonitorConfig(db: BenchmarkDBCredentials) extends BenchmarkingConfig
 
 case class ExecutorConfig(version: String,
                           hardware: String,
@@ -106,8 +105,7 @@ object BenchmarkExternalConfig {
   def parseMonitor(rootConfig: Config): MonitorConfig = {
     val resolved = parseConfig(rootConfig)
     MonitorConfig(
-      resolved.credentials,
-      Paths.get(resolved.outputDir.getOrElse(Names.defaultOutputDirectory))
+      resolved.credentials
     )
   }
 

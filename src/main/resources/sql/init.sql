@@ -4,7 +4,6 @@ DROP VIEW IF EXISTS completed_benchmarks;
 DROP VIEW IF EXISTS completed_paths;
 DROP VIEW IF EXISTS completed_programs;
 DROP TABLE IF EXISTS global_configuration;
-DROP TABLE IF EXISTS executor_stress_values;
 DROP TABLE IF EXISTS static_performance;
 DROP TABLE IF EXISTS static_conjuncts;
 DROP TABLE IF EXISTS dynamic_performance;
@@ -23,7 +22,6 @@ DROP TABLE IF EXISTS programs;
 DROP TABLE IF EXISTS nicknames;
 DROP TABLE IF EXISTS hardware;
 DROP TABLE IF EXISTS versions;
-DROP TABLE IF EXISTS hostnames;
 
 DROP PROCEDURE IF EXISTS sp_gr_Program;
 DROP PROCEDURE IF EXISTS sp_gr_Permutation;
@@ -34,9 +32,6 @@ DROP PROCEDURE IF EXISTS sp_gr_Version;
 DROP PROCEDURE IF EXISTS sp_gr_Nickname;
 DROP PROCEDURE IF EXISTS sp_gr_Program;
 DROP PROCEDURE IF EXISTS sp_gr_Path;
-DROP PROCEDURE IF EXISTS sp_gr_Hostname;
-DROP PROCEDURE IF EXISTS sp_GetCompletionPercentage;
-DROP PROCEDURE IF EXISTS sp_GetProgramErrorCounts;
 DROP PROCEDURE IF EXISTS sp_UpdateStaticPerformance;
 DROP PROCEDURE IF EXISTS sp_UpdateStaticConjuncts;
 DROP PROCEDURE IF EXISTS sp_ReservePermutation;
@@ -236,37 +231,6 @@ VALUES ('instrumentation');
 INSERT INTO static_measurement_types (measurement_type)
 VALUES ('compilation');
 
-CREATE TABLE IF NOT EXISTS hostnames
-(
-    id             SERIAL,
-    hostname       VARCHAR(512) UNIQUE NOT NULL,
-    last_connected DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
-);
-
-DELIMITER //
-CREATE PROCEDURE sp_gr_Hostname()
-BEGIN
-    SELECT SUBSTRING_INDEX(USER(), '@', -1) INTO @found_hostname;
-    INSERT INTO hostnames (hostname)
-    VALUES (@found_hostname)
-    ON DUPLICATE KEY UPDATE last_connected = CURRENT_TIMESTAMP;
-    SELECT id FROM hostnames WHERE hostname = @found_hostname;
-END //
-DELIMITER ;
-
-CREATE TABLE executor_stress_values
-(
-    hostname_id BIGINT UNSIGNED NOT NULL,
-    nickname_id BIGINT UNSIGNED NOT NULL,
-    program_id  BIGINT UNSIGNED NOT NULL,
-    stress      INT UNSIGNED    NOT NULL,
-    PRIMARY KEY (nickname_id, hostname_id, program_id, stress),
-    FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
-    FOREIGN KEY (hostname_id) REFERENCES hostnames (id),
-    FOREIGN KEY (program_id) REFERENCES programs (id)
-);
-
 CREATE TABLE IF NOT EXISTS measurements
 (
     id           SERIAL,
@@ -371,7 +335,6 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
 
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
-                                       IN hsid BIGINT UNSIGNED,
                                        IN bonly BOOLEAN, IN locks_enabled BOOLEAN)
 BEGIN
     IF (locks_enabled) THEN
@@ -397,7 +360,7 @@ BEGIN
     SELECT permutations.program_id, permutations.id, dmt.id
     INTO @found_program_id, @found_perm_id, @found_measurement_type_id
     FROM permutations
-             CROSS JOIN executor_stress_values sa on permutations.program_id = sa.program_id
+             CROSS JOIN configured_stress_values sa on permutations.program_id = sa.program_id
              CROSS JOIN dynamic_measurement_types dmt
              CROSS JOIN versions vr
              CROSS JOIN hardware hw
@@ -410,8 +373,6 @@ BEGIN
     WHERE dr.permutation_id IS NULL
       AND vr.id = vid
       AND hw.id = hid
-      AND sa.nickname_id = nnid
-      AND sa.hostname_id = hsid
       AND (NOT bonly OR permutations.id IN (SELECT permutation_id FROM benchmark_membership))
     ORDER BY RAND()
     LIMIT 1;
@@ -419,10 +380,8 @@ BEGIN
     IF ((SELECT @found_perm_id IS NOT NULL) AND (SELECT @found_measurement_type_id IS NOT NULL) AND
         (SELECT @found_program_id IS NOT NULL)) THEN
         INSERT INTO reserved_jobs (SELECT DISTINCT @found_perm_id, sa.stress, @found_measurement_type_id
-                                   FROM executor_stress_values sa
-                                   WHERE sa.program_id = @found_program_id
-                                     AND sa.nickname_id = nnid
-                                     AND sa.hostname_id = hsid);
+                                   FROM configured_stress_values sa
+                                   WHERE sa.program_id = @found_program_id);
         DELETE
         FROM reserved_jobs
         WHERE stress IN (SELECT stress
@@ -480,43 +439,6 @@ BEGIN
     INSERT INTO measurements (iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum)
     VALUES (p_iterations, p_ninety_fifth, p_fifth, p_median, p_mean, p_stdev, p_max, p_min);
     SELECT LAST_INSERT_ID();
-END //
-DELIMITER ;
-
-DELIMITER //
-CREATE PROCEDURE sp_GetCompletionPercentage(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED)
-BEGIN
-    SELECT (COUNT(measurement_id) + COUNT(error_id)) / COUNT(*) * 100
-    FROM permutations
-             CROSS JOIN versions
-             CROSS JOIN hardware
-             CROSS JOIN dynamic_measurement_types
-             CROSS JOIN executor_stress_values sa on permutations.program_id = sa.program_id
-             LEFT OUTER JOIN
-         dynamic_performance dp on dynamic_measurement_types.id = dp.measurement_type_id
-             AND dp.permutation_id = permutations.id AND dp.hardware_id = hardware.id AND dp.version_id = versions.id
-             AND dp.stress = sa.stress
-    WHERE version_id = vid
-      AND hardware_id = hid;
-END //
-DELIMITER ;
-DELIMITER //
-CREATE PROCEDURE sp_GetProgramErrorCounts(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED)
-BEGIN
-    SELECT src_filename, COUNT(error_id)
-    FROM permutations
-             INNER JOIN programs p on permutations.program_id = p.id
-             CROSS JOIN versions
-             CROSS JOIN hardware
-             CROSS JOIN dynamic_measurement_types
-             CROSS JOIN executor_stress_values sa on permutations.program_id = sa.program_id
-             LEFT OUTER JOIN
-         dynamic_performance dp on dynamic_measurement_types.id = dp.measurement_type_id
-             AND dp.permutation_id = permutations.id AND dp.hardware_id = hardware.id AND dp.version_id = versions.id
-             AND dp.stress = sa.stress
-    WHERE version_id = vid
-      AND hardware_id = hid
-    GROUP BY permutations.program_id;
 END //
 DELIMITER ;
 

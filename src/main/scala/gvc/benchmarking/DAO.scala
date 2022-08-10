@@ -65,7 +65,7 @@ object DAO {
 
   case class GlobalConfiguration(timeoutMinutes: Long, maxPaths: Long)
 
-  case class Identity(vid: Long, hwid: Long, nid: Long, hsid: Long)
+  case class Identity(vid: Long, hwid: Long, nid: Long)
 
   case class Version(id: Long, versionName: String, dateAdded: String)
 
@@ -122,7 +122,7 @@ object DAO {
                  staticModes,
                  connection,
                  locking = false,
-                 retries = 3)
+                 retries = 5)
   }
 
   private def resolveGlobalConfiguration(
@@ -176,77 +176,12 @@ object DAO {
     }
   }
 
-  def resolveStressValues(id: Identity,
-                          stressMapping: Map[Long, List[Int]],
-                          c: DBConnection): Unit = {
-    case class StressEntry(programID: Long, stress: Int)
-
-    val entries = stressMapping
-      .flatMap(p => {
-        for {
-          w <- p._2
-        } yield StressEntry(p._1, w)
-      })
-      .toList
-    (for {
-      _ <- sql"DELETE FROM executor_stress_values WHERE hostname_id = ${id.hsid} AND nickname_id = ${id.nid};".update.run
-      u <- Update[StressEntry](
-        s"INSERT INTO executor_stress_values (hostname_id, nickname_id, program_id, stress) VALUES (${id.hsid}, ${id.nid}, ?, ?);")
-        .updateMany(entries)
-    } yield u).transact(c.xa).attempt.unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException(
-          "Unable to populate table with configured stress values.",
-          t)
-      case Right(_) =>
-    }
-  }
-
-  def cleanupStressValues(id: Identity, c: DBConnection): Unit = {
-    sql"DELETE FROM executor_stress_values WHERE hostname_id = ${id.hsid} AND nickname_id = ${id.nid};".update.run
-      .transact(c.xa)
-      .attempt
-      .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException(
-          s"Unable to delete stress values for hostname ID=${id.hsid}",
-          t)
-      case Right(_) =>
-    }
-    sql"DELETE FROM hostnames WHERE id = ${id.hsid};".update.run
-      .transact(c.xa)
-      .attempt
-      .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException(
-          s"Unable to delete hostname entry for ID=${id.hsid}",
-          t)
-      case Right(_) =>
-    }
-  }
-
-  def addOrResolveHostname(c: DBConnection): Long = {
-    sql"CALL sp_gr_Hostname();"
-      .query[Long]
-      .unique
-      .transact(c.xa)
-      .attempt
-      .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException(
-          "Unable to resolve hostname for connected session.",
-          t)
-      case Right(value) => value
-    }
-  }
-
   def addOrResolveIdentity(config: ExecutorConfig,
                            c: DBConnection): Identity = {
     val hid = addOrResolveHardware(config.hardware, c)
     val vid = addOrResolveVersion(config.version, c)
     val nid = addOrResolveNickname(config.nickname, c)
-    val hostnameID = addOrResolveHostname(c)
-    Identity(vid, hid, nid, hostnameID)
+    Identity(vid, hid, nid)
   }
 
   def addOrResolveNickname(name: String, c: DBConnection): Long = {
@@ -488,16 +423,19 @@ object DAO {
                                   measurementID: Long)
 
   def reserveProgramForMeasurement(id: Identity,
+                                   table: StressTable,
                                    onlyBenchmark: Boolean,
                                    c: DBConnection): Option[ReservedProgram] = {
-    val startTime = System.nanoTime()
     var result: Option[ReservedProgram] = None
     var maxRetries = c.retries
     while (maxRetries > 0) {
       maxRetries -= 1
-      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hwid}, ${id.nid}, ${id.hsid}, $onlyBenchmark, ${c.locking});"
-        .query[ReservedProgramEntry]
-        .to[List]
+      (for {
+        _ <- Utilities.createTemporaryStressValueTable(table)
+        sp <- sql"CALL sp_ReservePermutation(${id.vid}, ${id.hwid}, ${id.nid}, $onlyBenchmark, ${c.locking});"
+          .query[ReservedProgramEntry]
+          .to[List]
+      } yield sp)
         .transact(c.xa)
         .attempt
         .unsafeRunSync() match {
@@ -532,11 +470,6 @@ object DAO {
           }
       }
     }
-    val stopTime = System.nanoTime()
-    val differenceInSeconds = Math
-      .round(((stopTime - startTime).toDouble / Math.pow(10, 9)) * 100)
-      .toDouble / 100
-    Output.info(s"Finished reservation query in $differenceInSeconds sec.")
     result
   }
 
@@ -980,6 +913,7 @@ object DAO {
 
   object Exporter {
     case class ProgramEntry(name: String, id: Long)
+
     case class BenchmarkEntry(name: String, id: Long)
 
     case class DynamicPerformanceEntry(programID: Long,

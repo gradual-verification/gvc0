@@ -7,14 +7,7 @@ import gvc.benchmarking.Benchmark.{
   injectStress,
   isInjectable
 }
-import gvc.benchmarking.BenchmarkPopulator.ProgramInformation
-import gvc.benchmarking.DAO.{
-  DBConnection,
-  DynamicMeasurementMode,
-  ErrorType,
-  Identity,
-  Permutation
-}
+import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
 import gvc.benchmarking.Timing.{CC0CompilationException, CC0ExecutionException}
 import gvc.transformer.{IR, IRPrinter}
 import gvc.weaver.WeaverException
@@ -41,9 +34,11 @@ object BenchmarkExecutor {
     }
     val conn = DAO.connect(config.db)
     val id = DAO.addOrResolveIdentity(config, conn)
+    val stressTable = new StressTable(config.workload)
     var currentSiliconInstance: Option[Silicon] = None
     val ongoingProcesses = mutable.ListBuffer[scala.sys.process.Process]()
-    val syncedPrograms = this.syncProgramsAndStress(id, config, libraries, conn)
+    val syncedPrograms =
+      BenchmarkPopulator.sync(config.sources, libraries, conn)
 
     val tempBinary =
       Files.createTempFile("temp_bin", ".out")
@@ -52,7 +47,10 @@ object BenchmarkExecutor {
       Files.createTempFile("temp_src", ".c0")
 
     var reservedProgram =
-      DAO.reserveProgramForMeasurement(id, config.modifiers.onlyBenchmark, conn)
+      DAO.reserveProgramForMeasurement(id,
+                                       stressTable,
+                                       config.modifiers.onlyBenchmark,
+                                       conn)
 
     def wrapTiming[T](f: => T): Either[Throwable, T] = {
       try {
@@ -199,10 +197,10 @@ object BenchmarkExecutor {
       }
       reservedProgram = DAO.reserveProgramForMeasurement(
         id,
+        stressTable,
         config.modifiers.onlyBenchmark,
         conn)
     }
-    DAO.cleanupStressValues(id, conn)
   }
 
   def injectAndWrite(c0: String, dest: Path): Unit = {
@@ -242,20 +240,5 @@ object BenchmarkExecutor {
       userConfiguredStressValues.getOrElse(filename, defaultStressValues)
     }
   }
-  private def syncProgramsAndStress(
-      id: Identity,
-      config: ExecutorConfig,
-      libraries: List[String],
-      conn: DBConnection): Map[Long, ProgramInformation] = {
-    val syncedPrograms =
-      BenchmarkPopulator.sync(config.sources, libraries, conn)
-    val stressTable = new StressTable(config.workload)
-    val translatedIDMapping = syncedPrograms.map(p => {
-      val withoutExtension =
-        p._2.fileName.substring(0, p._2.fileName.lastIndexOf(".c0"))
-      p._1 -> stressTable.get(withoutExtension)
-    })
-    DAO.resolveStressValues(id, translatedIDMapping, conn)
-    syncedPrograms
-  }
+
 }
