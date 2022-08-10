@@ -101,7 +101,7 @@ object Config {
       |                --execute-benchmark            Identical to --execute, but only selects programs belonging to pre-configured benchmark sets.
       |                --recreate=<id>                Specify a permutation to recreate from the database using options from the specified configuration file.
       |                --export                       Data is filtered using options from the specified configuration file.
-      |                --export=<dir>                 Specify a directory to export data to instead of the default './export'.
+      |                --export-benchmark             Identical to --export, but only selects data corresponding to pre-configured benchmark sets.
       |                 
       |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
       |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
@@ -237,6 +237,12 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(mode = Export)
+        )
+
+      case "--export-benchmark" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = Export, onlyBenchmark = true)
         )
       case "--only-exec" :: tail =>
         fromCommandLineArgs(

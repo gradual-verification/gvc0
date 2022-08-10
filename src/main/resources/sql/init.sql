@@ -522,7 +522,7 @@ DELIMITER ;
 
 CREATE VIEW path_step_index AS
 (
-SELECT p.program_id, paths.id as path_id, s.id as step_id, p.id as permutation_id
+SELECT p.program_id, p.id as permutation_id, paths.id as path_id, s.level_id as level_id
 FROM paths
          CROSS JOIN steps s ON paths.id = s.path_id
          CROSS JOIN permutations p on s.permutation_id = p.id);
@@ -545,9 +545,10 @@ FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
          INNER JOIN error_occurrences ON p_errors.error_id = error_occurrences.id
          INNER JOIN error_contents ON error_contents.id = error_occurrences.error_contents_id = error_contents.id
     );
+
 CREATE VIEW completed_paths AS
 (
-SELECT path_id, version_id, hardware_id, stress, measurement_type_id
+SELECT paths.program_id, path_id, version_id, hardware_id, stress, measurement_type_id
 FROM (SELECT path_id,
              version_id,
              hardware_id,

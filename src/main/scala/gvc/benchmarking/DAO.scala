@@ -8,6 +8,8 @@ import doobie.implicits._
 import gvc.benchmarking.ExprType.ExprType
 import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
+import cats.free.Free
+import doobie.free.connection
 import gvc.CC0Wrapper.Performance
 import gvc.Config.{error, prettyPrintException}
 import gvc.benchmarking.BenchmarkExecutor.{ReservedProgram, StressTable}
@@ -291,6 +293,18 @@ object DAO {
                      c: DBConnection): Option[Long] = {
     sql"SELECT id FROM programs WHERE num_labels = $numLabels AND src_hash = $hash"
       .query[Option[Long]]
+      .unique
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(_)      => None
+      case Right(value) => value
+    }
+  }
+
+  def resolveProgramName(id: Long, c: DBConnection): Option[String] = {
+    sql"SELECT src_filename FROM programs WHERE id=$id;"
+      .query[Option[String]]
       .unique
       .transact(c.xa)
       .attempt
@@ -816,8 +830,8 @@ object DAO {
 
   def resolveVersion(name: String, c: DBConnection): Option[Long] = {
     sql"SELECT id FROM versions WHERE version_name = $name;"
-      .query[Option[Long]]
-      .unique
+      .query[Long]
+      .option
       .transact(c.xa)
       .attempt
       .unsafeRunSync() match {
@@ -857,8 +871,8 @@ object DAO {
 
   def resolveHardware(name: String, c: DBConnection): Option[Long] = {
     sql"SELECT id FROM hardware WHERE hardware_name = $name;"
-      .query[Option[Long]]
-      .unique
+      .query[Long]
+      .option
       .transact(c.xa)
       .attempt
       .unsafeRunSync() match {
@@ -866,43 +880,6 @@ object DAO {
         prettyPrintException(s"Unable to query for hardware '$name'", t)
       case Right(value) => value
     }
-  }
-
-  def selectCompletedPathIDs(versionID: Long,
-                             hardwareID: Long,
-                             quantity: Int,
-                             connection: DBConnection): Unit = {}
-
-  def createTemporaryStressValueTable(stressTable: StressTable,
-                                      c: DBConnection): Unit = {
-    case class ProgramEntry(filename: String, programID: Long)
-    case class ProgramStressEntry(programID: Long, stress: Int)
-
-    val entries =
-      (for {
-        e <- sql"SELECT src_filename, id FROM programs;"
-          .query[ProgramEntry]
-          .to[List]
-        _ <- sql"CREATE TEMPORARY TABLE configured_stress_values (program_id BIGINT UNSIGNED NOT NULL, stress INT UNSIGNED NOT NULL);".update.run
-        u <- Update[ProgramStressEntry](
-          "INSERT INTO configured_stress_values (program_id, stress) VALUES (?, ?);")
-          .updateMany(
-            e.map(e => e.filename -> e.programID)
-              .toMap
-              .flatMap(p => {
-                for {
-                  w <- stressTable.get(p._1)
-                } yield ProgramStressEntry(p._2, w)
-              })
-              .toList)
-
-      } yield u).transact(c.xa).attempt.unsafeRunSync() match {
-        case Left(t) =>
-          prettyPrintException(
-            "Unable to populate stress value temporary table",
-            t)
-        case Right(_) =>
-      }
   }
 
   case class CompletedPathMetadata(version: String,
@@ -939,6 +916,7 @@ object DAO {
                                       completed: Int,
                                       errored: Int,
                                       total: Int)
+
   def getCompletedProgramList(
       conn: DBConnection): List[CompletedProgramMetadata] = {
     sql"""SELECT version_name, hardware_name, stress, measurement_type, completed, errored, total
@@ -997,6 +975,305 @@ object DAO {
         prettyPrintException("Unable to get list of program metadata", t)
       case Right(value) => value
 
+    }
+  }
+
+  object Exporter {
+    case class ProgramEntry(name: String, id: Long)
+    case class BenchmarkEntry(name: String, id: Long)
+
+    case class DynamicPerformanceEntry(programID: Long,
+                                       permutationID: Long,
+                                       measurementType: String,
+                                       stress: Int,
+                                       iter: Int,
+                                       ninetyFifth: Double,
+                                       fifth: Double,
+                                       median: Double,
+                                       mean: Double,
+                                       stdev: Double,
+                                       min: Long,
+                                       max: Long) {
+      override def toString: String = {
+        List(
+          this.programID,
+          this.permutationID,
+          this.measurementType,
+          this.stress,
+          this.iter,
+          this.ninetyFifth,
+          this.fifth,
+          this.median,
+          this.mean,
+          this.stdev,
+          this.min,
+          this.max
+        ).mkString(",")
+      }
+    }
+
+    def generateProgramIndex(c: DBConnection): String = {
+      (for {
+        l <- sql"""SELECT DISTINCT src_filename, programs.id
+         FROM programs;"""
+          .query[Exporter.ProgramEntry]
+          .to[List]
+      } yield l).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException(
+            "Unable to create mapping from program names to IDs",
+            t)
+        case Right(value) =>
+          value
+            .map(v => {
+              List(v.name, v.id).mkString(",")
+            })
+            .mkString("\n")
+      }
+    }
+
+    def generateProgramIndexFromPaths(paths: List[Long],
+                                      c: DBConnection): String = {
+
+      (for {
+        _ <- generatePathIDTemporaryTable(paths)
+        l <- sql"""SELECT DISTINCT src_filename, programs.id
+               FROM programs CROSS JOIN paths p on programs.id = p.program_id
+               WHERE p.id IN (SELECT path_id FROM requested_paths_ids);"""
+          .query[Exporter.ProgramEntry]
+          .to[List]
+      } yield l).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException(
+            "Unable to create mapping from program names to IDs",
+            t)
+        case Right(value) =>
+          value
+            .map(v => {
+              List(v.name, v.id).mkString(",")
+            })
+            .mkString("\n")
+      }
+    }
+
+    def generateDynamicPerformanceData(stressTable: StressTable,
+                                       paths: List[Long],
+                                       c: DBConnection): String = {
+
+      (for {
+        _ <- Exporter.generatePathIDTemporaryTable(paths)
+        _ <- Utilities.createTemporaryStressValueTable(stressTable)
+        u <- sql"""
+            SELECT p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress,
+            iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum
+            FROM dynamic_performance dp
+                INNER JOIN permutations p on dp.permutation_id = p.id
+                CROSS JOIN steps on steps.permutation_id = dp.permutation_id
+                INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
+                INNER JOIN programs p2 on p.program_id = p2.id
+                INNER JOIN configured_stress_values cs ON cs.program_id = p.program_id AND dp.stress = cs.stress
+                INNER JOIN measurements m on dp.measurement_id = m.id;
+             """.query[Exporter.DynamicPerformanceEntry].to[List]
+      } yield u).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException("Unable to generate dynamic performance list", t)
+        case Right(value) =>
+          value
+            .map(_.toString)
+            .mkString("\n")
+      }
+    }
+
+    def generateStaticPerformanceData(paths: List[Long],
+                                      c: DBConnection): String = {
+
+      case class StaticEntry(permID: Long, elim: Long, total: Long)
+
+      (for {
+        _ <- Exporter.generatePathIDTemporaryTable(paths)
+        l <- sql"""SElECT s.permutation_id, sc.conj_eliminated, sc.conj_total FROM static_conjuncts sc
+                    INNER JOIN permutations p on sc.permutation_id = p.id
+                    INNER JOIN steps s on p.id = s.permutation_id
+                    WHERE s.path_id IN (SELECT path_id FROM requested_paths_ids);
+               """.query[StaticEntry].to[List]
+      } yield l).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException("Unable to resolve static performance list", t)
+        case Right(value) =>
+          value
+            .map(v => {
+              List(v.permID, v.elim, v.total).mkString(",")
+            })
+            .mkString("\n")
+      }
+    }
+
+    def generatePathIDTemporaryTable(
+        paths: List[Long]): Free[connection.ConnectionOp, Int] = {
+      for {
+        _ <- sql"CREATE TEMPORARY TABLE requested_paths_ids (path_id BIGINT UNSIGNED NOT NULL);".update.run
+        l <- Update[Long](
+          "INSERT INTO requested_paths_ids (path_id) VALUES (?);")
+          .updateMany(paths)
+      } yield l
+    }
+
+    def generatePathIndex(paths: List[Long], c: DBConnection): String = {
+      case class IndexRow(programID: Long,
+                          permID: Long,
+                          pathID: Long,
+                          levelID: Long)
+
+      (for {
+        _ <- Exporter.generatePathIDTemporaryTable(paths)
+        l <- sql"""SELECT * FROM path_step_index WHERE path_id IN (SELECT path_id FROM requested_paths_ids);"""
+          .query[IndexRow]
+          .to[List]
+      } yield l).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) => prettyPrintException("Unable to resolve path index", t)
+        case Right(value) =>
+          value
+            .map(r =>
+              List(r.programID, r.permID, r.pathID, r.levelID).mkString(","))
+            .mkString("\n")
+      }
+    }
+
+    def getPathIDList(vid: Long,
+                      hid: Long,
+                      table: StressTable,
+                      c: DBConnection): Map[Long, List[Long]] = {
+      case class CompletedPathID(programID: Long, pathID: Long)
+
+      (for {
+        _ <- Utilities.createTemporaryStressValueTable(table)
+        v <- sql"""SELECT DISTINCT completed_paths.program_id, completed_paths.path_id
+        FROM completed_paths
+                 INNER JOIN
+             (SELECT path_id, COUNT(DISTINCT measurement_type_id) AS mcount, COUNT(DISTINCT cs.stress) AS ccount
+              FROM completed_paths cp
+                       CROSS JOIN configured_stress_values cs
+                           ON cs.program_id = cp.program_id AND cp.stress = cs.stress
+              GROUP BY path_id)
+                 AS stress_counts ON completed_paths.path_id = stress_counts.path_id
+                 INNER JOIN configured_stress_counts
+            AS target_counts ON target_counts.program_id = completed_paths.program_id
+        WHERE version_id = $vid
+          AND hardware_id = $hid
+          AND stress_counts.ccount = target_counts.stress_count
+          AND stress_counts.mcount = (SELECT COUNT(*) FROM dynamic_measurement_types);"""
+          .query[CompletedPathID]
+          .to[List]
+      } yield v).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException(
+            "Unable to resolve list of completed paths matching criteria",
+            t)
+        case Right(value) =>
+          value.groupBy(_.programID).map(g => g._1 -> g._2.map(_.pathID))
+      }
+    }
+
+    def getBenchmarkIDList(vid: Long,
+                           hid: Long,
+                           table: StressTable,
+                           c: DBConnection): List[BenchmarkEntry] = {
+
+      (for {
+        _ <- Utilities.createTemporaryStressValueTable(table)
+        v <- sql"""SELECT DISTINCT benchmark_name, completed_benchmarks.benchmark_id
+        FROM completed_benchmarks
+                 INNER JOIN benchmarks
+                            ON completed_benchmarks.benchmark_id = benchmarks.id
+                 INNER JOIN (SELECT hardware_id,
+                                    version_id,
+                                    cb.benchmark_id,
+                                    COUNT(DISTINCT measurement_type_id) AS mcount,
+                                    COUNT(DISTINCT cs.stress)           AS scount
+
+                             FROM completed_benchmarks cb
+                                 INNER JOIN benchmark_membership ON cb.benchmark_id = benchmark_membership.benchmark_id
+                                 INNER JOIN permutations p on benchmark_membership.permutation_id = p.id
+                                      CROSS JOIN configured_stress_values cs
+                                                 ON cb.stress = cs.stress
+                                                    AND p.program_id = cs.program_id
+                             GROUP BY hardware_id, version_id, cb.benchmark_id) as ct
+                            ON ct.version_id = completed_benchmarks.version_id
+                                AND ct.hardware_id = completed_benchmarks.hardware_id
+                                AND ct.benchmark_id = completed_benchmarks.benchmark_id
+        WHERE completed_benchmarks.version_id = $vid
+          AND completed_benchmarks.hardware_id = $hid
+          AND ct.scount = (SELECT SUM(DISTINCT stress_count) FROM configured_stress_counts)
+          AND ct.mcount = (SELECT COUNT(*) FROM dynamic_measurement_types);"""
+          .query[Exporter.BenchmarkEntry]
+          .to[List]
+      } yield v).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException("Unable to resolve list of completed benchmarks",
+                               t)
+        case Right(value) => value
+      }
+    }
+
+    def getBenchmarkPerformanceData(stressTable: StressTable,
+                                    id: Long,
+                                    c: DBConnection): String = {
+
+      (for {
+        _ <- Utilities.createTemporaryStressValueTable(stressTable)
+        l <- sql"""SELECT p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress,
+                      iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum
+                    FROM benchmark_membership
+                    INNER JOIN permutations p ON benchmark_membership.permutation_id = p.id
+                    CROSS JOIN dynamic_performance dp ON p.id = dp.permutation_id
+                    INNER JOIN configured_stress_values cs
+                        ON dp.stress = cs.stress AND cs.program_id = p.program_id
+                    INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
+                    INNER JOIN measurements m on dp.measurement_id = m.id;
+             """.query[Exporter.DynamicPerformanceEntry].to[List]
+      } yield l).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException(
+            s"Unable to acquire dynamic peformance results for benchmark ID=$id",
+            t)
+        case Right(value) =>
+          value.map(_.toString).mkString("\n")
+      }
+    }
+  }
+
+  object Utilities {
+    def createTemporaryStressValueTable(
+        stressTable: StressTable): Free[connection.ConnectionOp, Int] = {
+      case class ProgramEntry(filename: String, programID: Long)
+      case class ProgramStressEntry(programID: Long, stress: Int)
+
+      for {
+        e <- sql"SELECT src_filename, id FROM programs;"
+          .query[ProgramEntry]
+          .to[List]
+        _ <- sql"CREATE TEMPORARY TABLE configured_stress_values (program_id BIGINT UNSIGNED NOT NULL, stress INT UNSIGNED NOT NULL);".update.run
+        u <- Update[ProgramStressEntry](
+          "INSERT INTO configured_stress_values (program_id, stress) VALUES (?, ?);")
+          .updateMany(
+            e.map(e => e.filename -> e.programID)
+              .toMap
+              .flatMap(p => {
+                for {
+                  w <- stressTable.get(p._1)
+                } yield ProgramStressEntry(p._2, w)
+              })
+              .toList)
+        _ <- sql"""CREATE temporary table configured_stress_counts
+          (
+            program_id BIGINT UNSIGNED,
+            stress_count BIGINT UNSIGNED
+          );""".update.run
+        u <- sql"""INSERT INTO configured_stress_counts
+                    SELECT program_id, COUNT(*) AS c
+                        FROM configured_stress_values cs
+                        GROUP BY program_id;""".update.run
+      } yield u
     }
   }
 }
