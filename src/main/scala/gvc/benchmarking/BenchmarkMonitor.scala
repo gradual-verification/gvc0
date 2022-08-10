@@ -1,8 +1,5 @@
 package gvc.benchmarking
-
-import gvc.benchmarking.Benchmark.Extensions.csv
 import gvc.benchmarking.DAO.DBConnection
-import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.Output.{green, red}
 
 object BenchmarkMonitor {

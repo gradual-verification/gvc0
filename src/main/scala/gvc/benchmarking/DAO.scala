@@ -27,7 +27,9 @@ object DAO {
   case class DBConnection(gConfig: GlobalConfiguration,
                           dynamicModes: Map[Long, DynamicMeasurementMode],
                           staticModes: Map[StaticMeasurementMode, Long],
-                          xa: Transactor.Aux[IO, Unit])
+                          xa: Transactor.Aux[IO, Unit],
+                          locking: Boolean,
+                          retries: Int)
 
   object DynamicMeasurementMode {
     type DynamicMeasurementMode = String
@@ -113,7 +115,12 @@ object DAO {
     val gConfig = resolveGlobalConfiguration(connection)
     val dynamicModes = resolveDynamicModes(connection)
     val staticModes = resolveStaticModes(connection)
-    DBConnection(gConfig, dynamicModes, staticModes, connection)
+    DBConnection(gConfig,
+                 dynamicModes,
+                 staticModes,
+                 connection,
+                 locking = false,
+                 retries = 3)
   }
 
   private def resolveGlobalConfiguration(
@@ -470,11 +477,11 @@ object DAO {
                                    onlyBenchmark: Boolean,
                                    c: DBConnection): Option[ReservedProgram] = {
     val startTime = System.nanoTime()
-    var finished = false
     var result: Option[ReservedProgram] = None
-    while (!finished) {
-      finished = true
-      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hwid}, ${id.nid}, ${id.hsid}, $onlyBenchmark);"
+    var maxRetries = c.retries
+    while (maxRetries > 0) {
+      maxRetries -= 1
+      sql"CALL sp_ReservePermutation(${id.vid}, ${id.hwid}, ${id.nid}, ${id.hsid}, $onlyBenchmark, ${c.locking});"
         .query[ReservedProgramEntry]
         .to[List]
         .transact(c.xa)
@@ -485,13 +492,13 @@ object DAO {
             case _: SQLTransactionRollbackException =>
               Output.info("Deadlock detected; pausing and retrying...")
               Thread.sleep(50)
-              finished = false
             case _ =>
               prettyPrintException("Unable to reserve program for benchmarking",
                                    t)
           }
         case Right(value) =>
           if (value.nonEmpty) {
+            maxRetries = -1
             val workloads = value.map(v => v.stress)
             val permID = value.head.permID
             sql"SELECT * FROM permutations WHERE id = $permID;"

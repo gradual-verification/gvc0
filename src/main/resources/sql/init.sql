@@ -371,15 +371,19 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
                                        IN hsid BIGINT UNSIGNED,
-                                       IN bonly BOOLEAN)
+                                       IN bonly BOOLEAN, IN locks_enabled BOOLEAN)
 BEGIN
-    SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
-    IF ((SELECT @lock_status) != 1) THEN
-        SELECT CONCAT('Reservation failed, unable to acquire lock.')
-        INTO @message_text;
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = @message_text;
+
+    IF (locks_enabled) THEN
+        SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
+        IF ((SELECT @lock_status) != 1) THEN
+            SELECT CONCAT('Reservation failed, unable to acquire lock.')
+            INTO @message_text;
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = @message_text;
+        END IF;
     END IF;
+
     START TRANSACTION;
 
     DROP TABLE IF EXISTS reserved_jobs;
@@ -447,7 +451,10 @@ BEGIN
         FROM reserved_jobs;
     END IF;
     COMMIT;
-    DO RELEASE_LOCK('sp_ReservePermutation');
+
+    IF (locks_enabled) THEN
+        DO RELEASE_LOCK('sp_ReservePermutation');
+    END IF;
     SELECT * FROM reserved_jobs;
 END //
 DELIMITER ;
