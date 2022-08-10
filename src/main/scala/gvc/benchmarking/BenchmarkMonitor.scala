@@ -78,9 +78,9 @@ object BenchmarkMonitor {
             m2.foreach(p2 => {
               val elem = p2._2.head
               val completionPercentage = Math.round(
-                ((elem.completed / elem.total) * 100) * 100) / 100
+                ((elem.completed.toDouble / elem.total) * 100) * 100) / 100
               val errorPercentage = Math.round(
-                ((elem.errored / elem.total) * 100) * 100) / 100
+                ((elem.errored.toDouble / elem.total) * 100) * 100) / 100
               println(s"\t\t\t* ${p2._1}: ${green(
                 completionPercentage.toString + "%")}, (${elem.completed} total) - ${red(
                 errorPercentage.toString + "%")}, (${elem.errored} total)")

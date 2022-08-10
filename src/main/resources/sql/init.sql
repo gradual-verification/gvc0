@@ -545,7 +545,6 @@ FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
          INNER JOIN error_occurrences ON p_errors.error_id = error_occurrences.id
          INNER JOIN error_contents ON error_contents.id = error_occurrences.error_contents_id = error_contents.id
     );
-
 CREATE VIEW completed_paths AS
 (
 SELECT path_id, version_id, hardware_id, stress, measurement_type_id
@@ -563,7 +562,7 @@ FROM (SELECT path_id,
          INNER JOIN paths ON counts.path_id = paths.id
          INNER JOIN (SELECT program_id, COUNT(*) AS maximum FROM components GROUP BY(program_id))
     AS max_counts ON paths.program_id = max_counts.program_id
-WHERE counts.completed = max_counts.maximum);
+WHERE counts.completed = (max_counts.maximum + 1));
 
 CREATE VIEW completed_benchmarks AS
 (
