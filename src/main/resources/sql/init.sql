@@ -368,12 +368,12 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     FOREIGN KEY (measurement_type_id) REFERENCES dynamic_measurement_types (id)
 );
 
+
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
                                        IN hsid BIGINT UNSIGNED,
                                        IN bonly BOOLEAN, IN locks_enabled BOOLEAN)
 BEGIN
-
     IF (locks_enabled) THEN
         SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
         IF ((SELECT @lock_status) != 1) THEN
@@ -614,7 +614,7 @@ FROM (SELECT program_id,
       GROUP BY program_id, version_id, hardware_id, stress, measurement_type_id) AS B
      ON A.program_id = B.program_id AND A.stress = B.stress AND A.hardware_id = B.hardware_id AND
         A.measurement_type_id = B.measurement_type_id AND
-        A.version_id = b.version_id
+        A.version_id = B.version_id
          INNER JOIN (SELECT program_id, COUNT(*) AS total FROM permutations GROUP BY program_id) AS C
                     ON A.program_id = C.program_id
     );
