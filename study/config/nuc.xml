@@ -13,6 +13,12 @@
                 </stress>
             </p>
             <p>
+                <match>composite</match>
+                <stress>
+                    <list>4,8,16</list>
+                </stress>
+            </p>
+            <p>
                 <match>list</match>
                 <stress>
                     <list>16,32,64</list>

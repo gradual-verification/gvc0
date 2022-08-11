@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS global_configuration
 );
 
 INSERT INTO global_configuration (timeout_minutes, timeout_margin, max_paths)
-VALUES (45, 1, 128);
+VALUES (120, 1, 128);
 
 CREATE TABLE IF NOT EXISTS programs
 (

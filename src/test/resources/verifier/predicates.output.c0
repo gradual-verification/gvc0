@@ -11,7 +11,7 @@ struct Node
 void add_remove_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields, struct OwnedFields* _tempFields);
 void add_wrappedAcc(struct Node* node, struct OwnedFields* _ownedFields);
 int fullyImprecise(struct Node* a, struct OwnedFields* _ownedFields);
-int fullyPrecise(struct Node* a, int* _instanceCounter);
+int fullyPrecise(struct Node* a, struct OwnedFields* _ownedFields);
 int imprecisePostcondition(struct Node* a, struct OwnedFields* _ownedFields);
 int imprecisePrecondition(struct Node* a, struct OwnedFields* _ownedFields);
 int main();
@@ -38,19 +38,17 @@ int fullyImprecise(struct Node* a, struct OwnedFields* _ownedFields)
   return a->value;
 }
 
-int fullyPrecise(struct Node* a, int* _instanceCounter)
+int fullyPrecise(struct Node* a, struct OwnedFields* _ownedFields)
 {
   int _ = 0;
-  struct OwnedFields* _ownedFields = NULL;
   struct OwnedFields* _tempFields = NULL;
   struct OwnedFields* _tempFields1 = NULL;
-  _ownedFields = initOwnedFields(_instanceCounter);
   add_wrappedAcc(a, _ownedFields);
-  _tempFields1 = initOwnedFields(_instanceCounter);
+  _tempFields1 = initOwnedFields(_ownedFields->instanceCounter);
   add_remove_wrappedAcc(a, _tempFields1, _ownedFields);
   _ = imprecisePostcondition(a, _tempFields1);
   join(_ownedFields, _tempFields1);
-  _tempFields = initOwnedFields(_instanceCounter);
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
   wrappedAcc(a, _ownedFields);
   sep_wrappedAcc(a, _tempFields);
   return _;
@@ -72,12 +70,15 @@ int main()
   struct Node* a = NULL;
   int _ = 0;
   int* _instanceCounter = NULL;
+  struct OwnedFields* _tempFields = NULL;
   _instanceCounter = alloc(int);
   a = alloc(struct Node);
   a->_id = *_instanceCounter;
   *_instanceCounter = *_instanceCounter + 1;
   a->next = NULL;
-  _ = fullyPrecise(a, _instanceCounter);
+  _tempFields = initOwnedFields(_instanceCounter);
+  add_wrappedAcc(a, _tempFields);
+  _ = fullyPrecise(a, _tempFields);
   return _;
 }
 
