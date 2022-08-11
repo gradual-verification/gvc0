@@ -77,7 +77,6 @@ int main()
   *_instanceCounter = *_instanceCounter + 1;
   a->next = NULL;
   _tempFields = initOwnedFields(_instanceCounter);
-  add_wrappedAcc(a, _tempFields);
   _ = fullyPrecise(a, _tempFields);
   return _;
 }
