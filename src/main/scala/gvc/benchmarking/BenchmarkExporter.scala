@@ -14,19 +14,18 @@ object BenchmarkExporter {
   private case class AssertedPartialIdentity(versionID: Long, hardwareID: Long)
 
   private object Names {
-    val DateFormat = "+dd:MM:yyyy+HH:mm:ss+"
+    private val DateFormat = new SimpleDateFormat("+dd:MM:yyyy+HH:mm:ss+")
+      .format(Calendar.getInstance().getTime)
     val ErrorCSV: String = csv("errors")
-    val DefaultMassOutputDir: String = "export-mass" + new SimpleDateFormat(
-      Names.DateFormat).format(Calendar.getInstance().getTime)
-    val DefaultBenchOutputDir: String = "export-bench" + new SimpleDateFormat(
-      Names.DateFormat).format(Calendar.getInstance().getTime)
-    val BenchmarkPerformanceCSV: String = csv("benchmark_perf")
+    val DefaultMassOutputDir: String = "export-mass" + this.DateFormat
+    val DefaultBenchOutputDir: String = "export-bench" + this.DateFormat
+    val DefaultErrorOutputDir: String = "export-error" + this.DateFormat
     val DynamicPerformanceCSV: String = csv("dynamic_perf")
     val StaticPerformanceCSV: String = csv("static_perf")
     val PathIndexCSV: String = csv("path_index")
     val ProgramIndexCSV: String = csv("program_index")
     val ErrorCSVColumnNames =
-      "version_name,hardware_name,permutation_id,error_type,error_desc,error_date"
+      "program_id,permutation_id,error_type,occurred_during,measurement_type,error_desc,error_date"
     val DynamicPerformanceCSVColumnNames =
       "program_id,permutation_id,measurement_type,stress,iter,ninetyFifth,fifth,median,mean,stdev,min,max"
     val StaticPerformanceCSVColumnNames =
@@ -175,9 +174,20 @@ object BenchmarkExporter {
                            id: AssertedPartialIdentity,
                            conn: DBConnection): Unit = {
     val errorContents = DAO.getErrorList(id.versionID, id.hardwareID, conn)
-    val outputCSV = Paths.get(
-      config.outputDir.getOrElse(Names.DefaultMassOutputDir),
-      Names.ErrorCSV)
+
+    val outDir = Paths.get(
+      config.outputDir.getOrElse(
+        Names.DefaultErrorOutputDir + List(config.hardware, config.version)
+          .mkString("+")))
+    Files.createDirectories(outDir)
+
+    val programIndex = DAO.Exporter.generateProgramIndex(conn)
+    val programIndexPath = outDir.resolve(Names.ProgramIndexCSV)
+    Files.writeString(
+      programIndexPath,
+      List(Names.ProgramIndexCSVColumnNames, programIndex).mkString("\n"))
+
+    val outputCSV = outDir.resolve(Names.ErrorCSV)
     Files.writeString(
       outputCSV,
       List(Names.ErrorCSVColumnNames, errorContents).mkString("\n"))

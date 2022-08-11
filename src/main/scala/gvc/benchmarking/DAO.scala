@@ -53,7 +53,8 @@ object DAO {
     val Compilation = "compilation"
     val Execution = "execution"
     val Verification = "verification"
-    val Timeout = "timeout"
+    val ExecutionTimeout = "dynamic-timeout"
+    val VerificationTimeout = "static-timeout"
     val Unknown = "unknown"
     val Weaving = "weaving"
   }
@@ -548,6 +549,50 @@ object DAO {
     }
   }
 
+  private def logStaticException(id: Identity,
+                                 reserved: ReservedProgram,
+                                 eid: Long,
+                                 conn: DBConnection): Unit = {
+    sql"""UPDATE static_performance SET error_id = $eid
+                          WHERE hardware_id = ${id.hwid}
+                            AND version_id = ${id.vid}
+                            AND nickname_id = ${id.nid}
+                            AND permutation_id = ${reserved.perm.id}""".update.run
+      .transact(conn.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          s"Unable to update static performance entry for permutation ID=${reserved.perm.id} with error ID=$eid",
+          t)
+      case Right(_) =>
+    }
+  }
+
+  private def logDynamicException(id: Identity,
+                                  reserved: ReservedProgram,
+                                  eid: Long,
+                                  conn: DBConnection): Unit = {
+    reserved.workloads.foreach(w => {
+      sql"""UPDATE dynamic_performance SET error_id = $eid
+           WHERE permutation_id = ${reserved.perm.id}
+             AND measurement_type_id = ${reserved.measurementMode}
+             AND stress = $w
+             AND version_id = ${id.vid}
+             AND hardware_id = ${id.hwid}
+             AND nickname_id = ${id.nid};""".update.run
+        .transact(conn.xa)
+        .attempt
+        .unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException(
+            s"Unable to update results entry with error ID=$eid for permutation ID=${reserved.perm.id}, stress=$w",
+            t)
+        case Right(_) =>
+      }
+    })
+  }
+
   def logException(id: Identity,
                    reserved: ReservedProgram,
                    mode: ErrorType,
@@ -566,38 +611,16 @@ object DAO {
           t)
       case Right(value) => value
     }
-    sql"""UPDATE static_performance SET error_id = $eid
-                              WHERE hardware_id = ${id.hwid}
-                                AND version_id = ${id.vid}
-                                AND nickname_id = ${id.nid}
-                                AND permutation_id = ${reserved.perm.id}""".update.run
-      .transact(conn.xa)
-      .attempt
-      .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException(
-          s"Unable to update static performance entry with error ID for exception '$errText', ID=$eid",
-          t)
-      case Right(_) =>
+    mode match {
+      case ErrorType.Weaving | ErrorType.Compilation | ErrorType.Verification |
+          ErrorType.VerificationTimeout =>
+        logStaticException(id, reserved, eid, conn)
+      case ErrorType.Unknown =>
+        logStaticException(id, reserved, eid, conn)
+        logDynamicException(id, reserved, eid, conn)
+      case ErrorType.ExecutionTimeout | ErrorType.Execution =>
+        logDynamicException(id, reserved, eid, conn)
     }
-    reserved.workloads.foreach(w => {
-      sql"""UPDATE dynamic_performance SET error_id = $eid
-           WHERE permutation_id = ${reserved.perm.id}
-             AND measurement_type_id = ${reserved.measurementMode}
-             AND stress = $w
-             AND version_id = ${id.vid}
-             AND hardware_id = ${id.hwid}
-             AND nickname_id = ${id.nid};""".update.run
-        .transact(conn.xa)
-        .attempt
-        .unsafeRunSync() match {
-        case Left(t) =>
-          prettyPrintException(
-            s"Unable to update results entry with error ID for exception '$errText', ID=$eid, stress=$w",
-            t)
-        case Right(_) =>
-      }
-    })
   }
 
   case class CompletionMetadata(versionName: String,
@@ -727,16 +750,16 @@ object DAO {
   }
 
   def getErrorList(vid: Long, hid: Long, conn: DBConnection): String = {
-    case class ErrorEntry(versionName: String,
-                          hardwareName: String,
+    case class ErrorEntry(programID: Long,
                           permutationID: Long,
                           errorType: String,
+                          occurredDuring: String,
+                          measurementType: String,
                           errorDesc: String,
                           errorDate: String)
-    sql"""SELECT version_name, hardware_name, permutation_id, error_type, error_desc, error_date
+
+    sql"""SELECT program_id, permutation_id, error_type, occurred_during, measurement_type, error_desc, error_date
             FROM all_errors
-                INNER JOIN versions v ON all_errors.version_id = v.id
-                INNER JOIN hardware h ON all_errors.hardware_id = h.id
             WHERE version_id = $vid AND hardware_id = $hid;"""
       .query[ErrorEntry]
       .to[List]
@@ -751,14 +774,15 @@ object DAO {
         eList
           .map(
             e =>
-              List(e.versionName,
-                   e.hardwareName,
+              List(e.programID,
+                   e.permutationID,
                    e.errorType,
-                   e.errorDate,
+                   e.occurredDuring,
+                   e.measurementType,
+                   e.errorDesc,
                    e.errorDate).mkString(","))
           .mkString("\n")
     }
-
   }
 
   def resolveVersion(name: String, c: DBConnection): Option[Long] = {

@@ -451,21 +451,36 @@ FROM paths
 
 CREATE VIEW all_errors AS
 (
-SELECT version_id,
-       hardware_id,
-       permutation_id,
-       error_occurrences.error_type,
-       error_contents.error_desc,
-       error_occurrences.error_date
-FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id
+SELECT DISTINCT error_subset.version_id,
+                error_subset.hardware_id,
+                program_id,
+                error_subset.permutation_id,
+                error_type,
+                IF(s_comp.error_id IS NOT NULL AND d_comp.error_id IS NOT NULL,
+                   'unknown', IF(d_comp.error_id IS NULL, 'static', 'dynamic')) AS occurred_during,
+                measurement_type,
+                error_desc,
+                error_date
+FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id, 'static' AS measurement_type
       FROM static_performance
-      WHERE error_id IS NOT NULL
       UNION ALL
-      SELECT version_id, hardware_id, permutation_id, error_id
+      SELECT DISTINCT version_id, hardware_id, permutation_id, error_id, measurement_type
       FROM dynamic_performance
-      WHERE error_id IS NOT NULL) as p_errors
-         INNER JOIN error_occurrences ON p_errors.error_id = error_occurrences.id
-         INNER JOIN error_contents ON error_contents.id = error_occurrences.error_contents_id = error_contents.id
+               INNER JOIN dynamic_measurement_types dmt
+                          on dynamic_performance.measurement_type_id = dmt.id) AS error_subset
+         LEFT OUTER JOIN static_performance AS s_comp ON
+            error_subset.hardware_id = s_comp.hardware_id AND
+            error_subset.version_id = s_comp.version_id AND
+            error_subset.permutation_id = s_comp.permutation_id AND
+            error_subset.error_id = s_comp.error_id
+         LEFT OUTER JOIN dynamic_performance AS d_comp ON
+            error_subset.hardware_id = d_comp.hardware_id AND
+            error_subset.version_id = d_comp.version_id AND
+            error_subset.permutation_id = d_comp.permutation_id AND
+            error_subset.error_id = d_comp.error_id
+         INNER JOIN error_occurrences ON error_subset.error_id = error_occurrences.id
+         INNER JOIN error_contents ec on error_occurrences.error_contents_id = ec.id
+         INNER JOIN permutations p on error_subset.permutation_id = p.id
     );
 
 CREATE VIEW completed_paths AS
