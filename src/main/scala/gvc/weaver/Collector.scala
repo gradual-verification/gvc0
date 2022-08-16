@@ -112,8 +112,8 @@ object Collector {
     case object InvariantLoopEnd extends ViperLocation
 
     def loop(loopPosition: LoopPosition): ViperLocation = loopPosition match {
-      case LoopPosition.After     => ViperLocation.PreLoop
-      case LoopPosition.Before    => ViperLocation.PostLoop
+      case LoopPosition.After     => ViperLocation.PostLoop
+      case LoopPosition.Before    => ViperLocation.PreLoop
       case LoopPosition.Beginning => ViperLocation.InvariantLoopStart
       case LoopPosition.End       => ViperLocation.InvariantLoopEnd
     }
