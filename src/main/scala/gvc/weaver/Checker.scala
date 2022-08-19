@@ -120,6 +120,12 @@ object Checker {
     val initializeOps = mutable.ListBuffer[IR.Op]()
 
     def methodContainsImprecision(methodData: CollectedMethod): Boolean = {
+      val contractImprecise = methodData.callStyle match {
+        case ImpreciseCallStyle | PrecisePreCallStyle => true
+        case _                                        => false
+      }
+
+      contractImprecise ||
       methodData.bodyContainsImprecision ||
       methodData.calls.exists(
         c =>
