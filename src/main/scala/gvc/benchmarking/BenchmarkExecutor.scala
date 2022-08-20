@@ -8,7 +8,11 @@ import gvc.benchmarking.Benchmark.{
   isInjectable
 }
 import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
-import gvc.benchmarking.Timing.{CC0CompilationException, CC0ExecutionException}
+import gvc.benchmarking.Timing.{
+  CC0CompilationException,
+  CC0ExecutionException,
+  TimedVerification
+}
 import gvc.transformer.{IR, IRPrinter}
 import gvc.weaver.WeaverException
 import gvc.{Config, Main, VerificationException}
@@ -19,6 +23,51 @@ import scala.collection.mutable
 import scala.concurrent.TimeoutException
 
 object BenchmarkExecutor {
+
+  class SiliconState(config: Config) {
+    private var currentSiliconInstance: Option[Silicon] = None
+    private var terminatedPrematurely: Boolean = false
+
+    def init(): Silicon = {
+      terminatedPrematurely = false
+      val newInstance = resolveSilicon(config)
+      currentSiliconInstance = Some(newInstance)
+      newInstance
+    }
+
+    def destroy(): Unit = {
+      currentSiliconInstance match {
+        case Some(value) => value.stop()
+        case None        =>
+      }
+      currentSiliconInstance = None
+      terminatedPrematurely = false
+    }
+
+    def wrapVerifyTimed(source: String): TimedVerification = {
+      this.currentSiliconInstance match {
+        case Some(value) =>
+          Timing.verifyTimed(value,
+                             source,
+                             Main.Defaults.outputFileCollection,
+                             config)
+        case None =>
+          error(
+            "Cannot begin verification unless SiliconState has been initialized.")
+      }
+    }
+
+    def destroyPrematurely(): Unit = {
+      this.currentSiliconInstance match {
+        case Some(_) =>
+          this.destroy()
+          terminatedPrematurely = true
+        case None =>
+      }
+    }
+
+    def wasDestroyedPrematurely: Boolean = this.terminatedPrematurely
+  }
 
   case class ReservedProgram(perm: Permutation,
                              workloads: List[Int],
@@ -35,7 +84,7 @@ object BenchmarkExecutor {
     val conn = DAO.connect(config.db)
     val id = DAO.addOrResolveIdentity(config, conn)
     val stressTable = new StressTable(config.workload)
-    var currentSiliconInstance: Option[Silicon] = None
+    val silicon = new SiliconState(baseConfig)
     val ongoingProcesses = mutable.ListBuffer[scala.sys.process.Process]()
     val syncedPrograms =
       BenchmarkPopulator.sync(config.sources, libraries, conn)
@@ -62,10 +111,7 @@ object BenchmarkExecutor {
             val process = ongoingProcesses.remove(0)
             if (process.isAlive) process.destroy()
           }
-          currentSiliconInstance match {
-            case Some(silicon) => silicon.stop()
-            case None          =>
-          }
+          silicon.destroyPrematurely()
           Output.error(t.getMessage)
           Left(t)
       }
@@ -76,9 +122,13 @@ object BenchmarkExecutor {
         case _: VerificationException   => ErrorType.Verification
         case _: CC0CompilationException => ErrorType.Compilation
         case _: CC0ExecutionException   => ErrorType.Execution
-        case _: TimeoutException        => ErrorType.Timeout
-        case _: WeaverException         => ErrorType.Weaving
-        case _                          => ErrorType.Unknown
+        case _: TimeoutException =>
+          if (silicon.wasDestroyedPrematurely)
+            ErrorType.VerificationTimeout
+          else
+            ErrorType.ExecutionTimeout
+        case _: WeaverException => ErrorType.Weaving
+        case _                  => ErrorType.Unknown
       }
       DAO.logException(id, reserved, typeToReport, t.getMessage, conn)
     }
@@ -88,13 +138,9 @@ object BenchmarkExecutor {
       val reconstructedSourceText =
         IRPrinter.print(ir, includeSpecs = true)
 
-      currentSiliconInstance = Some(resolveSilicon(baseConfig))
-      val vOut = wrapTiming(
-        Timing.verifyTimed(currentSiliconInstance.get,
-                           reconstructedSourceText,
-                           Main.Defaults.outputFileCollection,
-                           baseConfig))
-      currentSiliconInstance = None
+      silicon.init()
+      val vOut = wrapTiming(silicon.wrapVerifyTimed(reconstructedSourceText))
+      silicon.destroy()
 
       vOut match {
         case Left(t) =>

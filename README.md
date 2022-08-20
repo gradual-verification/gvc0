@@ -37,7 +37,7 @@ the required dynamic verification. To run the frontend in SBT while developing:
 ```
 sbt
   > run [OPTION...] SOURCEFILE
-
+  
 where OPTION is
   -h            --help                         Give short usage message and exit
   -d <type>     --dump=<type>                  Print the generated code and exit, where <type> specifies
@@ -54,12 +54,14 @@ where OPTION is
                 --execute                      Execute programs and store results in the database using options from the specified configuration file.
                 --execute-benchmark            Identical to --execute, but only selects programs belonging to pre-configured benchmark sets.
                 --recreate=<id>                Specify a permutation to recreate from the database using options from the specified configuration file.
-                --export=<dir>                 Specify a directory to export data to. Data is filtered using options from the specified configuration file.
-                 
+                --export                       Data is filtered using options from the specified configuration file.
+                --export-benchmark             Identical to --export, but only selects data corresponding to pre-configured benchmark sets.
+                --export-errors                Identical to --export, but generates a list of all errors. 
+                
                 --version=<version>            Specify the version string identifying the current verifier. Overrides config.
                 --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
                 --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
-
+                
                 --db-url=<url>                 Specify the URL for the benchmarking database. Overrides config.
                 --db-user=<username>           Specify the user for the benchmarking database. Overrides config.
                 --db-pass=<password>           Specify the password for the benchmarking database. Overrides config.

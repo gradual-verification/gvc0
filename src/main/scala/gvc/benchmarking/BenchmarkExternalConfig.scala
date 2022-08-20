@@ -300,7 +300,7 @@ object BenchmarkExternalConfig {
       onlyVerify = xml.contains("only-verify") || config.onlyVerify,
       onlyCompile = xml.contains("only-compile") || config.onlyCompile,
       onlyBenchmark = xml.contains("only-benchmark") || config.onlyBenchmark,
-      onlyErrors = xml.contains("only-errors")
+      onlyErrors = xml.contains("only-errors") || config.onlyErrors
     )
   }
 

@@ -25,6 +25,7 @@ case class Config(
     onlyVerify: Boolean = false,
     onlyCompile: Boolean = false,
     onlyBenchmark: Boolean = false,
+    onlyErrors: Boolean = false,
     sourceFile: Option[String] = None,
     linkedLibraries: List[String] = List.empty,
     versionString: Option[String] = None,
@@ -104,7 +105,7 @@ object Config {
       |                --recreate=<id>                Specify a permutation to recreate from the database using options from the specified configuration file.
       |                --export                       Data is filtered using options from the specified configuration file.
       |                --export-benchmark             Identical to --export, but only selects data corresponding to pre-configured benchmark sets.
-      |                 
+      |                --export-errors                Identical to --export, but generates a list of all errors. 
       |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
       |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
       |                --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
@@ -245,6 +246,11 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(mode = Export, onlyBenchmark = true)
+        )
+      case "--export-errors" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = Export, onlyErrors = true)
         )
       case "--only-exec" :: tail =>
         fromCommandLineArgs(

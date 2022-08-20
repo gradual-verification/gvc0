@@ -8,7 +8,7 @@ struct Test
 };
 
 struct Test* getTest(struct OwnedFields* _ownedFields);
-struct Test* getTestPrecise(int* _instanceCounter);
+struct Test* getTestPrecise(struct OwnedFields* _ownedFields);
 int main();
 
 struct Test* getTest(struct OwnedFields* _ownedFields)
@@ -19,13 +19,11 @@ struct Test* getTest(struct OwnedFields* _ownedFields)
   return _;
 }
 
-struct Test* getTestPrecise(int* _instanceCounter)
+struct Test* getTestPrecise(struct OwnedFields* _ownedFields)
 {
   struct Test* _ = NULL;
-  struct OwnedFields* _ownedFields = NULL;
   struct OwnedFields* _tempFields = NULL;
-  _ownedFields = initOwnedFields(_instanceCounter);
-  _tempFields = initOwnedFields(_instanceCounter);
+  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
   _ = getTest(_tempFields);
   join(_ownedFields, _tempFields);
   assertAcc(_ownedFields, _ != NULL ? _->_id : -1, 0, "Field access runtime check failed for struct Test.value");
