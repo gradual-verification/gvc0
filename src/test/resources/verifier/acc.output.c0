@@ -27,5 +27,7 @@ void test(struct Test* t, struct OwnedFields* _ownedFields)
 {
   assertAcc(_ownedFields, t != NULL ? t->_id : -1, 0, "Field access runtime check failed for struct Test.value");
   assert(!(t == NULL));
+  loseAcc(_ownedFields, t->_id, 0);
   setValue(t, _ownedFields->instanceCounter);
+  addAcc(_ownedFields, t->_id, 2, 0);
 }
