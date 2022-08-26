@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<benchmark>
+    <hardware>i5-4250U</hardware>
+    <nickname>Intel NUC i5-4250U</nickname>
+    <source-dir>./src/test/resources/quant-study/</source-dir>
+    <quantity>16</quantity>
+    <workload>
+        <by-program>
+            <p>
+                <match>*</match>
+                <stress>
+                    <singular>0</singular>
+                </stress>
+            </p>
+        </by-program>
+        <iterations>1</iterations>
+    </workload>
+    <only-gradual/>
+</benchmark>
