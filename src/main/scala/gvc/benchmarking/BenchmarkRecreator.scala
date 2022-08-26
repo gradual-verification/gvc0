@@ -9,25 +9,18 @@ object BenchmarkRecreator {
                baseConfig: Config,
                libraries: List[String]): IR.Program = {
     val conn = DAO.connect(config.db)
-    val syncedPrograms =
-      BenchmarkPopulator.sync(config.sources, libraries, conn)
     val permutation = DAO.resolvePermutation(config.permToRecreate, conn)
-
     permutation match {
       case Some(perm) =>
-        if (syncedPrograms.contains(perm.programID)) {
-          val correspondingProgramLabels =
-            syncedPrograms(perm.programID).labels
-
-          val asLabelSet =
-            LabelTools.permutationIDToPermutation(correspondingProgramLabels,
-                                                  perm.permutationContents)
-          new SelectVisitor(syncedPrograms(perm.programID).ir).visit(asLabelSet)
-
-        } else {
-          error(
-            s"The program that this permutation was derived from was not found.")
-        }
+        Output.success(s"Located permutation #${config.permToRecreate}")
+        val pInfo = BenchmarkPopulator
+          .syncIndividual(config.sources, libraries, conn, perm.programID)
+        val correspondingProgramLabels = pInfo.labels
+        val asLabelSet =
+          LabelTools.permutationIDToPermutation(correspondingProgramLabels,
+                                                perm.permutationContents)
+        new SelectVisitor(pInfo.ir)
+          .visit(asLabelSet)
       case None =>
         error(
           s"A permutation with ID=${baseConfig.recreatePerm.get} does not exist in the database.")

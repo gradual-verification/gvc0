@@ -5,8 +5,6 @@ import doobie.implicits._
 import cats.effect.IO
 import doobie._
 import doobie.implicits._
-import gvc.benchmarking.ExprType.ExprType
-import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import cats.free.Free
 import doobie.free.connection
@@ -30,7 +28,6 @@ object DAO {
                           dynamicModes: Map[Long, DynamicMeasurementMode],
                           staticModes: Map[StaticMeasurementMode, Long],
                           xa: Transactor.Aux[IO, Unit],
-                          locking: Boolean,
                           retries: Int)
 
   object DynamicMeasurementMode {
@@ -61,47 +58,19 @@ object DAO {
 
   object Defaults {
     val DefaultBenchmarkName = "default"
-    val DefaultBenchmarkIncrements = List(20, 40, 60, 80)
+    val DefaultBenchmarkIncrements: List[Int] = List(20, 40, 60, 80)
+    val retries = 5
   }
 
-  case class GlobalConfiguration(timeoutMinutes: Long, maxPaths: Long)
+  case class GlobalConfiguration(maxPaths: Long)
 
   case class Identity(vid: Long, hwid: Long, nid: Long)
-
-  case class Version(id: Long, versionName: String, dateAdded: String)
 
   case class Permutation(id: Long,
                          programID: Long,
                          permutationHash: String,
                          permutationContents: Array[Byte],
                          dateAdded: String)
-
-  case class Step(pathID: Long, permutationID: Long, levelID: Long)
-
-  case class Conjuncts(id: Long,
-                       permutationID: Long,
-                       versionID: Long,
-                       total: Long,
-                       eliminated: Long,
-                       date: String)
-
-  case class ProgramPath(id: Long, hash: String, programID: Long)
-
-  case class StoredPerformance(id: Long,
-                               programID: Long,
-                               versionID: Long,
-                               hardwareID: Long,
-                               performanceDate: String,
-                               modeMeasured: String,
-                               stress: Int,
-                               iter: Int,
-                               ninetyFifth: BigDecimal,
-                               fifth: BigDecimal,
-                               median: BigDecimal,
-                               mean: BigDecimal,
-                               stdev: BigDecimal,
-                               minimum: BigDecimal,
-                               maximum: BigDecimal)
 
   private val DB_DRIVER = "com.mysql.cj.jdbc.Driver"
 
@@ -122,13 +91,12 @@ object DAO {
                  dynamicModes,
                  staticModes,
                  connection,
-                 locking = false,
-                 retries = 5)
+                 retries = Defaults.retries)
   }
 
   private def resolveGlobalConfiguration(
       conn: Transactor.Aux[IO, Unit]): GlobalConfiguration = {
-    sql"SELECT timeout_minutes, max_paths FROM global_configuration LIMIT 1"
+    sql"SELECT max_paths FROM global_configuration LIMIT 1"
       .query[GlobalConfiguration]
       .unique
       .transact(conn)
@@ -224,6 +192,19 @@ object DAO {
     }
   }
 
+  case class IdentifiedProgram(filename: String, srcHash: String)
+  def resolveProgram(id: Long, c: DBConnection): Option[IdentifiedProgram] = {
+    sql"SELECT src_filename, src_hash FROM programs WHERE id = $id;"
+      .query[Option[IdentifiedProgram]]
+      .unique
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(_)      => None
+      case Right(value) => value
+    }
+  }
+
   def resolveProgram(hash: String,
                      numLabels: Long,
                      c: DBConnection): Option[Long] = {
@@ -259,7 +240,7 @@ object DAO {
     val extensionRemoved = basenameWithExtension.substring(
       0,
       basenameWithExtension.lastIndexOf(".c0"))
-    sql"CALL sp_gr_Program(${extensionRemoved}, $hash, $numLabels);"
+    sql"CALL sp_gr_Program($extensionRemoved, $hash, $numLabels);"
       .query[Long]
       .unique
       .transact(c.xa)
@@ -270,15 +251,6 @@ object DAO {
       case Right(value) => value
     }
   }
-
-  case class StoredComponent(id: Long,
-                             programID: Long,
-                             contextName: String,
-                             specType: SpecType,
-                             specIndex: Long,
-                             exprType: ExprType,
-                             exprIndex: Long,
-                             dateAdded: String)
 
   def resolveComponent(programID: Long,
                        astLabel: ASTLabel,
@@ -425,7 +397,7 @@ object DAO {
 
   def reserveProgramForMeasurement(id: Identity,
                                    table: StressTable,
-                                   onlyBenchmark: Boolean,
+                                   ec: ExecutorConfig,
                                    c: DBConnection): Option[ReservedProgram] = {
     var result: Option[ReservedProgram] = None
     var maxRetries = c.retries
@@ -433,7 +405,14 @@ object DAO {
       maxRetries -= 1
       (for {
         _ <- Utilities.createTemporaryStressValueTable(table)
-        sp <- sql"CALL sp_ReservePermutation(${id.vid}, ${id.hwid}, ${id.nid}, $onlyBenchmark, ${c.locking});"
+        sp <- sql"""CALL sp_ReservePermutation(
+                    ${id.vid},
+                    ${id.hwid},
+                    ${id.nid},
+                    ${ec.modifiers.exclusiveMode},
+                    ${ec.timeoutMinutes},
+                    ${ec.modifiers.onlyBenchmark}
+            );"""
           .query[ReservedProgramEntry]
           .to[List]
       } yield sp)
@@ -841,10 +820,11 @@ object DAO {
 
   case class CompletedPathMetadata(version: String,
                                    hardware: String,
-                                   src_filename: String,
+                                   program: String,
                                    workload: Int,
                                    measurementMode: String,
                                    num_paths: Int)
+      extends IdentifiedMetadata
 
   def getCompletedPathList(conn: DBConnection): List[CompletedPathMetadata] = {
     sql"""SELECT version_name, hardware_name, src_filename, stress, measurement_type, COUNT(DISTINCT completed_paths.path_id)
@@ -862,6 +842,38 @@ object DAO {
       .unsafeRunSync() match {
       case Left(t) =>
         prettyPrintException("Unable to get list of completed paths", t)
+      case Right(value) => value
+    }
+  }
+
+  case class StaticTimingMetadata(program: String,
+                                  version: String,
+                                  hardware: String,
+                                  max: Int,
+                                  mean: Double)
+      extends IdentifiedMetadata
+
+  sealed trait IdentifiedMetadata {
+    def program: String
+
+    def version: String
+
+    def hardware: String
+  }
+
+  def getStaticTiming(conn: DBConnection): List[StaticTimingMetadata] = {
+    sql"""SELECT src_filename, version_name, hardware_name, max, mean
+    FROM static_verification_times
+             INNER JOIN versions v ON static_verification_times.version_id = v.id
+             INNER JOIN hardware h ON static_verification_times.hardware_id = h.id
+        INNER JOIN programs p on static_verification_times.program_id = p.id;"""
+      .query[StaticTimingMetadata]
+      .to[List]
+      .transact(conn.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException("Unable to get list of completed programs", t)
       case Right(value) => value
     }
   }
@@ -931,7 +943,6 @@ object DAO {
       case Left(t) =>
         prettyPrintException("Unable to get list of program metadata", t)
       case Right(value) => value
-
     }
   }
 

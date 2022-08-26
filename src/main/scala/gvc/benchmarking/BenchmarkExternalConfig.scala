@@ -2,10 +2,13 @@ package gvc.benchmarking
 
 import gvc.Config
 import gvc.Config.error
+import gvc.benchmarking.DAO.DynamicMeasurementMode
+import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
-import scala.xml.{NodeSeq, XML}
-
+import scala.xml.{Elem, NodeSeq, XML}
+import scala.language.implicitConversions
+import scala.language.postfixOps
 class BenchmarkConfigException(message: String) extends Exception(message)
 
 case class BenchmarkDBCredentials(
@@ -47,10 +50,12 @@ case class PlatformIdentification(versionID: String, hardwareID: String)
 
 trait BenchmarkingConfig
 
-case class PipelineModifiers(onlyVerify: Boolean,
+case class PipelineModifiers(exclusiveMode: Option[DynamicMeasurementMode],
+                             onlyVerify: Boolean,
                              onlyCompile: Boolean,
                              onlyBenchmark: Boolean,
-                             onlyErrors: Boolean)
+                             onlyErrors: Boolean,
+                             nicknameSensitivity: Boolean)
 
 case class RecreatorConfig(version: String,
                            db: BenchmarkDBCredentials,
@@ -72,7 +77,8 @@ case class ExecutorConfig(version: String,
                           workload: BenchmarkWorkload,
                           db: BenchmarkDBCredentials,
                           modifiers: PipelineModifiers,
-                          sources: List[Path])
+                          sources: List[Path],
+                          timeoutMinutes: Int)
     extends BenchmarkingConfig
 
 case class ExportConfig(version: String,
@@ -93,13 +99,29 @@ case class BenchmarkConfigResults(
     pathQuantity: Option[Int],
     modifiers: PipelineModifiers,
     outputDir: Option[String],
-    iter: IterConfiguration
+    iter: IterConfiguration,
+    timeout: Int
 )
 
 object BenchmarkExternalConfig {
 
+  class ChildSelectable(ns: NodeSeq) {
+    def \* = ns flatMap {
+      _ match {
+        case e: Elem => e.child
+        case _       => NodeSeq.Empty
+      }
+    }
+  }
+
+  implicit def nodeSeqIsChildSelectable(xml: NodeSeq) = new ChildSelectable(xml)
+
   private object Names {
     val defaultOutputDirectory = "./data"
+  }
+
+  private object Defaults {
+    val timeout = 2 * 60
   }
 
   def parseMonitor(rootConfig: Config): MonitorConfig = {
@@ -136,7 +158,8 @@ object BenchmarkExternalConfig {
                   wValue,
                   resolved.credentials,
                   resolved.modifiers,
-                  resolved.sources
+                  resolved.sources,
+                  resolved.timeout
                 )
               case None => error("A <nickname> must be provided.")
             }
@@ -201,6 +224,8 @@ object BenchmarkExternalConfig {
       val quantity =
         intOption(benchmarkRoot \ "quantity")
 
+      val timeout = intOption(benchmarkRoot \ "timeout")
+
       val sourceDirElement = benchmarkRoot \ "source-dir"
       if (sourceDirElement.isEmpty || sourceDirElement.text.trim.isEmpty) {
         error("Expected <source-dir> field.")
@@ -242,7 +267,8 @@ object BenchmarkExternalConfig {
                              quantity,
                              modifiers,
                              outputDirText,
-                             iter)
+                             iter,
+                             timeout.getOrElse(Defaults.timeout))
     }
   }
 
@@ -294,13 +320,39 @@ object BenchmarkExternalConfig {
     }
   }
 
+  private def singleton(xml: NodeSeq, label: String): Boolean = {
+    (xml \*).exists(p => {
+      p.label.equals(label)
+    })
+  }
+
   private def parsePipelineModifiers(config: Config,
                                      xml: NodeSeq): PipelineModifiers = {
+
+    val onlyDynamic =
+      if (singleton(xml, "only-dynamic")) Some(DynamicMeasurementMode.Dynamic)
+      else None
+    val onlyFraming =
+      if (singleton(xml, "only-framing")) Some(DynamicMeasurementMode.Framing)
+      else None
+    val onlyGradual =
+      if (singleton(xml, "only-gradual")) Some(DynamicMeasurementMode.Gradual)
+      else None
+
+    val excluded =
+      List(onlyDynamic, onlyGradual, onlyFraming).filter(_.nonEmpty).map(_.get)
+    if (excluded.length > 1) {
+      error(
+        "Multiple benchmarking modes were set as exclusive (e.g. <only-[mode])/>)")
+    }
+
     PipelineModifiers(
-      onlyVerify = xml.contains("only-verify") || config.onlyVerify,
-      onlyCompile = xml.contains("only-compile") || config.onlyCompile,
-      onlyBenchmark = xml.contains("only-benchmark") || config.onlyBenchmark,
-      onlyErrors = xml.contains("only-errors") || config.onlyErrors
+      exclusiveMode = excluded.headOption,
+      nicknameSensitivity = singleton(xml, "nickname-sensitive"),
+      onlyBenchmark = singleton(xml, "export-only-benchmark"),
+      onlyVerify = singleton(xml, "export-only-verification"),
+      onlyCompile = singleton(xml, "only-compile"),
+      onlyErrors = singleton(xml, "export-only-errors")
     )
   }
 

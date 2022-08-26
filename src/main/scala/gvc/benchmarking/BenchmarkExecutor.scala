@@ -77,10 +77,20 @@ object BenchmarkExecutor {
               baseConfig: Config,
               libraries: List[String]): Unit = {
     if (config.modifiers.onlyBenchmark) {
-      Output.info("Targeting only benchmarks.")
+      Output.info(s"Targeting ${Output.blue("benchmarks")}.")
     } else {
-      Output.info("Targeting all available programs.")
+      Output.info(s"Targeting ${Output.blue("all programs")}.")
     }
+    config.modifiers.exclusiveMode match {
+      case Some(value) =>
+        Output.info(s"Exclusive verification mode: ${Output.blue(value)}")
+      case None =>
+    }
+    Output.info(
+      s"Timeout: ${Output.blue(config.timeoutMinutes.toString)} minutes.")
+    Output.info(
+      s"Nickname sensitivity: ${Output.flag(config.modifiers.nicknameSensitivity)}.")
+
     val conn = DAO.connect(config.db)
     val id = DAO.addOrResolveIdentity(config, conn)
     val stressTable = new StressTable(config.workload)
@@ -96,15 +106,11 @@ object BenchmarkExecutor {
       Files.createTempFile("temp_src", ".c0")
 
     var reservedProgram =
-      DAO.reserveProgramForMeasurement(id,
-                                       stressTable,
-                                       config.modifiers.onlyBenchmark,
-                                       conn)
+      DAO.reserveProgramForMeasurement(id, stressTable, config, conn)
 
     def wrapTiming[T](f: => T): Either[Throwable, T] = {
       try {
-        Right(
-          Timeout.runWithTimeout(conn.gConfig.timeoutMinutes * 60 * 1000)(f))
+        Right(Timeout.runWithTimeout(config.timeoutMinutes * 60 * 1000)(f))
       } catch {
         case t: Throwable =>
           while (ongoingProcesses.nonEmpty) {
@@ -241,11 +247,8 @@ object BenchmarkExecutor {
             })
         case None =>
       }
-      reservedProgram = DAO.reserveProgramForMeasurement(
-        id,
-        stressTable,
-        config.modifiers.onlyBenchmark,
-        conn)
+      reservedProgram =
+        DAO.reserveProgramForMeasurement(id, stressTable, config, conn)
     }
   }
 

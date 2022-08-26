@@ -1,6 +1,11 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.DAO.DBConnection
+import gvc.benchmarking.DAO.{
+  CompletedPathMetadata,
+  DBConnection,
+  IdentifiedMetadata,
+  StaticTimingMetadata
+}
 import gvc.benchmarking.Output.{green, red}
 
 object BenchmarkMonitor {
@@ -46,6 +51,63 @@ object BenchmarkMonitor {
     Output.title("Completed Benchmarks")
     printCompletedBenchmarks(conn)
 
+    Output.title("Static Timing")
+    printStaticTiming(conn)
+
+  }
+
+  private def printStaticTiming(connection: DAO.DBConnection): Unit = {
+    val timing = DAO.getStaticTiming(connection)
+    printIdentifiable[StaticTimingMetadata](timing, ids => {
+      List(
+        s"* max: ${ids.head.max} min, mean: ${Math.floor(ids.head.mean * 10) / 10} min")
+    })
+  }
+
+  private def printCompletedPaths(connection: DAO.DBConnection): Unit = {
+    val completed = DAO.getCompletedPathList(connection)
+    printIdentifiable[CompletedPathMetadata](
+      completed,
+      ids => {
+        ids
+          .groupBy(_.workload)
+          .flatMap(g4 => {
+            List(s"* w = ${g4._1}") ++
+              g4._2
+                .groupBy(_.measurementMode)
+                .map(g5 => {
+                  s"\t* ${g5._1}: ${g5._2.head.num_paths}"
+                })
+          })
+          .toList
+      }
+    )
+  }
+
+  def printIdentifiable[I <: IdentifiedMetadata](
+      ids: List[I],
+      handler: List[I] => List[String]): Unit = {
+    if (ids.nonEmpty) {
+      ids
+        .groupBy(_.version)
+        .foreach(g1 => {
+          println(s"* V: ${g1._1}")
+          g1._2
+            .groupBy(_.hardware)
+            .foreach(g2 => {
+              println(s"\t* HW: ${g2._1}")
+              g2._2
+                .groupBy(_.program)
+                .foreach(g3 => {
+                  println(s"\t\t* Program: ${g3._1}")
+                  val contents = handler(g3._2)
+                  println("\t\t\t" + contents.mkString("\n\t\t\t"))
+                })
+            })
+        })
+    } else {
+      println("N/A\n")
+    }
   }
 
   private def printCompletedPrograms(conn: DBConnection): Unit = {
@@ -73,47 +135,9 @@ object BenchmarkMonitor {
                         ((elem.errored.toDouble / elem.total) * 100) * 100) / 100
                       val errorColoring: String => String =
                         if (elem.errored == 0) green else red
-                      println(s"\t\t\t* ${g4._1}: ${
-                        green(
-                          completionPercentage.toString + "%")
-                      }, (${elem.completed} total) - ${
-                        errorColoring(
-                          errorPercentage.toString + "%")
-                      }, (${elem.errored} total)")
-                    })
-                })
-            })
-        })
-    } else {
-      println("N/A\n")
-    }
-  }
-
-  private def printCompletedPaths(conn: DBConnection): Unit = {
-    val completed = DAO.getCompletedPathList(conn)
-    if (completed.nonEmpty) {
-      completed
-        .groupBy(_.version)
-        .foreach(g1 => {
-          println(s"* V: ${g1._1}")
-          g1._2
-            .groupBy(_.hardware)
-            .foreach(g2 => {
-              println(s"\t* HW: ${g2._1}")
-              g2._2
-                .groupBy(_.src_filename)
-                .foreach(g3 => {
-                  println(s"\t\t* Program: ${g3._1}")
-                  g3._2
-                    .groupBy(_.workload)
-                    .foreach(g4 => {
-                      println(s"\t\t\t* w = ${g4._1}")
-                      g4._2
-                        .groupBy(_.measurementMode)
-                        .foreach(g5 => {
-                          println(
-                            s"\t\t\t\t* ${g5._1}: ${g5._2.head.num_paths}")
-                        })
+                      println(s"\t\t\t* ${g4._1}: ${green(
+                        completionPercentage.toString + "%")}, (${elem.completed} total) - ${errorColoring(
+                        errorPercentage.toString + "%")}, (${elem.errored} total)")
                     })
                 })
             })

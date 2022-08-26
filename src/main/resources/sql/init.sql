@@ -3,6 +3,8 @@ DROP VIEW IF EXISTS all_errors;
 DROP VIEW IF EXISTS completed_benchmarks;
 DROP VIEW IF EXISTS completed_paths;
 DROP VIEW IF EXISTS completed_programs;
+DROP VIEW IF EXISTS static_verification_times;
+
 DROP TABLE IF EXISTS global_configuration;
 DROP TABLE IF EXISTS static_performance;
 DROP TABLE IF EXISTS static_conjuncts;
@@ -41,7 +43,7 @@ DROP PROCEDURE IF EXISTS sp_ResetBenchmark;
 
 DROP TABLE IF EXISTS reserved_jobs;
 
-DROP EVENT IF EXISTS delete_reserved_permutations;
+DROP EVENT IF EXISTS delete_failed_runs;
 
 CREATE TABLE IF NOT EXISTS global_configuration
 (
@@ -324,6 +326,7 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     measurement_id      BIGINT UNSIGNED UNIQUE   DEFAULT NULL,
     error_id            BIGINT UNSIGNED          DEFAULT NULL,
     last_updated        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    timeout_minutes     BIGINT UNSIGNED NOT NULL,
     PRIMARY KEY (permutation_id, stress, measurement_type_id, hardware_id, version_id, nickname_id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
@@ -335,20 +338,11 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
 
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
-                                       IN bonly BOOLEAN, IN locks_enabled BOOLEAN)
+                                       IN exclusive_measurement_type VARCHAR(255),
+                                       IN timeout BIGINT UNSIGNED,
+                                       IN bonly BOOLEAN)
 BEGIN
-    IF (locks_enabled) THEN
-        SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
-        IF ((SELECT @lock_status) != 1) THEN
-            SELECT CONCAT('Reservation failed, unable to acquire lock.')
-            INTO @message_text;
-            SIGNAL SQLSTATE '45000'
-                SET MESSAGE_TEXT = @message_text;
-        END IF;
-    END IF;
-
     START TRANSACTION;
-
     DROP TABLE IF EXISTS reserved_jobs;
     CREATE TEMPORARY TABLE reserved_jobs
     (
@@ -374,6 +368,7 @@ BEGIN
       AND vr.id = vid
       AND hw.id = hid
       AND (NOT bonly OR permutations.id IN (SELECT permutation_id FROM benchmark_membership))
+      AND (ISNULL(exclusive_measurement_type) OR dmt.measurement_type = exclusive_measurement_type)
     ORDER BY RAND()
     LIMIT 1;
 
@@ -406,14 +401,11 @@ BEGIN
                nnid,
                NULL,
                NULL,
-               CURRENT_TIMESTAMP
+               CURRENT_TIMESTAMP,
+               timeout
         FROM reserved_jobs;
     END IF;
     COMMIT;
-
-    IF (locks_enabled) THEN
-        DO RELEASE_LOCK('sp_ReservePermutation');
-    END IF;
     SELECT * FROM reserved_jobs;
 END //
 DELIMITER ;
@@ -607,3 +599,26 @@ BEGIN
       AND expr_index = p_eindex;
 END //
 DELIMITER ;
+
+CREATE EVENT delete_failed_runs ON SCHEDULE EVERY 1 HOUR ENABLE
+    DO
+    DELETE
+    FROM dynamic_performance
+    WHERE TIMESTAMPDIFF(MINUTE, last_updated, CURRENT_TIMESTAMP) > dynamic_performance.timeout_minutes + 5
+
+CREATE VIEW static_verification_times AS
+    SELECT program_id, version_id, hardware_id, MAX(elapsed) as max, AVG(elapsed) as mean
+    FROM (SELECT p3.program_id, version_id, hardware_id, FLOOR((median / POW(10, 9)) / 60) AS elapsed
+          FROM static_performance sp
+                   INNER JOIN static_measurement_types smt ON sp.static_measurement_type_id = smt.id
+                   INNER JOIN measurements m on sp.measurement_id = m.id
+                   INNER JOIN permutations p3 on sp.permutation_id = p3.id
+          WHERE permutation_id IN (select distinct permutation_id
+                                   from dynamic_performance dp
+                                            INNER JOIN permutations p ON dp.permutation_id = p.id
+                                            INNER JOIN programs p2 on p.program_id = p2.id
+                                            INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
+                                   WHERE dmt.measurement_type = 'gradual')
+            AND measurement_type = 'verification'
+          ORDER BY elapsed DESC) as et
+    GROUP BY program_id, version_id, hardware_id;
