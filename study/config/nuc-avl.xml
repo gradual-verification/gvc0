@@ -16,4 +16,5 @@
         <iterations>1</iterations>
     </workload>
     <only-gradual/>
+    <timeout>15</timeout>
 </benchmark>
