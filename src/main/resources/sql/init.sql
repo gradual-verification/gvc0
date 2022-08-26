@@ -600,25 +600,28 @@ BEGIN
 END //
 DELIMITER ;
 
-CREATE EVENT delete_failed_runs ON SCHEDULE EVERY 1 HOUR ENABLE
+CREATE EVENT delete_failed_runs ON SCHEDULE EVERY 3 HOUR ENABLE
     DO
     DELETE
     FROM dynamic_performance
-    WHERE TIMESTAMPDIFF(MINUTE, last_updated, CURRENT_TIMESTAMP) > dynamic_performance.timeout_minutes + 5
+    WHERE TIMESTAMPDIFF(MINUTE, last_updated, CURRENT_TIMESTAMP) >
+          dynamic_performance.timeout_minutes + (0.5 * dynamic_performance.timeout_minutes)
+      AND measurement_id IS NULL
+      AND error_id IS NULL;
 
 CREATE VIEW static_verification_times AS
-    SELECT program_id, version_id, hardware_id, MAX(elapsed) as max, AVG(elapsed) as mean
-    FROM (SELECT p3.program_id, version_id, hardware_id, FLOOR((median / POW(10, 9)) / 60) AS elapsed
-          FROM static_performance sp
-                   INNER JOIN static_measurement_types smt ON sp.static_measurement_type_id = smt.id
-                   INNER JOIN measurements m on sp.measurement_id = m.id
-                   INNER JOIN permutations p3 on sp.permutation_id = p3.id
-          WHERE permutation_id IN (select distinct permutation_id
-                                   from dynamic_performance dp
-                                            INNER JOIN permutations p ON dp.permutation_id = p.id
-                                            INNER JOIN programs p2 on p.program_id = p2.id
-                                            INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
-                                   WHERE dmt.measurement_type = 'gradual')
-            AND measurement_type = 'verification'
-          ORDER BY elapsed DESC) as et
-    GROUP BY program_id, version_id, hardware_id;
+SELECT program_id, version_id, hardware_id, MAX(elapsed) as max, AVG(elapsed) as mean
+FROM (SELECT p3.program_id, version_id, hardware_id, FLOOR((median / POW(10, 9)) / 60) AS elapsed
+      FROM static_performance sp
+               INNER JOIN static_measurement_types smt ON sp.static_measurement_type_id = smt.id
+               INNER JOIN measurements m on sp.measurement_id = m.id
+               INNER JOIN permutations p3 on sp.permutation_id = p3.id
+      WHERE permutation_id IN (select distinct permutation_id
+                               from dynamic_performance dp
+                                        INNER JOIN permutations p ON dp.permutation_id = p.id
+                                        INNER JOIN programs p2 on p.program_id = p2.id
+                                        INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
+                               WHERE dmt.measurement_type = 'gradual')
+        AND measurement_type = 'verification'
+      ORDER BY elapsed DESC) as et
+GROUP BY program_id, version_id, hardware_id;
