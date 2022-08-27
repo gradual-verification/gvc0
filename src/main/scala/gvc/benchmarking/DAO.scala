@@ -193,6 +193,7 @@ object DAO {
   }
 
   case class IdentifiedProgram(filename: String, srcHash: String)
+
   def resolveProgram(id: Long, c: DBConnection): Option[IdentifiedProgram] = {
     sql"SELECT src_filename, src_hash FROM programs WHERE id = $id;"
       .query[Option[IdentifiedProgram]]
@@ -411,7 +412,8 @@ object DAO {
                     ${id.nid},
                     ${ec.modifiers.exclusiveMode},
                     ${ec.timeoutMinutes},
-                    ${ec.modifiers.onlyBenchmark}
+                    ${ec.modifiers.onlyBenchmark},
+                    ${ec.modifiers.nicknameSensitivity}
             );"""
           .query[ReservedProgramEntry]
           .to[List]
@@ -528,15 +530,13 @@ object DAO {
     }
   }
 
-  private def logStaticException(id: Identity,
-                                 reserved: ReservedProgram,
-                                 eid: Long,
-                                 conn: DBConnection): Unit = {
-    sql"""UPDATE static_performance SET error_id = $eid
-                          WHERE hardware_id = ${id.hwid}
-                            AND version_id = ${id.vid}
-                            AND nickname_id = ${id.nid}
-                            AND permutation_id = ${reserved.perm.id}""".update.run
+  def logStaticException(id: Identity,
+                         reserved: ReservedProgram,
+                         eid: Long,
+                         conn: DBConnection): Unit = {
+
+    sql"""INSERT INTO static_errors (error_id, permutation_id, version_id, hardware_id, nickname_id)
+            VALUES ($eid, ${reserved.perm.id}, ${id.vid}, ${id.hwid}, ${id.nid});""".update.run
       .transact(conn.xa)
       .attempt
       .unsafeRunSync() match {
@@ -548,18 +548,15 @@ object DAO {
     }
   }
 
-  private def logDynamicException(id: Identity,
-                                  reserved: ReservedProgram,
-                                  eid: Long,
-                                  conn: DBConnection): Unit = {
+  def logDynamicException(id: Identity,
+                          reserved: ReservedProgram,
+                          eid: Long,
+                          stress: List[Int],
+                          conn: DBConnection,
+  ): Unit = {
     reserved.workloads.foreach(w => {
-      sql"""UPDATE dynamic_performance SET error_id = $eid
-           WHERE permutation_id = ${reserved.perm.id}
-             AND measurement_type_id = ${reserved.measurementMode}
-             AND stress = $w
-             AND version_id = ${id.vid}
-             AND hardware_id = ${id.hwid}
-             AND nickname_id = ${id.nid};""".update.run
+      sql"""INSERT INTO dynamic_errors (error_id, permutation_id, version_id, hardware_id, nickname_id, stress, measurement_type_id)
+      VALUES ($eid, ${reserved.perm.id}, ${id.vid}, ${id.hwid}, ${id.nid}, $w, ${reserved.measurementMode});""".update.run
         .transact(conn.xa)
         .attempt
         .unsafeRunSync() match {
@@ -572,13 +569,11 @@ object DAO {
     })
   }
 
-  def logException(id: Identity,
-                   reserved: ReservedProgram,
-                   mode: ErrorType,
-                   errText: String,
-                   conn: DBConnection): Unit = {
+  def resolveException(mode: ErrorType,
+                       errText: String,
+                       conn: DBConnection): Long = {
     val errorHash = md5sum(errText)
-    val eid = sql"CALL sp_gr_Error($errorHash, $errText, $mode);"
+    sql"CALL sp_gr_Error($errorHash, $errText, $mode);"
       .query[Long]
       .unique
       .transact(conn.xa)
@@ -589,77 +584,6 @@ object DAO {
           s"Unable to resolve error ID for exception '$errText'",
           t)
       case Right(value) => value
-    }
-    mode match {
-      case ErrorType.Weaving | ErrorType.Compilation | ErrorType.Verification |
-          ErrorType.VerificationTimeout =>
-        logStaticException(id, reserved, eid, conn)
-      case ErrorType.Unknown =>
-        logStaticException(id, reserved, eid, conn)
-        logDynamicException(id, reserved, eid, conn)
-      case ErrorType.ExecutionTimeout | ErrorType.Execution =>
-        logDynamicException(id, reserved, eid, conn)
-    }
-  }
-
-  case class CompletionMetadata(versionName: String,
-                                hardwareName: String,
-                                percentCompleted: Double,
-                                errorMapping: Map[String, Int])
-
-  def getIncompleteMetadata(c: DBConnection): List[CompletionMetadata] = {
-    case class VersionHardwareCombinations(versionName: String,
-                                           versionID: Int,
-                                           hardwareName: String,
-                                           hardwareID: Int)
-    case class ProgramErrorCount(srcFilename: String, errorCount: Int)
-
-    sql"""SELECT DISTINCT version_name, version_id, hardware_name, hardware_id
-                FROM dynamic_performance
-                    INNER JOIN hardware h on dynamic_performance.hardware_id = h.id
-                    INNER JOIN versions v on dynamic_performance.version_id = v.id"""
-      .query[VersionHardwareCombinations]
-      .to[List]
-      .transact(c.xa)
-      .attempt
-      .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException("Unable to acquire list of hardware and versions.",
-                             t)
-      case Right(value) =>
-        value.map(v => {
-          val completion =
-            sql"CALL sp_GetCompletionPercentage(${v.versionID}, ${v.hardwareID});"
-              .query[Double]
-              .unique
-              .transact(c.xa)
-              .attempt
-              .unsafeRunSync() match {
-              case Left(t) =>
-                prettyPrintException(
-                  s"Unable to acquire completion percentage for VID=${v.versionID}, HWID=${v.hardwareID}.",
-                  t)
-              case Right(value) => value
-            }
-          val programErrorCounts =
-            sql"CALL sp_GetProgramErrorCounts(${v.versionID}, ${v.hardwareID});"
-              .query[ProgramErrorCount]
-              .to[List]
-              .transact(c.xa)
-              .attempt
-              .unsafeRunSync() match {
-              case Left(t) =>
-                prettyPrintException(
-                  s"Unable to acquire error countsVID=${v.versionID}, HWID=${v.hardwareID}.",
-                  t)
-              case Right(ecs) =>
-                ecs.map(cs => cs.srcFilename -> cs.errorCount).toMap
-            }
-          CompletionMetadata(v.versionName,
-                             v.hardwareName,
-                             completion,
-                             programErrorCounts)
-        })
     }
   }
 
@@ -878,20 +802,23 @@ object DAO {
     }
   }
 
-  case class CompletedProgramMetadata(versionName: String,
-                                      hwName: String,
+  case class CompletedProgramMetadata(program: String,
+                                      version: String,
+                                      hardware: String,
                                       stress: Int,
                                       measurementType: String,
                                       completed: Int,
                                       errored: Int,
                                       total: Int)
+      extends IdentifiedMetadata
 
   def getCompletedProgramList(
       conn: DBConnection): List[CompletedProgramMetadata] = {
-    sql"""SELECT version_name, hardware_name, stress, measurement_type, completed, errored, total
+    sql"""SELECT src_filename, version_name, hardware_name, stress, measurement_type, completed, errored, total
     FROM completed_programs
              INNER JOIN versions v ON completed_programs.version_id = v.id
              INNER JOIN hardware h ON completed_programs.hardware_id = h.id
+             INNER JOIN programs p on completed_programs.program_id = p.id
     INNER JOIN dynamic_measurement_types dmt on completed_programs.measurement_type_id = dmt.id"""
       .query[CompletedProgramMetadata]
       .to[List]

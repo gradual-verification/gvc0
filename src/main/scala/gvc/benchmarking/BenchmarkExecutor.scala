@@ -19,6 +19,7 @@ import gvc.{Config, Main, VerificationException}
 import viper.silicon.Silicon
 
 import java.nio.file.{Files, Path}
+import java.util.Calendar
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 
@@ -136,7 +137,31 @@ object BenchmarkExecutor {
         case _: WeaverException => ErrorType.Weaving
         case _                  => ErrorType.Unknown
       }
-      DAO.logException(id, reserved, typeToReport, t.getMessage, conn)
+      val resolved = DAO.resolveException(typeToReport, t.getMessage, conn)
+      typeToReport match {
+        case ErrorType.Verification | ErrorType.Compilation |
+            ErrorType.Weaving | ErrorType.VerificationTimeout =>
+          DAO.logStaticException(id, reserved, resolved, conn)
+        case ErrorType.ExecutionTimeout =>
+          DAO.logDynamicException(id,
+                                  reserved,
+                                  resolved,
+                                  reserved.workloads,
+                                  conn)
+        case ErrorType.Unknown =>
+          DAO.logStaticException(id, reserved, resolved, conn)
+          DAO.logDynamicException(id,
+                                  reserved,
+                                  resolved,
+                                  reserved.workloads,
+                                  conn)
+        case ErrorType.Execution =>
+          val stress = t match {
+            case c: CC0ExecutionException => List(c.getStress)
+            case _                        => reserved.workloads
+          }
+          DAO.logDynamicException(id, reserved, resolved, stress, conn)
+      }
     }
 
     def benchmarkGradual(ir: IR.Program,
@@ -194,10 +219,15 @@ object BenchmarkExecutor {
 
     while (reservedProgram.nonEmpty) {
       val reserved = reservedProgram.get
+
+      val cal = Calendar.getInstance()
+      val currentTime =
+        s"${cal.get(Calendar.HOUR_OF_DAY)}:${cal.get(Calendar.MINUTE)}:${cal.get(Calendar.SECOND)}"
+
       Output.info(
         s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${conn
           .dynamicModes(reserved.measurementMode)} | w=[${reserved.workloads
-          .mkString(",")}] | id=${reserved.perm.id}")
+          .mkString(",")}] | id=${reserved.perm.id} | $currentTime")
 
       val correspondingProgramLabels =
         syncedPrograms(reserved.perm.programID).labels
@@ -230,8 +260,9 @@ object BenchmarkExecutor {
             .foreach(w => {
               val perfOption = wrapTiming(
                 Timing.execTimed(value,
-                                 List(s"--stress $w"),
+                                 List(),
                                  config.workload.iterations,
+                                 w,
                                  ongoingProcesses))
               perfOption match {
                 case Left(t) => reportError(reserved, t)

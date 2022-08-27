@@ -2,6 +2,7 @@ package gvc.benchmarking
 
 import gvc.benchmarking.DAO.{
   CompletedPathMetadata,
+  CompletedProgramMetadata,
   DBConnection,
   IdentifiedMetadata,
   StaticTimingMetadata
@@ -84,6 +85,35 @@ object BenchmarkMonitor {
     )
   }
 
+  private def printCompletedPrograms(conn: DBConnection): Unit = {
+    val completed = DAO.getCompletedProgramList(conn)
+    printIdentifiable[CompletedProgramMetadata](
+      completed,
+      ids => {
+        ids
+          .groupBy(_.stress)
+          .flatMap(g3 => {
+            List(s"* w = ${g3._1}") ++
+              g3._2
+                .groupBy(_.measurementType)
+                .flatMap(g4 => {
+                  val elem = g4._2.head
+                  val completionPercentage = Math.round(
+                    ((elem.completed.toDouble / elem.total) * 100) * 100) / 100
+                  val errorPercentage = Math.round(
+                    ((elem.errored.toDouble / elem.total) * 100) * 100) / 100
+                  val errorColoring: String => String =
+                    if (elem.errored == 0) green else red
+                  List(s"\t* ${g4._1}: ${green(
+                    completionPercentage.toString + "%")}, (${elem.completed} total) - ${errorColoring(
+                    errorPercentage.toString + "%")}, (${elem.errored} total)")
+                })
+          })
+          .toList
+      }
+    )
+  }
+
   def printIdentifiable[I <: IdentifiedMetadata](
       ids: List[I],
       handler: List[I] => List[String]): Unit = {
@@ -102,43 +132,6 @@ object BenchmarkMonitor {
                   println(s"\t\t* Program: ${g3._1}")
                   val contents = handler(g3._2)
                   println("\t\t\t" + contents.mkString("\n\t\t\t"))
-                })
-            })
-        })
-    } else {
-      println("N/A\n")
-    }
-  }
-
-  private def printCompletedPrograms(conn: DBConnection): Unit = {
-    val completed = DAO.getCompletedProgramList(conn)
-    if (completed.nonEmpty) {
-      completed
-        .groupBy(_.versionName)
-        .foreach(g1 => {
-          println(s"* V: ${g1._1}")
-          g1._2
-            .groupBy(_.hwName)
-            .foreach(g2 => {
-              println(s"\t* HW: ${g2._1}")
-              g2._2
-                .groupBy(_.stress)
-                .foreach(g3 => {
-                  println(s"\t\t* w = ${g3._1}")
-                  g3._2
-                    .groupBy(_.measurementType)
-                    .foreach(g4 => {
-                      val elem = g4._2.head
-                      val completionPercentage = Math.round(
-                        ((elem.completed.toDouble / elem.total) * 100) * 100) / 100
-                      val errorPercentage = Math.round(
-                        ((elem.errored.toDouble / elem.total) * 100) * 100) / 100
-                      val errorColoring: String => String =
-                        if (elem.errored == 0) green else red
-                      println(s"\t\t\t* ${g4._1}: ${green(
-                        completionPercentage.toString + "%")}, (${elem.completed} total) - ${errorColoring(
-                        errorPercentage.toString + "%")}, (${elem.errored} total)")
-                    })
                 })
             })
         })
