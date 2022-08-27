@@ -398,16 +398,19 @@ BEGIN
                 dr.version_id = vr.id AND
                 dr.hardware_id = hw.id AND
                 dr.permutation_id = permutations.id AND
-                dr.stress = sa.stress
+                dr.stress = sa.stress AND
+                (NOT nicknameSensitive OR dr.nickname_id = nnid)
              LEFT OUTER JOIN dynamic_errors de ON
                 dmt.id = de.measurement_type_id AND
                 vr.id = de.version_id AND
                 hw.id = de.hardware_id AND
-                permutations.id = de.permutation_id
+                permutations.id = de.permutation_id AND
+                (NOT nicknameSensitive OR de.nickname_id = nnid)
              LEFT OUTER JOIN static_errors se ON
                 vr.id = se.version_id AND
                 hw.id = se.hardware_id AND
-                permutations.id = se.permutation_id
+                permutations.id = se.permutation_id AND
+                (NOT nicknameSensitive OR se.nickname_id = nnid)
     WHERE vr.id = vid
       AND hw.id = hid
       AND (NOT bonly OR permutations.id IN (SELECT permutation_id FROM benchmark_membership))
@@ -430,7 +433,8 @@ BEGIN
                          where dr.measurement_type_id = @found_measurement_type_id
                            AND dr.permutation_id = @found_perm_id
                            AND dr.version_id = vid
-                           AND dr.hardware_id = hid);
+                           AND dr.hardware_id = hid
+                           AND (NOT nicknameSensitive OR dr.nickname_id = nnid));
         IF ((SELECT COUNT(*) FROM reserved_jobs) < 1) THEN
             SELECT CONCAT('Reservation failed. PID=', @found_perm_id, ' MTID=',
                           @found_measurement_type_id)
