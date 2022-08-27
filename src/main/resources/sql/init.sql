@@ -512,12 +512,12 @@ FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id, 'static
          INNER JOIN error_occurrences ON error_subset.error_id = error_occurrences.id
          INNER JOIN error_contents ec on error_occurrences.error_contents_id = ec.id
          INNER JOIN permutations p on error_subset.permutation_id = p.id
-         INNER JOIN static_errors se ON
+         LEFT OUTER JOIN static_errors se ON
             error_subset.error_id = se.error_id AND
             error_subset.version_id = se.version_id AND
             error_subset.permutation_id = se.permutation_id AND
             error_subset.hardware_id = se.hardware_id
-         INNER JOIN dynamic_errors de ON
+         LEFT OUTER JOIN dynamic_errors de ON
             error_subset.error_id = de.error_id AND
             error_subset.version_id = de.version_id AND
             error_subset.permutation_id = de.permutation_id AND

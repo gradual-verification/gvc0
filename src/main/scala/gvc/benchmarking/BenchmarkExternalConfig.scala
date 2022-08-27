@@ -9,6 +9,7 @@ import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{Elem, NodeSeq, XML}
 import scala.language.implicitConversions
 import scala.language.postfixOps
+
 class BenchmarkConfigException(message: String) extends Exception(message)
 
 case class BenchmarkDBCredentials(
@@ -346,14 +347,24 @@ object BenchmarkExternalConfig {
         "Multiple benchmarking modes were set as exclusive (e.g. <only-[mode])/>)")
     }
 
+    val benchmark = singleton(xml, "export-only-benchmark") || config.onlyBenchmark
+    val verify = singleton(xml, "export-only-verification") || config.onlyVerify
+    val compile = singleton(xml, "only-compile") || config.onlyCompile
+    val errors = singleton(xml, "export-only-errors") || config.onlyErrors
+    val enabled = List(benchmark, verify, compile, errors).count(b => b)
+    if (enabled > 1) {
+      error(
+        "Multiple export modes were set as exclusive (e.g. <only-[mode])/>)")
+    }
     PipelineModifiers(
       exclusiveMode = excluded.headOption,
       nicknameSensitivity = singleton(xml, "nickname-sensitive"),
-      onlyBenchmark = singleton(xml, "export-only-benchmark"),
-      onlyVerify = singleton(xml, "export-only-verification"),
-      onlyCompile = singleton(xml, "only-compile"),
-      onlyErrors = singleton(xml, "export-only-errors")
+      onlyBenchmark = singleton(xml, "export-only-benchmark") || config.onlyBenchmark,
+      onlyVerify = singleton(xml, "export-only-verification") || config.onlyVerify,
+      onlyCompile = singleton(xml, "only-compile") || config.onlyCompile,
+      onlyErrors = singleton(xml, "export-only-errors") || config.onlyErrors
     )
+
   }
 
   private def parseDB(xml: NodeSeq,
