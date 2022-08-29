@@ -89,6 +89,6 @@ study/aws/remote
 study/data*
 
 /config.xml
-sandbox*
+/sandbox*
 recreated_*
 /export-*
