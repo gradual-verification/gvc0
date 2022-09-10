@@ -9,19 +9,19 @@
             <p>
                 <match>*</match>
                 <stress>
-                    <list>8</list>
+                    <singular>8</singular>
                 </stress>
             </p>
             <p>
                 <match>composite</match>
                 <stress>
-                    <list>4</list>
+                    <singular>4</singular>
                 </stress>
             </p>
             <p>
                 <match>list</match>
                 <stress>
-                    <list>16</list>
+                    <singular>16</singular>
                 </stress>
             </p>
         </by-program>
