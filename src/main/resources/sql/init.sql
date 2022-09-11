@@ -1,3 +1,4 @@
+use gvc0;
 DROP VIEW IF EXISTS path_step_index;
 DROP VIEW IF EXISTS all_errors;
 DROP VIEW IF EXISTS completed_benchmarks;
@@ -363,8 +364,7 @@ CREATE TABLE IF NOT EXISTS dynamic_errors
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
     FOREIGN KEY (measurement_type_id) REFERENCES dynamic_measurement_types (id),
-    FOREIGN KEY (error_id) REFERENCES error_occurrences (id),
-    PRIMARY KEY (nickname_id, hardware_id, version_id, permutation_id, measurement_type_id, error_id)
+    FOREIGN KEY (error_id) REFERENCES error_occurrences (id)
 );
 
 DELIMITER //
