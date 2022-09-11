@@ -9,22 +9,16 @@
             <p>
                 <match>*</match>
                 <stress>
-                    <singular>8</singular>
-                </stress>
-            </p>
-            <p>
-                <match>composite</match>
-                <stress>
-                    <singular>4</singular>
+                    <list>4,8,16</list>
                 </stress>
             </p>
             <p>
                 <match>list</match>
                 <stress>
-                    <singular>16</singular>
+                    <list>8,16,32</list>
                 </stress>
             </p>
         </by-program>
-        <iterations>1</iterations>
+        <iterations>10</iterations>
     </workload>
 </benchmark>
