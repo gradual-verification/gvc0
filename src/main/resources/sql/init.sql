@@ -291,8 +291,7 @@ CREATE TABLE IF NOT EXISTS static_performance
     FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
-    FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
-    PRIMARY KEY (permutation_id, hardware_id, version_id, static_measurement_type_id)
+    FOREIGN KEY (nickname_id) REFERENCES nicknames (id)
 );
 
 CREATE TABLE IF NOT EXISTS static_errors
@@ -306,8 +305,7 @@ CREATE TABLE IF NOT EXISTS static_errors
     FOREIGN KEY (version_id) REFERENCES versions (id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
-    FOREIGN KEY (error_id) REFERENCES error_occurrences (id),
-    PRIMARY KEY (nickname_id, hardware_id, version_id, permutation_id, error_id)
+    FOREIGN KEY (error_id) REFERENCES error_occurrences (id)
 );
 
 DELIMITER //
