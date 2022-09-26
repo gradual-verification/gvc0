@@ -108,7 +108,6 @@ void appendLemmaAfterLoopBody(struct Node *a, struct Node *b, struct Node *c, in
 
 //-------------------------------------------------------------------verified code starts below
 
-// imprecise to precondition and leave the postcondition sorted
 struct Node *create_list(int val)
   //@ requires true;
   //@ ensures sorted(\result);
@@ -126,14 +125,12 @@ struct Node *list_insert(struct Node *list, int val)
   //@ requires ?;
   //@ ensures sorted(\result);
 {
-  if (val <= list->val) {
+  if (list == NULL) {
 
     struct Node *n = alloc(struct Node);
     n->val = val;
     n->next = list;
-    //@ fold sortedSegHelper(n->next, NULL, n->val, -1);
-    //@ fold sortedSeg(n, NULL, -1);
-    //@ fold sorted(n);
+
     return n;
 
   } else {
@@ -142,10 +139,10 @@ struct Node *list_insert(struct Node *list, int val)
     //@ unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
 
     //@ fold sortedSeg(list, curr, curr->val);
-    while (curr->next->val < val)
-     //@ loop_invariant acc(curr->val);
-     //@ loop_invariant sortedSeg(list, curr, curr->val);
-     //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && sortedSegHelper(curr->next->next, NULL, curr->next->val, -1);
+    while (curr->next != NULL && curr->next->val < val)
+     //@ loop_invariant acc(curr->val) && acc(curr->next);
+     //@ loop_invariant sortedSeg(list, curr, curr->val) && curr->val <= val;
+     //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val && sortedSegHelper(curr->next->next, NULL, curr->next->val, -1);
     {
 
       struct Node *prev = curr;
@@ -267,7 +264,7 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
-  int stress = 0;
+  int stress = 1;
   struct Node *l = create_list(3);
   int i = 0;
   while(i < stress)
@@ -276,11 +273,5 @@ int main()
     l = list_insert(l, 1);
     i += 1;
   }
-  l = list_insert(NULL, 1); // Inputs can be broken here by putting `NULL`
   return 0;
 }
-
-// 1st. break implementation
-// 2nd. modify specification so proofs are done dynamically instead of statically
-// Note: Put as much imprecision as possible but make sure you're still proving something
-// This is acyclic and sorted, it also proves memory safety

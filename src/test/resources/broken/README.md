@@ -1,4 +1,12 @@
 # Broken examples 
+For these broken examples, we are using the files found in `quant-study`. When breaking examples, we want to take into consideration the following:
+
+- Modify specification so proofs are done dynamically instead of statically
+- Put as much imprecision as possible but make sure you're still proving something
+
+The first two examples of each program have implementation errors, and the following two are specification errors. 
+
+Details for each example can be found [here](https://github.com/gradual-verification/recursive-predicates/wiki).
 
 ## Implementation 
 **For breaking implementations, we want to make sure that the code breaks during dynamic verification and not just a static fail. This requires all methods changed to remove `folds`/`unfolds` and preconditions must stay unspecified.**
@@ -19,16 +27,43 @@
 
 ### List 
 
-> **(B.1)** 
+> **(B.1)** We can mess with `list_insert`, and remove the edge cases for dealing with `NULL` lists. (Remember we remove all `folds` and `unfolds`).
 
-```c
-
+```diff
+struct Node *list_insert(struct Node *list, int val)
+-  //@ requires sorted(list);
++  //@ requires ?;
+  //@ ensures sorted(\result);
+{
+-  if (list == NULL || val <= list->val) {
++  if (val <= list->val) {
+...
+-    while (curr->next != NULL && curr->next->val < val)
++    while (curr->next->val < val)
+...
+int main()
+  //@ requires true;
+  //@ ensures true;
+{
+  int stress = 0;
+  struct Node *l = create_list(3);
+  int i = 0;
+  while(i < stress)
+  //@loop_invariant 0 <= i && i <= stress;
+  {
+    l = list_insert(l, 1);
+    i += 1;
+  }
++  l = list_insert(NULL, 1);
+  return 0;
+}
 ```
 
-> **(B.2)**
+> **(B.2)** Following the previous example, we can make a mistake on one of the branches for `list_insert`, if `stress = 1` we should get the error from running with `-x` rather than `--dynamic`:
 
-```c
-
+```diff
+-  if (list == NULL || val <= list->val) {
++  if (list == NULL) {
 ```
 
 ### Composite 
@@ -144,8 +179,6 @@ struct Node *tree_add_right(struct Node *node)
 
 ## Specifications 
 **Similarly, we have to remove `folds`/`unfolds`, but we can't make preconditions just unspecified.**
-
-
 
 ### BFS
 
@@ -302,13 +335,47 @@ struct Node *tree_add_right(struct Node *node)
 > 1
 
 ```
-
+sbt:gvc0> run "./src/test/resources/broken/list_1.c0" --dynamic
+[info] running (fork) gvc.Main ./src/test/resources/broken/list_1.c0 --dynamic
+[info] [*] — Mon Sep 26 06:54:20 EDT 2022
+[error] Exception in thread "main" gvc.benchmarking.Timing$CC0ExecutionException: 11
+[error]         at gvc.benchmarking.Timing$.execNonzero$1(Timing.scala:159)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1$adapted(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3(Timing.scala:129)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3$adapted(Timing.scala:121)
+[error]         at scala.collection.immutable.Range.foreach(Range.scala:158)
+[error]         at gvc.benchmarking.Timing$.runTimedCommand(Timing.scala:121)
+[error]         at gvc.benchmarking.Timing$.execTimed(Timing.scala:162)
+[error]         at gvc.Main$.$anonfun$run$1(main.scala:97)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:86)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 1 s, completed Sep 26, 2022, 6:54:20 AM
 ```
 
 > 2
 
 ```
-
+sbt:gvc0> run "./src/test/resources/broken/list_2.c0" -x
+[info] running (fork) gvc.Main ./src/test/resources/broken/list_2.c0 -x
+[info] [*] — Mon Sep 26 07:56:51 EDT 2022
+[error] c0rt: ./src/test/resources/broken/list_2.verified.c0: 145.7-145.32: assert failed
+[error] Nonzero exit code returned from runner: 134
+[error] (Compile / run) Nonzero exit code returned from runner: 134
+[error] Total time: 13 s, completed Sep 26, 2022, 7:57:04 AM
 ```
 
 > 3
