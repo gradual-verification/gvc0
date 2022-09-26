@@ -24,7 +24,7 @@ Details for each example can be found [here](https://github.com/gradual-verifica
         root->left = create_tree_helper(x, min, v-1);
       }
     } else {
--     if (v < x) {      
+-     if (v < x) {
 +     if (x < v) {
         if (r != NULL) {
           root->right = tree_add_helper(r, x, v+1, max);
@@ -48,6 +48,8 @@ struct Node *tree_add(struct Node *root, int x)
   return res;
 }
 ```
+
+---
 
 ### List 
 
@@ -89,6 +91,8 @@ int main()
 -  if (list == NULL || val <= list->val) {
 +  if (list == NULL) {
 ```
+
+---
 
 ### Composite 
 
@@ -204,125 +208,59 @@ struct Node *tree_add_right(struct Node *node)
 ## Specifications 
 **Similarly, we have to remove `folds`/`unfolds`, but we can't make preconditions just unspecified.**
 
-### BFS
+### BST
 
-> **(A.3)** 
+> **(A.3)** We follow the bst implementation break of changing the max and min values, and the program should recognize that the precondition for `add` does not hold
 
-```c
-
+```diff
+struct Node *tree_add(struct Node *root, int x)
+-  //@ requires tree(root) && -2147483647 <= x && x <= 2147483647;
++  //@ requires ? && 2147483647 <= x && x <= -2147483647;
+  //@ ensures tree(\result);
+{
+  struct Node *res = tree_add_helper(root, x, -2147483647, 2147483647);
+  return res;
+}
 ```
 
-> **(A.4)**
+> **(A.4)** Similarly, we can change the min max order in the `add_helper` precondition instead, and unspecify preconditions in `add` and `remove`.
 
-```c
-
+```diff
+struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
+-  //@ requires bst(root, min, max) && min <= x && x <= max;
++  //@ requires ? && max <= x && x <= min;
+  //@ ensures bst(\result, min, max);
 ```
+
+---
 
 ### List 
 
 > **(B.3)** 
 
-```c
+```diff
 
 ```
 
 > **(B.4)**
 
-```c
+```diff
 
 ```
+
+---
 
 ### Composite
 
 > **(C.3)** 
 
-```c
+```diff
 
 ```
 
 > **(C.4)**
 
-```c
-
-```
-
-## `--check` output 
-
-### A.
-
-> 1
-
-```
-
-```
-
-> 2
-
-```
-
-```
-
-> 3
-
-```
-
-```
-
-> 4
-
-```
-
-```
-
-### B.
-
-> 1
-
-```
-
-```
-
-> 2
-
-```
-
-```
-
-> 3
-
-```
-
-```
-
-> 4
-
-```
-
-```
-
-### C.
-
-> 1
-
-```
-
-```
-
-> 2
-
-```
-
-```
-
-> 3
-
-```
-
-```
-
-> 4
-
-```
+```diff
 
 ```
 
@@ -386,7 +324,58 @@ sbt:gvc0> run "./src/test/resources/broken/bst_2.c0" --dynamic
 > 3
 
 ```
-
+sbt:gvc0> run "./src/test/resources/broken/bst_3.c0" -x
+[info] running (fork) gvc.Main ./src/test/resources/broken/bst_3.c0 -x
+[info] [*] — Mon Sep 26 08:29:25 EDT 2022
+[error] Exception in thread "main" gvc.VerificationException: The precondition of method tree_add might not hold. Assertion 2147483647 <= toAdd might not hold. (<no position>)
+[error]         at gvc.Main$.verifySiliconProvided(main.scala:293)
+[error]         at gvc.Main$.verify(main.scala:255)
+[error]         at gvc.Main$.$anonfun$run$5(main.scala:148)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:147)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 5 s, completed Sep 26, 2022, 8:29:29 AM
+sbt:gvc0> run "./src/test/resources/broken/bst_3.c0" --dynamic
+[info] running (fork) gvc.Main ./src/test/resources/broken/bst_3.c0 --dynamic
+[info] [*] — Mon Sep 26 08:29:38 EDT 2022
+[error] Exception in thread "main" gvc.benchmarking.Timing$CC0ExecutionException: c0rt: /home/jpvinnie/Documents/uni/CMU/src/gradual/gvc0/./src/test/resources/broken/bst_3.verified.c0: 342.3-342.27: assert failed11
+[error]         at gvc.benchmarking.Timing$.execNonzero$1(Timing.scala:159)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1$adapted(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3(Timing.scala:129)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3$adapted(Timing.scala:121)
+[error]         at scala.collection.immutable.Range.foreach(Range.scala:158)
+[error]         at gvc.benchmarking.Timing$.runTimedCommand(Timing.scala:121)
+[error]         at gvc.benchmarking.Timing$.execTimed(Timing.scala:162)
+[error]         at gvc.Main$.$anonfun$run$1(main.scala:97)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:86)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 2 s, completed Sep 26, 2022, 8:29:39 AM
 ```
 
 > 4
@@ -394,6 +383,8 @@ sbt:gvc0> run "./src/test/resources/broken/bst_2.c0" --dynamic
 ```
 
 ```
+
+---
 
 ### B.
 
@@ -454,6 +445,8 @@ sbt:gvc0> run "./src/test/resources/broken/list_2.c0" -x
 ```
 
 ```
+
+---
 
 ### C.
 
@@ -531,6 +524,90 @@ sbt:gvc0> run "./src/test/resources/broken/composite_2.c0" --dynamic
 [error] Nonzero exit code returned from runner: 1
 [error] (Compile / run) Nonzero exit code returned from runner: 1
 [error] Total time: 2 s, completed Sep 26, 2022, 5:40:01 AM
+```
+
+> 3
+
+```
+
+```
+
+> 4
+
+```
+
+```
+
+## `--check` output 
+
+### A.
+
+> 1
+
+```
+
+```
+
+> 2
+
+```
+
+```
+
+> 3
+
+```
+
+```
+
+> 4
+
+```
+
+```
+
+---
+
+### B.
+
+> 1
+
+```
+
+```
+
+> 2
+
+```
+
+```
+
+> 3
+
+```
+
+```
+
+> 4
+
+```
+
+```
+
+---
+
+### C.
+
+> 1
+
+```
+
+```
+
+> 2
+
+```
+
 ```
 
 > 3

@@ -27,7 +27,7 @@ predicate bst(struct Node *root, int min, int max) =
     (
       acc(root->left) && acc(root->right) && acc(root->val) &&
       root->val >= min && root->val <= max &&
-      bst(root->left, min, root->val) &&
+      bst(root->left, min, root->val-1) &&
       bst(root->right, root->val+1, max)
     ) ;
 @*/
@@ -45,23 +45,27 @@ predicate tree(struct Node *root) =
 // lemmas -------------------------------------------------------------------------------
 
 void tree_max_lemma(struct Node *root, int newMax, int min, int max)
-  //@ requires true;
+  //@ requires bst(root, min, max) && max <= newMax;
   //@ ensures bst(root, min, newMax);
 {
   if (root == NULL) {
   } else {
+    //@ unfold bst(root, min, max);
     tree_max_lemma(root->right, newMax, root->val+1, max);
   }
+  //@ fold bst(root, min, newMax);
 }
 
 void tree_min_lemma(struct Node *root, int newMin, int min, int max)
-  //@ requires true;
+  //@ requires bst(root, min, max) && newMin <= min;
   //@ ensures bst(root, newMin, max);
 {
   if (root == NULL) {
   } else {
+    //@ unfold bst(root, min, max);
     tree_min_lemma(root->left, newMin, min, root->val-1);
   }
+  //@ fold bst(root, newMin, max);
 }
 
 void tree_remove_lemma(struct Node *root, int min, int max)
@@ -77,11 +81,12 @@ void tree_remove_lemma(struct Node *root, int min, int max)
 }
 
 void tree_remove_lemma_right(struct Node *r, int x, int min, int max)
-  //@ requires true;
+  //@ requires bst(r, min, max) && x < min;
   //@ ensures bstRemove(r, x, min, max);
 {
   if (r == NULL) {
   } else {
+    //@ unfold bst(r, min, max);
     if (r->left == NULL) {
       tree_remove_lemma_right(r->right, x, r->val+1, max);
       //@ fold bstRemove(r->left, x, min, r->val-1);
@@ -97,11 +102,12 @@ void tree_remove_lemma_right(struct Node *r, int x, int min, int max)
 }
 
 void tree_remove_lemma_left(struct Node *l, int x, int min, int max)
-  //@ requires true;
+  //@ requires bst(l, min, max) && max < x;
   //@ ensures bstRemove(l, x, min, max);
 {
   if (l == NULL) {
   } else {
+    //@ unfold bst(l, min, max);
     if (l->left == NULL) {
       tree_remove_lemma_left(l->right, x, l->val+1, max);
       //@ fold bstRemove(l->left, x, min, l->val-1);
@@ -171,6 +177,7 @@ void tree_main_lemma_bst(struct Node *root, int x, int min, int max)
     tree_main_lemma_bst(root->left, x, min, root->val-1);
     tree_main_lemma_bst(root->right, x, root->val+1, max);
   }
+  //@ fold bst(root, min, max);
 }
 
 void tree_main_lemma(struct Node *root, int x)
@@ -193,6 +200,9 @@ struct Node *create_tree_helper(int val, int min, int max)
   root->left = NULL;
   root->right = NULL;
 
+  //@ fold bst(root->left, min, root->val-1);
+  //@ fold bst(root->right, root->val+1, max);
+  //@ fold bst(root, min, max);
   return root;
 }
 
@@ -209,13 +219,19 @@ int tree_max_helper(struct Node *root, int min, int max)
   //@ requires bst(root, min, max) && root != NULL;
   //@ ensures bst(root, min, \result) && \result <= max;
 {
+  //@ unfold bst(root, min, max);
   int v = root->val;
   struct Node *r = root->right;
   if (r == NULL) {
+    //@ fold bst(r, v+1, v);
+    //@ fold bst(root, min, v);
     return v;
   } else {
     int m = tree_max_helper(r, v+1, max);
+    //@ unfold bst(r, v+1, m);
     //@ assert v <= m;
+    //@ fold bst(r, v+1, m);
+    //@ fold bst(root, min, m);
     return m;
   }
 }
@@ -235,13 +251,19 @@ int tree_min_helper(struct Node *root, int min, int max)
   //@ requires bst(root, min, max) && root != NULL;
   //@ ensures bst(root, \result, max) && min <= \result;
 {
+  //@ unfold bst(root, min, max);
   int v = root->val;
   struct Node *l = root->left;
   if (l == NULL) {
+    //@ fold bst(l, v, v-1);
+    //@ fold bst(root, v, max);
     return v;
   } else {
     int m = tree_min_helper(l, min, v-1);
+    //@ unfold bst(l, m, v-1);
     //@ assert m <= v;
+    //@ fold bst(l, m, v-1);
+    //@ fold bst(root, m, max);
     return m;
   }
 }
@@ -264,16 +286,20 @@ bool tree_contains_helper(struct Node *root, int x, int min, int max)
   if (root == NULL) {
     return false;
   } else {
+    //@ unfold bst(root, min, max);
     int v = root->val;
     struct Node *l = root->left;
     struct Node *r = root->right;
     if (v == x) {
+      //@ fold bst(root, min, max);
       return true;
     } else if (x < v) {
       bool temp1 = tree_contains_helper(l, x, min, v-1);
+      //@ fold bst(root, min, max);
       return temp1;
     } else {
       bool temp2 = tree_contains_helper(r, x, v+1, max);
+      //@ fold bst(root, min, max);
       return temp2;
     }
   }
@@ -290,7 +316,7 @@ bool tree_contains(struct Node *root, int x)
 }
 
 struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
-  //@ requires bst(root, min, max) && min <= x && x <= max;
+  //@ requires ? && max <= x && x <= min;
   //@ ensures bst(\result, min, max);
  {
 
@@ -321,12 +347,10 @@ struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
 }
 
 struct Node *tree_add(struct Node *root, int x)
-  //@ requires tree(root) && -2147483647 <= x && x <= 2147483647;
+  //@ requires ?;
   //@ ensures tree(\result);
 {
-  //@ unfold tree(root);
   struct Node *res = tree_add_helper(root, x, -2147483647, 2147483647);
-  //@ fold tree(res);
   return res;
 }
 
@@ -338,6 +362,7 @@ struct Node *tree_remove_helper(struct Node *root, int x, int min, int max)
     //@ fold bstRemove(root, x, min, max);
     return root;
   } else {
+    //@ unfold bst(root, min, max);
     int v = root->val;
     struct Node *l = root->left;
     struct Node *r = root->right;
@@ -369,7 +394,9 @@ struct Node *tree_remove_helper(struct Node *root, int x, int min, int max)
           return l;
         } else {
           int m = tree_max_helper(l, min, v-1);
+          //@ unfold bst(l, min, m);
           //@ assert min <= m;
+          //@ fold bst(l, min, m);
 
           root->val = m;
           root->left = tree_remove_helper(l, m, min, m);
@@ -387,12 +414,10 @@ struct Node *tree_remove_helper(struct Node *root, int x, int min, int max)
 }
 
 struct Node *tree_remove(struct Node *root, int x)
-  //@ requires tree(root);
+  //@ requires ?;
   //@ ensures treeRemove(\result, x);
 {
-  //@ unfold tree(root);
   struct Node *res = tree_remove_helper(root, x, -2147483647, 2147483647);
-  //@ fold treeRemove(res, x);
   return res;
 }
 
