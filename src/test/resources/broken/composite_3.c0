@@ -113,9 +113,10 @@ int tree_get_total(struct Node *node)
 
 
 int fixup_ancestors(struct Node *node, struct Node *parent, int oldTotal, int newTotal)
-  //@ requires ?;
+  //@ requires context(node, parent, oldTotal);
   //@ ensures context(node, parent, newTotal);
 {
+  //@ unfold context(node, parent, oldTotal);
   if (parent == NULL) {
   } else {
     struct Node *left = parent->left;
@@ -136,10 +137,11 @@ int fixup_ancestors(struct Node *node, struct Node *parent, int oldTotal, int ne
       rightTotal = newTotal;
     }
 
-    int parentTotal = leftTotal + rightTotal;
+    int parentTotal = 1 + leftTotal + rightTotal;
     parent->total = parentTotal;
     fixup_ancestors(parent, grandparent, oldparentTotal, parentTotal);
   }
+  //@ fold context(node, parent, newTotal);
   return 0;
 }
 
@@ -206,6 +208,7 @@ struct Node *tree_add_right(struct Node *node)
     }
   }
 }
+
 struct Node *tree_get_parent(struct Node *node)
   //@ requires tree(node);
   //@ ensures tree(\result);
@@ -317,7 +320,7 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
-  int stress = 1;
+  int stress = 0;
 
   int stressCaptured = stress + ((stress/2) * 2);
   int seed = 1;
