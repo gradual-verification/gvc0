@@ -13,16 +13,40 @@ Details for each example can be found [here](https://github.com/gradual-verifica
 
 ### BST
 
-> **(A.1)** We first want to break the tree order, the left subtree has to be less than the right subtree. Therefore, we insert a node which is greater in the left hand side of the tree.
+> **(A.1)** We first want to break the tree order, the left subtree has to be less than the right subtree. Therefore, we insert a node which is greater in the left hand side of the tree. (Remember we remove `folds`/`unfolds`)
 
-```c
-
+```diff
+-    if (x < v) {
++    if (v < x) {
+      if (l != NULL) {
+        root->left = tree_add_helper(l, x, min, v-1);
+      } else {
+        root->left = create_tree_helper(x, min, v-1);
+      }
+    } else {
+-     if (v < x) {      
++     if (x < v) {
+        if (r != NULL) {
+          root->right = tree_add_helper(r, x, v+1, max);
+        } else {
+          root->right = create_tree_helper(x, v+1, max);
+        }
+      }
+   }
 ```
 
-> **(A.2)**
+> **(A.2)** Interestingly, BST is forced to define the max and min int values in C for adding and removing in a tree. A trivial error is to invert these values
 
-```c
-
+```diff
+struct Node *tree_add(struct Node *root, int x)
+-  //@ requires tree(root) && -2147483647 <= x && x <= 2147483647;
++  //@ requires ?;
+  //@ ensures tree(\result);
+{
+-  struct Node *res = tree_add_helper(root, x, -2147483647, 2147483647);
++  struct Node *res = tree_add_helper(root, x, 2147483647, -2147483647);
+  return res;
+}
 ```
 
 ### List 
@@ -306,16 +330,57 @@ struct Node *tree_add_right(struct Node *node)
 
 ### A.
 
-> 1
+> 1 (If we only change the precondition for `add_helper` then `-x` will error for not holding the precondition for `add` and `remove`)
 
 ```
-
+sbt:gvc0> run "./src/test/resources/broken/bst_1.c0" -x
+[info] running (fork) gvc.Main ./src/test/resources/broken/bst_1.c0 -x
+[info] [*] — Mon Sep 26 08:09:31 EDT 2022
+[error] c0rt: ./src/test/resources/broken/bst_1.verified.c0: 331.11-331.32: assert failed
+[error] Nonzero exit code returned from runner: 134
+[error] (Compile / run) Nonzero exit code returned from runner: 134
+[error] Total time: 5 s, completed Sep 26, 2022, 8:09:35 AM
 ```
 
 > 2
 
 ```
-
+sbt:gvc0> run "./src/test/resources/broken/bst_1.c0" -x
+[info] running (fork) gvc.Main ./src/test/resources/broken/bst_1.c0 -x
+[info] [*] — Mon Sep 26 08:16:59 EDT 2022
+[error] c0rt: ./src/test/resources/broken/bst_1.verified.c0: 331.11-331.32: assert failed
+[error] Nonzero exit code returned from runner: 134
+[error] (Compile / run) Nonzero exit code returned from runner: 134
+[error] Total time: 5 s, completed Sep 26, 2022, 8:17:03 AM
+sbt:gvc0> run "./src/test/resources/broken/bst_2.c0" --dynamic
+[info] running (fork) gvc.Main ./src/test/resources/broken/bst_2.c0 --dynamic
+[info] [*] — Mon Sep 26 08:17:06 EDT 2022
+[error] Exception in thread "main" gvc.benchmarking.Timing$CC0ExecutionException: c0rt: /home/jpvinnie/Documents/uni/CMU/src/gradual/gvc0/./src/test/resources/broken/bst_2.verified.c0: 137.5-137.30: assert failed11
+[error]         at gvc.benchmarking.Timing$.execNonzero$1(Timing.scala:159)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1$adapted(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3(Timing.scala:129)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3$adapted(Timing.scala:121)
+[error]         at scala.collection.immutable.Range.foreach(Range.scala:158)
+[error]         at gvc.benchmarking.Timing$.runTimedCommand(Timing.scala:121)
+[error]         at gvc.benchmarking.Timing$.execTimed(Timing.scala:162)
+[error]         at gvc.Main$.$anonfun$run$1(main.scala:97)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:86)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 1 s, completed Sep 26, 2022, 8:17:07 AM
 ```
 
 > 3

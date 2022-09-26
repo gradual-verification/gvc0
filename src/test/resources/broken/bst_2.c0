@@ -352,7 +352,7 @@ struct Node *tree_add(struct Node *root, int x)
   //@ requires ?;
   //@ ensures tree(\result);
 {
-  struct Node *res = tree_add_helper(root, x, -2147483647, 2147483647);
+  struct Node *res = tree_add_helper(root, x, 2147483647, -2147483647);
   return res;
 }
 
@@ -416,12 +416,10 @@ struct Node *tree_remove_helper(struct Node *root, int x, int min, int max)
 }
 
 struct Node *tree_remove(struct Node *root, int x)
-  //@ requires tree(root);
+  //@ requires ?;
   //@ ensures treeRemove(\result, x);
 {
-  //@ unfold tree(root);
-  struct Node *res = tree_remove_helper(root, x, -2147483647, 2147483647);
-  //@ fold treeRemove(res, x);
+  struct Node *res = tree_remove_helper(root, x, 2147483647, -2147483647);
   return res;
 }
 
@@ -429,7 +427,7 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
-    int stress = 0;
+    int stress = 1;
     int seed = 1;
 
     int stressCaptured = stress;

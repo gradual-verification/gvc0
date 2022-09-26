@@ -277,7 +277,6 @@ object Config {
           tail,
           current.copy(mode = FramingVerification)
         )
-
       case "--check" :: tail =>
         fromCommandLineArgs(
           tail,

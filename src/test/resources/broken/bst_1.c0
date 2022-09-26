@@ -316,11 +316,10 @@ bool tree_contains(struct Node *root, int x)
 }
 
 struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
-  //@ requires bst(root, min, max) && min <= x && x <= max;
+  //@ requires ?;
   //@ ensures bst(\result, min, max);
  {
 
-  //@ unfold bst(root, min, max);
   if (root == NULL) {
     return create_tree_helper(x, min, max);
   } else {
@@ -328,14 +327,14 @@ struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
     struct Node *l = root->left;
     struct Node *r = root->right;
 
-    if (x < v) {
+    if (v < x) {
       if (l != NULL) {
         root->left = tree_add_helper(l, x, min, v-1);
       } else {
         root->left = create_tree_helper(x, min, v-1);
       }
     } else {
-      if (v < x) {
+      if (x < v) {
         if (r != NULL) {
           root->right = tree_add_helper(r, x, v+1, max);
         } else {
@@ -343,7 +342,6 @@ struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
         }
       }
    }
-   //@ fold bst(root, min, max);
    return root;
   }
 }
@@ -416,7 +414,7 @@ struct Node *tree_remove_helper(struct Node *root, int x, int min, int max)
 }
 
 struct Node *tree_remove(struct Node *root, int x)
-  //@ requires tree(root);
+  //@ requires ?;
   //@ ensures treeRemove(\result, x);
 {
   //@ unfold tree(root);
@@ -429,7 +427,7 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
-    int stress = 0;
+    int stress = 1;
     int seed = 1;
 
     int stressCaptured = stress;
