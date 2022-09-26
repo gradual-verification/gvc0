@@ -329,6 +329,12 @@ struct Node *tree_add_right(struct Node *node)
 > 1
 
 ```
+
+```
+
+> 2
+
+```
 sbt:gvc0> run "./src/test/resources/broken/composite_2.c0" -x
 [info] running (fork) gvc.Main ./src/test/resources/broken/composite_2.c0 -x
 [info] [*] — Mon Sep 26 04:31:07 EDT 2022
@@ -336,12 +342,6 @@ sbt:gvc0> run "./src/test/resources/broken/composite_2.c0" -x
 [error] Nonzero exit code returned from runner: 134
 [error] (Compile / run) Nonzero exit code returned from runner: 134
 [error] Total time: 10 s, completed Sep 26, 2022, 4:31:17 AM
-```
-
-> 2
-
-```
-
 ```
 
 > 3
