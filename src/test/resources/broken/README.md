@@ -205,7 +205,7 @@ struct Node *tree_add_right(struct Node *node)
 }
 ```
 
-## Specifications 
+## Specification
 **Similarly, we have to remove `folds`/`unfolds`, but we can't make preconditions just unspecified.**
 
 ### BST
@@ -234,7 +234,7 @@ struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
 
 ---
 
-### List 
+### List (breaking with `quant-study/list`?)
 
 > **(B.3)** 
 
@@ -252,16 +252,39 @@ struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
 
 ### Composite
 
-> **(C.3)** 
+> **(C.3)** As with the implementation error, we can remove the necessary `+ 1` so the condition doesn't hold.
 
 ```diff
-
+-       total == 1 + r->total
++       total == r->total
+...
+-       total == 1 + l->total
++       total == l->total
+...
+-       total == 1 + l->total + r->total
++       total == l->total + r->total
+...
+-       ( parent->total == 1 + total )
++       ( parent->total == total )
+...
+-       parent->total == 1 + total + parent->left->total
++       parent->total == total + parent->left->total
 ```
 
-> **(C.4)**
+> **(C.4)** We make sure that the postcondition for `create_tree` doesn't hold by making a simple equality mistake in the `tree` predicate. It's to note that if the postcondition on `create_tree()` is imprecisely framed then it will pass dynamically but fail the static  check because the postcondition might still not hold. (Remember we remove the `folds`/`unfolds` with tree calls.)
 
 ```diff
-
+/*@
+predicate tree(struct Node *node) =
+-  (node == NULL) ?
++  (node != NULL) ?
+    ( true )
+    :
+    (
+      acc(node->left) && acc(node->right) && acc(node->parent) && acc(node->total) &&
+      context(node, node->parent, node->total) && subtreeHelper(node->left, node->right, node, node->total)
+    ) ;
+@*/
 ```
 
 ## `--dynamic` output 
@@ -381,7 +404,57 @@ sbt:gvc0> run "./src/test/resources/broken/bst_3.c0" --dynamic
 > 4
 
 ```
-
+[info] running (fork) gvc.Main ./src/test/resources/broken/bst_4.c0 --dynamic
+[info] [*] — Mon Sep 26 08:48:10 EDT 2022
+[error] Exception in thread "main" gvc.benchmarking.Timing$CC0ExecutionException: c0rt: /home/jpvinnie/Documents/uni/CMU/src/gradual/gvc0/./src/test/resources/broken/bst_4.verified.c0: 354.3-354.20: assert failed11
+[error]         at gvc.benchmarking.Timing$.execNonzero$1(Timing.scala:159)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1$adapted(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3(Timing.scala:129)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3$adapted(Timing.scala:121)
+[error]         at scala.collection.immutable.Range.foreach(Range.scala:158)
+[error]         at gvc.benchmarking.Timing$.runTimedCommand(Timing.scala:121)
+[error]         at gvc.benchmarking.Timing$.execTimed(Timing.scala:162)
+[error]         at gvc.Main$.$anonfun$run$1(main.scala:97)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:86)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 1 s, completed Sep 26, 2022, 8:48:11 AM
+sbt:gvc0> run "./src/test/resources/broken/bst_4.c0"
+[info] running (fork) gvc.Main ./src/test/resources/broken/bst_4.c0
+[info] [*] — Mon Sep 26 08:48:25 EDT 2022
+[error] Exception in thread "main" gvc.VerificationException: The precondition of method tree_add_helper might not hold. Assertion x <= -2147483647 might not hold. (<no position>)
+[error]         at gvc.Main$.verifySiliconProvided(main.scala:293)
+[error]         at gvc.Main$.verify(main.scala:255)
+[error]         at gvc.Main$.$anonfun$run$5(main.scala:148)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:147)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 4 s, completed Sep 26, 2022, 8:48:29 AM
 ```
 
 ---
@@ -526,16 +599,95 @@ sbt:gvc0> run "./src/test/resources/broken/composite_2.c0" --dynamic
 [error] Total time: 2 s, completed Sep 26, 2022, 5:40:01 AM
 ```
 
-> 3
+> 3 (To remove static error we have to remove all `fold` instances of `subtreeHelper`)
 
 ```
-
+[info] running (fork) gvc.Main ./src/test/resources/broken/composite_3.c0 -x
+[info] [*] — Mon Sep 26 09:14:47 EDT 2022
+[error] Exception in thread "main" gvc.VerificationException: Folding context(left, node, left.Node$total) might fail. Assertion parent.Node$total == 1 + total might not hold. (<no position>)
+[error] Folding subtreeHelper(parent.Node$left, parent.Node$right, parent, parent.Node$total) might fail. Assertion total == l.Node$total might not hold. (<no position>)
+[error]         at gvc.Main$.verifySiliconProvided(main.scala:293)
+[error]         at gvc.Main$.verify(main.scala:255)
+[error]         at gvc.Main$.$anonfun$run$5(main.scala:148)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:147)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 7 s, completed Sep 26, 2022, 9:14:54 AM
+sbt:gvc0> run "./src/test/resources/broken/composite_3.c0" --dynamic
+[info] running (fork) gvc.Main ./src/test/resources/broken/composite_3.c0 --dynamic
+[info] [*] — Mon Sep 26 09:15:01 EDT 2022
+[error] Exception in thread "main" gvc.benchmarking.Timing$CC0ExecutionException: c0rt: /home/jpvinnie/Documents/uni/CMU/src/gradual/gvc0/./src/test/resources/broken/composite_3.verified.c0: 344.9-344.40: assert failed11
+[error]         at gvc.benchmarking.Timing$.execNonzero$1(Timing.scala:159)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1$adapted(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3(Timing.scala:129)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3$adapted(Timing.scala:121)
+[error]         at scala.collection.immutable.Range.foreach(Range.scala:158)
+[error]         at gvc.benchmarking.Timing$.runTimedCommand(Timing.scala:121)
+[error]         at gvc.benchmarking.Timing$.execTimed(Timing.scala:162)
+[error]         at gvc.Main$.$anonfun$run$1(main.scala:97)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:86)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 1 s, completed Sep 26, 2022, 9:15:02 AM
 ```
 
 > 4
 
 ```
-
+sbt:gvc0> run "./src/test/resources/broken/composite_4.c0" --dynamic
+[info] running (fork) gvc.Main ./src/test/resources/broken/composite_4.c0 --dynamic
+[info] [*] — Mon Sep 26 09:24:44 EDT 2022
+[error] Exception in thread "main" gvc.benchmarking.Timing$CC0ExecutionException: Error: Field access runtime check failed for struct Node.left11
+[error]         at gvc.benchmarking.Timing$.execNonzero$1(Timing.scala:159)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1$adapted(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3(Timing.scala:129)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3$adapted(Timing.scala:121)
+[error]         at scala.collection.immutable.Range.foreach(Range.scala:158)
+[error]         at gvc.benchmarking.Timing$.runTimedCommand(Timing.scala:121)
+[error]         at gvc.benchmarking.Timing$.execTimed(Timing.scala:162)
+[error]         at gvc.Main$.$anonfun$run$1(main.scala:97)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:86)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 1 s, completed Sep 26, 2022, 9:24:44 AM
 ```
 
 ## `--check` output 

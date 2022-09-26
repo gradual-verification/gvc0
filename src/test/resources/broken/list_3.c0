@@ -268,7 +268,7 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
-  int stress = 0;
+  int stress = 1;
   struct Node *l = create_list(3);
   int i = 0;
   while(i < stress)

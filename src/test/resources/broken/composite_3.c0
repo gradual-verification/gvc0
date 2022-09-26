@@ -17,25 +17,24 @@ predicate subtreeHelper(struct Node *l, struct Node *r, struct Node *parent, int
         :
         acc(r->left) && acc(r->right) && acc(r->parent) && acc(r->total) &&
         r->parent == parent && subtreeHelper(r->left, r->right, r, r->total) &&
-        total == 1 + r->total
+        total == r->total
     )
     :
     (
       (r == NULL) ?
         acc(l->left) && acc(l->right) && acc(l->parent) && acc(l->total) &&
         l->parent == parent && subtreeHelper(l->left, l->right, l, l->total) &&
-        total == 1 + l->total
+        total == l->total
         :
         acc(r->left) && acc(r->right) && acc(r->parent) && acc(r->total) &&
         r->parent == parent && subtreeHelper(r->left, r->right, r, r->total) &&
         acc(l->left) && acc(l->right) && acc(l->parent) && acc(l->total) &&
         l->parent == parent && subtreeHelper(l->left, l->right, l, l->total) &&
-        total == 1 + l->total + r->total
+        total == l->total + r->total
     ) ;
 @*/
 
 /*@
-// TODO: pickup debugging --- subtreeHelper in the context def is the issue causing the error, in both places it is used, works in backend: ie. ran as a silver program translated from this in the console and was fine
 predicate context(struct Node *node, struct Node *parent, int total) =
   (parent == NULL) ?
     ( true )
@@ -58,12 +57,12 @@ predicate context(struct Node *node, struct Node *parent, int total) =
         (
           node == parent->right &&
           ((parent->left == NULL) ?
-            ( parent->total == 1 + total )
+            ( parent->total == total )
             :
             (
               acc(parent->left->left) && acc(parent->left->right) && acc(parent->left->parent) && acc(parent->left->total) &&
               parent->left->parent == parent && subtreeHelper(parent->left->left, parent->left->right, parent->left, parent->left->total) &&
-              parent->total == 1 + total + parent->left->total
+              parent->total == total + parent->left->total
             )
           )
         )
@@ -113,10 +112,9 @@ int tree_get_total(struct Node *node)
 
 
 int fixup_ancestors(struct Node *node, struct Node *parent, int oldTotal, int newTotal)
-  //@ requires context(node, parent, oldTotal);
+  //@ requires ?;
   //@ ensures context(node, parent, newTotal);
 {
-  //@ unfold context(node, parent, oldTotal);
   if (parent == NULL) {
   } else {
     struct Node *left = parent->left;
@@ -141,17 +139,14 @@ int fixup_ancestors(struct Node *node, struct Node *parent, int oldTotal, int ne
     parent->total = parentTotal;
     fixup_ancestors(parent, grandparent, oldparentTotal, parentTotal);
   }
-  //@ fold context(node, parent, newTotal);
   return 0;
 }
 
 struct Node *tree_add_left(struct Node *node)
-  //@ requires tree(node);
+  //@ requires ?;
   //@ ensures tree(\result);
 {
-  //@ unfold tree(node);
   if (node == NULL) {
-    //@ fold tree(node);
     return node;
   } else {
     struct Node *n = alloc(struct Node);
@@ -159,31 +154,23 @@ struct Node *tree_add_left(struct Node *node)
     n->right = NULL;
     n->parent = node;
     n->total = 1;
-    //@ fold subtreeHelper(n->left, n->right, n, n->total);
-
     struct Node *nodeLeft = node->left;
     if (nodeLeft != NULL) {
-      //@ fold tree(node);
       return node;
     } else {
-      //@ unfold subtreeHelper(nodeLeft, node->right, node, node->total);
       node->left = n;
-      //@ fold context(n, node, 0);
       fixup_ancestors(n, node, 0, 1);
 
-      //@ fold tree(n);
       return n;
     }
   }
 }
 
 struct Node *tree_add_right(struct Node *node)
-  //@ requires tree(node);
+  //@ requires ?;
   //@ ensures tree(\result);
 {
-  //@ unfold tree(node);
   if (node == NULL) {
-    //@ fold tree(node);
     return node;
   } else {
     struct Node *n = alloc(struct Node);
@@ -191,19 +178,12 @@ struct Node *tree_add_right(struct Node *node)
     n->right = NULL;
     n->parent = node;
     n->total = 1;
-    //@ fold subtreeHelper(n->left, n->right, n, n->total);
-
     struct Node *nodeRight = node->right;
     if (nodeRight != NULL) {
-      //@ fold tree(node);
       return node;
     } else {
-      //@ unfold subtreeHelper(node->left, nodeRight, node, node->total);
       node->right = n;
-      //@ fold context(n, node, 0);
       fixup_ancestors(n, node, 0, 1);
-
-      //@ fold tree(n);
       return n;
     }
   }
@@ -320,7 +300,7 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
-  int stress = 0;
+  int stress = 1;
 
   int stressCaptured = stress + ((stress/2) * 2);
   int seed = 1;
