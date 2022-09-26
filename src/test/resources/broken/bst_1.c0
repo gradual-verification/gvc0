@@ -349,12 +349,10 @@ struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
 }
 
 struct Node *tree_add(struct Node *root, int x)
-  //@ requires tree(root) && -2147483647 <= x && x <= 2147483647;
+  //@ requires ?;
   //@ ensures tree(\result);
 {
-  //@ unfold tree(root);
   struct Node *res = tree_add_helper(root, x, -2147483647, 2147483647);
-  //@ fold tree(res);
   return res;
 }
 

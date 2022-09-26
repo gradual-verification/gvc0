@@ -108,6 +108,7 @@ void appendLemmaAfterLoopBody(struct Node *a, struct Node *b, struct Node *c, in
 
 //-------------------------------------------------------------------verified code starts below
 
+// imprecise to precondition and leave the postcondition sorted
 struct Node *create_list(int val)
   //@ requires true;
   //@ ensures sorted(\result);
@@ -275,6 +276,11 @@ int main()
     l = list_insert(l, 1);
     i += 1;
   }
-  l = list_insert(NULL, 1);
+  l = list_insert(NULL, 1); // Inputs can be broken here by putting `NULL`
   return 0;
 }
+
+// 1st. break implementation
+// 2nd. modify specification so proofs are done dynamically instead of statically
+// Note: Put as much imprecision as possible but make sure you're still proving something
+// This is acyclic and sorted, it also proves memory safety
