@@ -7,7 +7,7 @@
     <workload>
         <by-program>
             <p>
-                <match>*</match>
+                <match>bst,avlja</match>
                 <stress>
                     <list>4,8,16</list>
                 </stress>
