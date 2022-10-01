@@ -13,9 +13,9 @@
                 </stress>
             </p>
             <p>
-                <match>list</match>
+                <match>*</match>
                 <stress>
-                    <list>8,16,32</list>
+                    <list>4</list>
                 </stress>
             </p>
         </by-program>
