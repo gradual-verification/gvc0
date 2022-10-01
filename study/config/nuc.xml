@@ -12,12 +12,6 @@
                     <list>4,8,16</list>
                 </stress>
             </p>
-            <p>
-                <match>*</match>
-                <stress>
-                    <list>4</list>
-                </stress>
-            </p>
         </by-program>
         <iterations>10</iterations>
     </workload>
