@@ -472,10 +472,6 @@ object BenchmarkExternalConfig {
       if (numberDefault > 1) {
         error("Multiple <by-program> entries match everything ('*').")
       }
-      if (numberDefault == 0 && stress.isEmpty) {
-        error(
-          "No default stress configuration was provided, either as top-level <stress> under <workload> or the use of a wildcard ('*') in <match> under <by-program>")
-      }
       Some(
         BenchmarkWorkload(iterQuantity,
                           staticIterQuantity,

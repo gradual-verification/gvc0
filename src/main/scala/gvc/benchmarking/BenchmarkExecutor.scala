@@ -299,12 +299,7 @@ object BenchmarkExecutor {
   class StressTable(workload: BenchmarkWorkload) {
     private val defaultStressValues = workload.stress match {
       case Some(value) => BenchmarkExternalConfig.generateStressList(value)
-      case None =>
-        workload.programCases.find(p => p.isDefault) match {
-          case Some(value) =>
-            BenchmarkExternalConfig.generateStressList(value.workload)
-          case None => error("Unable to resolve default stress configuration.")
-        }
+      case None        => List.empty[Int]
     }
     private val userConfiguredStressValues = workload.programCases
       .flatMap(c => {
