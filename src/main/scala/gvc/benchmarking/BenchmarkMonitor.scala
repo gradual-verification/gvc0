@@ -98,15 +98,17 @@ object BenchmarkMonitor {
                 .groupBy(_.measurementType)
                 .flatMap(g4 => {
                   val elem = g4._2.head
+                  val errorTotal = (elem.staticErrored + elem.dynamicErrored)
                   val completionPercentage = Math.round(
                     ((elem.completed.toDouble / elem.total) * 100) * 100) / 100
                   val errorPercentage = Math.round(
-                    ((elem.errored.toDouble / elem.total) * 100) * 100) / 100
+                    ((errorTotal.toDouble / elem.total) * 100) * 100) / 100
                   val errorColoring: String => String =
-                    if (elem.errored == 0) green else red
+                    if (errorTotal == 0) green
+                    else red
                   List(s"\t* ${g4._1}: ${green(
                     completionPercentage.toString + "%")}, (${elem.completed} total) - ${errorColoring(
-                    errorPercentage.toString + "%")}, (${elem.errored} total)")
+                    errorPercentage.toString + "%")}, (${errorTotal} total)")
                 })
           })
           .toList

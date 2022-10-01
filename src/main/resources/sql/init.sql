@@ -566,7 +566,8 @@ SELECT A.program_id,
        A.stress,
        A.measurement_type_id,
        completed,
-       IFNULL(errored, 0) AS errored,
+       IFNULL(stat_errored, 0) AS static_errored,
+       IFNULL(dyn_errored, 0)  AS dynamic_errored,
        total
 FROM (SELECT program_id,
              version_id,
@@ -584,15 +585,25 @@ FROM (SELECT program_id,
              hardware_id,
              stress,
              measurement_type_id,
-             COUNT(DISTINCT dp.permutation_id) AS errored
+             COUNT(DISTINCT dp.permutation_id) AS dyn_errored
       FROM dynamic_errors dp
                INNER JOIN permutations p2 on dp.permutation_id = p2.id
       GROUP BY program_id, version_id, hardware_id, stress, measurement_type_id) AS B
      ON A.program_id = B.program_id AND A.stress = B.stress AND A.hardware_id = B.hardware_id AND
         A.measurement_type_id = B.measurement_type_id AND
         A.version_id = B.version_id
-         INNER JOIN (SELECT program_id, COUNT(*) AS total FROM permutations GROUP BY program_id) AS C
-                    ON A.program_id = C.program_id
+         LEFT OUTER JOIN
+     (SELECT program_id,
+             version_id,
+             hardware_id,
+             COUNT(DISTINCT dp.permutation_id) AS stat_errored
+      FROM static_errors dp
+               INNER JOIN permutations p2 on dp.permutation_id = p2.id
+      GROUP BY program_id, version_id, hardware_id) AS C
+     ON A.program_id = C.program_id AND A.hardware_id = C.hardware_id AND
+        A.version_id = C.version_id
+         INNER JOIN (SELECT program_id, COUNT(*) AS total FROM permutations GROUP BY program_id) AS D
+                    ON A.program_id = D.program_id
     );
 
 DELIMITER //

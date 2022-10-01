@@ -808,13 +808,14 @@ object DAO {
                                       stress: Int,
                                       measurementType: String,
                                       completed: Int,
-                                      errored: Int,
+                                      staticErrored: Int,
+                                      dynamicErrored: Int,
                                       total: Int)
       extends IdentifiedMetadata
 
   def getCompletedProgramList(
       conn: DBConnection): List[CompletedProgramMetadata] = {
-    sql"""SELECT src_filename, version_name, hardware_name, stress, measurement_type, completed, errored, total
+    sql"""SELECT src_filename, version_name, hardware_name, stress, measurement_type, completed, static_errored, dynamic_errored, total
     FROM completed_programs
              INNER JOIN versions v ON completed_programs.version_id = v.id
              INNER JOIN hardware h ON completed_programs.hardware_id = h.id
