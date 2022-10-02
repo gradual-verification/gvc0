@@ -82,6 +82,7 @@ object BenchmarkExecutor {
     } else {
       Output.info(s"Targeting ${Output.blue("all programs")}.")
     }
+
     config.modifiers.exclusiveMode match {
       case Some(value) =>
         Output.info(s"Exclusive verification mode: ${Output.blue(value)}")
@@ -89,6 +90,8 @@ object BenchmarkExecutor {
     }
     Output.info(
       s"Timeout: ${Output.blue(config.timeoutMinutes.toString)} minutes.")
+    Output.info(
+      s"Iterations: ${Output.blue(config.workload.iterations.toString)}")
     Output.info(
       s"Nickname sensitivity: ${Output.flag(config.modifiers.nicknameSensitivity)}.")
 
@@ -267,13 +270,12 @@ object BenchmarkExecutor {
               perfOption match {
                 case Left(t) => reportError(reserved, t)
                 case Right(p) =>
-                  DAO.completeProgramMeasurement(
-                    id,
-                    reserved,
-                    w,
-                    config.workload.staticIterations,
-                    p,
-                    conn)
+                  DAO.completeProgramMeasurement(id,
+                                                 reserved,
+                                                 w,
+                                                 config.workload.iterations,
+                                                 p,
+                                                 conn)
               }
             })
         case None =>
