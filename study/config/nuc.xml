@@ -9,7 +9,7 @@
             <p>
                 <match>list</match>
                 <stress>
-                    <list>8, 16, 32</list>
+                    <list>8,16,32</list>
                 </stress>
             </p>
         </by-program>
