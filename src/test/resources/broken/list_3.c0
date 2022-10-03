@@ -7,7 +7,7 @@ struct Node {
 /*@
 predicate sortedSegHelper(struct Node *start, struct Node *end, int prev, int endVal) =
   (start == end) ?
-    ( (end == NULL) ? true : endVal >= prev )
+    ( (end == NULL) ? false : endVal >= prev )
     :
     (
       acc(start->val) && acc(start->next) &&
@@ -36,7 +36,7 @@ predicate sorted(struct Node *list) =
 // Lemma:
 void appendLemmaLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPrev, int cPrev, int bVal, int cVal)
   /*@
-    requires sortedSegHelper(a, b, aPrev, bVal) &&
+    requires ? &&
         ( (b == c) ? bVal == cVal : true ) &&
         ( (c == NULL) ?
             ( true )
@@ -67,18 +67,14 @@ void appendLemmaLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPr
 {
   if (b == c) {
   } else if (a == b) {
-    //@ unfold sortedSegHelper(a, b, aPrev, bVal);
-    //@ fold sortedSegHelper(a, c, aPrev, cVal);
   } else {
-    //@ unfold sortedSegHelper(a, b, aPrev, bVal);
     appendLemmaLoopBody(a->next, b, c, a->val, cPrev, bVal, cVal);
-    //@ fold sortedSegHelper(a, c, aPrev, cVal);
   }
 }
 
 void appendLemmaAfterLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPrev, int bVal, int cVal)
   /*@
-    requires sortedSegHelper(a, b, aPrev, bVal) &&
+    requires ? &&
         ( (b == c) ? bVal == cVal : true ) &&
         ( (c == NULL) ? true : acc(c->val) && acc(c->next) && c->val == cVal ) &&
         ( (b == c) ?
@@ -97,12 +93,8 @@ void appendLemmaAfterLoopBody(struct Node *a, struct Node *b, struct Node *c, in
 {
   if (b == c) {
   } else if (a == b) {
-    //@ unfold sortedSegHelper(a, b, aPrev, bVal);
-    //@ fold sortedSegHelper(a, c, aPrev, cVal);
   } else {
-    //@ unfold sortedSegHelper(a, b, aPrev, bVal);
     appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal);
-    //@ fold sortedSegHelper(a, c, aPrev, cVal);
   }
 }
 
@@ -115,53 +107,37 @@ struct Node *create_list(int val)
   struct Node *n = alloc(struct Node);
   n->val = val;
   n->next = NULL;
-  //@ fold sortedSegHelper(n->next, NULL, n->val, -1);
-  //@ fold sortedSeg(n, NULL, -1);
-  //@ fold sorted(n);
   return n;
 }
 
 struct Node *list_insert(struct Node *list, int val)
-  //@ requires sorted(list);
+  //@ requires ?;
   //@ ensures sorted(\result);
 {
-  //@ unfold sorted(list);
-  //@ unfold sortedSeg(list, NULL, -1);
   if (list == NULL || val <= list->val) {
 
     struct Node *n = alloc(struct Node);
     n->val = val;
     n->next = list;
-    //@ fold sortedSegHelper(n->next, NULL, n->val, -1);
-    //@ fold sortedSeg(n, NULL, -1);
-    //@ fold sorted(n);
     return n;
 
   } else {
 
     struct Node *curr = list;
-    //@ unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
 
-    //@ fold sortedSeg(list, curr, curr->val);
     while (curr->next != NULL && curr->next->val < val)
      //@ loop_invariant acc(curr->val) && acc(curr->next);
      //@ loop_invariant sortedSeg(list, curr, curr->val) && curr->val <= val;
-     //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val && sortedSegHelper(curr->next->next, NULL, curr->next->val, -1);
+     //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val;
     {
 
       struct Node *prev = curr;
       curr = prev->next;
-
-      //@ unfold sortedSeg(list, prev, prev->val);
-      //@ fold sortedSegHelper(prev->next, curr, prev->val, curr->val);
 
       if (list == prev) {
       } else {
         appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val);
       }
-
-      //@ fold sortedSeg(list, curr, curr->val);
-      //@ unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
     }
 
     struct Node *tmp = alloc(struct Node);
@@ -169,97 +145,14 @@ struct Node *list_insert(struct Node *list, int val)
     tmp->next = curr->next;
     curr->next = tmp;
 
-    //@ fold sortedSegHelper(tmp->next, NULL, tmp->val, -1);
-    //@ fold sortedSegHelper(curr->next, NULL, curr->val, -1);
-
-    //@ unfold sortedSeg(list, curr, curr->val);
     if (list == curr) {
     } else {
       appendLemmaAfterLoopBody(list->next, curr, NULL, list->val, curr->val, -1);
     }
 
-    //@ fold sortedSeg(list, NULL, -1);
-    //@ fold sorted(list);
     return list;
   }
 }
-
-//------------------------------------------------------------------------- no endval -- might be helpful for when unfolding is supported
-
-/*
-struct Node *create_list(int val)
-  //@ requires true;
-  //@ ensures sorted(\result);
-{
-  struct Node *n = alloc(struct Node);
-  n->val = val;
-  n->next = NULL;
-  //@ fold sortedSegHelper(n->next, NULL, n->val);
-  //@ fold sortedSeg(n, NULL);
-  //@ fold sorted(n);
-  return n;
-}*/
-
-/*
-struct Node *list_insert(struct Node *list, int val)
-  //@ requires sorted(list);
-  //@ ensures sorted(\result);
-{
-  //@ unfold sorted(list);
-  //@ unfold sortedSeg(list, NULL);
-  if (list == NULL || val <= list->val) {
-
-    struct Node *n = alloc(struct Node);
-    n->val = val;
-    n->next = list;
-    //@ fold sortedSegHelper(n->next, NULL, n->val);
-    //@ fold sortedSeg(n, NULL);
-    //@ fold sorted(n);
-    return n;
-
-  } else {
-
-    struct Node *curr = list;
-    //@ unfold sortedSegHelper(curr->next, NULL, curr->val);
-
-    //@ fold sortedSeg(list, curr);
-    while (curr->next != NULL && curr->next->val < val)
-     //@ loop_invariant acc(curr->val) && acc(curr->next);
-     //@ loop_invariant sortedSeg(list, curr) && curr->val <= val;
-     //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && sortedSegHelper(curr->next->next, NULL, curr->next->val);
-    {
-
-      struct Node *prev = curr;
-      curr = prev->next;
-      //@ unfold sortedSegHelper(curr->next, NULL, curr->val);
-
-      //@ fold sortedSegHelper(prev->next, curr, prev->val);
-      //@ fold sortedSeg(prev, curr);
-      appendLemma(list, prev, curr);
-    }
-
-    struct Node *tmp = alloc(struct Node);
-    tmp->val = val;
-    tmp->next = curr->next;
-    curr->next = tmp;
-
-    //@ fold sortedSegHelper(tmp->next, NULL, tmp->val);
-    //@ fold sortedSegHelper(curr->next, NULL, curr->val);
-    //@ fold sortedSeg(curr, NULL);
-
-    appendLemma(list, curr, NULL);
-
-    //@ fold sorted(list);
-    return list;
-  }
-}
-*/
-
-// insert recursive version?
-
-// remove; options - 1) dequeue/removefirst is what both VeriFast + Viper do (separate file in Verifast sort of does iterative removal), IDF doesn't have remove ; 2) removeNode - recursive ; 3) removeNode - iterative
-
-// concat?? - real version not the lemma version in Viper's list example
 
 //---------------------------------------------------------------------main below
 
@@ -277,5 +170,6 @@ int main()
     l = list_insert(l, 1);
     i += 1;
   }
+  l = list_insert(NULL, 1);
   return 0;
 }

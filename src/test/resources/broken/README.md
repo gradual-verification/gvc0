@@ -234,12 +234,15 @@ struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
 
 ---
 
-### List (breaking with `quant-study/list`?)
+### List 
 
-> **(B.3)** 
+> **(B.3)** Simple boolean logic change
 
 ```diff
-
+predicate sortedSegHelper(struct Node *start, struct Node *end, int prev, int endVal) =
+  (start == end) ?
+-    ( (end == NULL) ? true : endVal >= prev )
++    ( (end == NULL) ? false : endVal >= prev )
 ```
 
 > **(B.4)**
