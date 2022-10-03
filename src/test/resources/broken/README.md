@@ -513,7 +513,35 @@ sbt:gvc0> run "./src/test/resources/broken/list_2.c0" -x
 > 3
 
 ```
-
+sbt:gvc0> run "./src/test/resources/broken/list_3.c0" --dynamic
+[info] running (fork) gvc.Main ./src/test/resources/broken/list_3.c0 --dynamic
+[info] [*] — Mon Oct 03 12:06:24 EDT 2022
+[error] Exception in thread "main" gvc.benchmarking.Timing$CC0ExecutionException: c0rt: /home/jpvinnie/Documents/uni/CMU/src/gradual/gvc0/./src/test/resources/broken/list_3.verified.c0: 474.7-474.30: assert failed11
+[error]         at gvc.benchmarking.Timing$.execNonzero$1(Timing.scala:159)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$execTimed$1$adapted(Timing.scala:162)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3(Timing.scala:129)
+[error]         at gvc.benchmarking.Timing$.$anonfun$runTimedCommand$3$adapted(Timing.scala:121)
+[error]         at scala.collection.immutable.Range.foreach(Range.scala:158)
+[error]         at gvc.benchmarking.Timing$.runTimedCommand(Timing.scala:121)
+[error]         at gvc.benchmarking.Timing$.execTimed(Timing.scala:162)
+[error]         at gvc.Main$.$anonfun$run$1(main.scala:97)
+[error]         at gvc.benchmarking.Output$.printTiming(Output.scala:39)
+[error]         at gvc.Main$.run(main.scala:86)
+[error]         at gvc.Main$.delayedEndpoint$gvc$Main$1(main.scala:73)
+[error]         at gvc.Main$delayedInit$body.apply(main.scala:42)
+[error]         at scala.Function0.apply$mcV$sp(Function0.scala:39)
+[error]         at scala.Function0.apply$mcV$sp$(Function0.scala:39)
+[error]         at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+[error]         at scala.App.$anonfun$main$1$adapted(App.scala:80)
+[error]         at scala.collection.immutable.List.foreach(List.scala:431)
+[error]         at scala.App.main(App.scala:80)
+[error]         at scala.App.main$(App.scala:78)
+[error]         at gvc.Main$.main(main.scala:42)
+[error]         at gvc.Main.main(main.scala)
+[error] Nonzero exit code returned from runner: 1
+[error] (Compile / run) Nonzero exit code returned from runner: 1
+[error] Total time: 1 s, completed Oct 3, 2022, 12:06:25 PM
 ```
 
 > 4
