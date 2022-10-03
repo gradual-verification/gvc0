@@ -23,11 +23,14 @@ object BenchmarkExporter {
     val DynamicPerformanceCSV: String = csv("dynamic_perf")
     val StaticPerformanceCSV: String = csv("static_perf")
     val PathIndexCSV: String = csv("path_index")
+    val MeasurementIndexCSV: String = csv("measurement_type_index")
     val ProgramIndexCSV: String = csv("program_index")
     val ErrorCSVColumnNames =
       "program_id,permutation_id,error_type,occurred_during,measurement_type,error_desc,error_date"
     val DynamicPerformanceCSVColumnNames =
-      "program_id,permutation_id,measurement_type,stress,iter,ninetyFifth,fifth,median,mean,stdev,min,max"
+      "program_id,permutation_id,measurement_type_id,stress,iter,ninetyFifth,fifth,median,mean,stdev,min,max"
+    val MeasurementTypeIndexColumnNames =
+      "measurement_type_id,measurement_type"
     val StaticPerformanceCSVColumnNames =
       "permutation_id,conj_elim,conj_total"
     val PathIndexCSVColumnNames =
@@ -72,26 +75,33 @@ object BenchmarkExporter {
     val pathIDsToPull =
       DAO.Exporter.getPathIDList(id.versionID, id.hardwareID, stressTable, conn)
 
-    val grandList = (config.quantity match {
-      case Some(value) =>
-        pathIDsToPull.flatMap(p => {
-          if (p._2.length < value) {
-            DAO.resolveProgramName(p._1, conn) match {
-              case Some(name) =>
-                error(
-                  s"There were only ${p._2.size} paths of $name matching the criteria, but $value were requested.")
-              case None =>
-                error(
-                  s"There were only ${p._2.size} paths of PID=${p._1} matching the criteria, but $value were requested.")
+    val grandList = if (pathIDsToPull.isEmpty) {
+      error(s"There are no completed paths matching the requested criteria.")
+    } else {
+      (config.quantity match {
+        case Some(value) =>
+          pathIDsToPull.flatMap(p => {
+            if (p._2.length < value) {
+              DAO.resolveProgramName(p._1, conn) match {
+                case Some(name) =>
+                  error(
+                    s"There were only ${p._2.size} paths of $name matching the criteria, but $value were requested.")
+                case None =>
+                  error(
+                    s"There were only ${p._2.size} paths of PID=${p._1} matching the criteria, but $value were requested.")
+              }
+            } else {
+              p._2.slice(0, value)
             }
-          } else {
-            p._2.slice(0, value)
-          }
-        })
-      case None => pathIDsToPull.flatMap(p => p._2)
-    }).toList
+          })
+        case None => pathIDsToPull.flatMap(p => p._2)
+      }).toList
+    }
     Output.info("Generating path index...")
     val pathIndex = DAO.Exporter.generatePathIndex(grandList, conn)
+    Output.info("Generating measurement type index...")
+    val mtIndex = DAO.Exporter.generateMeasurementTypeIndex(conn)
+
     Output.info("Generating program index...")
     val programIndex =
       DAO.Exporter.generateProgramIndexFromPaths(grandList, conn)
@@ -116,6 +126,12 @@ object BenchmarkExporter {
     Files.writeString(
       pathIndexPath,
       List(Names.PathIndexCSVColumnNames, pathIndex).mkString("\n"))
+
+    val measurementIndexPath =
+      outDir.resolve(Names.MeasurementIndexCSV)
+    Files.writeString(
+      measurementIndexPath,
+      List(Names.MeasurementTypeIndexColumnNames, mtIndex).mkString("\n"))
 
     val programIndexPath = outDir.resolve(Names.ProgramIndexCSV)
     Files.writeString(

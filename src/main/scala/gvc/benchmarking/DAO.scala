@@ -881,7 +881,7 @@ object DAO {
 
     case class DynamicPerformanceEntry(programID: Long,
                                        permutationID: Long,
-                                       measurementType: String,
+                                       measurementTypeID: Long,
                                        stress: Int,
                                        iter: Int,
                                        ninetyFifth: Double,
@@ -895,7 +895,7 @@ object DAO {
         List(
           this.programID,
           this.permutationID,
-          this.measurementType,
+          this.measurementTypeID,
           this.stress,
           this.iter,
           this.ninetyFifth,
@@ -961,15 +961,28 @@ object DAO {
         _ <- Exporter.generatePathIDTemporaryTable(paths)
         _ <- Utilities.createTemporaryStressValueTable(stressTable)
         u <- sql"""
-            SELECT p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress,
-            iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum
-            FROM dynamic_performance dp
-                INNER JOIN permutations p on dp.permutation_id = p.id
-                CROSS JOIN steps on steps.permutation_id = dp.permutation_id
-                INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
-                INNER JOIN programs p2 on p.program_id = p2.id
-                INNER JOIN configured_stress_values cs ON cs.program_id = p.program_id AND dp.stress = cs.stress
-                INNER JOIN measurements m on dp.measurement_id = m.id;
+            SELECT A.program_id,
+               A.permutation_id,
+               A.measurement_type_id,
+               A.stress,
+               iter,
+               ninety_fifth,
+               fifth,
+               median,
+               mean,
+               stdev,
+               minimum,
+               maximum
+        FROM (SELECT p.program_id, dp.permutation_id, dmt.id AS measurement_type_id, cs.stress, max(dp.last_updated), ANY_VALUE(dp.measurement_id) as mid
+              FROM dynamic_performance dp
+                       INNER JOIN permutations p on dp.permutation_id = p.id
+                       CROSS JOIN steps on steps.permutation_id = dp.permutation_id
+                       INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
+                       INNER JOIN programs p2 on p.program_id = p2.id
+                       INNER JOIN configured_stress_values cs ON cs.program_id = p.program_id AND dp.stress = cs.stress
+              GROUP BY p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress) as A
+                 INNER JOIN
+             measurements ON measurements.id = A.mid;
              """.query[Exporter.DynamicPerformanceEntry].to[List]
       } yield u).transact(c.xa).attempt.unsafeRunSync() match {
         case Left(t) =>
@@ -988,7 +1001,7 @@ object DAO {
 
       (for {
         _ <- Exporter.generatePathIDTemporaryTable(paths)
-        l <- sql"""SElECT s.permutation_id, sc.conj_eliminated, sc.conj_total FROM static_conjuncts sc
+        l <- sql"""SElECT DISTINCT s.permutation_id, sc.conj_eliminated, sc.conj_total FROM static_conjuncts sc
                     INNER JOIN permutations p on sc.permutation_id = p.id
                     INNER JOIN steps s on p.id = s.permutation_id
                     WHERE s.path_id IN (SELECT path_id FROM requested_paths_ids);
@@ -1032,6 +1045,22 @@ object DAO {
           value
             .map(r =>
               List(r.programID, r.permID, r.pathID, r.levelID).mkString(","))
+            .mkString("\n")
+      }
+    }
+
+    def generateMeasurementTypeIndex(c: DBConnection): String = {
+      case class IndexRow(mtID: Long, mt: String)
+
+      (for {
+        l <- sql"""SELECT * FROM dynamic_measurement_types;"""
+          .query[IndexRow]
+          .to[List]
+      } yield l).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) => prettyPrintException("Unable to resolve path index", t)
+        case Right(value) =>
+          value
+            .map(r => List(r.mtID, r.mt).mkString(","))
             .mkString("\n")
       }
     }
