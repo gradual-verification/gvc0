@@ -893,11 +893,11 @@ object DAO {
                                        max: Long) {
       override def toString: String = {
         List(
-          this.programID,
-          this.permutationID,
-          this.measurementTypeID,
-          this.stress,
-          this.iter,
+          this.programID.toString,
+          this.permutationID.toString,
+          this.measurementTypeID.toString,
+          this.stress.toString,
+          this.iter.toString,
           this.ninetyFifth,
           this.fifth,
           this.median,
