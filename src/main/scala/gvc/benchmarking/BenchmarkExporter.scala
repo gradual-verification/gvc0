@@ -28,7 +28,7 @@ object BenchmarkExporter {
     val ErrorCSVColumnNames =
       "program_id,permutation_id,error_type,occurred_during,measurement_type,error_desc,error_date"
     val DynamicPerformanceCSVColumnNames =
-      "program_id,permutation_id,measurement_type_id,stress,iter,ninetyFifth,fifth,median,mean,stdev,min,max"
+      "program_id,permutation_id,measurement_type_id,stress,iter,median"
     val MeasurementTypeIndexColumnNames =
       "measurement_type_id,measurement_type"
     val StaticPerformanceCSVColumnNames =

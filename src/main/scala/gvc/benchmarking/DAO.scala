@@ -884,13 +884,8 @@ object DAO {
                                        measurementTypeID: Long,
                                        stress: Int,
                                        iter: Int,
-                                       ninetyFifth: Double,
-                                       fifth: Double,
                                        median: Double,
-                                       mean: Double,
-                                       stdev: Double,
-                                       min: Long,
-                                       max: Long) {
+    ) {
       override def toString: String = {
         List(
           this.programID.toString,
@@ -898,13 +893,7 @@ object DAO {
           this.measurementTypeID.toString,
           this.stress.toString,
           this.iter.toString,
-          this.ninetyFifth,
-          this.fifth,
           this.median,
-          this.mean,
-          this.stdev,
-          this.min,
-          this.max
         ).mkString(",")
       }
     }
@@ -966,13 +955,7 @@ object DAO {
                A.measurement_type_id,
                A.stress,
                iter,
-               ninety_fifth,
-               fifth,
-               median,
-               mean,
-               stdev,
-               minimum,
-               maximum
+               median
         FROM (SELECT p.program_id, dp.permutation_id, dmt.id AS measurement_type_id, cs.stress, max(dp.last_updated), ANY_VALUE(dp.measurement_id) as mid
               FROM dynamic_performance dp
                        INNER JOIN permutations p on dp.permutation_id = p.id
