@@ -482,10 +482,18 @@ DELIMITER ;
 
 CREATE VIEW path_step_index AS
 (
-SELECT p.program_id, p.id as permutation_id, paths.id as path_id, s.level_id as level_id
+SELECT p.program_id,
+       p.id       as permutation_id,
+       paths.id   as path_id,
+       s.level_id as level_id,
+       c.context_name,
+       c.spec_type,
+       c.expr_type
 FROM paths
          CROSS JOIN steps s ON paths.id = s.path_id
-         CROSS JOIN permutations p on s.permutation_id = p.id);
+         CROSS JOIN permutations p on s.permutation_id = p.id
+         INNER JOIN components c on s.component_id = c.id
+    );
 
 CREATE VIEW all_errors AS
 (

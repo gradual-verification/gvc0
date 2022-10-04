@@ -984,7 +984,8 @@ object DAO {
 
       (for {
         _ <- Exporter.generatePathIDTemporaryTable(paths)
-        l <- sql"""SElECT DISTINCT s.permutation_id, sc.conj_eliminated, sc.conj_total FROM static_conjuncts sc
+        l <- sql"""SElECT DISTINCT s.permutation_id, sc.conj_eliminated,
+                        sc.conj_total FROM static_conjuncts sc
                     INNER JOIN permutations p on sc.permutation_id = p.id
                     INNER JOIN steps s on p.id = s.permutation_id
                     WHERE s.path_id IN (SELECT path_id FROM requested_paths_ids);
@@ -1015,7 +1016,10 @@ object DAO {
       case class IndexRow(programID: Long,
                           permID: Long,
                           pathID: Long,
-                          levelID: Long)
+                          levelID: Long,
+                          contextName: String,
+                          specType: String,
+                          exprType: String)
 
       (for {
         _ <- Exporter.generatePathIDTemporaryTable(paths)
@@ -1026,8 +1030,15 @@ object DAO {
         case Left(t) => prettyPrintException("Unable to resolve path index", t)
         case Right(value) =>
           value
-            .map(r =>
-              List(r.programID, r.permID, r.pathID, r.levelID).mkString(","))
+            .map(
+              r =>
+                List(r.programID,
+                     r.permID,
+                     r.pathID,
+                     r.levelID,
+                     r.contextName,
+                     r.specType,
+                     r.exprType).mkString(","))
             .mkString("\n")
       }
     }

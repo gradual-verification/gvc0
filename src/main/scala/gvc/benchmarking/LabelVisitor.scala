@@ -56,6 +56,7 @@ class LabelVisitor extends SpecVisitor[IR.Program, LabelOutput] {
 
     val pred_bodies = labels.filter(_.specType == SpecType.Predicate)
     Output.info("Predicate bodies: " + componentTypeCounts(pred_bodies))
+
   }
 
   private def componentTypeCounts(labels: List[ASTLabel]): String = {
