@@ -1,0 +1,32 @@
+// [Fix](https://github.com/gradual-verification/silicon-gv/commit/5b51fae1a1e7b7a929f638be53e28c906a88ff22)
+
+// ERROR java.lang.RuntimeException: Match error in resolveType!
+
+struct Node {
+  int value;
+  struct Node *next;
+};
+
+typedef struct Node Node;
+
+/*@
+predicate list(struct Node *l) =
+  ? && (l != NULL ? acc(l->value) && list(l->next) : true);
+@*/
+
+void append(Node *root, int value)
+  //@requires ?;
+  //@ensures ? && list(root);
+{
+  Node *n = root;
+  while (n->next != NULL)
+    //@loop_invariant ?;
+    n = n->next;
+  n->next = alloc(Node);
+  n->next->value = value;
+}
+
+int main()
+{
+  return 0;
+}
