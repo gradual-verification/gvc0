@@ -81,7 +81,7 @@ object BaselineChecker {
               ))
 
           } else {
-            val mode = if (onlyFraming) CheckAddMode else AddMode
+            val mode = if (onlyFraming) AddMode else CheckAddMode
             method.body ++= method.postcondition.toSeq
               .flatMap(
                 checks.translate(mode,
@@ -112,9 +112,12 @@ object BaselineChecker {
                    tempPerms,
                    globalPerms,
                    onlyFraming)
-        method.precondition.toSeq.flatMap(
-          validateSpec(_, globalPerms, tempPerms, checks)
-        ) ++=: method.body
+
+        if (!onlyFraming) {
+          method.precondition.toSeq.flatMap(
+            validateSpec(_, globalPerms, tempPerms, checks)
+          ) ++=: method.body
+        }
 
         if (!onlyFraming && Collector.hasImplicitReturn(method)) {
           method.body ++= method.postcondition.toSeq.flatMap(
