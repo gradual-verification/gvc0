@@ -11,7 +11,7 @@ import java.util.Calendar
 
 object BenchmarkExporter {
 
-  private case class AssertedPartialIdentity(versionID: Long, hardwareID: Long)
+  case class AssertedPartialIdentity(versionID: Long, hardwareID: Long)
 
   private object Names {
     private val DateFormat = new SimpleDateFormat("+dd:MM:yyyy+HH:mm:ss+")
@@ -108,10 +108,13 @@ object BenchmarkExporter {
 
     Output.info("Collecting dynamic performance data...")
     val dynamicData =
-      DAO.Exporter.generateDynamicPerformanceData(stressTable, grandList, conn)
+      DAO.Exporter.generateDynamicPerformanceData(id,
+                                                  stressTable,
+                                                  grandList,
+                                                  conn)
     Output.info("Collecting static performance data...")
     val staticData =
-      DAO.Exporter.generateStaticPerformanceData(grandList, conn)
+      DAO.Exporter.generateStaticPerformanceData(id, grandList, conn)
 
     val outDir = Paths.get(
       config.outputDir.getOrElse(

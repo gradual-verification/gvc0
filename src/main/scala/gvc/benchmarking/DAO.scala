@@ -11,6 +11,7 @@ import doobie.free.connection
 import gvc.CC0Wrapper.Performance
 import gvc.Config.{error, prettyPrintException}
 import gvc.benchmarking.BenchmarkExecutor.{ReservedProgram, StressTable}
+import gvc.benchmarking.BenchmarkExporter.AssertedPartialIdentity
 import gvc.benchmarking.BenchmarkPopulator.md5sum
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
@@ -942,7 +943,8 @@ object DAO {
       }
     }
 
-    def generateDynamicPerformanceData(stressTable: StressTable,
+    def generateDynamicPerformanceData(id: AssertedPartialIdentity,
+                                       stressTable: StressTable,
                                        paths: List[Long],
                                        c: DBConnection): String = {
 
@@ -963,6 +965,8 @@ object DAO {
                        INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
                        INNER JOIN programs p2 on p.program_id = p2.id
                        INNER JOIN configured_stress_values cs ON cs.program_id = p.program_id AND dp.stress = cs.stress
+                       INNER JOIN requested_paths_ids rpi ON steps.path_id = rpi.path_id
+              WHERE dp.version_id = ${id.versionID} and dp.hardware_id= ${id.hardwareID}
               GROUP BY p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress) as A
                  INNER JOIN
              measurements ON measurements.id = A.mid;
@@ -977,7 +981,8 @@ object DAO {
       }
     }
 
-    def generateStaticPerformanceData(paths: List[Long],
+    def generateStaticPerformanceData(id: AssertedPartialIdentity,
+                                      paths: List[Long],
                                       c: DBConnection): String = {
 
       case class StaticEntry(permID: Long, elim: Long, total: Long)
@@ -988,7 +993,8 @@ object DAO {
                         sc.conj_total FROM static_conjuncts sc
                     INNER JOIN permutations p on sc.permutation_id = p.id
                     INNER JOIN steps s on p.id = s.permutation_id
-                    WHERE s.path_id IN (SELECT path_id FROM requested_paths_ids);
+                    WHERE s.path_id IN (SELECT path_id FROM requested_paths_ids) AND
+                    sc.version_id = ${id.versionID};
                """.query[StaticEntry].to[List]
       } yield l).transact(c.xa).attempt.unsafeRunSync() match {
         case Left(t) =>
