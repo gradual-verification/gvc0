@@ -1,0 +1,36 @@
+// missing input address for a memory read; manually set memory, somewhere memory gets automatically displaced, 
+// then try to search at manual memory, what will happen?
+
+// void * p = (void *)0x28ff44;
+
+// int *p=(int *)0x1234 = 10; //0x1234 is the memory address and value 10 is assigned in that address
+
+// unsigned int *ptr=(unsigned int *)0x903jf; 
+// *ptr = 20; //0x903j is memory address and value 20 is assigned
+
+#include <stdio.h>
+
+#define ptr *(uint32_t *) (0x28ff4402);
+
+void f(int ptr)
+{
+	*ptr = 20;
+	printf("The address of p inside f() is    %p\n", &ptr);
+}
+
+void g(int r)
+{
+	printf("The address of r inside g() is    %p\n", &r);
+	f(r);
+}
+
+int main()
+{
+	int a = 55;
+
+	printf("The address of a inside main() is %p\n", &a);
+	f(a);
+	g(a);
+
+	return 0;
+}

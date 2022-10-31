@@ -1,0 +1,45 @@
+// [Fix](https://github.com/gradual-verification/silicon-gv/commit/077001a0bae8cf5156480aaeface960bbf95217b)
+
+/*
+Doesn't return the shortest variable...
+
+x = a.b
+acc(x.c) NEEDS PERMS FOR x
+acc(a.b.c) NEEDS PERMS FOR a.b
+if we lose perms for a.b somewhere then this would fail
+
+We can have a runtime check for x 
+
+We don't want a concrete value like x=2 because the translator takes it as a concrete value at runtime
+
+Symbolic exec creates fresh symbolic values that we use statically but they don't correspond what it wants at runtime.
+
+void foo(int x Struc a) // layered where a.b.c
+//@ requires ?; // precondition doesn't say anything so it asks for a run-time check
+//@ ensures ?;
+{ x -> tx, a -> ta
+  
+  x = a.b; // run-time check for acc(a.b), a.b -> t
+  // also have now, x -> t, tx == t in path condition
+
+  bar(a); // Doesn't matter what bar is
+
+  assert x > 2; // run-time check for tx > 2, 
+  // reverse translater tx, looks for aliases see that tis one, so Translator return {x, a.b} 
+  // So run-time check can be 
+}
+
+void bar(Struct a)
+//@ requires acc(a.b);
+//@ ensures true;
+{
+  ...
+}
+
+int main()
+//@ requires true;
+//@ ensures true;
+{
+  ... <- does allocation of struct a and its fields and passes it to foo
+}
+*/
