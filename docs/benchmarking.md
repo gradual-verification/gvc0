@@ -128,9 +128,18 @@ benchmark all programs within the database that have yet to ran with that config
 
 Though `<nickname>` is required, it is not used to differentiate between results that are present and not present;
 e.g., if a program has already been executed by a configuration that only differs from the current configuration
-by its `<nickname>`, then the executor with the current configuration will not choose to rerun that program.
+by its nickname, then the executor with the current configuration will not choose to rerun that program. However,
+the `<nickname-sensitivity/>` singleton tag will include an executor's nickname in the completion criteria, ensuring
+a complete result set for each unique nickname at a given version and hardware configuration.
 
-Unlike all other modes, executor is designed to be safely run in parallel.
+Unlike all other modes, the executor mode is designed to be safely run in parallel.
+
+By default, the executor will benchmark programs under each of the three verification modes: gradual, dynamic,
+and framing. The `<only-gradual/>`, `<only-dynamic/>`,
+and `<only-framing/>` singleton tags can be added to the configuration to limit verification to a single mode. Only
+one of these tags can be used at a time.
+
+The timeout bound for running the entire pipeline can be specified in minutes using `<timeout>`.
 
 ### Monitor
 
@@ -155,8 +164,12 @@ The exporter mode is indicated by `--export` and requires `<workload>`, `<quanti
 database credentials in its provided configuration. It pulls all data from the database
 corresponding to that workload, hardware, and version, with an upper limit on the number of paths pulled
 given by the `<quantity>` tag. Similar to executor, `--export-benchmark` is also available, which will only
-export data corresponding to each preconfigured benchmark. Additionally, `--export-errors` will provide a CSV list
+export data corresponding to each preconfigured benchmark. Equivalently, the singleton tag `<export-only-benchmark/>`
+can
+be added to the provided configuration. Additionally, `--export-errors` will provide a CSV list
 of error information corresponding to programs that produced errors during verification, compilation, or execution.
+Equivalently,
+`<export-only-errors/>` can be added to the configuration file.
 
 Only benchmarks and paths that are fully completed can be exported from the database, where 'completed' indicates
 that no static or dynamic errors have occurred for any of the containing programs. All paths and benchmarks listed under

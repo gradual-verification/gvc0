@@ -19,6 +19,7 @@ import gvc.{Config, Main, VerificationException}
 import viper.silicon.Silicon
 
 import java.nio.file.{Files, Path}
+import java.util.Calendar
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 
@@ -77,10 +78,23 @@ object BenchmarkExecutor {
               baseConfig: Config,
               libraries: List[String]): Unit = {
     if (config.modifiers.onlyBenchmark) {
-      Output.info("Targeting only benchmarks.")
+      Output.info(s"Targeting ${Output.blue("benchmarks")}.")
     } else {
-      Output.info("Targeting all available programs.")
+      Output.info(s"Targeting ${Output.blue("all programs")}.")
     }
+
+    config.modifiers.exclusiveMode match {
+      case Some(value) =>
+        Output.info(s"Exclusive verification mode: ${Output.blue(value)}")
+      case None =>
+    }
+    Output.info(
+      s"Timeout: ${Output.blue(config.timeoutMinutes.toString)} minutes.")
+    Output.info(
+      s"Iterations: ${Output.blue(config.workload.iterations.toString)}")
+    Output.info(
+      s"Nickname sensitivity: ${Output.flag(config.modifiers.nicknameSensitivity)}.")
+
     val conn = DAO.connect(config.db)
     val id = DAO.addOrResolveIdentity(config, conn)
     val stressTable = new StressTable(config.workload)
@@ -96,15 +110,11 @@ object BenchmarkExecutor {
       Files.createTempFile("temp_src", ".c0")
 
     var reservedProgram =
-      DAO.reserveProgramForMeasurement(id,
-                                       stressTable,
-                                       config.modifiers.onlyBenchmark,
-                                       conn)
+      DAO.reserveProgramForMeasurement(id, stressTable, config, conn)
 
     def wrapTiming[T](f: => T): Either[Throwable, T] = {
       try {
-        Right(
-          Timeout.runWithTimeout(conn.gConfig.timeoutMinutes * 60 * 1000)(f))
+        Right(Timeout.runWithTimeout(config.timeoutMinutes * 60 * 1000)(f))
       } catch {
         case t: Throwable =>
           while (ongoingProcesses.nonEmpty) {
@@ -130,7 +140,31 @@ object BenchmarkExecutor {
         case _: WeaverException => ErrorType.Weaving
         case _                  => ErrorType.Unknown
       }
-      DAO.logException(id, reserved, typeToReport, t.getMessage, conn)
+      val resolved = DAO.resolveException(typeToReport, t.getMessage, conn)
+      typeToReport match {
+        case ErrorType.Verification | ErrorType.Compilation |
+            ErrorType.Weaving | ErrorType.VerificationTimeout =>
+          DAO.logStaticException(id, reserved, resolved, conn)
+        case ErrorType.ExecutionTimeout =>
+          DAO.logDynamicException(id,
+                                  reserved,
+                                  resolved,
+                                  reserved.workloads,
+                                  conn)
+        case ErrorType.Unknown =>
+          DAO.logStaticException(id, reserved, resolved, conn)
+          DAO.logDynamicException(id,
+                                  reserved,
+                                  resolved,
+                                  reserved.workloads,
+                                  conn)
+        case ErrorType.Execution =>
+          val stress = t match {
+            case c: CC0ExecutionException => List(c.getStress)
+            case _                        => reserved.workloads
+          }
+          DAO.logDynamicException(id, reserved, resolved, stress, conn)
+      }
     }
 
     def benchmarkGradual(ir: IR.Program,
@@ -188,10 +222,15 @@ object BenchmarkExecutor {
 
     while (reservedProgram.nonEmpty) {
       val reserved = reservedProgram.get
+
+      val cal = Calendar.getInstance()
+      val currentTime =
+        s"${cal.get(Calendar.HOUR_OF_DAY)}:${cal.get(Calendar.MINUTE)}:${cal.get(Calendar.SECOND)}"
+
       Output.info(
         s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${conn
           .dynamicModes(reserved.measurementMode)} | w=[${reserved.workloads
-          .mkString(",")}] | id=${reserved.perm.id}")
+          .mkString(",")}] | id=${reserved.perm.id} | $currentTime")
 
       val correspondingProgramLabels =
         syncedPrograms(reserved.perm.programID).labels
@@ -224,28 +263,25 @@ object BenchmarkExecutor {
             .foreach(w => {
               val perfOption = wrapTiming(
                 Timing.execTimed(value,
-                                 List(s"--stress $w"),
+                                 List(),
                                  config.workload.iterations,
+                                 w,
                                  ongoingProcesses))
               perfOption match {
                 case Left(t) => reportError(reserved, t)
                 case Right(p) =>
-                  DAO.completeProgramMeasurement(
-                    id,
-                    reserved,
-                    w,
-                    config.workload.staticIterations,
-                    p,
-                    conn)
+                  DAO.completeProgramMeasurement(id,
+                                                 reserved,
+                                                 w,
+                                                 config.workload.iterations,
+                                                 p,
+                                                 conn)
               }
             })
         case None =>
       }
-      reservedProgram = DAO.reserveProgramForMeasurement(
-        id,
-        stressTable,
-        config.modifiers.onlyBenchmark,
-        conn)
+      reservedProgram =
+        DAO.reserveProgramForMeasurement(id, stressTable, config, conn)
     }
   }
 
@@ -265,12 +301,7 @@ object BenchmarkExecutor {
   class StressTable(workload: BenchmarkWorkload) {
     private val defaultStressValues = workload.stress match {
       case Some(value) => BenchmarkExternalConfig.generateStressList(value)
-      case None =>
-        workload.programCases.find(p => p.isDefault) match {
-          case Some(value) =>
-            BenchmarkExternalConfig.generateStressList(value.workload)
-          case None => error("Unable to resolve default stress configuration.")
-        }
+      case None        => List.empty[Int]
     }
     private val userConfiguredStressValues = workload.programCases
       .flatMap(c => {

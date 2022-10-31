@@ -9,6 +9,14 @@ object Output {
 
   def success(input: String): Unit = println(formatSuccess(input))
 
+  def flag(f: Boolean): String = {
+    if (f) {
+      this.green("enabled")
+    } else {
+      this.red("disabled")
+    }
+  }
+
   def title(input: String): Unit =
     println(s"-------<[ ${purple(input)} ]>-------")
 

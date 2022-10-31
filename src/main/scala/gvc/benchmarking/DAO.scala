@@ -5,14 +5,13 @@ import doobie.implicits._
 import cats.effect.IO
 import doobie._
 import doobie.implicits._
-import gvc.benchmarking.ExprType.ExprType
-import gvc.benchmarking.SpecType.SpecType
 import cats.effect.unsafe.implicits.global
 import cats.free.Free
 import doobie.free.connection
 import gvc.CC0Wrapper.Performance
 import gvc.Config.{error, prettyPrintException}
 import gvc.benchmarking.BenchmarkExecutor.{ReservedProgram, StressTable}
+import gvc.benchmarking.BenchmarkExporter.AssertedPartialIdentity
 import gvc.benchmarking.BenchmarkPopulator.md5sum
 import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.ErrorType.ErrorType
@@ -30,7 +29,6 @@ object DAO {
                           dynamicModes: Map[Long, DynamicMeasurementMode],
                           staticModes: Map[StaticMeasurementMode, Long],
                           xa: Transactor.Aux[IO, Unit],
-                          locking: Boolean,
                           retries: Int)
 
   object DynamicMeasurementMode {
@@ -61,47 +59,19 @@ object DAO {
 
   object Defaults {
     val DefaultBenchmarkName = "default"
-    val DefaultBenchmarkIncrements = List(20, 40, 60, 80)
+    val DefaultBenchmarkIncrements: List[Int] = List(20, 40, 60, 80)
+    val retries = 5
   }
 
-  case class GlobalConfiguration(timeoutMinutes: Long, maxPaths: Long)
+  case class GlobalConfiguration(maxPaths: Long)
 
   case class Identity(vid: Long, hwid: Long, nid: Long)
-
-  case class Version(id: Long, versionName: String, dateAdded: String)
 
   case class Permutation(id: Long,
                          programID: Long,
                          permutationHash: String,
                          permutationContents: Array[Byte],
                          dateAdded: String)
-
-  case class Step(pathID: Long, permutationID: Long, levelID: Long)
-
-  case class Conjuncts(id: Long,
-                       permutationID: Long,
-                       versionID: Long,
-                       total: Long,
-                       eliminated: Long,
-                       date: String)
-
-  case class ProgramPath(id: Long, hash: String, programID: Long)
-
-  case class StoredPerformance(id: Long,
-                               programID: Long,
-                               versionID: Long,
-                               hardwareID: Long,
-                               performanceDate: String,
-                               modeMeasured: String,
-                               stress: Int,
-                               iter: Int,
-                               ninetyFifth: BigDecimal,
-                               fifth: BigDecimal,
-                               median: BigDecimal,
-                               mean: BigDecimal,
-                               stdev: BigDecimal,
-                               minimum: BigDecimal,
-                               maximum: BigDecimal)
 
   private val DB_DRIVER = "com.mysql.cj.jdbc.Driver"
 
@@ -122,13 +92,12 @@ object DAO {
                  dynamicModes,
                  staticModes,
                  connection,
-                 locking = false,
-                 retries = 5)
+                 retries = Defaults.retries)
   }
 
   private def resolveGlobalConfiguration(
       conn: Transactor.Aux[IO, Unit]): GlobalConfiguration = {
-    sql"SELECT timeout_minutes, max_paths FROM global_configuration LIMIT 1"
+    sql"SELECT max_paths FROM global_configuration LIMIT 1"
       .query[GlobalConfiguration]
       .unique
       .transact(conn)
@@ -224,6 +193,20 @@ object DAO {
     }
   }
 
+  case class IdentifiedProgram(filename: String, srcHash: String)
+
+  def resolveProgram(id: Long, c: DBConnection): Option[IdentifiedProgram] = {
+    sql"SELECT src_filename, src_hash FROM programs WHERE id = $id;"
+      .query[Option[IdentifiedProgram]]
+      .unique
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(_)      => None
+      case Right(value) => value
+    }
+  }
+
   def resolveProgram(hash: String,
                      numLabels: Long,
                      c: DBConnection): Option[Long] = {
@@ -259,7 +242,7 @@ object DAO {
     val extensionRemoved = basenameWithExtension.substring(
       0,
       basenameWithExtension.lastIndexOf(".c0"))
-    sql"CALL sp_gr_Program(${extensionRemoved}, $hash, $numLabels);"
+    sql"CALL sp_gr_Program($extensionRemoved, $hash, $numLabels);"
       .query[Long]
       .unique
       .transact(c.xa)
@@ -270,15 +253,6 @@ object DAO {
       case Right(value) => value
     }
   }
-
-  case class StoredComponent(id: Long,
-                             programID: Long,
-                             contextName: String,
-                             specType: SpecType,
-                             specIndex: Long,
-                             exprType: ExprType,
-                             exprIndex: Long,
-                             dateAdded: String)
 
   def resolveComponent(programID: Long,
                        astLabel: ASTLabel,
@@ -425,7 +399,7 @@ object DAO {
 
   def reserveProgramForMeasurement(id: Identity,
                                    table: StressTable,
-                                   onlyBenchmark: Boolean,
+                                   ec: ExecutorConfig,
                                    c: DBConnection): Option[ReservedProgram] = {
     var result: Option[ReservedProgram] = None
     var maxRetries = c.retries
@@ -433,7 +407,15 @@ object DAO {
       maxRetries -= 1
       (for {
         _ <- Utilities.createTemporaryStressValueTable(table)
-        sp <- sql"CALL sp_ReservePermutation(${id.vid}, ${id.hwid}, ${id.nid}, $onlyBenchmark, ${c.locking});"
+        sp <- sql"""CALL sp_ReservePermutation(
+                    ${id.vid},
+                    ${id.hwid},
+                    ${id.nid},
+                    ${ec.modifiers.exclusiveMode},
+                    ${ec.timeoutMinutes},
+                    ${ec.modifiers.onlyBenchmark},
+                    ${ec.modifiers.nicknameSensitivity}
+            );"""
           .query[ReservedProgramEntry]
           .to[List]
       } yield sp)
@@ -549,15 +531,13 @@ object DAO {
     }
   }
 
-  private def logStaticException(id: Identity,
-                                 reserved: ReservedProgram,
-                                 eid: Long,
-                                 conn: DBConnection): Unit = {
-    sql"""UPDATE static_performance SET error_id = $eid
-                          WHERE hardware_id = ${id.hwid}
-                            AND version_id = ${id.vid}
-                            AND nickname_id = ${id.nid}
-                            AND permutation_id = ${reserved.perm.id}""".update.run
+  def logStaticException(id: Identity,
+                         reserved: ReservedProgram,
+                         eid: Long,
+                         conn: DBConnection): Unit = {
+
+    sql"""INSERT INTO static_errors (error_id, permutation_id, version_id, hardware_id, nickname_id)
+            VALUES ($eid, ${reserved.perm.id}, ${id.vid}, ${id.hwid}, ${id.nid});""".update.run
       .transact(conn.xa)
       .attempt
       .unsafeRunSync() match {
@@ -569,18 +549,15 @@ object DAO {
     }
   }
 
-  private def logDynamicException(id: Identity,
-                                  reserved: ReservedProgram,
-                                  eid: Long,
-                                  conn: DBConnection): Unit = {
+  def logDynamicException(id: Identity,
+                          reserved: ReservedProgram,
+                          eid: Long,
+                          stress: List[Int],
+                          conn: DBConnection,
+  ): Unit = {
     reserved.workloads.foreach(w => {
-      sql"""UPDATE dynamic_performance SET error_id = $eid
-           WHERE permutation_id = ${reserved.perm.id}
-             AND measurement_type_id = ${reserved.measurementMode}
-             AND stress = $w
-             AND version_id = ${id.vid}
-             AND hardware_id = ${id.hwid}
-             AND nickname_id = ${id.nid};""".update.run
+      sql"""INSERT INTO dynamic_errors (error_id, permutation_id, version_id, hardware_id, nickname_id, stress, measurement_type_id)
+      VALUES ($eid, ${reserved.perm.id}, ${id.vid}, ${id.hwid}, ${id.nid}, $w, ${reserved.measurementMode});""".update.run
         .transact(conn.xa)
         .attempt
         .unsafeRunSync() match {
@@ -593,13 +570,11 @@ object DAO {
     })
   }
 
-  def logException(id: Identity,
-                   reserved: ReservedProgram,
-                   mode: ErrorType,
-                   errText: String,
-                   conn: DBConnection): Unit = {
+  def resolveException(mode: ErrorType,
+                       errText: String,
+                       conn: DBConnection): Long = {
     val errorHash = md5sum(errText)
-    val eid = sql"CALL sp_gr_Error($errorHash, $errText, $mode);"
+    sql"CALL sp_gr_Error($errorHash, $errText, $mode);"
       .query[Long]
       .unique
       .transact(conn.xa)
@@ -610,77 +585,6 @@ object DAO {
           s"Unable to resolve error ID for exception '$errText'",
           t)
       case Right(value) => value
-    }
-    mode match {
-      case ErrorType.Weaving | ErrorType.Compilation | ErrorType.Verification |
-          ErrorType.VerificationTimeout =>
-        logStaticException(id, reserved, eid, conn)
-      case ErrorType.Unknown =>
-        logStaticException(id, reserved, eid, conn)
-        logDynamicException(id, reserved, eid, conn)
-      case ErrorType.ExecutionTimeout | ErrorType.Execution =>
-        logDynamicException(id, reserved, eid, conn)
-    }
-  }
-
-  case class CompletionMetadata(versionName: String,
-                                hardwareName: String,
-                                percentCompleted: Double,
-                                errorMapping: Map[String, Int])
-
-  def getIncompleteMetadata(c: DBConnection): List[CompletionMetadata] = {
-    case class VersionHardwareCombinations(versionName: String,
-                                           versionID: Int,
-                                           hardwareName: String,
-                                           hardwareID: Int)
-    case class ProgramErrorCount(srcFilename: String, errorCount: Int)
-
-    sql"""SELECT DISTINCT version_name, version_id, hardware_name, hardware_id
-                FROM dynamic_performance
-                    INNER JOIN hardware h on dynamic_performance.hardware_id = h.id
-                    INNER JOIN versions v on dynamic_performance.version_id = v.id"""
-      .query[VersionHardwareCombinations]
-      .to[List]
-      .transact(c.xa)
-      .attempt
-      .unsafeRunSync() match {
-      case Left(t) =>
-        prettyPrintException("Unable to acquire list of hardware and versions.",
-                             t)
-      case Right(value) =>
-        value.map(v => {
-          val completion =
-            sql"CALL sp_GetCompletionPercentage(${v.versionID}, ${v.hardwareID});"
-              .query[Double]
-              .unique
-              .transact(c.xa)
-              .attempt
-              .unsafeRunSync() match {
-              case Left(t) =>
-                prettyPrintException(
-                  s"Unable to acquire completion percentage for VID=${v.versionID}, HWID=${v.hardwareID}.",
-                  t)
-              case Right(value) => value
-            }
-          val programErrorCounts =
-            sql"CALL sp_GetProgramErrorCounts(${v.versionID}, ${v.hardwareID});"
-              .query[ProgramErrorCount]
-              .to[List]
-              .transact(c.xa)
-              .attempt
-              .unsafeRunSync() match {
-              case Left(t) =>
-                prettyPrintException(
-                  s"Unable to acquire error countsVID=${v.versionID}, HWID=${v.hardwareID}.",
-                  t)
-              case Right(ecs) =>
-                ecs.map(cs => cs.srcFilename -> cs.errorCount).toMap
-            }
-          CompletionMetadata(v.versionName,
-                             v.hardwareName,
-                             completion,
-                             programErrorCounts)
-        })
     }
   }
 
@@ -841,10 +745,11 @@ object DAO {
 
   case class CompletedPathMetadata(version: String,
                                    hardware: String,
-                                   src_filename: String,
+                                   program: String,
                                    workload: Int,
                                    measurementMode: String,
                                    num_paths: Int)
+      extends IdentifiedMetadata
 
   def getCompletedPathList(conn: DBConnection): List[CompletedPathMetadata] = {
     sql"""SELECT version_name, hardware_name, src_filename, stress, measurement_type, COUNT(DISTINCT completed_paths.path_id)
@@ -866,20 +771,56 @@ object DAO {
     }
   }
 
-  case class CompletedProgramMetadata(versionName: String,
-                                      hwName: String,
+  case class StaticTimingMetadata(program: String,
+                                  version: String,
+                                  hardware: String,
+                                  max: Int,
+                                  mean: Double)
+      extends IdentifiedMetadata
+
+  sealed trait IdentifiedMetadata {
+    def program: String
+
+    def version: String
+
+    def hardware: String
+  }
+
+  def getStaticTiming(conn: DBConnection): List[StaticTimingMetadata] = {
+    sql"""SELECT src_filename, version_name, hardware_name, max, mean
+    FROM static_verification_times
+             INNER JOIN versions v ON static_verification_times.version_id = v.id
+             INNER JOIN hardware h ON static_verification_times.hardware_id = h.id
+        INNER JOIN programs p on static_verification_times.program_id = p.id;"""
+      .query[StaticTimingMetadata]
+      .to[List]
+      .transact(conn.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException("Unable to get list of completed programs", t)
+      case Right(value) => value
+    }
+  }
+
+  case class CompletedProgramMetadata(program: String,
+                                      version: String,
+                                      hardware: String,
                                       stress: Int,
                                       measurementType: String,
                                       completed: Int,
-                                      errored: Int,
+                                      staticErrored: Int,
+                                      dynamicErrored: Int,
                                       total: Int)
+      extends IdentifiedMetadata
 
   def getCompletedProgramList(
       conn: DBConnection): List[CompletedProgramMetadata] = {
-    sql"""SELECT version_name, hardware_name, stress, measurement_type, completed, errored, total
+    sql"""SELECT src_filename, version_name, hardware_name, stress, measurement_type, completed, static_errored, dynamic_errored, total
     FROM completed_programs
              INNER JOIN versions v ON completed_programs.version_id = v.id
              INNER JOIN hardware h ON completed_programs.hardware_id = h.id
+             INNER JOIN programs p on completed_programs.program_id = p.id
     INNER JOIN dynamic_measurement_types dmt on completed_programs.measurement_type_id = dmt.id"""
       .query[CompletedProgramMetadata]
       .to[List]
@@ -931,7 +872,6 @@ object DAO {
       case Left(t) =>
         prettyPrintException("Unable to get list of program metadata", t)
       case Right(value) => value
-
     }
   }
 
@@ -942,30 +882,19 @@ object DAO {
 
     case class DynamicPerformanceEntry(programID: Long,
                                        permutationID: Long,
-                                       measurementType: String,
+                                       measurementTypeID: Long,
                                        stress: Int,
                                        iter: Int,
-                                       ninetyFifth: Double,
-                                       fifth: Double,
                                        median: Double,
-                                       mean: Double,
-                                       stdev: Double,
-                                       min: Long,
-                                       max: Long) {
+    ) {
       override def toString: String = {
         List(
-          this.programID,
-          this.permutationID,
-          this.measurementType,
-          this.stress,
-          this.iter,
-          this.ninetyFifth,
-          this.fifth,
+          this.programID.toString,
+          this.permutationID.toString,
+          this.measurementTypeID.toString,
+          this.stress.toString,
+          this.iter.toString,
           this.median,
-          this.mean,
-          this.stdev,
-          this.min,
-          this.max
         ).mkString(",")
       }
     }
@@ -1014,7 +943,8 @@ object DAO {
       }
     }
 
-    def generateDynamicPerformanceData(stressTable: StressTable,
+    def generateDynamicPerformanceData(id: AssertedPartialIdentity,
+                                       stressTable: StressTable,
                                        paths: List[Long],
                                        c: DBConnection): String = {
 
@@ -1022,15 +952,24 @@ object DAO {
         _ <- Exporter.generatePathIDTemporaryTable(paths)
         _ <- Utilities.createTemporaryStressValueTable(stressTable)
         u <- sql"""
-            SELECT p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress,
-            iter, ninety_fifth, fifth, median, mean, stdev, minimum, maximum
-            FROM dynamic_performance dp
-                INNER JOIN permutations p on dp.permutation_id = p.id
-                CROSS JOIN steps on steps.permutation_id = dp.permutation_id
-                INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
-                INNER JOIN programs p2 on p.program_id = p2.id
-                INNER JOIN configured_stress_values cs ON cs.program_id = p.program_id AND dp.stress = cs.stress
-                INNER JOIN measurements m on dp.measurement_id = m.id;
+            SELECT A.program_id,
+               A.permutation_id,
+               A.measurement_type_id,
+               A.stress,
+               iter,
+               median
+        FROM (SELECT p.program_id, dp.permutation_id, dmt.id AS measurement_type_id, cs.stress, max(dp.last_updated), ANY_VALUE(dp.measurement_id) as mid
+              FROM dynamic_performance dp
+                       INNER JOIN permutations p on dp.permutation_id = p.id
+                       CROSS JOIN steps on steps.permutation_id = dp.permutation_id
+                       INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
+                       INNER JOIN programs p2 on p.program_id = p2.id
+                       INNER JOIN configured_stress_values cs ON cs.program_id = p.program_id AND dp.stress = cs.stress
+                       INNER JOIN requested_paths_ids rpi ON steps.path_id = rpi.path_id
+              WHERE dp.version_id = ${id.versionID} and dp.hardware_id= ${id.hardwareID}
+              GROUP BY p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress) as A
+                 INNER JOIN
+             measurements ON measurements.id = A.mid;
              """.query[Exporter.DynamicPerformanceEntry].to[List]
       } yield u).transact(c.xa).attempt.unsafeRunSync() match {
         case Left(t) =>
@@ -1042,17 +981,20 @@ object DAO {
       }
     }
 
-    def generateStaticPerformanceData(paths: List[Long],
+    def generateStaticPerformanceData(id: AssertedPartialIdentity,
+                                      paths: List[Long],
                                       c: DBConnection): String = {
 
       case class StaticEntry(permID: Long, elim: Long, total: Long)
 
       (for {
         _ <- Exporter.generatePathIDTemporaryTable(paths)
-        l <- sql"""SElECT s.permutation_id, sc.conj_eliminated, sc.conj_total FROM static_conjuncts sc
+        l <- sql"""SElECT DISTINCT s.permutation_id, sc.conj_eliminated,
+                        sc.conj_total FROM static_conjuncts sc
                     INNER JOIN permutations p on sc.permutation_id = p.id
                     INNER JOIN steps s on p.id = s.permutation_id
-                    WHERE s.path_id IN (SELECT path_id FROM requested_paths_ids);
+                    WHERE s.path_id IN (SELECT path_id FROM requested_paths_ids) AND
+                    sc.version_id = ${id.versionID};
                """.query[StaticEntry].to[List]
       } yield l).transact(c.xa).attempt.unsafeRunSync() match {
         case Left(t) =>
@@ -1080,7 +1022,10 @@ object DAO {
       case class IndexRow(programID: Long,
                           permID: Long,
                           pathID: Long,
-                          levelID: Long)
+                          levelID: Long,
+                          contextName: String,
+                          specType: String,
+                          exprType: String)
 
       (for {
         _ <- Exporter.generatePathIDTemporaryTable(paths)
@@ -1091,8 +1036,31 @@ object DAO {
         case Left(t) => prettyPrintException("Unable to resolve path index", t)
         case Right(value) =>
           value
-            .map(r =>
-              List(r.programID, r.permID, r.pathID, r.levelID).mkString(","))
+            .map(
+              r =>
+                List(r.programID,
+                     r.permID,
+                     r.pathID,
+                     r.levelID,
+                     r.contextName,
+                     r.specType,
+                     r.exprType).mkString(","))
+            .mkString("\n")
+      }
+    }
+
+    def generateMeasurementTypeIndex(c: DBConnection): String = {
+      case class IndexRow(mtID: Long, mt: String)
+
+      (for {
+        l <- sql"""SELECT * FROM dynamic_measurement_types;"""
+          .query[IndexRow]
+          .to[List]
+      } yield l).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) => prettyPrintException("Unable to resolve path index", t)
+        case Right(value) =>
+          value
+            .map(r => List(r.mtID, r.mt).mkString(","))
             .mkString("\n")
       }
     }

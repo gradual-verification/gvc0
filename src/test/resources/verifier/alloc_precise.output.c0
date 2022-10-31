@@ -47,6 +47,8 @@ void test(struct A* x, struct A* y, struct OwnedFields* _ownedFields)
   assert(!(y == NULL));
   addAccEnsureSeparate(_tempFields, x != NULL ? x->_id : -1, 0, 2, "Overlapping field permissions for struct A.value");
   addAccEnsureSeparate(_tempFields, y != NULL ? y->_id : -1, 0, 2, "Overlapping field permissions for struct A.value");
+  loseAcc(_ownedFields, x->_id, 0);
+  loseAcc(_ownedFields, y->_id, 0);
   test2(x, y, _ownedFields->instanceCounter);
 }
 

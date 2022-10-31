@@ -1,6 +1,12 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.DAO.DBConnection
+import gvc.benchmarking.DAO.{
+  CompletedPathMetadata,
+  CompletedProgramMetadata,
+  DBConnection,
+  IdentifiedMetadata,
+  StaticTimingMetadata
+}
 import gvc.benchmarking.Output.{green, red}
 
 object BenchmarkMonitor {
@@ -46,53 +52,75 @@ object BenchmarkMonitor {
     Output.title("Completed Benchmarks")
     printCompletedBenchmarks(conn)
 
+    Output.title("Static Timing")
+    printStaticTiming(conn)
+
+  }
+
+  private def printStaticTiming(connection: DAO.DBConnection): Unit = {
+    val timing = DAO.getStaticTiming(connection)
+    printIdentifiable[StaticTimingMetadata](timing, ids => {
+      List(
+        s"* max: ${ids.head.max} min, mean: ${Math.floor(ids.head.mean * 10) / 10} min")
+    })
+  }
+
+  private def printCompletedPaths(connection: DAO.DBConnection): Unit = {
+    val completed = DAO.getCompletedPathList(connection)
+    printIdentifiable[CompletedPathMetadata](
+      completed,
+      ids => {
+        ids
+          .groupBy(_.workload)
+          .flatMap(g4 => {
+            List(s"* w = ${g4._1}") ++
+              g4._2
+                .groupBy(_.measurementMode)
+                .map(g5 => {
+                  s"\t* ${g5._1}: ${g5._2.head.num_paths}"
+                })
+          })
+          .toList
+      }
+    )
   }
 
   private def printCompletedPrograms(conn: DBConnection): Unit = {
     val completed = DAO.getCompletedProgramList(conn)
-    if (completed.nonEmpty) {
-      completed
-        .groupBy(_.versionName)
-        .foreach(g1 => {
-          println(s"* V: ${g1._1}")
-          g1._2
-            .groupBy(_.hwName)
-            .foreach(g2 => {
-              println(s"\t* HW: ${g2._1}")
-              g2._2
-                .groupBy(_.stress)
-                .foreach(g3 => {
-                  println(s"\t\t* w = ${g3._1}")
-                  g3._2
-                    .groupBy(_.measurementType)
-                    .foreach(g4 => {
-                      val elem = g4._2.head
-                      val completionPercentage = Math.round(
-                        ((elem.completed.toDouble / elem.total) * 100) * 100) / 100
-                      val errorPercentage = Math.round(
-                        ((elem.errored.toDouble / elem.total) * 100) * 100) / 100
-                      val errorColoring: String => String =
-                        if (elem.errored == 0) green else red
-                      println(s"\t\t\t* ${g4._1}: ${
-                        green(
-                          completionPercentage.toString + "%")
-                      }, (${elem.completed} total) - ${
-                        errorColoring(
-                          errorPercentage.toString + "%")
-                      }, (${elem.errored} total)")
-                    })
+    printIdentifiable[CompletedProgramMetadata](
+      completed,
+      ids => {
+        ids
+          .groupBy(_.stress)
+          .flatMap(g3 => {
+            List(s"* w = ${g3._1}") ++
+              g3._2
+                .groupBy(_.measurementType)
+                .flatMap(g4 => {
+                  val elem = g4._2.head
+                  val errorTotal = (elem.staticErrored + elem.dynamicErrored)
+                  val completionPercentage = Math.round(
+                    ((elem.completed.toDouble / elem.total) * 100) * 100) / 100
+                  val errorPercentage = Math.round(
+                    ((errorTotal.toDouble / elem.total) * 100) * 100) / 100
+                  val errorColoring: String => String =
+                    if (errorTotal == 0) green
+                    else red
+                  List(s"\t* ${g4._1}: ${green(
+                    completionPercentage.toString + "%")}, (${elem.completed} total) - ${errorColoring(
+                    errorPercentage.toString + "%")}, (${errorTotal} total)")
                 })
-            })
-        })
-    } else {
-      println("N/A\n")
-    }
+          })
+          .toList
+      }
+    )
   }
 
-  private def printCompletedPaths(conn: DBConnection): Unit = {
-    val completed = DAO.getCompletedPathList(conn)
-    if (completed.nonEmpty) {
-      completed
+  def printIdentifiable[I <: IdentifiedMetadata](
+      ids: List[I],
+      handler: List[I] => List[String]): Unit = {
+    if (ids.nonEmpty) {
+      ids
         .groupBy(_.version)
         .foreach(g1 => {
           println(s"* V: ${g1._1}")
@@ -101,20 +129,11 @@ object BenchmarkMonitor {
             .foreach(g2 => {
               println(s"\t* HW: ${g2._1}")
               g2._2
-                .groupBy(_.src_filename)
+                .groupBy(_.program)
                 .foreach(g3 => {
                   println(s"\t\t* Program: ${g3._1}")
-                  g3._2
-                    .groupBy(_.workload)
-                    .foreach(g4 => {
-                      println(s"\t\t\t* w = ${g4._1}")
-                      g4._2
-                        .groupBy(_.measurementMode)
-                        .foreach(g5 => {
-                          println(
-                            s"\t\t\t\t* ${g5._1}: ${g5._2.head.num_paths}")
-                        })
-                    })
+                  val contents = handler(g3._2)
+                  println("\t\t\t" + contents.mkString("\n\t\t\t"))
                 })
             })
         })

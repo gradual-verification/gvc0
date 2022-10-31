@@ -7,18 +7,14 @@
     <workload>
         <by-program>
             <p>
-                <match>list</match>
+                <match>*</match>
                 <stress>
-                    <list>8,16,32</list>
-                </stress>
-            </p>
-                        <p>
-                <match>avlja,bst,composite</match>
-                <stress>
-                    <list>4,8,16</list>
+                    <singular>0</singular>
                 </stress>
             </p>
         </by-program>
-        <iterations>10</iterations>
+        <iterations>1</iterations>
     </workload>
+    <only-gradual/>
+    <timeout>15</timeout>
 </benchmark>

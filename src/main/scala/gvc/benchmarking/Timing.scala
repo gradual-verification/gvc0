@@ -29,12 +29,13 @@ object Timing {
                      binary: Path,
                      config: Config,
                      args: List[String],
+                     stress: Int,
                      iterations: Int,
                      ongoingProcesses: mutable.ListBuffer[Process])
     : (Performance, Performance) = {
     val compilationPerf =
       compileTimed(input, binary, config, iterations, ongoingProcesses)
-    val execPerf = execTimed(binary, args, iterations, ongoingProcesses)
+    val execPerf = execTimed(binary, args, iterations, stress, ongoingProcesses)
     (compilationPerf, execPerf)
   }
 
@@ -151,12 +152,14 @@ object Timing {
       binary: Path,
       args: List[String],
       iterations: Int = 1,
+      stress: Int = 0,
       ongoingProcesses: mutable.ListBuffer[Process] = mutable.ListBuffer(),
   ): Performance = {
-    val command = (List(binary.toAbsolutePath.toString) ++ args).mkString(" ")
+    val command = (List(binary.toAbsolutePath.toString) ++ args)
+      .mkString(" ") + s" --stress $stress"
 
     def execNonzero(output: CommandOutput): Unit = {
-      throw new CC0ExecutionException(output)
+      throw new CC0ExecutionException(output, stress)
     }
 
     runTimedCommand(iterations, command, execNonzero, ongoingProcesses)
@@ -211,8 +214,10 @@ object Timing {
   class CC0CompilationException(output: CommandOutput)
       extends CapturedOutputException(output)
 
-  class CC0ExecutionException(output: CommandOutput)
-      extends CapturedOutputException(output)
+  class CC0ExecutionException(output: CommandOutput, stress: Int)
+      extends CapturedOutputException(output) {
+    def getStress: Int = stress
+  }
 }
 
 object Timeout {

@@ -2,8 +2,6 @@
 
 ![Build](https://github.com/gradual-verification/gvc0/actions/workflows/build.yml/badge.svg)
 
-TODO: Get a better name
-
 ## Setup
 
 Clone the gradual verification forks of [Silver](https://github.com/gradual-verification/silver-gv)

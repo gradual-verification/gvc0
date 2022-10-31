@@ -1,12 +1,20 @@
+use gvc0;
 DROP VIEW IF EXISTS path_step_index;
 DROP VIEW IF EXISTS all_errors;
 DROP VIEW IF EXISTS completed_benchmarks;
 DROP VIEW IF EXISTS completed_paths;
 DROP VIEW IF EXISTS completed_programs;
+DROP VIEW IF EXISTS static_verification_times;
+
 DROP TABLE IF EXISTS global_configuration;
+
 DROP TABLE IF EXISTS static_performance;
+DROP TABLE IF EXISTS static_errors;
 DROP TABLE IF EXISTS static_conjuncts;
+
 DROP TABLE IF EXISTS dynamic_performance;
+DROP TABLE IF EXISTS dynamic_errors;
+
 DROP TABLE IF EXISTS measurements;
 DROP TABLE IF EXISTS static_measurement_types;
 DROP TABLE IF EXISTS dynamic_measurement_types;
@@ -41,7 +49,7 @@ DROP PROCEDURE IF EXISTS sp_ResetBenchmark;
 
 DROP TABLE IF EXISTS reserved_jobs;
 
-DROP EVENT IF EXISTS delete_reserved_permutations;
+DROP EVENT IF EXISTS delete_failed_runs;
 
 CREATE TABLE IF NOT EXISTS global_configuration
 (
@@ -281,13 +289,24 @@ CREATE TABLE IF NOT EXISTS static_performance
     nickname_id                BIGINT UNSIGNED        NOT NULL,
     measurement_id             BIGINT UNSIGNED UNIQUE NOT NULL,
     static_measurement_type_id BIGINT UNSIGNED        NOT NULL,
-    error_id                   BIGINT UNSIGNED DEFAULT NULL,
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
+    FOREIGN KEY (version_id) REFERENCES versions (id),
+    FOREIGN KEY (hardware_id) REFERENCES hardware (id),
+    FOREIGN KEY (nickname_id) REFERENCES nicknames (id)
+);
+
+CREATE TABLE IF NOT EXISTS static_errors
+(
+    permutation_id BIGINT UNSIGNED NOT NULL,
+    version_id     BIGINT UNSIGNED NOT NULL,
+    hardware_id    BIGINT UNSIGNED NOT NULL,
+    nickname_id    BIGINT UNSIGNED NOT NULL,
+    error_id       BIGINT UNSIGNED DEFAULT NULL,
     FOREIGN KEY (permutation_id) REFERENCES permutations (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
-    FOREIGN KEY (error_id) REFERENCES error_occurrences (id),
-    PRIMARY KEY (permutation_id, hardware_id, version_id, static_measurement_type_id)
+    FOREIGN KEY (error_id) REFERENCES error_occurrences (id)
 );
 
 DELIMITER //
@@ -322,8 +341,8 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     version_id          BIGINT UNSIGNED NOT NULL,
     nickname_id         BIGINT UNSIGNED NOT NULL,
     measurement_id      BIGINT UNSIGNED UNIQUE   DEFAULT NULL,
-    error_id            BIGINT UNSIGNED          DEFAULT NULL,
     last_updated        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    timeout_minutes     BIGINT UNSIGNED NOT NULL,
     PRIMARY KEY (permutation_id, stress, measurement_type_id, hardware_id, version_id, nickname_id),
     FOREIGN KEY (hardware_id) REFERENCES hardware (id),
     FOREIGN KEY (version_id) REFERENCES versions (id),
@@ -331,24 +350,31 @@ CREATE TABLE IF NOT EXISTS dynamic_performance
     FOREIGN KEY (measurement_id) REFERENCES measurements (id),
     FOREIGN KEY (measurement_type_id) REFERENCES dynamic_measurement_types (id)
 );
-
+CREATE TABLE IF NOT EXISTS dynamic_errors
+(
+    permutation_id      BIGINT UNSIGNED NOT NULL,
+    version_id          BIGINT UNSIGNED NOT NULL,
+    hardware_id         BIGINT UNSIGNED NOT NULL,
+    nickname_id         BIGINT UNSIGNED NOT NULL,
+    stress              BIGINT UNSIGNED NOT NULL,
+    measurement_type_id BIGINT UNSIGNED NOT NULL,
+    error_id            BIGINT UNSIGNED DEFAULT NULL,
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
+    FOREIGN KEY (version_id) REFERENCES versions (id),
+    FOREIGN KEY (hardware_id) REFERENCES hardware (id),
+    FOREIGN KEY (nickname_id) REFERENCES nicknames (id),
+    FOREIGN KEY (measurement_type_id) REFERENCES dynamic_measurement_types (id),
+    FOREIGN KEY (error_id) REFERENCES error_occurrences (id)
+);
 
 DELIMITER //
 CREATE PROCEDURE sp_ReservePermutation(IN vid BIGINT UNSIGNED, IN hid BIGINT UNSIGNED, IN nnid BIGINT UNSIGNED,
-                                       IN bonly BOOLEAN, IN locks_enabled BOOLEAN)
+                                       IN exclusive_measurement_type VARCHAR(255),
+                                       IN timeout BIGINT UNSIGNED,
+                                       IN bonly BOOLEAN,
+                                       IN nicknameSensitive BOOLEAN)
 BEGIN
-    IF (locks_enabled) THEN
-        SELECT GET_LOCK('sp_ReservePermutation', -1) INTO @lock_status;
-        IF ((SELECT @lock_status) != 1) THEN
-            SELECT CONCAT('Reservation failed, unable to acquire lock.')
-            INTO @message_text;
-            SIGNAL SQLSTATE '45000'
-                SET MESSAGE_TEXT = @message_text;
-        END IF;
-    END IF;
-
     START TRANSACTION;
-
     DROP TABLE IF EXISTS reserved_jobs;
     CREATE TEMPORARY TABLE reserved_jobs
     (
@@ -369,11 +395,26 @@ BEGIN
                 dr.version_id = vr.id AND
                 dr.hardware_id = hw.id AND
                 dr.permutation_id = permutations.id AND
-                dr.stress = sa.stress
-    WHERE dr.permutation_id IS NULL
-      AND vr.id = vid
+                dr.stress = sa.stress AND
+                (NOT nicknameSensitive OR dr.nickname_id = nnid)
+             LEFT OUTER JOIN dynamic_errors de ON
+                dmt.id = de.measurement_type_id AND
+                vr.id = de.version_id AND
+                hw.id = de.hardware_id AND
+                permutations.id = de.permutation_id AND
+                (NOT nicknameSensitive OR de.nickname_id = nnid)
+             LEFT OUTER JOIN static_errors se ON
+                vr.id = se.version_id AND
+                hw.id = se.hardware_id AND
+                permutations.id = se.permutation_id AND
+                (NOT nicknameSensitive OR se.nickname_id = nnid)
+    WHERE vr.id = vid
       AND hw.id = hid
       AND (NOT bonly OR permutations.id IN (SELECT permutation_id FROM benchmark_membership))
+      AND (ISNULL(exclusive_measurement_type) OR dmt.measurement_type = exclusive_measurement_type)
+      AND se.error_id IS NULL
+      AND de.error_id IS NULL
+      AND dr.permutation_id IS NULL
     ORDER BY RAND()
     LIMIT 1;
 
@@ -389,7 +430,8 @@ BEGIN
                          where dr.measurement_type_id = @found_measurement_type_id
                            AND dr.permutation_id = @found_perm_id
                            AND dr.version_id = vid
-                           AND dr.hardware_id = hid);
+                           AND dr.hardware_id = hid
+                           AND (NOT nicknameSensitive OR dr.nickname_id = nnid));
         IF ((SELECT COUNT(*) FROM reserved_jobs) < 1) THEN
             SELECT CONCAT('Reservation failed. PID=', @found_perm_id, ' MTID=',
                           @found_measurement_type_id)
@@ -405,15 +447,11 @@ BEGIN
                vid,
                nnid,
                NULL,
-               NULL,
-               CURRENT_TIMESTAMP
+               CURRENT_TIMESTAMP,
+               timeout
         FROM reserved_jobs;
     END IF;
     COMMIT;
-
-    IF (locks_enabled) THEN
-        DO RELEASE_LOCK('sp_ReservePermutation');
-    END IF;
     SELECT * FROM reserved_jobs;
 END //
 DELIMITER ;
@@ -444,10 +482,18 @@ DELIMITER ;
 
 CREATE VIEW path_step_index AS
 (
-SELECT p.program_id, p.id as permutation_id, paths.id as path_id, s.level_id as level_id
+SELECT p.program_id,
+       p.id       as permutation_id,
+       paths.id   as path_id,
+       s.level_id as level_id,
+       c.context_name,
+       c.spec_type,
+       c.expr_type
 FROM paths
          CROSS JOIN steps s ON paths.id = s.path_id
-         CROSS JOIN permutations p on s.permutation_id = p.id);
+         CROSS JOIN permutations p on s.permutation_id = p.id
+         INNER JOIN components c on s.component_id = c.id
+    );
 
 CREATE VIEW all_errors AS
 (
@@ -456,31 +502,33 @@ SELECT DISTINCT error_subset.version_id,
                 program_id,
                 error_subset.permutation_id,
                 error_type,
-                IF(s_comp.error_id IS NOT NULL AND d_comp.error_id IS NOT NULL,
-                   'unknown', IF(d_comp.error_id IS NULL, 'static', 'dynamic')) AS occurred_during,
+                IF(se.error_id IS NOT NULL AND de.error_id IS NOT NULL,
+                   'unknown', IF(de.error_id IS NULL, 'static', 'dynamic')) AS occurred_during,
                 measurement_type,
                 error_desc,
                 error_date
 FROM (SELECT DISTINCT version_id, hardware_id, permutation_id, error_id, 'static' AS measurement_type
-      FROM static_performance
+      FROM static_errors
       UNION ALL
       SELECT DISTINCT version_id, hardware_id, permutation_id, error_id, measurement_type
-      FROM dynamic_performance
+      FROM dynamic_errors
                INNER JOIN dynamic_measurement_types dmt
-                          on dynamic_performance.measurement_type_id = dmt.id) AS error_subset
-         LEFT OUTER JOIN static_performance AS s_comp ON
-            error_subset.hardware_id = s_comp.hardware_id AND
-            error_subset.version_id = s_comp.version_id AND
-            error_subset.permutation_id = s_comp.permutation_id AND
-            error_subset.error_id = s_comp.error_id
-         LEFT OUTER JOIN dynamic_performance AS d_comp ON
-            error_subset.hardware_id = d_comp.hardware_id AND
-            error_subset.version_id = d_comp.version_id AND
-            error_subset.permutation_id = d_comp.permutation_id AND
-            error_subset.error_id = d_comp.error_id
+                          on dynamic_errors.measurement_type_id = dmt.id) AS error_subset
          INNER JOIN error_occurrences ON error_subset.error_id = error_occurrences.id
          INNER JOIN error_contents ec on error_occurrences.error_contents_id = ec.id
          INNER JOIN permutations p on error_subset.permutation_id = p.id
+         LEFT OUTER JOIN static_errors se ON
+            error_subset.error_id = se.error_id AND
+            error_subset.version_id = se.version_id AND
+            error_subset.permutation_id = se.permutation_id AND
+            error_subset.hardware_id = se.hardware_id
+         LEFT OUTER JOIN dynamic_errors de ON
+            error_subset.error_id = de.error_id AND
+            error_subset.version_id = de.version_id AND
+            error_subset.permutation_id = de.permutation_id AND
+            error_subset.hardware_id = de.hardware_id AND
+            error_subset.measurement_type =
+            (SELECT measurement_type FROM dynamic_measurement_types WHERE id = de.measurement_type_id)
     );
 
 CREATE VIEW completed_paths AS
@@ -526,7 +574,8 @@ SELECT A.program_id,
        A.stress,
        A.measurement_type_id,
        completed,
-       IFNULL(errored, 0) AS errored,
+       IFNULL(stat_errored, 0) AS static_errored,
+       IFNULL(dyn_errored, 0)  AS dynamic_errored,
        total
 FROM (SELECT program_id,
              version_id,
@@ -544,16 +593,25 @@ FROM (SELECT program_id,
              hardware_id,
              stress,
              measurement_type_id,
-             COUNT(DISTINCT dp.permutation_id) AS errored
-      FROM dynamic_performance dp
+             COUNT(DISTINCT dp.permutation_id) AS dyn_errored
+      FROM dynamic_errors dp
                INNER JOIN permutations p2 on dp.permutation_id = p2.id
-      WHERE dp.error_id IS NOT NULL
       GROUP BY program_id, version_id, hardware_id, stress, measurement_type_id) AS B
      ON A.program_id = B.program_id AND A.stress = B.stress AND A.hardware_id = B.hardware_id AND
         A.measurement_type_id = B.measurement_type_id AND
         A.version_id = B.version_id
-         INNER JOIN (SELECT program_id, COUNT(*) AS total FROM permutations GROUP BY program_id) AS C
-                    ON A.program_id = C.program_id
+         LEFT OUTER JOIN
+     (SELECT program_id,
+             version_id,
+             hardware_id,
+             COUNT(DISTINCT dp.permutation_id) AS stat_errored
+      FROM static_errors dp
+               INNER JOIN permutations p2 on dp.permutation_id = p2.id
+      GROUP BY program_id, version_id, hardware_id) AS C
+     ON A.program_id = C.program_id AND A.hardware_id = C.hardware_id AND
+        A.version_id = C.version_id
+         INNER JOIN (SELECT program_id, COUNT(*) AS total FROM permutations GROUP BY program_id) AS D
+                    ON A.program_id = D.program_id
     );
 
 DELIMITER //
@@ -607,3 +665,52 @@ BEGIN
       AND expr_index = p_eindex;
 END //
 DELIMITER ;
+
+CREATE EVENT delete_failed_runs ON SCHEDULE EVERY 3 HOUR ENABLE
+    DO
+    DELETE
+    FROM dynamic_performance
+    WHERE TIMESTAMPDIFF(MINUTE, last_updated, CURRENT_TIMESTAMP) >
+          dynamic_performance.timeout_minutes + (0.5 * dynamic_performance.timeout_minutes)
+      AND measurement_id IS NULL;
+
+CREATE VIEW static_verification_times AS
+SELECT program_id, version_id, hardware_id, MAX(elapsed) as max, AVG(elapsed) as mean
+FROM (SELECT p3.program_id, version_id, hardware_id, FLOOR((median / POW(10, 9)) / 60) AS elapsed
+      FROM static_performance sp
+               INNER JOIN static_measurement_types smt ON sp.static_measurement_type_id = smt.id
+               INNER JOIN measurements m on sp.measurement_id = m.id
+               INNER JOIN permutations p3 on sp.permutation_id = p3.id
+      WHERE permutation_id IN (select distinct permutation_id
+                               from dynamic_performance dp
+                                        INNER JOIN permutations p ON dp.permutation_id = p.id
+                                        INNER JOIN programs p2 on p.program_id = p2.id
+                                        INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
+                               WHERE dmt.measurement_type = 'gradual')
+        AND measurement_type = 'verification'
+      ORDER BY elapsed DESC) as et
+GROUP BY program_id, version_id, hardware_id;
+
+
+SELECT A.program_id,
+       A.permutation_id,
+       A.measurement_type,
+       A.stress,
+       iter,
+       ninety_fifth,
+       fifth,
+       median,
+       mean,
+       stdev,
+       minimum,
+       maximum
+FROM (SELECT p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress, max(dp.last_updated), measurement_id
+      FROM dynamic_performance dp
+               INNER JOIN permutations p on dp.permutation_id = p.id
+               CROSS JOIN steps on steps.permutation_id = dp.permutation_id
+               INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
+               INNER JOIN programs p2 on p.program_id = p2.id
+               INNER JOIN configured_stress_values cs ON cs.program_id = p.program_id AND dp.stress = cs.stress
+      GROUP BY p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress) as A
+         INNER JOIN
+     measurements ON measurements.id = A.measurement_id;

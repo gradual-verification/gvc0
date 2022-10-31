@@ -32,6 +32,7 @@ object BenchmarkPopulator {
 
   def populate(populatorConfig: PopulatorConfig,
                libraryDirs: List[String]): Unit = {
+
     val connection = DAO.connect(populatorConfig.db)
     populatePrograms(populatorConfig.sources,
                      libraryDirs,
@@ -43,6 +44,34 @@ object BenchmarkPopulator {
                                      connection)
     Output.info("Successfully populated default benchmark.")
 
+  }
+
+  def syncIndividual(sources: List[Path],
+                     libraryDirs: List[String],
+                     connection: DBConnection,
+                     id: Long): ProgramInformation = {
+    val programInfo = DAO.resolveProgram(id, connection)
+    programInfo match {
+      case Some(info) =>
+        sources.find(p => {
+          val base = p.getFileName.toString
+          base.substring(0, base.lastIndexOf(".c0")).equals(info.filename)
+        }) match {
+          case Some(foundFile) =>
+            val foundContents = Files.readString(foundFile)
+            val contentsHash = md5sum(foundContents)
+            if (!contentsHash.equals(info.srcHash)) {
+              error(s"Checksums for ${info.filename}.c0 don't match!")
+            } else {
+              val sourceIR = Main.generateIR(foundContents, libraryDirs)
+              val labelOutput = new LabelVisitor().visit(sourceIR)
+              val fileName = foundFile.getFileName.toString
+              ProgramInformation(foundContents, sourceIR, labelOutput, fileName)
+            }
+          case None => error(s"Unable to locate ${info.filename}.c0")
+        }
+      case None => error("Unable to locate a corresponding program.")
+    }
   }
 
   def sync(sources: List[Path],

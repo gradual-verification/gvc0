@@ -1,23 +1,23 @@
 {
   "title": {
-    "text": "Composite",
+    "text": "AVL",
     "anchor": "start"
   },
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
   "width": 200,
   "height": 200,
   "data": {
-    "url": "https://gist.githubusercontent.com/icmccorm/9ca4c8f3a4c72a6ca46d52b4e380abf8/raw/5e77e848ce9491d6784e50dc18ecfc5d0e410087/vcs_popl.csv"
+    "url": "https://gist.githubusercontent.com/icmccorm/b20ce241a5c65783ce899d30c86968eb/raw/16200dcba2fd78cf3b4867f5569ce6161682611a/bst-avl_static.csv"
   },
   "transform": [
     {
       "filter": {
-        "field": "example",
-        "equal": "composite"
+        "field": "program_name",
+        "equal": "avlja"
       }
     },
     {
-      "calculate": "{'total': 'Total', 'eliminated': 'Eliminated'}[datum.conj_type]",
+      "calculate": "{'Total': 'Total', 'Eliminated': 'Eliminated'}[datum.conj_type]",
       "as": "Category"
     }
   ],
@@ -29,12 +29,12 @@
       },
       "encoding": {
         "x": {
-          "field": "% Specified",
+          "field": "percent_specified",
           "type": "quantitative"
         },
         "y": {
           "aggregate": "mean",
-          "field": "% VCs",
+          "field": "VCs",
           "type": "quantitative"
         },
         "color": {
@@ -57,7 +57,8 @@
       "mark": "line",
       "encoding": {
         "x": {
-          "field": "% Specified",
+          "field": "percent_specified",
+          "title":"% Specified",
           "type": "quantitative"
         },
         "y": {
