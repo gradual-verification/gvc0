@@ -77,7 +77,7 @@ object Config {
 
   case object FramingVerification extends Mode
 
-  case object Checker extends Mode
+  case object Check extends Mode
 
   case object Recreate extends Mode
 
@@ -280,7 +280,7 @@ object Config {
       case "--check" :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(mode = Checker)
+          current.copy(mode = Check)
         )
 
       case "-t" :: t :: tail =>

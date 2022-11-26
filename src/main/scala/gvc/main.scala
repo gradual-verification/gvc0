@@ -3,8 +3,9 @@ package gvc
 import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
 import gvc.analyzer._
-import gvc.benchmarking.BenchmarkExecutor.injectAndWrite
 import gvc.transformer._
+import gvc.pbt._
+import gvc.benchmarking.BenchmarkExecutor.injectAndWrite
 import gvc.benchmarking.{
   BaselineChecker,
   BenchmarkExecutor,
@@ -16,7 +17,6 @@ import gvc.benchmarking.{
   Output,
   Timing
 }
-import gvc.pbt.Checker
 import gvc.weaver.{Weaver, WeaverException}
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
@@ -96,18 +96,22 @@ object Main extends App {
           Timing.compileTimed(outputC0Source, outputBinary, config)
           Timing.execTimed(outputBinary,
                            List(s"--stress ${config.stressLevel.getOrElse(1)}"))
+        Files.delete(Paths.get(fileNames.binaryName))
+        Files.delete(Paths.get(fileNames.c0FileName))
         })
-      case Config.Checker =>
-        val fileNames = getOutputCollection(config.sourceFile.get)
-        val inputSource = readFile(config.sourceFile.get)
-        val onlyFraming = config.mode == Config.FramingVerification
-        val gradualIR = generateIR(inputSource, linkedLibraries)
-        val dynamicIR = generateIR(inputSource, linkedLibraries)
-        BaselineChecker.check(dynamicIR, onlyFraming)
-        Output.printTiming(() => {
-          val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
-          execute(verifiedOutput.c0Source, fileNames)
-        })
+      case Config.Check =>
+        // val fileNames = getOutputCollection(config.sourceFile.get)
+        // val inputSource = readFile(config.sourceFile.get)
+        // val onlyFraming = config.mode == Config.FramingVerification
+        // val gradualIR = generateIR(inputSource, linkedLibraries)
+        // val dynamicIR = generateIR(inputSource, linkedLibraries)
+        // BaselineChecker.check(dynamicIR, onlyFraming)
+        // Output.printTiming(() => {
+        //   val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+        //   execute(verifiedOutput.c0Source, fileNames)
+        // })
+        Check.isValid()
+        Check.equal()
       case Config.Recreate =>
         val benchConfig =
           BenchmarkExternalConfig.parseRecreator(config)

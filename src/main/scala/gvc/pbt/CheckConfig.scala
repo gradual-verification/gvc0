@@ -5,9 +5,9 @@ import gvc.Config.error
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{NodeSeq, XML}
 
-class CheckerConfigException(message: String) extends Exception(message)
+class CheckConfigException(message: String) extends Exception(message)
 
-object CheckerConfig {
+object CheckConfig {
 
 //  private object Names {
 //    val defaultOutputDirectory = "./data"

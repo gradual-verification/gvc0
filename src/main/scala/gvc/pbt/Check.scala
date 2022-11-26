@@ -18,7 +18,7 @@ import viper.silicon.Silicon
 import java.nio.file.{Files, Path}
 import scala.concurrent.TimeoutException
 
-object Checker {
+object Check {
   /*
   1. External Structure: input.c0 file -> match main.scala Config.Checker -> call isValid:gvc/pbt/Checker.scala
   2. isValid: main.generateIR()
@@ -27,7 +27,13 @@ object Checker {
   3. Compile and Execute with --stress
   4. .equals string comparison and output
    */
+  //  progam1: IR.Program, program2: IR.Program, onlyFraming: Boolean = false
   def isValid() : Unit = {
+    // val structIds = 
+    //   program.structs.map(s => (s.name, s.addField("_id", IR.IntType))).toMap 
+  }
+  // String
+  def equal() : Unit = {
 
   }
 //  def injectAndWrite(c0: String, dest: Path): Unit = {
