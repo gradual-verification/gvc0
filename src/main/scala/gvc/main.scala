@@ -96,8 +96,8 @@ object Main extends App {
           Timing.compileTimed(outputC0Source, outputBinary, config)
           Timing.execTimed(outputBinary,
                            List(s"--stress ${config.stressLevel.getOrElse(1)}"))
-        Files.delete(Paths.get(fileNames.binaryName))
-        Files.delete(Paths.get(fileNames.c0FileName))
+        Files.delete(outputC0Source)
+        Files.delete(outputBinary)
         })
       case Config.Check =>
         // val fileNames = getOutputCollection(config.sourceFile.get)
