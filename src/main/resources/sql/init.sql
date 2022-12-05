@@ -690,27 +690,3 @@ FROM (SELECT p3.program_id, version_id, hardware_id, FLOOR((median / POW(10, 9))
         AND measurement_type = 'verification'
       ORDER BY elapsed DESC) as et
 GROUP BY program_id, version_id, hardware_id;
-
-
-SELECT A.program_id,
-       A.permutation_id,
-       A.measurement_type,
-       A.stress,
-       iter,
-       ninety_fifth,
-       fifth,
-       median,
-       mean,
-       stdev,
-       minimum,
-       maximum
-FROM (SELECT p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress, max(dp.last_updated), measurement_id
-      FROM dynamic_performance dp
-               INNER JOIN permutations p on dp.permutation_id = p.id
-               CROSS JOIN steps on steps.permutation_id = dp.permutation_id
-               INNER JOIN dynamic_measurement_types dmt on dp.measurement_type_id = dmt.id
-               INNER JOIN programs p2 on p.program_id = p2.id
-               INNER JOIN configured_stress_values cs ON cs.program_id = p.program_id AND dp.stress = cs.stress
-      GROUP BY p.program_id, dp.permutation_id, dmt.measurement_type, cs.stress) as A
-         INNER JOIN
-     measurements ON measurements.id = A.measurement_id;
