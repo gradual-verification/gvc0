@@ -3,7 +3,7 @@
     <hardware>i5-4250U</hardware>
     <nickname>Intel NUC i5-4250U</nickname>
     <source-dir>./src/test/resources/quant-study/</source-dir>
-    <quantity>32</quantity>
+    <quantity>16</quantity>
     <workload>
         <by-program>
             <p>
@@ -19,6 +19,6 @@
                 </stress>
             </p>
         </by-program>
-        <iterations>10</iterations>
+        <iterations>100</iterations>
     </workload>
 </benchmark>
