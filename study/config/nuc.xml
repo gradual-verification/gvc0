@@ -12,13 +12,13 @@
                     <list>8,16,32</list>
                 </stress>
             </p>
-                        <p>
+            <p>
                 <match>avlja,bst,composite</match>
                 <stress>
                     <list>4,8,16</list>
                 </stress>
             </p>
         </by-program>
-        <iterations>10</iterations>
+        <iterations>100</iterations>
     </workload>
 </benchmark>
