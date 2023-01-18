@@ -11,18 +11,18 @@ import scala.language.implicitConversions
 import scala.language.postfixOps
 
 case class BenchmarkDBCredentials(
-                                   url: String,
-                                   username: String,
-                                   password: String
-                                 )
+    url: String,
+    username: String,
+    password: String
+)
 
 case class BenchmarkWorkload(
-                              iterations: Int,
-                              staticIterations: Int,
-                              nPaths: Int,
-                              stress: Option[StressConfiguration],
-                              programCases: List[WorkloadProgramEntry]
-                            )
+    iterations: Int,
+    staticIterations: Int,
+    nPaths: Int,
+    stress: Option[StressConfiguration],
+    programCases: List[WorkloadProgramEntry]
+)
 
 case class WorkloadProgramEntry(matches: List[String],
                                 iterations: Option[Int],
@@ -34,7 +34,7 @@ case class IterConfiguration(static: Int, dynamic: Int)
 trait StressConfiguration
 
 case class StressBounded(wLower: Int, wUpper: Int, wStep: Int)
-  extends StressConfiguration
+    extends StressConfiguration
 
 case class StressList(wList: List[Int]) extends StressConfiguration
 
@@ -54,13 +54,13 @@ case class RecreatorConfig(version: String,
                            db: BenchmarkDBCredentials,
                            sources: List[Path],
                            permToRecreate: Long)
-  extends BenchmarkingConfig
+    extends BenchmarkingConfig
 
 case class PopulatorConfig(version: String,
                            pathQuantity: Option[Int],
                            db: BenchmarkDBCredentials,
                            sources: List[Path])
-  extends BenchmarkingConfig
+    extends BenchmarkingConfig
 
 case class MonitorConfig(db: BenchmarkDBCredentials) extends BenchmarkingConfig
 
@@ -72,7 +72,7 @@ case class ExecutorConfig(version: String,
                           modifiers: PipelineModifiers,
                           sources: List[Path],
                           timeoutMinutes: Int)
-  extends BenchmarkingConfig
+    extends BenchmarkingConfig
 
 case class ExportConfig(version: String,
                         hardware: String,
@@ -83,18 +83,18 @@ case class ExportConfig(version: String,
                         outputDir: Option[String])
 
 case class BenchmarkConfigResults(
-                                   version: String,
-                                   hardware: Option[String],
-                                   nickname: Option[String],
-                                   credentials: BenchmarkDBCredentials,
-                                   sources: List[Path],
-                                   workload: Option[BenchmarkWorkload],
-                                   pathQuantity: Option[Int],
-                                   modifiers: PipelineModifiers,
-                                   outputDir: Option[String],
-                                   iter: IterConfiguration,
-                                   timeout: Int
-                                 )
+    version: String,
+    hardware: Option[String],
+    nickname: Option[String],
+    credentials: BenchmarkDBCredentials,
+    sources: List[Path],
+    workload: Option[BenchmarkWorkload],
+    pathQuantity: Option[Int],
+    modifiers: PipelineModifiers,
+    outputDir: Option[String],
+    iter: IterConfiguration,
+    timeout: Int
+)
 
 object BenchmarkExternalConfig {
 
@@ -102,7 +102,7 @@ object BenchmarkExternalConfig {
     def \* : NodeSeq = ns flatMap {
       _ match {
         case e: Elem => e.child
-        case _ => NodeSeq.Empty
+        case _       => NodeSeq.Empty
       }
     }
   }
@@ -126,9 +126,9 @@ object BenchmarkExternalConfig {
     rootConfig.recreatePerm match {
       case Some(value) =>
         RecreatorConfig(resolved.version,
-          resolved.credentials,
-          resolved.sources,
-          value)
+                        resolved.credentials,
+                        resolved.sources,
+                        value)
       case None => error("Expected an integer value passed to --recreate.")
     }
   }
@@ -165,9 +165,9 @@ object BenchmarkExternalConfig {
     val resolved = parseConfig(rootConfig)
 
     PopulatorConfig(resolved.version,
-      resolved.pathQuantity,
-      resolved.credentials,
-      resolved.sources)
+                    resolved.pathQuantity,
+                    resolved.credentials,
+                    resolved.sources)
 
   }
 
@@ -175,19 +175,19 @@ object BenchmarkExternalConfig {
     val resolved = parseConfig(rootConfig)
     val optionalOutputDirectory = resolved.outputDir match {
       case Some(oValue) => Some(oValue)
-      case None => rootConfig.exportDirectory
+      case None         => rootConfig.exportDirectory
     }
     resolved.hardware match {
       case Some(hValue) =>
         resolved.workload match {
           case Some(wValue) =>
             ExportConfig(resolved.version,
-              hValue,
-              wValue,
-              resolved.pathQuantity,
-              resolved.modifiers,
-              resolved.credentials,
-              optionalOutputDirectory)
+                         hValue,
+                         wValue,
+                         resolved.pathQuantity,
+                         resolved.modifiers,
+                         resolved.credentials,
+                         optionalOutputDirectory)
           case None => error("A <workload> configuration must be provided.")
         }
       case None => error("A <hardware> ID must be provided.")
@@ -205,12 +205,12 @@ object BenchmarkExternalConfig {
         resolveFallback(benchmarkRoot, "version", rootConfig.versionString)
       val hardware =
         resolveFallbackOptional(benchmarkRoot,
-          "hardware",
-          rootConfig.hardwareString)
+                                "hardware",
+                                rootConfig.hardwareString)
       val nickname =
         resolveFallbackOptional(benchmarkRoot,
-          "nickname",
-          rootConfig.nicknameString)
+                                "nickname",
+                                rootConfig.nicknameString)
       val quantity =
         intOption(benchmarkRoot \ "quantity")
 
@@ -232,7 +232,7 @@ object BenchmarkExternalConfig {
         .map(_.toPath)
       val fileCollection = rootConfig.sourceFile match {
         case Some(value) => c0SourceFiles ++ List(Paths.get(value))
-        case None => c0SourceFiles
+        case None        => c0SourceFiles
       }
 
       val outputDir = benchmarkRoot \ "output-dir"
@@ -249,23 +249,23 @@ object BenchmarkExternalConfig {
       val modifiers = parsePipelineModifiers(rootConfig, benchmarkRoot)
 
       BenchmarkConfigResults(version,
-        hardware,
-        nickname,
-        credentials,
-        fileCollection,
-        workload,
-        quantity,
-        modifiers,
-        outputDirText,
-        iter,
-        timeout.getOrElse(Defaults.timeout))
+                             hardware,
+                             nickname,
+                             credentials,
+                             fileCollection,
+                             workload,
+                             quantity,
+                             modifiers,
+                             outputDirText,
+                             iter,
+                             timeout.getOrElse(Defaults.timeout))
     }
   }
 
   def generateStressList(stress: StressConfiguration): List[Int] = {
     val stepList = stress match {
       case singular: StressSingular => List(singular.stressValue)
-      case list: StressList => list.wList.distinct
+      case list: StressList         => list.wList.distinct
       case stepwise: StressBounded =>
         (stepwise.wLower to stepwise.wUpper by stepwise.wStep).toList
     }
@@ -295,9 +295,9 @@ object BenchmarkExternalConfig {
   }
 
   private def resolveFallbackOptional(
-                                       xml: NodeSeq,
-                                       field: String,
-                                       fallback: Option[String]): Option[String] = {
+      xml: NodeSeq,
+      field: String,
+      fallback: Option[String]): Option[String] = {
     fallback match {
       case Some(_) => fallback
       case None =>
@@ -417,7 +417,7 @@ object BenchmarkExternalConfig {
       }
     } catch {
       case _: InvalidPathException => {}
-        error(s"<$tag>: Invalid path format: $pathText")
+      error(s"<$tag>: Invalid path format: $pathText")
     }
   }
 
@@ -436,12 +436,12 @@ object BenchmarkExternalConfig {
       }
     } catch {
       case _: InvalidPathException => {}
-        error(s"<$tag>: Invalid path format: $pathText")
+      error(s"<$tag>: Invalid path format: $pathText")
     }
   }
 
   private def parseWorkload(
-                             workloadRoot: NodeSeq): Option[BenchmarkWorkload] = {
+      workloadRoot: NodeSeq): Option[BenchmarkWorkload] = {
     if (workloadRoot.isEmpty) {
       None
     } else {
@@ -478,10 +478,10 @@ object BenchmarkExternalConfig {
       }
       Some(
         BenchmarkWorkload(iterQuantity,
-          staticIterQuantity,
-          pathQuantity,
-          stress,
-          byProgram))
+                          staticIterQuantity,
+                          pathQuantity,
+                          stress,
+                          byProgram))
     }
   }
 
@@ -502,9 +502,9 @@ object BenchmarkExternalConfig {
         s"No stress configuration was provided for <match>${names.mkString(",")}</match>")
     }
     WorkloadProgramEntry(namesWithoutWildcard,
-      iterations,
-      stress.get,
-      isDefault)
+                         iterations,
+                         stress.get,
+                         isDefault)
   }
 
   private def parseStress(xml: NodeSeq): Option[StressConfiguration] = {
@@ -575,7 +575,7 @@ object BenchmarkExternalConfig {
     if (xml.isEmpty) {
       None
     } else {
-      if (xml.text.matches("[0-9]+(,[0-9]+)+")) {
+      if (xml.text.matches("[0-9]+(,[0-9]+)*")) {
         Some(StressList(xml.text.split(',').map(s => s.trim.toInt).toList))
       } else {
         error(
