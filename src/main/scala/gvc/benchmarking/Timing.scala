@@ -25,20 +25,6 @@ object Timing {
       instrumentation: Performance
   )
 
-  def compileAndExec(input: Path,
-                     binary: Path,
-                     config: Config,
-                     args: List[String],
-                     stress: Int,
-                     iterations: Int,
-                     ongoingProcesses: mutable.ListBuffer[Process])
-    : (Performance, Performance) = {
-    val compilationPerf =
-      compileTimed(input, binary, config, iterations, ongoingProcesses)
-    val execPerf = execTimed(binary, args, iterations, stress, ongoingProcesses)
-    (compilationPerf, execPerf)
-  }
-
   def verifyTimed(
       silicon: Silicon,
       inputSource: String,
