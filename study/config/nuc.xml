@@ -16,4 +16,5 @@
         <iterations>1</iterations>
     </workload>
     <save-errored-perms>./errored</save-errored-perms>
+    <only-gradual/>
 </benchmark>
