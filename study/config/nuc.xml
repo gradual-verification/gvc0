@@ -7,18 +7,13 @@
     <workload>
         <by-program>
             <p>
-                <match>list</match>
+                <match>avlja</match>
                 <stress>
-                    <list>8,16,32</list>
-                </stress>
-            </p>
-            <p>
-                <match>avlja,bst,composite</match>
-                <stress>
-                    <list>4,8,16</list>
+                    <list>1</list>
                 </stress>
             </p>
         </by-program>
-        <iterations>100</iterations>
+        <iterations>1</iterations>
     </workload>
+    <save-errored-perms>./errored</save-errored-perms>
 </benchmark>
