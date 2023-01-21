@@ -326,7 +326,8 @@ object Main extends App {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = Defaults.includeDirectories
+      includeDirs = Defaults.includeDirectories,
+      profilingEnabled = cmdConfig.profilingEnabled
     )
     // Always write the intermediate C0 file, but then delete it
     // if not saving intermediate files

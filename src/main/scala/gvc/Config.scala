@@ -21,6 +21,7 @@ case class Config(
     onlyExec: Boolean = false,
     saveFiles: Boolean = false,
     stressLevel: Option[Int] = None,
+    profilingEnabled: Boolean = false,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
     onlyCompile: Boolean = false,
@@ -94,7 +95,7 @@ object Config {
       |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
       |  -x            --exec                         Execute the compiled file
       |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
-      |
+      |  -p            --profile                      Compile C0 binary with -pg flag to enable profiling with gprof.
       |                --config=<config.xml>          Execute a benchmark using the specified configuration file
       |
       |                --populate                     Populate the benchmarking database using options from the specified configuration file.
@@ -107,7 +108,7 @@ object Config {
       |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
       |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
       |                --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
-
+      |
       |                --db-url=<url>                 Specify the URL for the benchmarking database. Overrides config.
       |                --db-user=<username>           Specify the user for the benchmarking database. Overrides config.
       |                --db-pass=<password>           Specify the password for the benchmarking database. Overrides config.
@@ -214,6 +215,7 @@ object Config {
         fromCommandLineArgs(tail, current.copy(nicknameString = Some(t)))
       case dbURLString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(dbURLString = Some(t)))
+
       case dbPassString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(dbPassString = Some(t)))
       case dbUserString(t) :: tail =>
@@ -275,12 +277,19 @@ object Config {
           tail,
           current.copy(mode = FramingVerification)
         )
+      case "--profiling" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(profilingEnabled = true)
+        )
       case "-t" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case timeoutArg(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case "-d" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
+      case "-p" :: tail =>
+        fromCommandLineArgs(tail, current.copy(profilingEnabled = true))
       case dumpArg(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
       case "-o" :: f :: tail =>

@@ -68,7 +68,8 @@ object Timing {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
       output = Some(binary.toString),
-      includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/")
+      includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
+      profilingEnabled = config.profilingEnabled
     )
     if (System.getProperty("mrj.version") != null) {
       // the upper bound on nested brackets is lower for clang than for gcc, leading to compilation failures.
