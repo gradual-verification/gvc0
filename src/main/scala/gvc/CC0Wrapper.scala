@@ -29,6 +29,7 @@ case class CC0Options(
     warnings: List[String] = Nil,
     dumpAST: Boolean = false,
     output: Option[String] = None,
+    profilingEnabled: Boolean = false,
     warn: Boolean = false,
     exec: Boolean = false,
     version: Boolean = false,
@@ -47,6 +48,7 @@ case class CC0Options(
 )
 
 object CC0Wrapper {
+
   private val bundledResourcesDirectory = Paths
     .get("src/main/resources")
     .toAbsolutePath
@@ -85,13 +87,13 @@ object CC0Wrapper {
       min: Long,
       max: Long
   ) {
-    val median = med
-    val mean = mn
-    val ninetyFifth = p95
-    val fifth = p5
-    val stdev = std
-    val minimum = min
-    val maximum = max
+    val median: BigDecimal = med
+    val mean: BigDecimal = mn
+    val ninetyFifth: BigDecimal = p95
+    val fifth: BigDecimal = p5
+    val stdev: BigDecimal = std
+    val minimum: Long = min
+    val maximum: Long = max
 
     override def toString: String = {
       s"$p95,$p5,$median,$mean,$stdev,$min,$max"
@@ -123,6 +125,13 @@ object CC0Wrapper {
     def value(arg: String, value: Option[String]): Seq[String] =
       values(arg, value.toSeq)
 
+    def compilerArg(arg: String, flag: Boolean): Seq[String] =
+      if (flag) Seq(arg) else Seq.empty[String]
+
+    val modifiedCompilerArgs = options.compilerArgs ++ compilerArg(
+      "-pg",
+      options.profilingEnabled)
+
     Seq(
       Seq(options.compilerPath),
       options.inputFiles.flatMap(value => Seq(value)),
@@ -141,7 +150,7 @@ object CC0Wrapper {
       flag("--bytecode", options.genBytecode),
       value("--bc-arch", options.architecture.map(_.name)),
       value("--output", options.output),
-      values("-c", options.compilerArgs),
+      values("-c", modifiedCompilerArgs),
       flag("--warn", options.warn),
       flag("--exec", options.exec),
       flag("--only-typecheck", options.onlyTypecheck),

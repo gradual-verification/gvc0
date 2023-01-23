@@ -10,17 +10,10 @@ import scala.xml.{Elem, NodeSeq, XML}
 import scala.language.implicitConversions
 import scala.language.postfixOps
 
-class BenchmarkConfigException(message: String) extends Exception(message)
-
 case class BenchmarkDBCredentials(
     url: String,
     username: String,
     password: String
-)
-
-case class BenchmarkIO(
-    outputDir: java.nio.file.Path,
-    input: List[java.nio.file.Path]
 )
 
 case class BenchmarkWorkload(
@@ -47,21 +40,22 @@ case class StressList(wList: List[Int]) extends StressConfiguration
 
 case class StressSingular(stressValue: Int) extends StressConfiguration
 
-case class PlatformIdentification(versionID: String, hardwareID: String)
-
 trait BenchmarkingConfig
 
 case class PipelineModifiers(exclusiveMode: Option[DynamicMeasurementMode],
+                             saveErroredPerms: Option[Path],
                              onlyVerify: Boolean,
                              onlyCompile: Boolean,
                              onlyBenchmark: Boolean,
                              onlyErrors: Boolean,
-                             nicknameSensitivity: Boolean)
+                             nicknameSensitivity: Boolean,
+                             skipVerification: Boolean)
 
 case class RecreatorConfig(version: String,
                            db: BenchmarkDBCredentials,
                            sources: List[Path],
-                           permToRecreate: Long)
+                           permToRecreate: Long,
+                           modifiers: PipelineModifiers)
     extends BenchmarkingConfig
 
 case class PopulatorConfig(version: String,
@@ -107,7 +101,7 @@ case class BenchmarkConfigResults(
 object BenchmarkExternalConfig {
 
   class ChildSelectable(ns: NodeSeq) {
-    def \* = ns flatMap {
+    def \* : NodeSeq = ns flatMap {
       _ match {
         case e: Elem => e.child
         case _       => NodeSeq.Empty
@@ -115,14 +109,11 @@ object BenchmarkExternalConfig {
     }
   }
 
-  implicit def nodeSeqIsChildSelectable(xml: NodeSeq) = new ChildSelectable(xml)
-
-  private object Names {
-    val defaultOutputDirectory = "./data"
-  }
+  implicit def nodeSeqIsChildSelectable(xml: NodeSeq): ChildSelectable =
+    new ChildSelectable(xml)
 
   private object Defaults {
-    val timeout = 2 * 60
+    val timeout: Int = 2 * 60
   }
 
   def parseMonitor(rootConfig: Config): MonitorConfig = {
@@ -139,7 +130,8 @@ object BenchmarkExternalConfig {
         RecreatorConfig(resolved.version,
                         resolved.credentials,
                         resolved.sources,
-                        value)
+                        value,
+                        resolved.modifiers)
       case None => error("Expected an integer value passed to --recreate.")
     }
   }
@@ -213,14 +205,14 @@ object BenchmarkExternalConfig {
       error("Expected <benchmark> element.")
     } else {
       val version =
-        resolveFallback("version", benchmarkRoot, rootConfig.versionString)
+        resolveFallback(benchmarkRoot, "version", rootConfig.versionString)
       val hardware =
-        resolveFallbackOptional("hardware",
-                                benchmarkRoot,
+        resolveFallbackOptional(benchmarkRoot,
+                                "hardware",
                                 rootConfig.hardwareString)
       val nickname =
-        resolveFallbackOptional("nickname",
-                                benchmarkRoot,
+        resolveFallbackOptional(benchmarkRoot,
+                                "nickname",
                                 rootConfig.nicknameString)
       val quantity =
         intOption(benchmarkRoot \ "quantity")
@@ -283,12 +275,12 @@ object BenchmarkExternalConfig {
     stepList
   }
 
-  private def resolveFallback(field: String,
-                              xml: NodeSeq,
-                              fallback: Option[String]) = {
+  private def resolveFallback(xml: NodeSeq,
+                              field: String,
+                              fallback: Option[String]): String = {
     fallback match {
       case Some(value) => value
-      case None => {
+      case None =>
         val provided = xml \ field
         if (provided.nonEmpty) {
           provided.text.trim
@@ -297,7 +289,7 @@ object BenchmarkExternalConfig {
           error(
             s"No $field string has been provided, either as a command line argument (--$field) or configuration file field.")
         }
-      }
+
     }
   }
 
@@ -305,16 +297,16 @@ object BenchmarkExternalConfig {
     xml.text.split(',').map(_.trim).toList
   }
 
-  private def resolveFallbackOptional(field: String,
-                                      xml: NodeSeq,
-                                      fallback: Option[String]) = {
+  private def resolveFallbackOptional(
+      xml: NodeSeq,
+      field: String,
+      fallback: Option[String]): Option[String] = {
     fallback match {
       case Some(_) => fallback
       case None =>
         val provided = xml \ field
         if (provided.nonEmpty) {
           Some(provided.text.trim)
-
         } else {
           None
         }
@@ -340,6 +332,21 @@ object BenchmarkExternalConfig {
       if (singleton(xml, "only-gradual")) Some(DynamicMeasurementMode.Gradual)
       else None
 
+    val saveErroredPerms =
+      resolveFallbackOptional(xml, "save-errored-perms", None)
+    val erroredPermsDirectory = saveErroredPerms match {
+      case Some(value) =>
+        val dirPath = Paths.get(value)
+        if (Files.exists(Paths.get(value))) {
+          error(
+            s"Cannot save errored permutations to '$value'; the directory already exists.")
+        } else {
+          Files.createDirectory(dirPath)
+        }
+        Some(dirPath)
+      case None => None
+    }
+
     val excluded =
       List(onlyDynamic, onlyGradual, onlyFraming).filter(_.nonEmpty).map(_.get)
     if (excluded.length > 1) {
@@ -358,20 +365,22 @@ object BenchmarkExternalConfig {
     }
     PipelineModifiers(
       exclusiveMode = excluded.headOption,
+      saveErroredPerms = erroredPermsDirectory,
       nicknameSensitivity = singleton(xml, "nickname-sensitive"),
       onlyBenchmark = singleton(xml, "export-only-benchmark") || config.onlyBenchmark,
       onlyVerify = singleton(xml, "export-only-verification") || config.onlyVerify,
       onlyCompile = singleton(xml, "only-compile") || config.onlyCompile,
-      onlyErrors = singleton(xml, "export-only-errors") || config.onlyErrors
+      onlyErrors = singleton(xml, "export-only-errors") || config.onlyErrors,
+      skipVerification = singleton(xml, "skip-verification")
     )
 
   }
 
   private def parseDB(xml: NodeSeq,
                       rootConfig: Config): BenchmarkDBCredentials = {
-    val url = resolveFallback("url", xml, rootConfig.dbURLString)
-    val username = resolveFallback("username", xml, rootConfig.dbUserString)
-    val password = resolveFallback("password", xml, rootConfig.dbPassString)
+    val url = resolveFallback(xml, "url", rootConfig.dbURLString)
+    val username = resolveFallback(xml, "username", rootConfig.dbUserString)
+    val password = resolveFallback(xml, "password", rootConfig.dbPassString)
     BenchmarkDBCredentials(
       url,
       username,
@@ -571,7 +580,7 @@ object BenchmarkExternalConfig {
     if (xml.isEmpty) {
       None
     } else {
-      if (xml.text.matches("[0-9]+(,[0-9]+)+")) {
+      if (xml.text.matches("[0-9]+(,[0-9]+)*")) {
         Some(StressList(xml.text.split(',').map(s => s.trim.toInt).toList))
       } else {
         error(

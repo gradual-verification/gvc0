@@ -25,20 +25,6 @@ object Timing {
       instrumentation: Performance
   )
 
-  def compileAndExec(input: Path,
-                     binary: Path,
-                     config: Config,
-                     args: List[String],
-                     stress: Int,
-                     iterations: Int,
-                     ongoingProcesses: mutable.ListBuffer[Process])
-    : (Performance, Performance) = {
-    val compilationPerf =
-      compileTimed(input, binary, config, iterations, ongoingProcesses)
-    val execPerf = execTimed(binary, args, iterations, stress, ongoingProcesses)
-    (compilationPerf, execPerf)
-  }
-
   def verifyTimed(
       silicon: Silicon,
       inputSource: String,
@@ -82,7 +68,8 @@ object Timing {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
       output = Some(binary.toString),
-      includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/")
+      includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
+      profilingEnabled = config.profilingEnabled
     )
     if (System.getProperty("mrj.version") != null) {
       // the upper bound on nested brackets is lower for clang than for gcc, leading to compilation failures.
