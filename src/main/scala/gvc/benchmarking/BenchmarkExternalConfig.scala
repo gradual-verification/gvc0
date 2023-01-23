@@ -48,12 +48,14 @@ case class PipelineModifiers(exclusiveMode: Option[DynamicMeasurementMode],
                              onlyCompile: Boolean,
                              onlyBenchmark: Boolean,
                              onlyErrors: Boolean,
-                             nicknameSensitivity: Boolean)
+                             nicknameSensitivity: Boolean,
+                             skipVerification: Boolean)
 
 case class RecreatorConfig(version: String,
                            db: BenchmarkDBCredentials,
                            sources: List[Path],
-                           permToRecreate: Long)
+                           permToRecreate: Long,
+                           modifiers: PipelineModifiers)
     extends BenchmarkingConfig
 
 case class PopulatorConfig(version: String,
@@ -128,7 +130,8 @@ object BenchmarkExternalConfig {
         RecreatorConfig(resolved.version,
                         resolved.credentials,
                         resolved.sources,
-                        value)
+                        value,
+                        resolved.modifiers)
       case None => error("Expected an integer value passed to --recreate.")
     }
   }
@@ -328,6 +331,7 @@ object BenchmarkExternalConfig {
     val onlyGradual =
       if (singleton(xml, "only-gradual")) Some(DynamicMeasurementMode.Gradual)
       else None
+
     val saveErroredPerms =
       resolveFallbackOptional(xml, "save-errored-perms", None)
     val erroredPermsDirectory = saveErroredPerms match {
@@ -366,7 +370,8 @@ object BenchmarkExternalConfig {
       onlyBenchmark = singleton(xml, "export-only-benchmark") || config.onlyBenchmark,
       onlyVerify = singleton(xml, "export-only-verification") || config.onlyVerify,
       onlyCompile = singleton(xml, "only-compile") || config.onlyCompile,
-      onlyErrors = singleton(xml, "export-only-errors") || config.onlyErrors
+      onlyErrors = singleton(xml, "export-only-errors") || config.onlyErrors,
+      skipVerification = singleton(xml, "skip-verification")
     )
 
   }

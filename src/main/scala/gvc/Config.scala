@@ -80,6 +80,8 @@ object Config {
 
   case object Recreate extends Mode
 
+  case object RecreateVerified extends Mode
+
   case object Monitor extends Mode
 
   case object Export extends Mode
@@ -132,6 +134,7 @@ object Config {
   private val dbUserString = raw"--db-user=(.+)".r
   private val dbPassString = raw"--db-pass=(.+)".r
   private val recreatePermString = raw"--recreate=(.+)".r
+  private val recreateVerifiedPermString = raw"--recreate-verified=(.+)".r
 
   def error(message: String): Nothing = {
     Output.error(message)

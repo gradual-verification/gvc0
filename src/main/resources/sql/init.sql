@@ -295,6 +295,26 @@ CREATE TABLE IF NOT EXISTS static_performance
     FOREIGN KEY (nickname_id) REFERENCES nicknames (id)
 );
 
+CREATE TABLE IF NOT EXISTS verified_permutations
+(
+    permutation_id BIGINT UNSIGNED NOT NULL,
+    version_id     BIGINT UNSIGNED NOT NULL,
+    c0_source      LONGTEXT        NOT NULL,
+    FOREIGN KEY (permutation_id) REFERENCES permutations (id),
+    FOREIGN KEY (version_id) REFERENCES versions (id),
+    PRIMARY KEY (permutation_id, version_id)
+);
+DELIMITER //
+CREATE PROCEDURE sp_UpdateVerifiedPermutation(IN vid BIGINT UNSIGNED,
+                                              IN perm_id BIGINT UNSIGNED, IN c0 LONGTEXT)
+BEGIN
+    INSERT INTO verified_permutations (permutation_id, version_id, c0_source)
+    VALUES (perm_id, vid, c0)
+    ON DUPLICATE KEY UPDATE c0_source = c0;
+END //
+DELIMITER ;
+
+
 CREATE TABLE IF NOT EXISTS static_errors
 (
     permutation_id BIGINT UNSIGNED NOT NULL,
@@ -331,6 +351,7 @@ BEGIN
     ON DUPLICATE KEY UPDATE conj_total = n_total, conj_eliminated = n_elim;
 END //
 DELIMITER ;
+
 
 CREATE TABLE IF NOT EXISTS dynamic_performance
 (
