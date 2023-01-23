@@ -46,6 +46,7 @@ DROP PROCEDURE IF EXISTS sp_ReservePermutation;
 DROP PROCEDURE IF EXISTS sp_AddMeasurement;
 DROP PROCEDURE IF EXISTS sp_AddProgramToBenchmark;
 DROP PROCEDURE IF EXISTS sp_ResetBenchmark;
+DROP PROCEDURE IF EXISTS sp_UpdateVerifiedPermutation
 
 DROP TABLE IF EXISTS reserved_jobs;
 
