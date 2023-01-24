@@ -87,7 +87,8 @@ object BenchmarkExecutor {
       s"Iterations: ${Output.blue(config.workload.iterations.toString)}")
     Output.info(
       s"Nickname sensitivity: ${Output.flag(config.modifiers.nicknameSensitivity)}.")
-
+    Output.info(
+      s"Profiling: ${Output.flag(config.profilingDirectory.nonEmpty)}.")
     val conn = DAO.connect(config.db)
     val id = DAO.addOrResolveIdentity(config, conn)
     val stressTable = new StressTable(config.workload)
