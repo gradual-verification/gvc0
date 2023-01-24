@@ -7,14 +7,23 @@
     <workload>
         <by-program>
             <p>
-                <match>avlja</match>
-                <stress>
-                    <list>1</list>
-                </stress>
+                <p>
+                    <match>list</match>
+                    <stress>
+                        <list>32</list>
+                    </stress>
+                </p>
+                <p>
+                    <match>avlja,bst,composite</match>
+                    <stress>
+                        <list>16</list>
+                    </stress>
+                </p>
             </p>
         </by-program>
-        <iterations>1</iterations>
+        <iterations>100</iterations>
     </workload>
+    <save-profiling>./profiling</save-profiling>
     <save-errored-perms>./errored</save-errored-perms>
     <only-gradual/>
 </benchmark>
