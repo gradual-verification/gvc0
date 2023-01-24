@@ -256,10 +256,10 @@ object BenchmarkExecutor {
           }
           binary match {
             case Some(binaryToExecute) => {
-              val profiler =
-                resolveProfiler(config, reserved, binaryToExecute, mode)
               reserved.workloads
                 .foreach(w => {
+                  val profiler =
+                    resolveProfiler(config, reserved, binaryToExecute, mode, w)
                   val perfOption = try {
                     Right(
                       Timeout.runWithTimeout(config.timeoutMinutes * 60 * 1000)(
@@ -294,7 +294,6 @@ object BenchmarkExecutor {
             }
             case None =>
           }
-
         case None =>
           error(
             s"Unrecognized dynamic measurement mode with ID ${reserved.measurementMode}")
@@ -318,15 +317,15 @@ object BenchmarkExecutor {
     )
   }
 
-  def resolveProfiler(
-      config: ExecutorConfig,
-      reservedProgram: ReservedProgram,
-      binary: Path,
-      measurementMode: DynamicMeasurementMode): Option[GProf] = {
+  def resolveProfiler(config: ExecutorConfig,
+                      reservedProgram: ReservedProgram,
+                      binary: Path,
+                      measurementMode: DynamicMeasurementMode,
+                      workload: Int): Option[GProf] = {
     config.profilingDirectory match {
       case Some(value) =>
         val filename = Benchmark.Extensions.sum(
-          s"${measurementMode}_${reservedProgram.perm.programID}_${reservedProgram.perm.id}")
+          s"${measurementMode}_${workload}_${reservedProgram.perm.programID}_${reservedProgram.perm.id}")
         val sumPath = value.resolve(filename)
         Some(new GProf(binary, sumPath))
       case None => None
