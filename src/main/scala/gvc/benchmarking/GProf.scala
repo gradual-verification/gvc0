@@ -23,6 +23,8 @@ class GProf(binary: Path, destination: Path) {
         Files.copy(profilingSum,
                    destination,
                    StandardCopyOption.REPLACE_EXISTING)
+        Files.deleteIfExists(profilingSum)
+        Files.deleteIfExists(profilingOutput)
       }
     } else {
       Files.copy(profilingOutput, destination)
