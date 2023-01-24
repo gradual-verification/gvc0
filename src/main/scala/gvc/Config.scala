@@ -2,7 +2,6 @@ package gvc
 
 import gvc.Config.DefaultMode
 import gvc.benchmarking.Output
-
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import java.io.File
 import scala.annotation.tailrec
@@ -12,31 +11,32 @@ sealed trait DumpType
 sealed trait Mode
 
 case class Config(
-    dump: Option[DumpType] = None,
-    output: Option[String] = None,
-    timeout: Option[Long] = None,
-    mode: Mode = Config.DefaultMode,
-    exportDirectory: Option[String] = None,
-    config: Option[Path] = None,
-    onlyExec: Boolean = false,
-    saveFiles: Boolean = false,
-    stressLevel: Option[Int] = None,
-    profilingEnabled: Boolean = false,
-    exec: Boolean = false,
-    onlyVerify: Boolean = false,
-    onlyCompile: Boolean = false,
-    onlyBenchmark: Boolean = false,
-    onlyErrors: Boolean = false,
-    sourceFile: Option[String] = None,
-    linkedLibraries: List[String] = List.empty,
-    versionString: Option[String] = None,
-    nicknameString: Option[String] = None,
-    hardwareString: Option[String] = None,
-    dbURLString: Option[String] = None,
-    dbUserString: Option[String] = None,
-    dbPassString: Option[String] = None,
-    recreatePerm: Option[Int] = None,
-) {
+                   dump: Option[DumpType] = None,
+                   output: Option[String] = None,
+                   timeout: Option[Long] = None,
+                   mode: Mode = Config.DefaultMode,
+                   exportDirectory: Option[String] = None,
+                   config: Option[Path] = None,
+                   onlyExec: Boolean = false,
+                   saveFiles: Boolean = false,
+                   stressLevel: Option[Int] = None,
+                   profilingEnabled: Boolean = false,
+                   profilingDirectory: Option[String] = None,
+                   exec: Boolean = false,
+                   onlyVerify: Boolean = false,
+                   onlyCompile: Boolean = false,
+                   onlyBenchmark: Boolean = false,
+                   onlyErrors: Boolean = false,
+                   sourceFile: Option[String] = None,
+                   linkedLibraries: List[String] = List.empty,
+                   versionString: Option[String] = None,
+                   nicknameString: Option[String] = None,
+                   hardwareString: Option[String] = None,
+                   dbURLString: Option[String] = None,
+                   dbUserString: Option[String] = None,
+                   dbPassString: Option[String] = None,
+                   recreatePerm: Option[Int] = None,
+                 ) {
   def validate(): Unit = {
     (
       if (dump.isDefined && output.isDefined)
@@ -57,7 +57,7 @@ case class Config(
       else if (versionString.nonEmpty && versionString.get.trim.isEmpty) {
         Some(s"Invalid version string.")
       } else None
-    ).foreach(Config.error)
+      ).foreach(Config.error)
   }
 }
 
@@ -80,8 +80,6 @@ object Config {
 
   case object Recreate extends Mode
 
-  case object RecreateVerified extends Mode
-
   case object Monitor extends Mode
 
   case object Export extends Mode
@@ -97,17 +95,34 @@ object Config {
       |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
       |  -x            --exec                         Execute the compiled file
       |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
+      |
       |  -p            --profile                      Compile C0 binary with -pg flag to enable profiling with gprof.
+      |                --profile-dir=<dir>            Save profiling output to the specified directory.
+      |                
       |                --config=<config.xml>          Execute a benchmark using the specified configuration file
       |
-      |                --populate                     Populate the benchmarking database using options from the specified configuration file.
-      |                --execute                      Execute programs and store results in the database using options from the specified configuration file.
-      |                --execute-benchmark            Identical to --execute, but only selects programs belonging to pre-configured benchmark sets.
-      |                --recreate=<id>                Specify a permutation to recreate from the database using options from the specified configuration file.
-      |                --export                       Data is filtered using options from the specified configuration file.
-      |                --export-benchmark             Identical to --export, but only selects data corresponding to pre-configured benchmark sets.
+      |                --populate                     Populate the benchmarking database using options from the specified
+      |                                               configuration file.
+      |                                               
+      |                --execute                      Execute programs and store results in the database using options
+      |                                               from the specified configuration file.
+      |                                               
+      |                --execute-benchmark            Identical to --execute, but only selects programs belonging to
+      |                                               pre-configured benchmark sets.
+      |                                               
+      |                --recreate=<id>                Specify a permutation to recreate from the database using options
+      |                                               from the specified configuration file.
+      |                                               
+      |                --export                       Data is filtered using options from the specified configuration
+      |                                               file.
+      |                
+      |                --export-benchmark             Identical to --export, but only selects data corresponding to
+      |                                               pre-configured benchmark sets.
+      |                                               
       |                --export-errors                Identical to --export, but generates a list of all errors. 
-      |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
+      |                --version=<version>            Specify the version string identifying the current verifier.
+      |                                               Overrides config.
+      |
       |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
       |                --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
       |
@@ -134,7 +149,7 @@ object Config {
   private val dbUserString = raw"--db-user=(.+)".r
   private val dbPassString = raw"--db-pass=(.+)".r
   private val recreatePermString = raw"--recreate=(.+)".r
-  private val recreateVerifiedPermString = raw"--recreate-verified=(.+)".r
+  private val profilingDirectory = raw"--profile-dir=(.+)".r
 
   def error(message: String): Nothing = {
     Output.error(message)
@@ -149,14 +164,14 @@ object Config {
   private def parseTimeout(t: String): Long = t match {
     case timeoutSec(t) => t.substring(0, t.length).toLong * 1000
     case timeoutMin(t) => t.substring(0, t.length).toLong * 60 * 1000
-    case _             => error(s"Invalid timeout: $t")
+    case _ => error(s"Invalid timeout: $t")
   }
 
   private def parseDumpType(t: String) = t.toLowerCase() match {
-    case "ir"     => DumpIR
+    case "ir" => DumpIR
     case "silver" => DumpSilver
-    case "c0"     => DumpC0
-    case _        => error(s"Invalid dump output type: $t")
+    case "c0" => DumpC0
+    case _ => error(s"Invalid dump output type: $t")
   }
 
   def parseInt(t: String, config: String): Int = {
@@ -198,9 +213,9 @@ object Config {
 
   @tailrec
   def fromCommandLineArgs(
-      args: List[String],
-      current: Config = Config()
-  ): Config =
+                           args: List[String],
+                           current: Config = Config()
+                         ): Config =
     args match {
       case exportString(t) :: tail =>
         fromCommandLineArgs(
@@ -231,9 +246,13 @@ object Config {
         fromCommandLineArgs(tail, current.copy(mode = Execute))
       case recreatePermString(t) :: tail =>
         fromCommandLineArgs(tail,
-                            current.copy(recreatePerm =
-                                           Some(this.parseInt(t, "--recreate")),
-                                         mode = Recreate))
+          current.copy(recreatePerm =
+            Some(this.parseInt(t, "--recreate")),
+            mode = Recreate))
+      case profilingDirectory(t) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(profilingDirectory = Some(t), profilingEnabled = true))
       case configFileArg(t) :: tail =>
         fromCommandLineArgs(
           tail,

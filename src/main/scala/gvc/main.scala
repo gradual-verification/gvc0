@@ -104,7 +104,7 @@ object Main extends App {
           BenchmarkRecreator.recreate(benchConfig, config, linkedLibraries)
         Output.success(
           s"Successfully recreated permutation ID=${benchConfig.permToRecreate}!")
-        
+
         recreated match {
           case BenchmarkRecreator.RecreatedUnverified(ir) =>
             val recreationName = s"./recreated_${benchConfig.permToRecreate}.c0"
@@ -252,14 +252,15 @@ object Main extends App {
              fileNames: OutputFileCollection,
              config: Config): VerifiedOutput = {
     def silicon = resolveSilicon(config)
-
-    verifySiliconProvided(silicon, inputSource, fileNames, config)
+    val output = verifySiliconProvided(silicon, inputSource, fileNames, config)
+    output
   }
 
   def verifySiliconProvided(silicon: Silicon,
                             inputSource: String,
                             fileNames: OutputFileCollection,
-                            config: Config): VerifiedOutput = {
+                            config: Config,
+                            stopImmediately: Boolean = true): VerifiedOutput = {
     profilingInfo.reset
     runtimeChecks.reset
 
@@ -287,13 +288,12 @@ object Main extends App {
     val verificationStart = System.nanoTime()
     silicon.start()
     silicon.verify(silver.program) match {
-      case verifier.Success => ()
+      case verifier.Success => if (stopImmediately) silicon.stop()
       case verifier.Failure(errors) =>
         val message = errors.map(_.readableMessage).mkString("\n")
-        silicon.stop()
+        if (stopImmediately) silicon.stop()
         throw VerificationException(message)
     }
-    silicon.stop()
     val verificationStop = System.nanoTime()
     val verificationTime = verificationStop - verificationStart
 

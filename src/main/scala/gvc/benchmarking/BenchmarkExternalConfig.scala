@@ -73,7 +73,8 @@ case class ExecutorConfig(version: String,
                           db: BenchmarkDBCredentials,
                           modifiers: PipelineModifiers,
                           sources: List[Path],
-                          timeoutMinutes: Int)
+                          timeoutMinutes: Int,
+                          profilingDirectory: Option[Path])
     extends BenchmarkingConfig
 
 case class ExportConfig(version: String,
@@ -93,6 +94,7 @@ case class BenchmarkConfigResults(
     workload: Option[BenchmarkWorkload],
     pathQuantity: Option[Int],
     modifiers: PipelineModifiers,
+    profilingDirectory: Option[Path],
     outputDir: Option[String],
     iter: IterConfiguration,
     timeout: Int
@@ -137,7 +139,22 @@ object BenchmarkExternalConfig {
   }
 
   def parseExecutor(rootConfig: Config): ExecutorConfig = {
+
     val resolved = parseConfig(rootConfig)
+    val profilingDirectory: Option[Path] = resolved.profilingDirectory match {
+      case Some(value) => Some(value)
+      case None =>
+        rootConfig.profilingDirectory match {
+          case Some(value) => Some(Files.createDirectory(Paths.get(value)))
+          case None =>
+            if (rootConfig.profilingEnabled) {
+              Some(Paths.get("./"))
+            } else {
+              None
+            }
+        }
+    }
+
     resolved.hardware match {
       case Some(hValue) =>
         resolved.workload match {
@@ -152,7 +169,8 @@ object BenchmarkExternalConfig {
                   resolved.credentials,
                   resolved.modifiers,
                   resolved.sources,
-                  resolved.timeout
+                  resolved.timeout,
+                  profilingDirectory
                 )
               case None => error("A <nickname> must be provided.")
             }
@@ -225,6 +243,7 @@ object BenchmarkExternalConfig {
       }
       val sourceDirText = sourceDirElement.text
       val sourceDirPath = validateDirectory(sourceDirText, "source-dir")
+
       val c0SourceFiles = sourceDirPath.toFile
         .listFiles()
         .filter(_.isFile)
@@ -251,6 +270,15 @@ object BenchmarkExternalConfig {
 
       val modifiers = parsePipelineModifiers(rootConfig, benchmarkRoot)
 
+      val profilingDirElement = benchmarkRoot \ "profiling-dir"
+      val profilingDirText = profilingDirElement.text
+
+      val profilingDir = if (outputDir.isEmpty || outputDir.text.trim.isEmpty) {
+        None
+      } else {
+        Some(validateDirectory(profilingDirText, "profiling-dir"))
+      }
+
       BenchmarkConfigResults(version,
                              hardware,
                              nickname,
@@ -259,9 +287,11 @@ object BenchmarkExternalConfig {
                              workload,
                              quantity,
                              modifiers,
+                             profilingDir,
                              outputDirText,
                              iter,
-                             timeout.getOrElse(Defaults.timeout))
+                             timeout.getOrElse(Defaults.timeout),
+      )
     }
   }
 
@@ -321,7 +351,6 @@ object BenchmarkExternalConfig {
 
   private def parsePipelineModifiers(config: Config,
                                      xml: NodeSeq): PipelineModifiers = {
-
     val onlyDynamic =
       if (singleton(xml, "only-dynamic")) Some(DynamicMeasurementMode.Dynamic)
       else None
@@ -331,7 +360,6 @@ object BenchmarkExternalConfig {
     val onlyGradual =
       if (singleton(xml, "only-gradual")) Some(DynamicMeasurementMode.Gradual)
       else None
-
     val saveErroredPerms =
       resolveFallbackOptional(xml, "save-errored-perms", None)
     val erroredPermsDirectory = saveErroredPerms match {
@@ -418,7 +446,7 @@ object BenchmarkExternalConfig {
             s"<$tag>: Expected a directory but found a regular file: $pathText")
         }
       } else {
-        error(s"<$tag>: The specified directory $pathText doesn't exist.")
+        Files.createDirectory(converted)
       }
     } catch {
       case _: InvalidPathException => {}

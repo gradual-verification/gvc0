@@ -13,6 +13,7 @@ object Benchmark {
     def csv(basename: String): String = basename + ".csv"
 
     def log(basename: String): String = basename + ".log"
+    def sum(basename: String): String = basename + ".sum"
     def remove(fullname: String): String =
       fullname.replaceFirst("[.][^.]+$", "")
   }

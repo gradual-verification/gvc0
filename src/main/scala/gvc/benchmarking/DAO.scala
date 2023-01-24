@@ -405,10 +405,17 @@ object DAO {
                                  pid: Long,
                                  c: DBConnection): Option[String] = {
     sql"SELECT c0_source FROM verified_permutations WHERE permutation_id = $pid AND version_id = $vid"
-      .query[Option[String]]
-      .unique
+      .query[String]
+      .option
       .transact(c.xa)
-      .unsafeRunSync()
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          s"Unable to resolve prior verification attempts for permutation PID=$pid",
+          t)
+      case Right(value) => value
+    }
   }
 
   case class ReservedProgramEntry(permID: Long,

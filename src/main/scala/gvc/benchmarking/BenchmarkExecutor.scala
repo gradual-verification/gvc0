@@ -1,12 +1,12 @@
 package gvc.benchmarking
-
 import gvc.Config.error
-import gvc.Main.{resolveSilicon, writeFile}
+import gvc.Main.writeFile
 import gvc.benchmarking.Benchmark.{
   BenchmarkException,
   injectStress,
   isInjectable
 }
+import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
 import gvc.benchmarking.Timing.{
   CC0CompilationException,
@@ -29,48 +29,36 @@ object BenchmarkExecutor {
       extends Exception(timeout.getMessage)
 
   class SiliconState(config: Config) {
-    private var currentSiliconInstance: Option[Silicon] = None
+    private var currentInstance: Option[Silicon] = None
 
-    private def init(): Silicon = {
-      val newInstance = resolveSilicon(config)
-      currentSiliconInstance = Some(newInstance)
-      newInstance
-    }
-
-    private def destroy(): Unit = {
-      currentSiliconInstance match {
+    def trackInstance(silicon: Silicon): Unit = {
+      this.currentInstance match {
         case Some(value) => value.stop()
         case None        =>
       }
-      currentSiliconInstance = None
+      this.currentInstance = Some(silicon)
     }
 
-    def verify(permutationID: Long,
-               source: String,
-               minutes: Int): Either[Throwable, TimedVerification] = {
-      currentSiliconInstance.synchronized {
-        this.currentSiliconInstance match {
-          case None =>
-            val instance = this.init()
-            try {
-              val res = Timeout.runWithTimeout(minutes * 60 * 1000)(
-                Timing.verifyTimed(instance,
-                                   source,
-                                   Main.Defaults.outputFileCollection,
-                                   config)
-              )
-              this.destroy()
-              Right(res)
-            } catch {
-              case t: Throwable =>
-                this.destroy()
-                Output.error(
-                  f"Error in permutation $permutationID: ${t.getMessage}")
-                Left(VerificationTimeoutException(t))
-            }
-          case Some(_) =>
-            error("Cannot begin verification before prior run has terminated.")
-        }
+    def verifyWithTimeout(
+        permutationID: Long,
+        source: String,
+        minutes: Int): Either[Throwable, TimedVerification] = {
+      try {
+        val res = Timeout.runWithTimeout(minutes * 60 * 1000)(
+          Timing.verifyTimed(SiliconState.this,
+                             source,
+                             Main.Defaults.outputFileCollection,
+                             config)
+        )
+        Right(res)
+      } catch {
+        case t: Throwable =>
+          this.currentInstance match {
+            case Some(value) => value.stop()
+            case None        =>
+          }
+          Output.error(f"Error in permutation $permutationID: ${t.getMessage}")
+          Left(VerificationTimeoutException(t))
       }
     }
   }
@@ -174,9 +162,9 @@ object BenchmarkExecutor {
           case None =>
             val reconstructedSourceText =
               IRPrinter.print(ir, includeSpecs = true)
-            val vOut = silicon.verify(reserved.perm.id,
-                                      reconstructedSourceText,
-                                      config.timeoutMinutes)
+            val vOut = silicon.verifyWithTimeout(reserved.perm.id,
+                                                 reconstructedSourceText,
+                                                 config.timeoutMinutes)
             vOut match {
               case Left(t) =>
                 reportError(reconstructedSourceText, reserved, t)
@@ -255,60 +243,65 @@ object BenchmarkExecutor {
       val reconstructedSourceText =
         IRPrinter.print(convertedToIR, includeSpecs = true)
 
-      val binaryToExecute =
-        conn.dynamicModes.get(reserved.measurementMode) match {
-          case Some(value) =>
-            value match {
-              case DynamicMeasurementMode.Dynamic |
-                  DynamicMeasurementMode.Framing =>
-                benchmarkBaseline(convertedToIR,
-                                  value == DynamicMeasurementMode.Framing)
-              case DynamicMeasurementMode.Gradual =>
-                benchmarkGradual(convertedToIR, reserved)
-            }
-          case None =>
-            error(
-              s"Unrecognized dynamic measurement mode with ID ${reserved.measurementMode}")
-        }
-      binaryToExecute match {
-        case Some(value) =>
-          reserved.workloads
-            .foreach(w => {
-              val perfOption = try {
-                Right(
-                  Timeout.runWithTimeout(config.timeoutMinutes * 60 * 1000)(
-                    Timing.execTimed(value,
-                                     List(),
-                                     config.workload.iterations,
-                                     w,
-                                     ongoingProcesses)))
-              } catch {
-                case t: Throwable =>
-                  while (ongoingProcesses.nonEmpty) {
-                    val process = ongoingProcesses.remove(0)
-                    if (process.isAlive) process.destroy()
+      conn.dynamicModes.get(reserved.measurementMode) match {
+        case Some(mode) =>
+          val binary = mode match {
+            case DynamicMeasurementMode.Dynamic |
+                DynamicMeasurementMode.Framing =>
+              benchmarkBaseline(convertedToIR,
+                                mode == DynamicMeasurementMode.Framing)
+            case DynamicMeasurementMode.Gradual =>
+              benchmarkGradual(convertedToIR, reserved)
+          }
+          binary match {
+            case Some(binaryToExecute) => {
+              val profiler =
+                resolveProfiler(config, reserved, binaryToExecute, mode)
+              reserved.workloads
+                .foreach(w => {
+                  val perfOption = try {
+                    Right(
+                      Timeout.runWithTimeout(config.timeoutMinutes * 60 * 1000)(
+                        Timing.execTimed(binaryToExecute,
+                                         List(),
+                                         config.workload.iterations,
+                                         w,
+                                         ongoingProcesses,
+                                         profiler)))
+                  } catch {
+                    case t: Throwable =>
+                      while (ongoingProcesses.nonEmpty) {
+                        val process = ongoingProcesses.remove(0)
+                        if (process.isAlive) process.destroy()
+                      }
+                      Output.error(
+                        s"Error with Perm ID= ${reserved.perm.id}: " + t.getMessage)
+                      Left(t)
                   }
-                  Output.error(
-                    s"Error with Perm ID= ${reserved.perm.id}: " + t.getMessage)
-                  Left(t)
-              }
-              perfOption match {
-                case Left(t) =>
-                  reportError(reconstructedSourceText, reserved, t)
-                case Right(p) =>
-                  DAO.completeProgramMeasurement(id,
-                                                 reserved,
-                                                 w,
-                                                 config.workload.iterations,
-                                                 p,
-                                                 conn)
-              }
-            })
+                  perfOption match {
+                    case Left(t) =>
+                      reportError(reconstructedSourceText, reserved, t)
+                    case Right(p) =>
+                      DAO.completeProgramMeasurement(id,
+                                                     reserved,
+                                                     w,
+                                                     config.workload.iterations,
+                                                     p,
+                                                     conn)
+                  }
+                })
+            }
+            case None =>
+          }
+
         case None =>
+          error(
+            s"Unrecognized dynamic measurement mode with ID ${reserved.measurementMode}")
       }
       reservedProgram =
         DAO.reserveProgramForMeasurement(id, stressTable, config, conn)
     }
+    Output.info("No additional permutations available for reservation.")
   }
 
   def injectAndWrite(c0: String, dest: Path): Unit = {
@@ -324,6 +317,20 @@ object BenchmarkExecutor {
     )
   }
 
+  def resolveProfiler(
+      config: ExecutorConfig,
+      reservedProgram: ReservedProgram,
+      binary: Path,
+      measurementMode: DynamicMeasurementMode): Option[GProf] = {
+    config.profilingDirectory match {
+      case Some(value) =>
+        val filename = Benchmark.Extensions.sum(
+          s"${measurementMode}_${reservedProgram.perm.programID}_${reservedProgram.perm.id}")
+        val sumPath = value.resolve(filename)
+        Some(new GProf(binary, sumPath))
+      case None => None
+    }
+  }
   class StressTable(workload: BenchmarkWorkload) {
     private val defaultStressValues = workload.stress match {
       case Some(value) => BenchmarkExternalConfig.generateStressList(value)
