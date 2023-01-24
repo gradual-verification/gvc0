@@ -9,6 +9,7 @@ import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{Elem, NodeSeq, XML}
 import scala.language.implicitConversions
 import scala.language.postfixOps
+import scala.reflect.io.Directory
 
 case class BenchmarkDBCredentials(
     url: String,
@@ -145,7 +146,8 @@ object BenchmarkExternalConfig {
       case Some(value) => Some(value)
       case None =>
         rootConfig.profilingDirectory match {
-          case Some(value) => Some(Files.createDirectory(Paths.get(value)))
+          case Some(value) =>
+            Some(overwriteDirectory(value))
           case None =>
             if (rootConfig.profilingEnabled) {
               Some(Paths.get("./"))
@@ -276,7 +278,7 @@ object BenchmarkExternalConfig {
       val profilingDir = if (outputDir.isEmpty || outputDir.text.trim.isEmpty) {
         None
       } else {
-        Some(validateDirectory(profilingDirText, "profiling-dir"))
+        Some(overwriteDirectory(profilingDirText))
       }
 
       BenchmarkConfigResults(version,
@@ -452,6 +454,14 @@ object BenchmarkExternalConfig {
       case _: InvalidPathException => {}
       error(s"<$tag>: Invalid path format: $pathText")
     }
+  }
+
+  private def overwriteDirectory(pathText: String): java.nio.file.Path = {
+    val converted = Paths.get(pathText)
+    if (Files.exists(converted)) {
+      new Directory(converted.toFile).deleteRecursively()
+    }
+    Files.createDirectory(converted)
   }
 
   private def validateFile(pathText: String,
