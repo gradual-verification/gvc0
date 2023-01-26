@@ -22,7 +22,7 @@
         </by-program>
         <iterations>100</iterations>
     </workload>
-    <profiling-dir>./profiling</profiling-dir>
+    <profiling-dir>./profiling-output</profiling-dir>
     <save-errored-perms>./errored</save-errored-perms>
     <only-gradual/>
 </benchmark>
