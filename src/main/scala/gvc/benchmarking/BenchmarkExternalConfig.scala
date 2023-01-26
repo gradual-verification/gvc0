@@ -147,7 +147,7 @@ object BenchmarkExternalConfig {
       case None =>
         rootConfig.profilingDirectory match {
           case Some(value) =>
-            Some(overwriteDirectory(value))
+            Some(Paths.get(value))
           case None =>
             if (rootConfig.profilingEnabled) {
               Some(Paths.get("./"))
@@ -279,7 +279,7 @@ object BenchmarkExternalConfig {
         if (profilingDirElement.isEmpty || profilingDirElement.text.trim.isEmpty) {
           None
         } else {
-          Some(overwriteDirectory(profilingDirText))
+          Some(Paths.get(profilingDirText))
         }
 
       BenchmarkConfigResults(version,
@@ -456,15 +456,6 @@ object BenchmarkExternalConfig {
       error(s"<$tag>: Invalid path format: $pathText")
     }
   }
-
-  private def overwriteDirectory(pathText: String): java.nio.file.Path = {
-    val converted = Paths.get(pathText)
-    if (Files.exists(converted)) {
-      new Directory(converted.toFile).deleteRecursively()
-    }
-    Files.createDirectory(converted)
-  }
-
   private def validateFile(pathText: String,
                            tag: String): java.nio.file.Path = {
     try {

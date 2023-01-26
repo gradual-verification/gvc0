@@ -1,4 +1,5 @@
 package gvc.benchmarking
+
 import gvc.Config.error
 import gvc.Main.writeFile
 import gvc.benchmarking.Benchmark.{
@@ -22,6 +23,7 @@ import java.nio.file.{Files, Path}
 import java.util.Calendar
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
+import scala.reflect.io.Directory
 
 object BenchmarkExecutor {
 
@@ -105,6 +107,13 @@ object BenchmarkExecutor {
 
     var reservedProgram =
       DAO.reserveProgramForMeasurement(id, stressTable, config, conn)
+
+    config.profilingDirectory match {
+      case Some(value) =>
+        if (Files.exists(value)) new Directory(value.toFile).deleteRecursively()
+        Files.createDirectory(value)
+      case None =>
+    }
 
     def reportError(src: String,
                     reserved: ReservedProgram,
@@ -331,6 +340,7 @@ object BenchmarkExecutor {
       case None => None
     }
   }
+
   class StressTable(workload: BenchmarkWorkload) {
     private val defaultStressValues = workload.stress match {
       case Some(value) => BenchmarkExternalConfig.generateStressList(value)
