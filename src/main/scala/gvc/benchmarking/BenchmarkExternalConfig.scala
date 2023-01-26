@@ -275,11 +275,12 @@ object BenchmarkExternalConfig {
       val profilingDirElement = benchmarkRoot \ "profiling-dir"
       val profilingDirText = profilingDirElement.text
 
-      val profilingDir = if (outputDir.isEmpty || outputDir.text.trim.isEmpty) {
-        None
-      } else {
-        Some(overwriteDirectory(profilingDirText))
-      }
+      val profilingDir =
+        if (profilingDirElement.isEmpty || profilingDirElement.text.trim.isEmpty) {
+          None
+        } else {
+          Some(overwriteDirectory(profilingDirText))
+        }
 
       BenchmarkConfigResults(version,
                              hardware,
