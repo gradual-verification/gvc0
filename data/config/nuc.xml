@@ -21,7 +21,7 @@
         </by-program>
         <iterations>100</iterations>
     </workload>
-    <save-profiling>./profiling</save-profiling>
+    <profiling-dir>./profiling</profiling-dir>
     <save-errored-perms>./errored</save-errored-perms>
     <only-gradual/>
 </benchmark>
