@@ -91,7 +91,11 @@ object Main extends App {
           val outputBinary = Paths.get(fileNames.binaryName)
           injectAndWrite(IRPrinter.print(ir, includeSpecs = false),
                          outputC0Source)
-          Timing.compileTimed(outputC0Source, outputBinary, config)
+          Timing.compileTimed(
+            outputC0Source,
+            outputBinary,
+            config,
+            profilingEnabled = config.profilingEnabled || config.profilingDirectory.nonEmpty)
           Timing.execTimed(outputBinary,
                            List(s"--stress ${config.stressLevel.getOrElse(1)}"))
         })
