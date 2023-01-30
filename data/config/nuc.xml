@@ -8,21 +8,15 @@
     <workload>
         <by-program>
             <p>
-                <match>list</match>
+                <match>avlja,bst,composite,list</match>
                 <stress>
                     <list>32</list>
-                </stress>
-            </p>
-            <p>
-                <match>avlja,bst,composite</match>
-                <stress>
-                    <list>16</list>
                 </stress>
             </p>
         </by-program>
         <iterations>100</iterations>
     </workload>
-    <profiling-dir>./profiling-output</profiling-dir>
+    <profiling-dir>./profiling-results</profiling-dir>
     <save-errored-perms>./errored</save-errored-perms>
     <only-gradual/>
 </benchmark>

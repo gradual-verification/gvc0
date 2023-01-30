@@ -28,7 +28,7 @@ import scala.reflect.io.Directory
 object BenchmarkExecutor {
 
   case class VerificationTimeoutException(timeout: Throwable)
-    extends Exception(timeout.getMessage)
+      extends Exception(timeout.getMessage)
 
   class SiliconState(config: Config) {
     private var currentInstance: Option[Silicon] = None
@@ -36,28 +36,28 @@ object BenchmarkExecutor {
     def trackInstance(silicon: Silicon): Unit = {
       this.currentInstance match {
         case Some(value) => value.stop()
-        case None =>
+        case None        =>
       }
       this.currentInstance = Some(silicon)
     }
 
     def verifyWithTimeout(
-                           permutationID: Long,
-                           source: String,
-                           minutes: Int): Either[Throwable, TimedVerification] = {
+        permutationID: Long,
+        source: String,
+        minutes: Int): Either[Throwable, TimedVerification] = {
       try {
         val res = Timeout.runWithTimeout(minutes * 60 * 1000)(
           Timing.verifyTimed(SiliconState.this,
-            source,
-            Main.Defaults.outputFileCollection,
-            config)
+                             source,
+                             Main.Defaults.outputFileCollection,
+                             config)
         )
         Right(res)
       } catch {
         case t: Throwable =>
           this.currentInstance match {
             case Some(value) => value.stop()
-            case None =>
+            case None        =>
           }
           Output.error(f"Error in permutation $permutationID: ${t.getMessage}")
           Left(VerificationTimeoutException(t))
@@ -121,13 +121,13 @@ object BenchmarkExecutor {
                     t: Throwable): Unit = {
 
       val typeToReport = t match {
-        case _: VerificationException => ErrorType.Verification
-        case _: CC0CompilationException => ErrorType.Compilation
-        case _: CC0ExecutionException => ErrorType.Execution
+        case _: VerificationException        => ErrorType.Verification
+        case _: CC0CompilationException      => ErrorType.Compilation
+        case _: CC0ExecutionException        => ErrorType.Execution
         case _: VerificationTimeoutException => ErrorType.VerificationTimeout
-        case _: TimeoutException => ErrorType.ExecutionTimeout
-        case _: WeaverException => ErrorType.Weaving
-        case _ => ErrorType.Unknown
+        case _: TimeoutException             => ErrorType.ExecutionTimeout
+        case _: WeaverException              => ErrorType.Weaving
+        case _                               => ErrorType.Unknown
       }
 
       config.modifiers.saveErroredPerms match {
@@ -141,25 +141,25 @@ object BenchmarkExecutor {
       val resolved = DAO.resolveException(typeToReport, t.getMessage, conn)
       typeToReport match {
         case ErrorType.Verification | ErrorType.Compilation |
-             ErrorType.Weaving | ErrorType.VerificationTimeout =>
+            ErrorType.Weaving | ErrorType.VerificationTimeout =>
           DAO.logStaticException(id, reserved, resolved, conn)
         case ErrorType.ExecutionTimeout =>
           DAO.logDynamicException(id,
-            reserved,
-            resolved,
-            reserved.workloads,
-            conn)
+                                  reserved,
+                                  resolved,
+                                  reserved.workloads,
+                                  conn)
         case ErrorType.Unknown =>
           DAO.logStaticException(id, reserved, resolved, conn)
           DAO.logDynamicException(id,
-            reserved,
-            resolved,
-            reserved.workloads,
-            conn)
+                                  reserved,
+                                  resolved,
+                                  reserved.workloads,
+                                  conn)
         case ErrorType.Execution =>
           val stress = t match {
             case c: CC0ExecutionException => List(c.getStress)
-            case _ => reserved.workloads
+            case _                        => reserved.workloads
           }
           DAO.logDynamicException(id, reserved, resolved, stress, conn)
       }
@@ -174,8 +174,8 @@ object BenchmarkExecutor {
             val reconstructedSourceText =
               IRPrinter.print(ir, includeSpecs = true)
             val vOut = silicon.verifyWithTimeout(reserved.perm.id,
-              reconstructedSourceText,
-              config.timeoutMinutes)
+                                                 reconstructedSourceText,
+                                                 config.timeoutMinutes)
             vOut match {
               case Left(t) =>
                 reportError(reconstructedSourceText, reserved, t)
@@ -194,20 +194,20 @@ object BenchmarkExecutor {
       Files.deleteIfExists(tempBinary)
 
       val cOut = Timing.compileTimed(tempSource,
-        tempBinary,
-        baseConfig,
-        config.workload.staticIterations,
-        config.profilingDirectory.nonEmpty,
-        ongoingProcesses)
+                                     tempBinary,
+                                     baseConfig,
+                                     config.workload.staticIterations,
+                                     config.profilingDirectory.nonEmpty,
+                                     ongoingProcesses)
 
       verifierOutput match {
         case Some(value) =>
           DAO.updateStaticProfiling(id,
-            reserved.perm.id,
-            config.workload.staticIterations,
-            value,
-            cOut,
-            conn)
+                                    reserved.perm.id,
+                                    config.workload.staticIterations,
+                                    value,
+                                    cOut,
+                                    conn)
         case None =>
       }
 
@@ -223,11 +223,11 @@ object BenchmarkExecutor {
       this.injectAndWrite(sourceText, tempSource)
       Files.deleteIfExists(tempBinary)
       Timing.compileTimed(tempSource,
-        tempBinary,
-        baseConfig,
-        config.workload.staticIterations,
-        config.profilingDirectory.nonEmpty,
-        ongoingProcesses)
+                          tempBinary,
+                          baseConfig,
+                          config.workload.staticIterations,
+                          config.profilingDirectory.nonEmpty,
+                          ongoingProcesses)
       Some(tempBinary)
     }
 
@@ -239,20 +239,16 @@ object BenchmarkExecutor {
         s"${cal.get(Calendar.HOUR_OF_DAY)}:${cal.get(Calendar.MINUTE)}:${cal.get(Calendar.SECOND)}"
 
       Output.info(
-        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${
-          conn
-            .dynamicModes(reserved.measurementMode)
-        } | w=[${
-          reserved.workloads
-            .mkString(",")
-        }] | id=${reserved.perm.id} | $currentTime")
+        s"Benchmarking: ${syncedPrograms(reserved.perm.programID).fileName} | ${conn
+          .dynamicModes(reserved.measurementMode)} | w=[${reserved.workloads
+          .mkString(",")}] | id=${reserved.perm.id} | $currentTime")
 
       val correspondingProgramLabels =
         syncedPrograms(reserved.perm.programID).labels
 
       val asLabelSet =
         LabelTools.permutationIDToPermutation(correspondingProgramLabels,
-          reserved.perm.permutationContents)
+                                              reserved.perm.permutationContents)
 
       val convertedToIR = new SelectVisitor(
         syncedPrograms(reserved.perm.programID).ir).visit(asLabelSet)
@@ -264,9 +260,9 @@ object BenchmarkExecutor {
         case Some(mode) =>
           val binary = mode match {
             case DynamicMeasurementMode.Dynamic |
-                 DynamicMeasurementMode.Framing =>
+                DynamicMeasurementMode.Framing =>
               benchmarkBaseline(convertedToIR,
-                mode == DynamicMeasurementMode.Framing)
+                                mode == DynamicMeasurementMode.Framing)
             case DynamicMeasurementMode.Gradual =>
               benchmarkGradual(convertedToIR, reserved)
           }
@@ -280,11 +276,11 @@ object BenchmarkExecutor {
                     Right(
                       Timeout.runWithTimeout(config.timeoutMinutes * 60 * 1000)(
                         Timing.execTimed(binaryToExecute,
-                          List(),
-                          config.workload.iterations,
-                          w,
-                          ongoingProcesses,
-                          profiler)))
+                                         List(),
+                                         config.workload.iterations,
+                                         w,
+                                         ongoingProcesses,
+                                         profiler)))
                   } catch {
                     case t: Throwable =>
                       while (ongoingProcesses.nonEmpty) {
@@ -300,11 +296,11 @@ object BenchmarkExecutor {
                       reportError(reconstructedSourceText, reserved, t)
                     case Right(p) =>
                       DAO.completeProgramMeasurement(id,
-                        reserved,
-                        w,
-                        config.workload.iterations,
-                        p,
-                        conn)
+                                                     reserved,
+                                                     w,
+                                                     config.workload.iterations,
+                                                     p,
+                                                     conn)
                   }
                 })
 
@@ -340,7 +336,7 @@ object BenchmarkExecutor {
                       workload: Int): Option[GProf] = {
     config.profilingDirectory match {
       case Some(value) =>
-        val filename = Benchmark.Extensions.sum(
+        val filename = Benchmark.Extensions.txt(
           s"${measurementMode}_${workload}_${reservedProgram.perm.programID}_${reservedProgram.perm.id}")
         val sumPath = value.resolve(filename)
         Some(new GProf(binary, sumPath))
@@ -351,7 +347,7 @@ object BenchmarkExecutor {
   class StressTable(workload: BenchmarkWorkload) {
     private val defaultStressValues = workload.stress match {
       case Some(value) => BenchmarkExternalConfig.generateStressList(value)
-      case None => List.empty[Int]
+      case None        => List.empty[Int]
     }
     private val userConfiguredStressValues = workload.programCases
       .flatMap(c => {
