@@ -4,7 +4,7 @@ import gvc.Config
 import gvc.Config.error
 
 import java.nio.file.{Files, Path, Paths}
-import scala.sys.process.Process
+import scala.sys.process.{Process, ProcessLogger}
 
 class GProf(binary: Path, destination: Path) {
   private val gprof_exe = Config.resolveToolPath("gprof", "GPROF_EXE")
@@ -38,15 +38,20 @@ class GProf(binary: Path, destination: Path) {
       error(
         s"Unable to save gprof results; profiling output file does not exist.")
     }
-
+    var capture = ""
+    val logger = ProcessLogger(
+      (o: String) => capture += o,
+      (e: String) => capture += e
+    )
     val command =
-      s"${gprof_exe} --brief ${binary.toAbsolutePath} ${output.toAbsolutePath} > ${destination.toAbsolutePath}"
+      s"${gprof_exe} --brief ${binary.toAbsolutePath} ${output.toAbsolutePath}"
     val commandAsProcess = Process(command)
-    val exit = commandAsProcess.run().exitValue()
+    val exit = commandAsProcess.run(logger).exitValue()
     if (exit != 0) {
       error(s"Failed to save gprof results into ${destination.toString}")
     } else {
       Files.deleteIfExists(output)
+      Files.writeString(destination, capture)
     }
   }
 }
