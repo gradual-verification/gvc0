@@ -9,7 +9,9 @@ import scala.sys.process.Process
 class GProf(binary: Path, destination: Path) {
   private val gprof_exe = Config.resolveToolPath("gprof", "GPROF_EXE")
   private val profilingOutput = Paths.get("./gmon.out")
+  Files.deleteIfExists(profilingOutput)
   private val profilingSum = Paths.get("./gmon.sum")
+  Files.deleteIfExists(profilingSum)
 
   def merge: Unit = {
     if (Files.exists(profilingSum)) {

@@ -9,7 +9,6 @@ import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{Elem, NodeSeq, XML}
 import scala.language.implicitConversions
 import scala.language.postfixOps
-import scala.reflect.io.Directory
 
 case class BenchmarkDBCredentials(
     url: String,
