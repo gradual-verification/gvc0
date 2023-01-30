@@ -18,19 +18,19 @@ import sys.process._
 object Timing {
 
   case class TimedVerification(
-                                output: VerifiedOutput,
-                                translation: Performance,
-                                verification: Performance,
-                                instrumentation: Performance
-                              )
+      output: VerifiedOutput,
+      translation: Performance,
+      verification: Performance,
+      instrumentation: Performance
+  )
 
   def verifyTimed(
-                   state: SiliconState,
-                   inputSource: String,
-                   fileNames: OutputFileCollection,
-                   config: Config,
-                   iterations: Int = 1
-                 ): TimedVerification = {
+      state: SiliconState,
+      inputSource: String,
+      fileNames: OutputFileCollection,
+      config: Config,
+      iterations: Int = 1
+  ): TimedVerification = {
     var verifiedOutput: Option[VerifiedOutput] = None
     val translationTimings = ListBuffer[Long]()
     val verifierTimings = ListBuffer[Long]()
@@ -39,10 +39,10 @@ object Timing {
       val silicon = resolveSilicon(config)
       state.trackInstance(silicon)
       val out = verifySiliconProvided(silicon,
-        inputSource,
-        fileNames,
-        config,
-        stopImmediately = true)
+                                      inputSource,
+                                      fileNames,
+                                      config,
+                                      stopImmediately = true)
       val perf = out.timing
       translationTimings += perf.translation
       verifierTimings += perf.verification
@@ -61,14 +61,14 @@ object Timing {
   }
 
   def compileTimed(
-                    input: Path,
-                    binary: Path,
-                    config: Config,
-                    iterations: Int = 1,
-                    profilingEnabled: Boolean,
-                    ongoingProcesses: mutable.ListBuffer[Process] =
-                    mutable.ListBuffer[Process](),
-                  ): Performance = {
+      input: Path,
+      binary: Path,
+      config: Config,
+      iterations: Int = 1,
+      profilingEnabled: Boolean,
+      ongoingProcesses: mutable.ListBuffer[Process] =
+        mutable.ListBuffer[Process](),
+  ): Performance = {
     val cc0Options = CC0Options(
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
@@ -99,12 +99,12 @@ object Timing {
   }
 
   private def runTimedCommand(
-                               iterations: Int,
-                               command: String,
-                               onNonzero: CommandOutput => Unit,
-                               ongoingProcesses: mutable.ListBuffer[scala.sys.process.Process],
-                               profiler: Option[GProf] = None
-                             ): Performance = {
+      iterations: Int,
+      command: String,
+      onNonzero: CommandOutput => Unit,
+      ongoingProcesses: mutable.ListBuffer[scala.sys.process.Process],
+      profiler: Option[GProf] = None
+  ): Performance = {
     var capture = ""
     val logger = ProcessLogger(
       (o: String) => capture += o,
@@ -121,8 +121,8 @@ object Timing {
       ongoingProcesses.trimEnd(1)
 
       profiler match {
-        case Some(gprof) => gprof.merge
-        case None =>
+        case Some(gprof) => gprof.merge()
+        case None        =>
       }
 
       if (awaitExit != 0) {
@@ -148,13 +148,13 @@ object Timing {
   }
 
   def execTimed(
-                 binary: Path,
-                 args: List[String],
-                 iterations: Int = 1,
-                 stress: Int = 0,
-                 ongoingProcesses: mutable.ListBuffer[Process] = mutable.ListBuffer(),
-                 profiler: Option[GProf] = None
-               ): Performance = {
+      binary: Path,
+      args: List[String],
+      iterations: Int = 1,
+      stress: Int = 0,
+      ongoingProcesses: mutable.ListBuffer[Process] = mutable.ListBuffer(),
+      profiler: Option[GProf] = None
+  ): Performance = {
     val command = (List(binary.toAbsolutePath.toString) ++ args)
       .mkString(" ") + s" --stress $stress"
 
@@ -163,10 +163,10 @@ object Timing {
     }
 
     runTimedCommand(iterations,
-      command,
-      execNonzero,
-      ongoingProcesses,
-      profiler)
+                    command,
+                    execNonzero,
+                    ongoingProcesses,
+                    profiler)
   }
 
   private def percentile(values: List[Long], percentile: Double): BigDecimal = {
@@ -216,10 +216,10 @@ object Timing {
   }
 
   class CC0CompilationException(output: CommandOutput)
-    extends CapturedOutputException(output)
+      extends CapturedOutputException(output)
 
   class CC0ExecutionException(output: CommandOutput, stress: Int)
-    extends CapturedOutputException(output) {
+      extends CapturedOutputException(output) {
     def getStress: Int = stress
   }
 }

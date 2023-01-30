@@ -295,6 +295,10 @@ object BenchmarkExecutor {
                     case Left(t) =>
                       reportError(reconstructedSourceText, reserved, t)
                     case Right(p) =>
+                      profiler match {
+                        case Some(value) => value.complete()
+                        case None        =>
+                      }
                       DAO.completeProgramMeasurement(id,
                                                      reserved,
                                                      w,
