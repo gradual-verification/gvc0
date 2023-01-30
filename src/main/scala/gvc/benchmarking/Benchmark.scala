@@ -6,7 +6,7 @@ import scala.util.matching.Regex
 
 object Benchmark {
   object Extensions {
-    def c0(basename: Object): String = basename.toString + ".c0"
+    def c0(basename: String): String = basename + ".c0"
     def txt(basename: String): String = basename + ".txt"
     def out(basename: String): String = basename + ".out"
 

@@ -41,6 +41,7 @@ class GProf(binary: Path, destination: Path) {
 
     val command =
       s"${gprof_exe} --brief ${binary.toAbsolutePath} ${output.toAbsolutePath} > ${destination.toAbsolutePath}"
+    println(command)
     val commandAsProcess = Process(command)
     val exit = commandAsProcess.run().exitValue()
     if (exit != 0) {
