@@ -2,9 +2,8 @@ package gvc.benchmarking
 
 import gvc.{CC0Options, CC0Wrapper, Config, OutputFileCollection}
 import gvc.CC0Wrapper.{CommandOutput, Performance}
-import gvc.Main.{VerifiedOutput, verifySiliconProvided}
-import viper.silicon.Silicon
-
+import gvc.Main.{VerifiedOutput, resolveSilicon, verifySiliconProvided}
+import gvc.benchmarking.BenchmarkExecutor.SiliconState
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.concurrent.duration._
@@ -25,22 +24,8 @@ object Timing {
       instrumentation: Performance
   )
 
-  def compileAndExec(input: Path,
-                     binary: Path,
-                     config: Config,
-                     args: List[String],
-                     stress: Int,
-                     iterations: Int,
-                     ongoingProcesses: mutable.ListBuffer[Process])
-    : (Performance, Performance) = {
-    val compilationPerf =
-      compileTimed(input, binary, config, iterations, ongoingProcesses)
-    val execPerf = execTimed(binary, args, iterations, stress, ongoingProcesses)
-    (compilationPerf, execPerf)
-  }
-
   def verifyTimed(
-      silicon: Silicon,
+      state: SiliconState,
       inputSource: String,
       fileNames: OutputFileCollection,
       config: Config,
@@ -50,9 +35,14 @@ object Timing {
     val translationTimings = ListBuffer[Long]()
     val verifierTimings = ListBuffer[Long]()
     val weaverTimings = ListBuffer[Long]()
-
     for (_ <- 0 until iterations) {
-      val out = verifySiliconProvided(silicon, inputSource, fileNames, config)
+      val silicon = resolveSilicon(config)
+      state.trackInstance(silicon)
+      val out = verifySiliconProvided(silicon,
+                                      inputSource,
+                                      fileNames,
+                                      config,
+                                      stopImmediately = true)
       val perf = out.timing
       translationTimings += perf.translation
       verifierTimings += perf.verification
@@ -75,6 +65,7 @@ object Timing {
       binary: Path,
       config: Config,
       iterations: Int = 1,
+      profilingEnabled: Boolean,
       ongoingProcesses: mutable.ListBuffer[Process] =
         mutable.ListBuffer[Process](),
   ): Performance = {
@@ -82,7 +73,8 @@ object Timing {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = config.saveFiles,
       output = Some(binary.toString),
-      includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/")
+      includeDirs = List(Paths.get("src/main/resources").toAbsolutePath + "/"),
+      profilingEnabled = profilingEnabled
     )
     if (System.getProperty("mrj.version") != null) {
       // the upper bound on nested brackets is lower for clang than for gcc, leading to compilation failures.
@@ -110,13 +102,15 @@ object Timing {
       iterations: Int,
       command: String,
       onNonzero: CommandOutput => Unit,
-      ongoingProcesses: mutable.ListBuffer[scala.sys.process.Process]
+      ongoingProcesses: mutable.ListBuffer[scala.sys.process.Process],
+      profiler: Option[GProf] = None
   ): Performance = {
     var capture = ""
     val logger = ProcessLogger(
       (o: String) => capture += o,
       (e: String) => capture += e
     )
+
     val commandAsProcess = Process(command)
     val timings = mutable.ListBuffer[Long]()
     for (_ <- 0 until iterations) {
@@ -125,6 +119,11 @@ object Timing {
       val awaitExit = ongoingProcesses.last.exitValue()
       val end = System.nanoTime()
       ongoingProcesses.trimEnd(1)
+
+      profiler match {
+        case Some(gprof) => gprof.merge()
+        case None        =>
+      }
 
       if (awaitExit != 0) {
         onNonzero(CommandOutput(awaitExit, capture))
@@ -154,6 +153,7 @@ object Timing {
       iterations: Int = 1,
       stress: Int = 0,
       ongoingProcesses: mutable.ListBuffer[Process] = mutable.ListBuffer(),
+      profiler: Option[GProf] = None
   ): Performance = {
     val command = (List(binary.toAbsolutePath.toString) ++ args)
       .mkString(" ") + s" --stress $stress"
@@ -162,7 +162,11 @@ object Timing {
       throw new CC0ExecutionException(output, stress)
     }
 
-    runTimedCommand(iterations, command, execNonzero, ongoingProcesses)
+    runTimedCommand(iterations,
+                    command,
+                    execNonzero,
+                    ongoingProcesses,
+                    profiler)
   }
 
   private def percentile(values: List[Long], percentile: Double): BigDecimal = {

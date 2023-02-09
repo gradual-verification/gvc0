@@ -92,3 +92,4 @@ study/data*
 /sandbox*
 recreated_*
 /export-*
+./data/results/

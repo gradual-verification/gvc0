@@ -2,7 +2,6 @@ package gvc
 
 import gvc.Config.DefaultMode
 import gvc.benchmarking.Output
-
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import java.io.File
 import scala.annotation.tailrec
@@ -21,6 +20,8 @@ case class Config(
     onlyExec: Boolean = false,
     saveFiles: Boolean = false,
     stressLevel: Option[Int] = None,
+    profilingEnabled: Boolean = false,
+    profilingDirectory: Option[String] = None,
     exec: Boolean = false,
     onlyVerify: Boolean = false,
     onlyCompile: Boolean = false,
@@ -95,19 +96,36 @@ object Config {
       |  -x            --exec                         Execute the compiled file
       |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
       |
+      |  -p            --profiling                    Compile C0 binary with -pg flag to enable profiling with gprof.
+      |                --profiling-dir=<dir>          Save profiling output to the specified directory.
+      |                
       |                --config=<config.xml>          Execute a benchmark using the specified configuration file
       |
-      |                --populate                     Populate the benchmarking database using options from the specified configuration file.
-      |                --execute                      Execute programs and store results in the database using options from the specified configuration file.
-      |                --execute-benchmark            Identical to --execute, but only selects programs belonging to pre-configured benchmark sets.
-      |                --recreate=<id>                Specify a permutation to recreate from the database using options from the specified configuration file.
-      |                --export                       Data is filtered using options from the specified configuration file.
-      |                --export-benchmark             Identical to --export, but only selects data corresponding to pre-configured benchmark sets.
+      |                --populate                     Populate the benchmarking database using options from the specified
+      |                                               configuration file.
+      |                                               
+      |                --execute                      Execute programs and store results in the database using options
+      |                                               from the specified configuration file.
+      |                                               
+      |                --execute-benchmark            Identical to --execute, but only selects programs belonging to
+      |                                               pre-configured benchmark sets.
+      |                                               
+      |                --recreate=<id>                Specify a permutation to recreate from the database using options
+      |                                               from the specified configuration file.
+      |                                               
+      |                --export                       Data is filtered using options from the specified configuration
+      |                                               file.
+      |                
+      |                --export-benchmark             Identical to --export, but only selects data corresponding to
+      |                                               pre-configured benchmark sets.
+      |                                               
       |                --export-errors                Identical to --export, but generates a list of all errors. 
-      |                --version=<version>            Specify the version string identifying the current verifier. Overrides config.
+      |                --version=<version>            Specify the version string identifying the current verifier.
+      |                                               Overrides config.
+      |
       |                --hardware=<hardware>          Specify an identifier for current hardware platform. Overrides config.
       |                --nickname=<nickname>          Specify a nickname for the current hardware platform. Overrides config.
-
+      |
       |                --db-url=<url>                 Specify the URL for the benchmarking database. Overrides config.
       |                --db-user=<username>           Specify the user for the benchmarking database. Overrides config.
       |                --db-pass=<password>           Specify the password for the benchmarking database. Overrides config.
@@ -131,6 +149,7 @@ object Config {
   private val dbUserString = raw"--db-user=(.+)".r
   private val dbPassString = raw"--db-pass=(.+)".r
   private val recreatePermString = raw"--recreate=(.+)".r
+  private val profilingDirectory = raw"--profiling-dir=(.+)".r
 
   def error(message: String): Nothing = {
     Output.error(message)
@@ -214,6 +233,7 @@ object Config {
         fromCommandLineArgs(tail, current.copy(nicknameString = Some(t)))
       case dbURLString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(dbURLString = Some(t)))
+
       case dbPassString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(dbPassString = Some(t)))
       case dbUserString(t) :: tail =>
@@ -229,6 +249,10 @@ object Config {
                             current.copy(recreatePerm =
                                            Some(this.parseInt(t, "--recreate")),
                                          mode = Recreate))
+      case profilingDirectory(t) :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(profilingDirectory = Some(t), profilingEnabled = true))
       case configFileArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
@@ -275,12 +299,19 @@ object Config {
           tail,
           current.copy(mode = FramingVerification)
         )
+      case "--profiling" :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(profilingEnabled = true)
+        )
       case "-t" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case timeoutArg(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case "-d" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
+      case "-p" :: tail =>
+        fromCommandLineArgs(tail, current.copy(profilingEnabled = true))
       case dumpArg(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
       case "-o" :: f :: tail =>

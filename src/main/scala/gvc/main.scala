@@ -91,7 +91,11 @@ object Main extends App {
           val outputBinary = Paths.get(fileNames.binaryName)
           injectAndWrite(IRPrinter.print(ir, includeSpecs = false),
                          outputC0Source)
-          Timing.compileTimed(outputC0Source, outputBinary, config)
+          Timing.compileTimed(
+            outputC0Source,
+            outputBinary,
+            config,
+            profilingEnabled = config.profilingEnabled || config.profilingDirectory.nonEmpty)
           Timing.execTimed(outputBinary,
                            List(s"--stress ${config.stressLevel.getOrElse(1)}"))
         })
@@ -102,18 +106,32 @@ object Main extends App {
           s"Recreating permutation ID=${benchConfig.permToRecreate}...")
         val recreated =
           BenchmarkRecreator.recreate(benchConfig, config, linkedLibraries)
-        val recreationName = s"./recreated_${benchConfig.permToRecreate}.c0"
         Output.success(
-          s"Successfully recreated permutation ID=${benchConfig.permToRecreate}, writing to $recreationName")
-        val inputSource = IRPrinter.print(recreated, includeSpecs = true)
-        val sourcePath =
-          Paths.get(recreationName)
-        Files.writeString(sourcePath, inputSource)
-        val fileNames = getOutputCollection(recreationName)
-        Output.printTiming(() => {
-          val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
-          execute(verifiedOutput.c0Source, fileNames)
-        })
+          s"Successfully recreated permutation ID=${benchConfig.permToRecreate}!")
+
+        recreated match {
+          case BenchmarkRecreator.RecreatedUnverified(ir) =>
+            val recreationName = s"./recreated_${benchConfig.permToRecreate}.c0"
+            Output.info(s"Writing to $recreationName")
+            val inputSource = IRPrinter.print(ir, includeSpecs = true)
+            val sourcePath =
+              Paths.get(recreationName)
+            Files.writeString(sourcePath, inputSource)
+            val fileNames = getOutputCollection(recreationName)
+            Output.printTiming(() => {
+              val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+              execute(verifiedOutput.c0Source, fileNames)
+            })
+          case BenchmarkRecreator.RecreatedVerified(c0) =>
+            val recreationName =
+              s"./recreated_${benchConfig.permToRecreate}.verified.c0"
+            Output.info(s"Writing to $recreationName")
+            val sourcePath =
+              Paths.get(recreationName)
+            Files.writeString(sourcePath, c0)
+            val fileNames = getOutputCollection(recreationName)
+            execute(c0, fileNames)
+        }
       case Config.Execute =>
         val benchConfig =
           BenchmarkExternalConfig.parseExecutor(config)
@@ -238,14 +256,15 @@ object Main extends App {
              fileNames: OutputFileCollection,
              config: Config): VerifiedOutput = {
     def silicon = resolveSilicon(config)
-
-    verifySiliconProvided(silicon, inputSource, fileNames, config)
+    val output = verifySiliconProvided(silicon, inputSource, fileNames, config)
+    output
   }
 
   def verifySiliconProvided(silicon: Silicon,
                             inputSource: String,
                             fileNames: OutputFileCollection,
-                            config: Config): VerifiedOutput = {
+                            config: Config,
+                            stopImmediately: Boolean = true): VerifiedOutput = {
     profilingInfo.reset
     runtimeChecks.reset
 
@@ -273,13 +292,12 @@ object Main extends App {
     val verificationStart = System.nanoTime()
     silicon.start()
     silicon.verify(silver.program) match {
-      case verifier.Success => ()
+      case verifier.Success => if (stopImmediately) silicon.stop()
       case verifier.Failure(errors) =>
         val message = errors.map(_.readableMessage).mkString("\n")
-        silicon.stop()
+        if (stopImmediately) silicon.stop()
         throw VerificationException(message)
     }
-    silicon.stop()
     val verificationStop = System.nanoTime()
     val verificationTime = verificationStop - verificationStart
 
@@ -326,7 +344,8 @@ object Main extends App {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = Defaults.includeDirectories
+      includeDirs = Defaults.includeDirectories,
+      profilingEnabled = cmdConfig.profilingEnabled
     )
     // Always write the intermediate C0 file, but then delete it
     // if not saving intermediate files

@@ -390,7 +390,32 @@ object DAO {
           t)
       case Right(_) =>
     }
+    sql"""CALL sp_UpdateVerifiedPermutation(${id.vid}, $pid, ${vOut.output.c0Source})""".update.run
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(s"Unable to store verified permutation PID=$pid",
+                             t)
+      case Right(_) =>
+    }
+  }
 
+  def resolveVerifiedPermutation(vid: Long,
+                                 pid: Long,
+                                 c: DBConnection): Option[String] = {
+    sql"SELECT c0_source FROM verified_permutations WHERE permutation_id = $pid AND version_id = $vid"
+      .query[String]
+      .option
+      .transact(c.xa)
+      .attempt
+      .unsafeRunSync() match {
+      case Left(t) =>
+        prettyPrintException(
+          s"Unable to resolve prior verification attempts for permutation PID=$pid",
+          t)
+      case Right(value) => value
+    }
   }
 
   case class ReservedProgramEntry(permID: Long,

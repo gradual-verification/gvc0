@@ -13,7 +13,6 @@ object Checker {
       tempVars: Map[SilverVarId, IR.Invoke]
   ) extends CheckMethod {
     val resultVars = mutable.Map[String, IR.Expression]()
-
     def resultVar(name: String): IR.Expression = {
       resultVars.getOrElseUpdate(
         name, {
@@ -21,14 +20,12 @@ object Checker {
             SilverVarId(method.name, name),
             throw new WeaverException(s"Missing temporary variable '$name'")
           )
-
           invoke.target.getOrElse {
             val retType = invoke.method.returnType.getOrElse(
               throw new WeaverException(
                 s"Invalid temporary variable '$name' for void '${invoke.callee.name}'"
               )
             )
-
             val tempVar = method.addVar(retType)
             invoke.target = Some(tempVar)
             tempVar
