@@ -275,20 +275,20 @@ object Checker {
               val context = new CallSiteContext(call.ir, method)
 
               if (methodContainsImprecision(calleeData)) {
+                val tempSet = method.addVar(
+                  runtime.ownedFieldsRef,
+                  CheckRuntime.Names.temporaryOwnedFields
+                )
+                call.ir.arguments :+= tempSet
+
+                val initTemp = new IR.Invoke(
+                  runtime.initOwnedFields,
+                  List(instanceCounter),
+                  Some(tempSet)
+                )
+
+                call.ir.insertBefore(initTemp)
                 if (needsToTrackPrecisePerms) {
-                  val tempSet = method.addVar(
-                    runtime.ownedFieldsRef,
-                    CheckRuntime.Names.temporaryOwnedFields
-                  )
-                  call.ir.arguments :+= tempSet
-
-                  val initTemp = new IR.Invoke(
-                    runtime.initOwnedFields,
-                    List(instanceCounter),
-                    Some(tempSet)
-                  )
-
-                  call.ir.insertBefore(initTemp)
                   call.ir.insertBefore(
                     callee.precondition.toSeq
                       .flatMap(
