@@ -364,7 +364,9 @@ object BenchmarkExecutor {
       .toMap
 
     def get(filename: String): List[Int] = {
-      userConfiguredStressValues.getOrElse(filename, defaultStressValues)
+      val stressList =
+        userConfiguredStressValues.getOrElse(filename, defaultStressValues)
+      stressList
     }
   }
 
