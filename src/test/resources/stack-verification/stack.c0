@@ -1,0 +1,52 @@
+#use <conio>
+struct Node {
+    int val;
+    struct Node *next;
+};
+typedef struct Node Node;
+
+void push (Node *head, int val)
+//@ requires ? && head != NULL;
+{
+    Node *y = head;
+    while (y->next != NULL)
+    {
+        y = y->next;
+    }
+    y->next = alloc(struct Node);
+    y->next->val = val;
+    y->next->next = NULL;
+}
+
+void pop (Node *head) 
+    //@ requires ? && head != NULL;
+{
+    Node *y = head;
+    y = y -> next;
+
+    if (y == NULL) {
+        printint(head->val);
+        head = NULL;
+    } else {
+        while (y -> next -> next != NULL)
+        {
+            y = y->next;
+        }
+        printint(y->next->val);
+        y -> next = NULL;
+    }
+}
+
+int main () 
+{
+    Node* head = alloc(struct Node);
+    head->val = 5;
+    head->next = NULL;
+    push(head, 10);
+    push(head, 34);
+    push(head, 32);
+    pop(head);
+    push(head, 12);
+    pop(head);
+    return 0;
+}
