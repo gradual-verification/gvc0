@@ -1,52 +1,236 @@
 #use <conio>
+// List node
 struct Node {
-    int val;
-    struct Node *next;
+  int val;
+  struct Node *next;
 };
-typedef struct Node Node;
 
-void push (Node *head, int val)
-//@ requires ? && head != NULL;
+/*@
+predicate segHelper(struct Node *start, struct Node *end) = 
+    (start == end) ?
+        (true)
+        :
+        (
+            acc(start->val) && acc(start->next) &&
+            segHelper(start->next, end)
+        ) ;
+@*/
+
+/*@
+
+predicate seg(struct Node *start) = 
+    segHelper(start, NULL);
+@*/
+
+
+//-------------------------------------------------------------------lemmas
+// Lemma:
+void appendLemmaLoopBody(struct Node *a, struct Node *b, struct Node *c)
+  /*@
+    requires segHelper(a, b) &&
+        ( (c == NULL) ?
+            ( true )
+            :
+            ( acc(c->val) && acc(c->next) &&
+              segHelper(c->next, NULL)
+            )
+        ) &&
+        ( (b == c) ?
+            ( true )
+            :
+            (
+              acc(b->val) && acc(b->next) &&
+              segHelper(b->next, c)
+            )
+        ) ;
+  @*/
+  /*@
+    ensures segHelper(a, c) &&
+        ( (c == NULL) ?
+            ( true )
+            :
+            ( acc(c->val) && acc(c->next) &&
+              segHelper(c->next, NULL)
+            )
+        ) ;
+  @*/
 {
-    Node *y = head;
-    while (y->next != NULL)
+  if (b == c) {
+  } else if (a == b) {
+    //@ unfold segHelper(a, b);
+    //@ fold segHelper(a, c);
+  } else {
+    //@ unfold segHelper(a, b);
+    appendLemmaLoopBody(a->next, b, c);
+    //@ fold segHelper(a, c);
+  }
+}
+
+void appendLemmaAfterLoopBody(struct Node *a, struct Node *b, struct Node *c)
+  /*@
+    requires segHelper(a, b) &&
+        ( (c == NULL) ? true : acc(c->val) && acc(c->next) ) &&
+        ( (b == c) ?
+            ( true )
+            :
+            (
+              acc(b->val) && acc(b->next) &&
+              segHelper(b->next, c)
+            )
+        ) ;
+  @*/
+  /*@
+    ensures segHelper(a, c) &&
+        ( (c == NULL) ? true : acc(c->val) && acc(c->next) ) ;
+  @*/
+{
+  if (b == c) {
+  } else if (a == b) {
+    //@ unfold segHelper(a, b);
+    //@ fold segHelper(a, c);
+  } else {
+    //@ unfold segHelper(a, b);
+    appendLemmaAfterLoopBody(a->next, b, c);
+    //@ fold segHelper(a, c);
+  }
+}
+
+
+struct Node *push(struct Node *head, int val)
+  //@ requires seg(head);
+  //@ ensures seg(\result);
+{
+  //@ unfold seg(head);
+  //@ unfold segHelper(head, NULL);
+
+  if (head == NULL) {
+    struct Node *n = alloc(struct Node);
+    n->val = val;
+    n->next = head;
+    //@ fold segHelper(n->next, NULL);
+    //@ fold segHelper(n, NULL);
+    //@ fold seg(n);
+    return n;
+  } else {
+    struct Node *curr = head;
+    //@ unfold segHelper(curr->next, NULL);
+
+    //@ fold segHelper(head, curr);
+    while (curr->next != NULL)
+    //@ loop_invariant acc(curr->val) && acc(curr->next);
+    //@ loop_invariant segHelper(head, curr);
+    //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && segHelper(curr->next->next, NULL);
     {
-        y = y->next;
+
+      struct Node *prev = curr;
+      curr = prev->next;
+
+      //@ unfold segHelper(head, prev);
+      //@ fold segHelper(prev->next, curr);
+
+      if (head == prev) {
+      } else {
+        appendLemmaLoopBody(head->next, prev, curr);
+      }
+
+        //@ fold segHelper(head, curr);
+      //@ unfold segHelper(curr->next, NULL);
+
     }
-    y->next = alloc(struct Node);
-    y->next->val = val;
-    y->next->next = NULL;
-}
 
-void pop (Node *head) 
-    //@ requires ? && head != NULL;
-{
-    Node *y = head;
-    y = y -> next;
+    struct Node *tmp = alloc(struct Node);
+    tmp->val = val;
+    tmp->next = curr->next;
+    curr->next = tmp;
 
-    if (y == NULL) {
-        printint(head->val);
-        head = NULL;
+    //@ fold segHelper(tmp->next, NULL);
+    //@ fold segHelper(curr->next, NULL);
+
+    //@ unfold segHelper(head, curr);
+    if (head == curr) {
     } else {
-        while (y -> next -> next != NULL)
-        {
-            y = y->next;
-        }
-        printint(y->next->val);
-        y -> next = NULL;
+      appendLemmaAfterLoopBody(head->next, curr, NULL);
+    }
+
+    //@ fold segHelper(head, NULL);
+    //@ fold seg(head);
+  return head;
+  }
+}
+
+int pop(struct Node *head)
+ //@ requires seg(head);
+{
+
+  //@ unfold seg(head);
+  //@ unfold segHelper(head, NULL);
+
+  if (head == NULL) {
+    //@ fold segHelper(head, NULL);
+    //@ fold seg(head);
+    return -1;
+  } else {
+
+    struct Node *curr = head;
+    //@ unfold segHelper(curr->next, NULL);
+
+    //@ fold segHelper(head, curr);
+    while (curr->next != NULL && curr->next->next != NULL)
+    //@ loop_invariant acc(curr->val) && acc(curr->next);
+    //@ loop_invariant segHelper(head, curr);
+    //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && segHelper(curr->next->next, NULL);
+    {
+
+      struct Node *prev = curr;
+
+      curr = prev->next;
+      
+      //@ unfold segHelper(head, prev);
+      //@ fold segHelper(prev->next, curr);
+
+      if (head == prev) {
+      } else {
+        appendLemmaLoopBody(head->next, prev, curr);
+      }
+
+           
+
+      //@ fold segHelper(head, curr);
+      //@ unfold segHelper(curr->next, NULL);
+
+
+    }
+
+    curr->next = NULL;
+
+  return 1;
     }
 }
+
+
+
+struct Node *create_list(int val)
+  //@ requires true;
+  //@ ensures seg(\result);
+{
+  struct Node *n = alloc(struct Node);
+  n->val = val;
+  n->next = NULL;
+  //@ fold segHelper(n->next, NULL);
+  //@ fold segHelper(n, NULL);
+  //@ fold seg(n);
+  return n;
+}
+
+
 
 int main () 
+  //@ requires true;
+  //@ ensures true;
 {
-    Node* head = alloc(struct Node);
-    head->val = 5;
-    head->next = NULL;
-    push(head, 10);
-    push(head, 34);
-    push(head, 32);
-    pop(head);
-    push(head, 12);
-    pop(head);
-    return 0;
+    struct Node *l = create_list(5);
+    struct Node *l2 = push(l, 1);
+    //@ assert seg(l2);
+    pop(l2);
+    return 1;
 }
