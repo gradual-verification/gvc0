@@ -1111,8 +1111,7 @@ object DAO {
             AS target_counts ON target_counts.program_id = completed_paths.program_id
         WHERE version_id = $vid
           AND hardware_id = $hid
-          AND stress_counts.ccount = target_counts.stress_count
-          AND stress_counts.mcount = (SELECT COUNT(*) FROM dynamic_measurement_types);"""
+          AND stress_counts.ccount = target_counts.stress_count;"""
           .query[CompletedPathID]
           .to[List]
       } yield v).transact(c.xa).attempt.unsafeRunSync() match {

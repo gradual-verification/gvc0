@@ -75,7 +75,7 @@ object BenchmarkExporter {
     val pathIDsToPull =
       DAO.Exporter.getPathIDList(id.versionID, id.hardwareID, stressTable, conn)
 
-    val grandList = if (pathIDsToPull.isEmpty) {
+    val requestedSubsetOfPathIDs = if (pathIDsToPull.isEmpty) {
       error(s"There are no completed paths matching the requested criteria.")
     } else {
       (config.quantity match {
@@ -98,23 +98,26 @@ object BenchmarkExporter {
       }).toList
     }
     Output.info("Generating path index...")
-    val pathIndex = DAO.Exporter.generatePathIndex(grandList, conn)
+    val pathIndex =
+      DAO.Exporter.generatePathIndex(requestedSubsetOfPathIDs, conn)
     Output.info("Generating measurement type index...")
     val mtIndex = DAO.Exporter.generateMeasurementTypeIndex(conn)
 
     Output.info("Generating program index...")
     val programIndex =
-      DAO.Exporter.generateProgramIndexFromPaths(grandList, conn)
+      DAO.Exporter.generateProgramIndexFromPaths(requestedSubsetOfPathIDs, conn)
 
     Output.info("Collecting dynamic performance data...")
     val dynamicData =
       DAO.Exporter.generateDynamicPerformanceData(id,
                                                   stressTable,
-                                                  grandList,
+                                                  requestedSubsetOfPathIDs,
                                                   conn)
     Output.info("Collecting static performance data...")
     val staticData =
-      DAO.Exporter.generateStaticPerformanceData(id, grandList, conn)
+      DAO.Exporter.generateStaticPerformanceData(id,
+                                                 requestedSubsetOfPathIDs,
+                                                 conn)
 
     val outDir = Paths.get(
       config.outputDir.getOrElse(

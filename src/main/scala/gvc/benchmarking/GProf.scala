@@ -12,7 +12,7 @@ class GProf(binary: Path, destination: Path) {
   Files.deleteIfExists(profilingOutput)
   private val profilingSum = Paths.get("./gmon.sum")
   Files.deleteIfExists(profilingSum)
-
+ 
   def merge(): Unit = {
     if (Files.exists(profilingSum)) {
       val command =
