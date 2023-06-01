@@ -1,2 +1,7 @@
-// Directed Acyclic Graph 
-#use stress
+#use <stress>
+
+// directed acyclic graph node
+struct Node {
+  int val;
+  struct Node 
+}

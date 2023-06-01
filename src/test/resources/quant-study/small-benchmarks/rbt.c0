@@ -1,0 +1,10 @@
+#use <stress>
+// red-black tree node
+struct Node {
+    int data;
+    int color;
+    struct Node *parent;
+    struct Node *red;
+    struct Node *left;
+};
+ 
