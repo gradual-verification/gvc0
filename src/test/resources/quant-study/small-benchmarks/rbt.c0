@@ -8,3 +8,7 @@ struct Node {
     struct Node *left;
 };
  
+/*@
+predicate rbtRightRotate(struct Node *root, int x, int min, int max) =
+  (root == NULL)
+@*/
