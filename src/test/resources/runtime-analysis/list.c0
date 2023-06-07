@@ -162,6 +162,7 @@ struct Node *list_insert(struct Node *list, int val)
 
       if (list == prev) {
       } else {
+        // RUNTIME CHECK HERE
         // appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val);
       }
 

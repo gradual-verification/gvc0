@@ -1,3 +1,5 @@
+// Line 77 for analysis on BST?
+
 #use <stress>
 // binary search tree node
 struct Node {
