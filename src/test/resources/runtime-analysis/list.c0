@@ -145,29 +145,18 @@ struct Node *list_insert(struct Node *list, int val)
   } else {
 
     struct Node *curr = list;
-    //@ unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
 
-    //@ fold sortedSeg(list, curr, curr->val);
     while (curr->next != NULL && curr->next->val < val)
-     //@ loop_invariant acc(curr->val) && acc(curr->next);
-     //@ loop_invariant sortedSeg(list, curr, curr->val) && curr->val <= val;
-     //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val && sortedSegHelper(curr->next->next, NULL, curr->next->val, -1);
     {
 
       struct Node *prev = curr;
       curr = prev->next;
 
-      //@ unfold sortedSeg(list, prev, prev->val);
-      //@ fold sortedSegHelper(prev->next, curr, prev->val, curr->val);
-
       if (list == prev) {
       } else {
-        // RUNTIME CHECK HERE
+        //@assert ?;
         // appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val);
       }
-
-      //@ fold sortedSeg(list, curr, curr->val);
-      //@ unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
     }
 
     struct Node *tmp = alloc(struct Node);

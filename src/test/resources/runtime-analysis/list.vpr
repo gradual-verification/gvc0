@@ -1,0 +1,131 @@
+field Node$next: Ref
+
+field Node$val: Int
+
+predicate sorted(list: Ref) {
+  acc(sortedSeg(list, null, -1), write)
+}
+
+predicate sortedSeg(start: Ref, end: Ref, endVal: Int) {
+  (start == end ? true : acc(start.Node$val, write) && acc(start.Node$next, write) && acc(sortedSegHelper(start.Node$next, end, start.Node$val, endVal), write))
+}
+
+predicate sortedSegHelper(start: Ref, end: Ref, prev: Int, endVal: Int) {
+  (start == end ? (end == null ? true : endVal >= prev) : acc(start.Node$val, write) && acc(start.Node$next, write) && start.Node$val >= prev && acc(sortedSegHelper(start.Node$next, end, start.Node$val, endVal), write))
+}
+
+method appendLemmaAfterLoopBody(a: Ref, b: Ref, c: Ref, aPrev: Int, bVal: Int, cVal: Int)
+  requires acc(sortedSegHelper(a, b, aPrev, bVal), write) && (b == c ? bVal == cVal : true) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && c.Node$val == cVal) && (b == c ? true : acc(b.Node$val, write) && acc(b.Node$next, write) && b.Node$val == bVal && acc(sortedSegHelper(b.Node$next, c, b.Node$val, cVal), write))
+  ensures acc(sortedSegHelper(a, c, aPrev, cVal), write) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && c.Node$val == cVal)
+{
+  if (b == c) {
+    
+  } elseif (a == b) {
+    unfold acc(sortedSegHelper(a, b, aPrev, bVal), write)
+    fold acc(sortedSegHelper(a, c, aPrev, cVal), write)
+  } else {
+    unfold acc(sortedSegHelper(a, b, aPrev, bVal), write)
+    appendLemmaAfterLoopBody(a.Node$next, b, c, a.Node$val, bVal, cVal)
+    fold acc(sortedSegHelper(a, c, aPrev, cVal), write)
+  }
+}
+
+method appendLemmaLoopBody(a: Ref, b: Ref, c: Ref, aPrev: Int, cPrev: Int, bVal: Int, cVal: Int)
+  requires acc(sortedSegHelper(a, b, aPrev, bVal), write) && (b == c ? bVal == cVal : true) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && c.Node$val == cVal && c.Node$val >= cPrev && acc(sortedSegHelper(c.Node$next, null, c.Node$val, -1), write)) && (b == c ? true : acc(b.Node$val, write) && acc(b.Node$next, write) && b.Node$val == bVal && acc(sortedSegHelper(b.Node$next, c, b.Node$val, cVal), write))
+  ensures acc(sortedSegHelper(a, c, aPrev, cVal), write) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && c.Node$val == cVal && c.Node$val >= cPrev && acc(sortedSegHelper(c.Node$next, null, c.Node$val, -1), write))
+{
+  if (b == c) {
+    
+  } elseif (a == b) {
+    unfold acc(sortedSegHelper(a, b, aPrev, bVal), write)
+    fold acc(sortedSegHelper(a, c, aPrev, cVal), write)
+  } else {
+    unfold acc(sortedSegHelper(a, b, aPrev, bVal), write)
+    appendLemmaLoopBody(a.Node$next, b, c, a.Node$val, cPrev, bVal, cVal)
+    fold acc(sortedSegHelper(a, c, aPrev, cVal), write)
+  }
+}
+
+method create_list(val: Int) returns ($result: Ref)
+  requires true
+  ensures acc(sorted($result), write)
+{
+  var n: Ref
+  n := new(Node$val, Node$next)
+  n.Node$val := val
+  n.Node$next := null
+  fold acc(sortedSegHelper(n.Node$next, null, n.Node$val, -1), write)
+  fold acc(sortedSeg(n, null, -1), write)
+  fold acc(sorted(n), write)
+  $result := n
+}
+
+method list_insert(list: Ref, val: Int) returns ($result: Ref)
+  requires acc(sorted(list), write)
+  ensures acc(sorted($result), write)
+{
+  var n: Ref
+  var curr: Ref
+  var tmp: Ref
+  var prev: Ref
+  unfold acc(sorted(list), write)
+  unfold acc(sortedSeg(list, null, -1), write)
+  if (list == null || val <= list.Node$val) {
+    n := new(Node$val, Node$next)
+    n.Node$val := val
+    n.Node$next := list
+    fold acc(sortedSegHelper(n.Node$next, null, n.Node$val, -1), write)
+    fold acc(sortedSeg(n, null, -1), write)
+    fold acc(sorted(n), write)
+    $result := n
+  } else {
+    curr := list
+    while (curr.Node$next != null && curr.Node$next.Node$val < val)
+      invariant ? && true 
+    {
+      prev := curr
+      curr := prev.Node$next
+      if (list == prev) {
+        
+      } else {
+        assert ? && true
+      }
+    }
+    tmp := new(Node$val, Node$next)
+    tmp.Node$val := val
+    tmp.Node$next := curr.Node$next
+    curr.Node$next := tmp
+    fold acc(sortedSegHelper(tmp.Node$next, null, tmp.Node$val, -1), write)
+    fold acc(sortedSegHelper(curr.Node$next, null, curr.Node$val, -1), write)
+    unfold acc(sortedSeg(list, curr, curr.Node$val), write)
+    if (list == curr) {
+      
+    } else {
+      appendLemmaAfterLoopBody(list.Node$next, curr, null, list.Node$val, curr.Node$val, -1)
+    }
+    fold acc(sortedSeg(list, null, -1), write)
+    fold acc(sorted(list), write)
+    $result := list
+  }
+}
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var stress: Int
+  var l: Ref
+  var i: Int
+  var l1: Ref
+  stress := 0
+  l := create_list(3)
+  i := 0
+  while (i < stress)
+    invariant 0 <= i && i <= stress 
+  {
+    l1 := list_insert(l, 1)
+    i := i + 1
+    l := l1
+  }
+  $result := 0
+}
