@@ -44,8 +44,6 @@ void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, in
 }
 
 void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal)
-  //@requires sortedSegHelper(a, b, aPrev, bVal) && (b == c ? bVal == cVal : true) && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal && c->val >= cPrev && sortedSegHelper(c->next, NULL, c->val, -1)) && (b == c ? true : acc(b->val) && acc(b->next) && b->val == bVal && sortedSegHelper(b->next, c, b->val, cVal));
-  //@ensures sortedSegHelper(a, c, aPrev, cVal) && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal && c->val >= cPrev && sortedSegHelper(c->next, NULL, c->val, -1));
 {
   if (b == c)
   {
@@ -113,16 +111,13 @@ struct Node* list_insert(struct Node* list, int val)
       }
       else
       {
-        //@assert ?;
+        appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val);
       }
     }
     tmp = alloc(struct Node);
     tmp->val = val;
     tmp->next = curr->next;
     curr->next = tmp;
-    //@fold sortedSegHelper(tmp->next, NULL, tmp->val, -1);
-    //@fold sortedSegHelper(curr->next, NULL, curr->val, -1);
-    //@unfold sortedSeg(list, curr, curr->val);
     if (list == curr)
     {
     }
@@ -130,8 +125,6 @@ struct Node* list_insert(struct Node* list, int val)
     {
       appendLemmaAfterLoopBody(list->next, curr, NULL, list->val, curr->val, -1);
     }
-    //@fold sortedSeg(list, NULL, -1);
-    //@fold sorted(list);
     return list;
   }
 }
