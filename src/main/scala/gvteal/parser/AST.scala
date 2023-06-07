@@ -38,6 +38,8 @@ case class LengthExpression(value: Expression, span: SourceSpan) extends Express
 case class ImprecisionExpression(span: SourceSpan) extends Expression
 case class AccessibilityExpression(field: Expression, span: SourceSpan) extends Expression
 
+// TODO: (PyTEAL AST)[https://github.com/algorand/pyteal/blob/master/pyteal/ast]
+
 // Literal expressions
 sealed trait LiteralExpression extends Expression {
   val raw: String

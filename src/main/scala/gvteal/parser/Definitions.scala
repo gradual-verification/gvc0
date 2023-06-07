@@ -66,9 +66,9 @@ trait Definitions extends Statements with Types {
     P(singleLinePredicateAnnotation | multiLinePredicateAnnotation)
 
   def singleLinePredicateAnnotation[_: P]: P[Seq[PredicateDefinition]] =
-    P("//@"./.flatMapX(_ => new Parser(state.inSingleLineAnnotation()).predicateDefinitions) ~~/ ("\n" | End))
+    P("#@"./.flatMapX(_ => new Parser(state.inSingleLineAnnotation()).predicateDefinitions) ~~/ ("\n" | End))
   def multiLinePredicateAnnotation[_: P]: P[Seq[PredicateDefinition]] =
-    P("/*@"./.flatMapX(_ => new Parser(state.inAnnotation()).predicateDefinitions) ~/ "@*/")
+    P("\"\"\"@"./.flatMapX(_ => new Parser(state.inAnnotation()).predicateDefinitions) ~/ "@\"\"\"")
 
   def predicateDefinitions[_: P]: P[Seq[PredicateDefinition]] =
     P(space ~~ predicateDefinition.rep ~~ space)

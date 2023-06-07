@@ -52,7 +52,7 @@ trait Statements extends Specifications {
 
         BlockStatement(stmts.toList, span, Nil, specs)
     })
-  
+
   def ifStatement[_: P]: P[IfStatement] =
     P(span(kw("if") ~ "(" ~ expression ~ ")" ~ statement ~ ("else" ~ statement).?)).map({
       case ((condition, body, els), span) => IfStatement(condition, body, els, span)
