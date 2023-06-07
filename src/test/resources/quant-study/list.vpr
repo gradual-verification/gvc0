@@ -31,8 +31,8 @@ method appendLemmaAfterLoopBody(a: Ref, b: Ref, c: Ref, aPrev: Int, bVal: Int, c
 }
 
 method appendLemmaLoopBody(a: Ref, b: Ref, c: Ref, aPrev: Int, cPrev: Int, bVal: Int, cVal: Int)
-  requires ? && (b == c ? bVal == cVal : true) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && c.Node$val == cVal && c.Node$val >= cPrev) && (b == c ? true : acc(b.Node$val, write) && acc(b.Node$next, write) && b.Node$val == bVal)
-  ensures ? && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && c.Node$val == cVal && c.Node$val >= cPrev)
+  requires acc(sortedSegHelper(a, b, aPrev, bVal), write) && (b == c ? bVal == cVal : true) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && c.Node$val == cVal && c.Node$val >= cPrev && acc(sortedSegHelper(c.Node$next, null, c.Node$val, -1), write)) && (b == c ? true : acc(b.Node$val, write) && acc(b.Node$next, write) && b.Node$val == bVal && acc(sortedSegHelper(b.Node$next, c, b.Node$val, cVal), write))
+  ensures acc(sortedSegHelper(a, c, aPrev, cVal), write) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && c.Node$val == cVal && c.Node$val >= cPrev && acc(sortedSegHelper(c.Node$next, null, c.Node$val, -1), write))
 {
   if (b == c) {
     

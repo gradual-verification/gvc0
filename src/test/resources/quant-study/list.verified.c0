@@ -1,0 +1,128 @@
+#use <runtime>
+struct Node;
+
+struct Node
+{
+  int val;
+  struct Node* next;
+  int _id;
+};
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, int* _instanceCounter);
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal, int* _instanceCounter);
+struct Node* create_list(int val, int* _instanceCounter);
+struct Node* list_insert(struct Node* list, int val, int* _instanceCounter);
+int main();
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, int* _instanceCounter)
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+    }
+    else
+    {
+      appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal, _instanceCounter);
+    }
+  }
+}
+
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal, int* _instanceCounter)
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+    }
+    else
+    {
+      appendLemmaLoopBody(a->next, b, c, a->val, cPrev, bVal, cVal, _instanceCounter);
+    }
+  }
+}
+
+struct Node* create_list(int val, int* _instanceCounter)
+{
+  struct Node* n = NULL;
+  n = alloc(struct Node);
+  n->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  n->val = val;
+  n->next = NULL;
+  return n;
+}
+
+struct Node* list_insert(struct Node* list, int val, int* _instanceCounter)
+{
+  struct Node* n = NULL;
+  struct Node* curr = NULL;
+  struct Node* tmp = NULL;
+  struct Node* prev = NULL;
+  struct Node* _ = NULL;
+  if (list == NULL || val <= list->val)
+  {
+    n = alloc(struct Node);
+    n->_id = *_instanceCounter;
+    *_instanceCounter = *_instanceCounter + 1;
+    n->val = val;
+    n->next = list;
+    return n;
+  }
+  else
+  {
+    curr = list;
+    while (curr->next != NULL && curr->next->val < val)
+    {
+      prev = curr;
+      curr = prev->next;
+      if (list == prev)
+      {
+      }
+      else
+      {
+        appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val, _instanceCounter);
+      }
+    }
+    tmp = alloc(struct Node);
+    tmp->_id = *_instanceCounter;
+    *_instanceCounter = *_instanceCounter + 1;
+    tmp->val = val;
+    tmp->next = curr->next;
+    curr->next = tmp;
+    if (list == curr)
+    {
+    }
+    else
+    {
+      appendLemmaAfterLoopBody(list->next, curr, NULL, list->val, curr->val, -1, _instanceCounter);
+    }
+    return list;
+  }
+}
+
+int main()
+{
+  int stress = 0;
+  struct Node* l = NULL;
+  int i = 0;
+  struct Node* l1 = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  stress = 0;
+  l = create_list(3, _instanceCounter);
+  i = 0;
+  while (i < stress)
+  {
+    l1 = list_insert(l, 1, _instanceCounter);
+    i = i + 1;
+    l = l1;
+  }
+  return 0;
+}

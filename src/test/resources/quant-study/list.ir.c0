@@ -44,8 +44,8 @@ void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, in
 }
 
 void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal)
-  //@requires ? && (b == c ? bVal == cVal : true) && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal && c->val >= cPrev) && (b == c ? true : acc(b->val) && acc(b->next) && b->val == bVal);
-  //@ensures ? && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal && c->val >= cPrev);
+  //@requires sortedSegHelper(a, b, aPrev, bVal) && (b == c ? bVal == cVal : true) && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal && c->val >= cPrev && sortedSegHelper(c->next, NULL, c->val, -1)) && (b == c ? true : acc(b->val) && acc(b->next) && b->val == bVal && sortedSegHelper(b->next, c, b->val, cVal));
+  //@ensures sortedSegHelper(a, c, aPrev, cVal) && (c == NULL ? true : acc(c->val) && acc(c->next) && c->val == cVal && c->val >= cPrev && sortedSegHelper(c->next, NULL, c->val, -1));
 {
   if (b == c)
   {
