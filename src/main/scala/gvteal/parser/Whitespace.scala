@@ -6,8 +6,8 @@ trait Whitespace {
 
   // Whitespace is a regular space, horizontal and vertical tab,
   // newline, formfeed and comments
-  // Comments can be single-line (//) or multi-line (/* ... */)
-  // Multi-line comments can be nested (/* ... /* ... */ ... */)
+  // Comments can be single-line (#) or multi-line (""" ... """)
+  // Python does not support nested multi-line comments!
   implicit val whitespace = { implicit ctx: ParsingRun[_] => space }
 
   def space[_: P] = P(state.mode match {
@@ -32,10 +32,10 @@ trait Whitespace {
 
   def singleLineComment[_: P] = P("#" ~~ !"@" ~~/ (!"\n" ~~ AnyChar).repX ~~ &("\n"))
 
-  // def multiLineComment[_: P]: P[Unit] = P("/*" ~~ !"@" ~~/ (multiLineComment | multiLineCommentChar).repX ~~ "*/")
+  def multiLineComment[_: P]: P[Unit] = P("\"\"\"" ~~ !"@" ~~/ (multiLineComment | multiLineCommentChar).repX ~~ "\"\"\"")
 
-  // def multiLineCommentChar[_: P]: P[Unit] = P(state.mode match {
-  //   case SingleLineAnnotation => !("*/" | "\n") ~~ AnyChar
-  //   case _ => !"*/" ~~ AnyChar
-  // })
+  def multiLineCommentChar[_: P]: P[Unit] = P(state.mode match {
+    case SingleLineAnnotation => !("\"\"\"" | "\n") ~~ AnyChar
+    case _ => !"\"\"\"" ~~ AnyChar
+  })
 }
