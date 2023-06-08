@@ -1,9 +1,9 @@
-package gvc.weaver
+package gvteal.weaver
 
-import gvc.transformer.IR.Predicate
+import gvteal.transformer.IR.Predicate
 
 import scala.collection.mutable
-import gvc.transformer.{IR, SilverProgram, SilverVarId}
+import gvteal.transformer.{IR, SilverProgram, SilverVarId}
 import viper.silver.ast.MethodCall
 import viper.silver.{ast => vpr}
 import viper.silicon.state.CheckPosition

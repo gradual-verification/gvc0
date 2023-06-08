@@ -1,8 +1,8 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.Config
-import gvc.Config.error
-import gvc.transformer.IR
+import gvteal.Config
+import gvteal.Config.error
+import gvteal.transformer.IR
 
 object BenchmarkRecreator {
 

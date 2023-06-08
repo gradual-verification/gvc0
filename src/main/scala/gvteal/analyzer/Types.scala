@@ -1,5 +1,5 @@
-package gvc.analyzer
-import gvc.parser._
+package gvteal.analyzer
+import gvteal.parser._
 
 sealed trait ResolvedType {
   def name: String

@@ -1,4 +1,4 @@
-package gvc.analyzer
+package gvteal.analyzer
 
 object ExpressionVisitor {
   type Visitor = (ResolvedExpression) => Unit

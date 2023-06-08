@@ -1,11 +1,11 @@
-package gvc
+package gvteal
 
-import gvc.parser.Parser
+import gvteal.parser.Parser
 import fastparse.Parsed.{Failure, Success}
-import gvc.analyzer._
-import gvc.benchmarking.BenchmarkExecutor.injectAndWrite
-import gvc.transformer._
-import gvc.benchmarking.{
+import gvteal.analyzer._
+import gvteal.benchmarking.BenchmarkExecutor.injectAndWrite
+import gvteal.transformer._
+import gvteal.benchmarking.{
   BaselineChecker,
   BenchmarkExecutor,
   BenchmarkExporter,
@@ -16,7 +16,7 @@ import gvc.benchmarking.{
   Output,
   Timing
 }
-import gvc.weaver.{Weaver, WeaverException}
+import gvteal.weaver.{Weaver, WeaverException}
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
 import viper.silver.ast.Program

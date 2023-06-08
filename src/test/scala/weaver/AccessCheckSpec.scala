@@ -1,8 +1,8 @@
 package weaver
 
-import gvc.Config
+import gvteal.Config
 import java.nio.file._
-import gvc.specs._
+import gvteal.specs._
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuite
 import java.lang.ProcessBuilder

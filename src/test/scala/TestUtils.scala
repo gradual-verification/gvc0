@@ -1,13 +1,13 @@
-package gvc.specs
+package gvteal.specs
 
 import java.nio.file._
 import scala.collection.mutable.ListBuffer
 import java.io.IOException
-import gvc.parser.Parser
+import gvteal.parser.Parser
 import fastparse.Parsed
-import gvc.analyzer._
-import gvc.transformer._
-import gvc.weaver.Weaver
+import gvteal.analyzer._
+import gvteal.transformer._
+import gvteal.weaver.Weaver
 
 case class TestProgram(
     ir: IR.Program,

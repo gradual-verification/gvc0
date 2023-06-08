@@ -1,9 +1,9 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.transformer.IR
-import gvc.transformer.IR.{Block, Expression, Method, Predicate}
-import gvc.benchmarking.ExprType.ExprType
-import gvc.benchmarking.SpecType.SpecType
+import gvteal.transformer.IR
+import gvteal.transformer.IR.{Block, Expression, Method, Predicate}
+import gvteal.benchmarking.ExprType.ExprType
+import gvteal.benchmarking.SpecType.SpecType
 
 object SpecType {
   type SpecType = String

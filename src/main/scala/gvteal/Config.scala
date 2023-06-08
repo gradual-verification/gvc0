@@ -1,7 +1,7 @@
-package gvc
+package gvteal
 
-import gvc.Config.DefaultMode
-import gvc.benchmarking.Output
+import gvteal.Config.DefaultMode
+import gvteal.benchmarking.Output
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import java.io.File
 import scala.annotation.tailrec

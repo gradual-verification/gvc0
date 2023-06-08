@@ -1,0 +1,7 @@
+#pragma version 2
+int 20
+int 15
++
+int 55
+==
+return

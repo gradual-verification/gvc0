@@ -1,10 +1,10 @@
-package gvc.specs.permutation
+package gvteal.specs.permutation
 
-import gvc.Main
-import gvc.benchmarking._
-import gvc.specs._
-import gvc.transformer.{IR, IRPrinter}
-import gvc.transformer.IR.{Method, Predicate}
+import gvteal.Main
+import gvteal.benchmarking._
+import gvteal.specs._
+import gvteal.transformer.{IR, IRPrinter}
+import gvteal.transformer.IR.{Method, Predicate}
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuite
 
@@ -101,7 +101,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
           label.parent match {
             case Left(value) =>
               label.specType match {
-                case gvc.benchmarking.SpecType.Precondition =>
+                case gvteal.benchmarking.SpecType.Precondition =>
                   assert(
                     !preconditions
                       .contains(value) || preconditions(
@@ -109,7 +109,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
                     ) == label.specIndex
                   )
                   preconditions += value -> label.specIndex
-                case gvc.benchmarking.SpecType.Postcondition =>
+                case gvteal.benchmarking.SpecType.Postcondition =>
                   assert(
                     !postconditions
                       .contains(value) || postconditions(
@@ -180,8 +180,8 @@ class PermutationSpec extends FixtureAnyFunSuite {
         for (labelIndex <- ordering.indices) {
           val label = ordering(labelIndex)
           label.specType match {
-            case gvc.benchmarking.SpecType.Fold |
-                gvc.benchmarking.SpecType.Unfold =>
+            case gvteal.benchmarking.SpecType.Fold |
+                gvteal.benchmarking.SpecType.Unfold =>
               assert(label.parent.isLeft)
               val methodContext = label.parent.left.get
               uniqueMethods += methodContext
@@ -193,12 +193,12 @@ class PermutationSpec extends FixtureAnyFunSuite {
                   ) == labelOutput
                     .foldUnfoldCount(methodContext))
                 methodCompletedAt(methodContext) = labelIndex
-            case gvc.benchmarking.SpecType.Assert =>
+            case gvteal.benchmarking.SpecType.Assert =>
             case _ =>
               lastComponents += label.specIndex -> (label, labelIndex)
           }
           label.exprType match {
-            case gvc.benchmarking.ExprType.Imprecision =>
+            case gvteal.benchmarking.ExprType.Imprecision =>
               imprecisionCount += (label.specIndex -> (imprecisionCount
                 .getOrElse(label.specIndex, 0) + 1))
             case _ =>
@@ -210,8 +210,8 @@ class PermutationSpec extends FixtureAnyFunSuite {
         for (pair <- pairList) {
           val label = pair._2._1
           label.specType match {
-            case gvc.benchmarking.SpecType.Fold |
-                gvc.benchmarking.SpecType.Unfold =>
+            case gvteal.benchmarking.SpecType.Fold |
+                gvteal.benchmarking.SpecType.Unfold =>
             case _ =>
               assert(label.exprType.equals(ExprType.Imprecision))
               label.parent match {

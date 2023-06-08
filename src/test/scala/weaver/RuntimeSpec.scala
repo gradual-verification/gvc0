@@ -1,9 +1,9 @@
 package weaver
 
-import gvc.specs.BaseFileSpec
+import gvteal.specs.BaseFileSpec
 import org.scalatest.funsuite.AnyFunSuite
-import gvc.transformer.{IRPrinter, IR}
-import gvc.weaver.CheckRuntime
+import gvteal.transformer.{IRPrinter, IR}
+import gvteal.weaver.CheckRuntime
 
 class RuntimeSpec extends AnyFunSuite with BaseFileSpec {
 

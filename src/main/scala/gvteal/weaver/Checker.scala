@@ -1,6 +1,6 @@
-package gvc.weaver
+package gvteal.weaver
 
-import gvc.transformer.{IR, SilverVarId}
+import gvteal.transformer.{IR, SilverVarId}
 import Collector._
 import scala.collection.mutable
 import scala.annotation.tailrec

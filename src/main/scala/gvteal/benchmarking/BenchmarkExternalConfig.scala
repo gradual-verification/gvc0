@@ -1,9 +1,9 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.Config
-import gvc.Config.error
-import gvc.benchmarking.DAO.DynamicMeasurementMode
-import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
+import gvteal.Config
+import gvteal.Config.error
+import gvteal.benchmarking.DAO.DynamicMeasurementMode
+import gvteal.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
 
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import scala.xml.{Elem, NodeSeq, XML}

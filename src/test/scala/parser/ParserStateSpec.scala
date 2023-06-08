@@ -1,7 +1,7 @@
 import org.scalatest.funsuite._
-import gvc.parser.{ParserState, SourcePosition}
-import gvc.parser.MultiLineAnnotation
-import gvc.parser.SingleLineAnnotation
+import gvteal.parser.{ParserState, SourcePosition}
+import gvteal.parser.MultiLineAnnotation
+import gvteal.parser.SingleLineAnnotation
 
 class ParserStateSpec extends AnyFunSuite {
   test("start position") {

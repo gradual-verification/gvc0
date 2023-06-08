@@ -1,4 +1,4 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
 abstract class ProgressTracker(activity: String) {
   def increment(): Unit

@@ -1,6 +1,6 @@
-package gvc.analyzer
+package gvteal.analyzer
 import fastparse.Parsed.{Failure, Success}
-import gvc.parser._
+import gvteal.parser._
 
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.ListBuffer

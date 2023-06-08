@@ -1,6 +1,6 @@
-package gvc.weaver
-import gvc.transformer.IR
-import gvc.transformer.IR
+package gvteal.weaver
+import gvteal.transformer.IR
+import gvteal.transformer.IR
 
 abstract class SpecificationContext {
   def convertVar(source: IR.Var): IR.Expression

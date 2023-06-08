@@ -1,6 +1,6 @@
 import org.scalatest.funsuite._
-import gvc.parser._
-import gvc.analyzer._
+import gvteal.parser._
+import gvteal.analyzer._
 
 class ResolverSpec extends AnyFunSuite {
   test("resolve empty method") {

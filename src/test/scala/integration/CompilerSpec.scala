@@ -1,12 +1,12 @@
-package gvc.specs.integration
+package gvteal.specs.integration
 
 import org.scalatest.funsuite.AnyFunSuite
 import java.lang.ProcessBuilder.Redirect
 
-import gvc.specs._
+import gvteal.specs._
 import org.scalatest._
 import java.nio.file._
-import gvc.specs.BaseFileSpec
+import gvteal.specs.BaseFileSpec
 import scala.io.Source
 
 class CompilerSpec extends AnyFunSuite with BaseFileSpec with ParallelTestExecution {
@@ -24,7 +24,7 @@ class CompilerSpec extends AnyFunSuite with BaseFileSpec with ParallelTestExecut
 
   def compile(args: String*): Unit = {
     val jvm = ProcessHandle.current().info().command().get()
-    val mainClass = "gvc.Main"
+    val mainClass = "gvteal.Main"
 
     val command = jvm :: javaArgs ::: "-classpath" :: getClasspath :: mainClass :: args.toList
     execute(command:_*)

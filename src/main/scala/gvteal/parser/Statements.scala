@@ -1,4 +1,4 @@
-package gvc.parser
+package gvteal.parser
 import fastparse._
 import scala.collection.mutable.ListBuffer
 

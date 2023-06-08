@@ -6,7 +6,7 @@ The parser should only be used through the interface defined in the `Parser` obj
 
 # Code Structure
 
-The parser code is contained in `/src/main/scala/gvc/parser`. Parser code is separated into several files:
+The parser code is contained in `/src/main/scala/gvteal/parser`. Parser code is separated into several files:
 
  * `AST`: AST data structure definitions
  * `ParserState`: Immutable data structure that contains line indices and parser state data, used for translating string indices to line/column numbers and for tracking multi-line comment state.

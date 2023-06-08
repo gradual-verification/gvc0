@@ -1,9 +1,9 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.{CC0Options, CC0Wrapper, Config, OutputFileCollection}
-import gvc.CC0Wrapper.{CommandOutput, Performance}
-import gvc.Main.{VerifiedOutput, resolveSilicon, verifySiliconProvided}
-import gvc.benchmarking.BenchmarkExecutor.SiliconState
+import gvteal.{CC0Options, CC0Wrapper, Config, OutputFileCollection}
+import gvteal.CC0Wrapper.{CommandOutput, Performance}
+import gvteal.Main.{VerifiedOutput, resolveSilicon, verifySiliconProvided}
+import gvteal.benchmarking.BenchmarkExecutor.SiliconState
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.concurrent.duration._

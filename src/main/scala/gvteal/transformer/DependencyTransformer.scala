@@ -1,5 +1,5 @@
-package gvc.transformer
-import gvc.analyzer._
+package gvteal.transformer
+import gvteal.analyzer._
 
 object DependencyTransformer {
   // TODO: There should be a *lot* more checking of the validity of definitions

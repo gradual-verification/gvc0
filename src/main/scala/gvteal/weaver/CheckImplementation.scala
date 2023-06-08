@@ -1,7 +1,7 @@
-package gvc.weaver
+package gvteal.weaver
 
 import scala.collection.mutable
-import gvc.transformer.IR
+import gvteal.transformer.IR
 
 sealed trait CheckMode {
   def prefix: String

@@ -1,9 +1,9 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.Config.error
-import gvc.benchmarking.Benchmark.Extensions._
-import gvc.benchmarking.BenchmarkExecutor.StressTable
-import gvc.benchmarking.DAO.DBConnection
+import gvteal.Config.error
+import gvteal.benchmarking.Benchmark.Extensions._
+import gvteal.benchmarking.BenchmarkExecutor.StressTable
+import gvteal.benchmarking.DAO.DBConnection
 
 import java.nio.file.{Files, Paths}
 import java.text.SimpleDateFormat

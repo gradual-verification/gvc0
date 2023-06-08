@@ -1,6 +1,6 @@
-package gvc.weaver
+package gvteal.weaver
 
-import gvc.weaver.CheckExpression._
+import gvteal.weaver.CheckExpression._
 import org.scalatest.funsuite.AnyFunSuite
 
 class ChecksSpec extends AnyFunSuite {

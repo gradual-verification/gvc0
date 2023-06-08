@@ -1,6 +1,6 @@
-package gvc.analyzer
+package gvteal.analyzer
 
-import gvc.parser.Definition
+import gvteal.parser.Definition
 
 object Validator {
   def validateParsed(

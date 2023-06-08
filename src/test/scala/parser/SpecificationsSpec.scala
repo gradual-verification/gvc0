@@ -1,5 +1,5 @@
 import org.scalatest.funsuite._
-import gvc.parser._
+import gvteal.parser._
 import fastparse.Parsed.{Success, Failure}
 
 class SpecificationsSpec extends AnyFunSuite {

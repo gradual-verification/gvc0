@@ -1,4 +1,4 @@
-package gvc.parser
+package gvteal.parser
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Searching._

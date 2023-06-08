@@ -1,9 +1,9 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.benchmarking.ExprType.ExprType
-import gvc.benchmarking.SpecType.SpecType
-import gvc.transformer.IR
-import gvc.transformer.IR.{Expression, Method, Predicate}
+import gvteal.benchmarking.ExprType.ExprType
+import gvteal.benchmarking.SpecType.SpecType
+import gvteal.transformer.IR
+import gvteal.transformer.IR.{Expression, Method, Predicate}
 
 import scala.collection.mutable
 

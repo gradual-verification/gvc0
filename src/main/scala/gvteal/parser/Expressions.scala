@@ -1,4 +1,4 @@
-package gvc.parser
+package gvteal.parser
 import fastparse._
 
 trait Expressions extends Types {

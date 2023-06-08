@@ -1,8 +1,8 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.benchmarking.Benchmark.BenchmarkException
-import gvc.benchmarking.SamplingHeuristic.SamplingHeuristic
-import gvc.transformer.IR.{Expression, Method, Predicate}
+import gvteal.benchmarking.Benchmark.BenchmarkException
+import gvteal.benchmarking.SamplingHeuristic.SamplingHeuristic
+import gvteal.transformer.IR.{Expression, Method, Predicate}
 import java.nio.{ByteBuffer, ByteOrder}
 import scala.collection.mutable
 
@@ -38,8 +38,8 @@ class Sampler(labelOutput: LabelOutput) {
     for (index <- listOfComponents.indices) {
       val label = listOfComponents(index)
       label.specType match {
-        case gvc.benchmarking.SpecType.Fold |
-            gvc.benchmarking.SpecType.Unfold =>
+        case gvteal.benchmarking.SpecType.Fold |
+            gvteal.benchmarking.SpecType.Unfold =>
           label.parent match {
             case Left(method) => lastFoldUnfoldForMethod += (method -> index)
             case Right(pred) =>
@@ -47,7 +47,7 @@ class Sampler(labelOutput: LabelOutput) {
                 s"A fold or unfold was associated with the body of the predicate ${pred.name}"
               )
           }
-        case gvc.benchmarking.SpecType.Assert =>
+        case gvteal.benchmarking.SpecType.Assert =>
         case _ =>
           specIndexToContext += (label.specIndex -> label.parent)
           lastComponentWithSpecIndexAt += (label.specIndex -> index)
@@ -170,8 +170,8 @@ class LabelPermutation(
     label.parent match {
       case Left(value) =>
         label.specType match {
-          case gvc.benchmarking.SpecType.Fold |
-              gvc.benchmarking.SpecType.Unfold =>
+          case gvteal.benchmarking.SpecType.Fold |
+              gvteal.benchmarking.SpecType.Unfold =>
             foldUnfoldCounts += value -> (foldUnfoldCounts.getOrElse(
               value,
               0
@@ -181,7 +181,7 @@ class LabelPermutation(
       case Right(_) =>
     }
     label.exprType match {
-      case gvc.benchmarking.ExprType.Imprecision =>
+      case gvteal.benchmarking.ExprType.Imprecision =>
         completedSpecs += label.specIndex
       case _ =>
     }

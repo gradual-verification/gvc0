@@ -1,6 +1,6 @@
-package gvc.analyzer
+package gvteal.analyzer
 
-import gvc.parser.UseDeclaration
+import gvteal.parser.UseDeclaration
 
 import java.nio.file.Path
 

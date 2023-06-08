@@ -1,6 +1,6 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.benchmarking.Benchmark.Extensions.{c0, csv}
+import gvteal.benchmarking.Benchmark.Extensions.{c0, csv}
 
 import scala.util.matching.Regex
 

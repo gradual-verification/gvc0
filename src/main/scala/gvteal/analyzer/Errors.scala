@@ -1,6 +1,6 @@
-package gvc.analyzer
+package gvteal.analyzer
 import scala.collection.mutable.ArrayBuffer
-import gvc.parser._
+import gvteal.parser._
 
 case class Error(
   node: Node,

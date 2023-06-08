@@ -1,6 +1,6 @@
-package gvc.transformer
+package gvteal.transformer
 import scala.collection.mutable
-import gvc.analyzer._
+import gvteal.analyzer._
 
 class TransformerException(message: String) extends Exception(message)
 

@@ -1,4 +1,4 @@
-package gvc
+package gvteal
 
 import java.io.ByteArrayOutputStream
 import java.nio.file.Paths

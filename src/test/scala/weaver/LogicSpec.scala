@@ -1,6 +1,6 @@
-package gvc.weaver
+package gvteal.weaver
 
-import gvc.weaver.Logic._
+import gvteal.weaver.Logic._
 import org.scalatest.funsuite.AnyFunSuite
 import scala.collection.immutable.BitSet
 

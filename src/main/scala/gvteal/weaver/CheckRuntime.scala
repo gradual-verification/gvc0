@@ -1,10 +1,10 @@
-package gvc.weaver
+package gvteal.weaver
 
 import scala.io.Source
 import fastparse.Parsed.{Failure, Success}
-import gvc.parser.Parser
-import gvc.analyzer.{ErrorSink, ResolvedProgram, Resolver}
-import gvc.transformer.{DependencyTransformer, IR}
+import gvteal.parser.Parser
+import gvteal.analyzer.{ErrorSink, ResolvedProgram, Resolver}
+import gvteal.transformer.{DependencyTransformer, IR}
 object CheckRuntime {
   val name = "runtime"
   private lazy val header: ResolvedProgram = {

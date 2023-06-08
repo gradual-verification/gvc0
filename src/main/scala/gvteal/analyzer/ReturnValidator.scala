@@ -1,4 +1,4 @@
-package gvc.analyzer
+package gvteal.analyzer
 
 import scala.annotation.tailrec
 

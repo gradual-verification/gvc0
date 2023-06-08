@@ -1,6 +1,6 @@
 import fastparse.Parsed.{Success, Failure}
 import org.scalatest.funsuite._
-import gvc.parser._
+import gvteal.parser._
 
 class StatementsSpec extends AnyFunSuite {
   test("literal statement") {

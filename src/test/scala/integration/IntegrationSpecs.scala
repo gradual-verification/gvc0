@@ -1,8 +1,8 @@
-package gvc.specs.integration
+package gvteal.specs.integration
 
 import org.scalatest.funsuite._
-import gvc.transformer._
-import gvc.specs._
+import gvteal.transformer._
+import gvteal.specs._
 
 class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
   val testDirs = List(

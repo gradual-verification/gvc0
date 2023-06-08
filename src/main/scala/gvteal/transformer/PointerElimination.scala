@@ -1,4 +1,4 @@
-package gvc.transformer
+package gvteal.transformer
 import scala.collection.mutable
 
 // Rewrites all bare pointers to instead be single-field structs

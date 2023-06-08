@@ -1,4 +1,4 @@
-package gvc.parser
+package gvteal.parser
 
 sealed trait Node{
   val span: SourceSpan

@@ -1,11 +1,11 @@
-package gvc.specs.permutation
+package gvteal.specs.permutation
 
 import org.scalatest.funsuite.AnyFunSuite
 
-import gvc.specs._
-import gvc.specs.BaseFileSpec
-import gvc.transformer.IRPrinter
-import gvc.benchmarking.BaselineChecker
+import gvteal.specs._
+import gvteal.specs.BaseFileSpec
+import gvteal.transformer.IRPrinter
+import gvteal.benchmarking.BaselineChecker
 
 class BaselineSpec extends AnyFunSuite with BaseFileSpec {
   for (input <- TestUtils.groupResources("baseline")) {

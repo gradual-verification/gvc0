@@ -1,4 +1,4 @@
-package gvc.analyzer
+package gvteal.analyzer
 
 // Validates the structure of specifications
 // This could be integrated into the type-checker since it arguably is checking

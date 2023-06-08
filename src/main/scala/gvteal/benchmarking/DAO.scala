@@ -1,4 +1,4 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
 import doobie._
 import doobie.implicits._
@@ -8,15 +8,15 @@ import doobie.implicits._
 import cats.effect.unsafe.implicits.global
 import cats.free.Free
 import doobie.free.connection
-import gvc.CC0Wrapper.Performance
-import gvc.Config.{error, prettyPrintException}
-import gvc.benchmarking.BenchmarkExecutor.{ReservedProgram, StressTable}
-import gvc.benchmarking.BenchmarkExporter.AssertedPartialIdentity
-import gvc.benchmarking.BenchmarkPopulator.md5sum
-import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
-import gvc.benchmarking.DAO.ErrorType.ErrorType
-import gvc.benchmarking.DAO.StaticMeasurementMode.StaticMeasurementMode
-import gvc.benchmarking.Timing.TimedVerification
+import gvteal.CC0Wrapper.Performance
+import gvteal.Config.{error, prettyPrintException}
+import gvteal.benchmarking.BenchmarkExecutor.{ReservedProgram, StressTable}
+import gvteal.benchmarking.BenchmarkExporter.AssertedPartialIdentity
+import gvteal.benchmarking.BenchmarkPopulator.md5sum
+import gvteal.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
+import gvteal.benchmarking.DAO.ErrorType.ErrorType
+import gvteal.benchmarking.DAO.StaticMeasurementMode.StaticMeasurementMode
+import gvteal.benchmarking.Timing.TimedVerification
 
 import java.sql.SQLTransactionRollbackException
 import scala.collection.mutable

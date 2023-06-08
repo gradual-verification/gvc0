@@ -1,7 +1,7 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.Config
-import gvc.Config.error
+import gvteal.Config
+import gvteal.Config.error
 
 import java.nio.file.{Files, Path, Paths}
 import scala.sys.process.{Process, ProcessLogger}

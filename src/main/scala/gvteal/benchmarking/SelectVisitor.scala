@@ -1,7 +1,7 @@
-package gvc.benchmarking
-import gvc.benchmarking.Benchmark.BenchmarkException
-import gvc.transformer.IR
-import gvc.transformer.IR.{
+package gvteal.benchmarking
+import gvteal.benchmarking.Benchmark.BenchmarkException
+import gvteal.transformer.IR
+import gvteal.transformer.IR.{
   Binary,
   BinaryOp,
   BoolLit,
@@ -11,8 +11,8 @@ import gvc.transformer.IR.{
   Op,
   Predicate
 }
-import gvc.benchmarking.ExprType.ExprType
-import gvc.benchmarking.SpecType.SpecType
+import gvteal.benchmarking.ExprType.ExprType
+import gvteal.benchmarking.SpecType.SpecType
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer

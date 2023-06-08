@@ -1,4 +1,4 @@
-package gvc.parser
+package gvteal.parser
 
 class Parser(val state: ParserState) extends Definitions {
   import fastparse._

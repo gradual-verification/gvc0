@@ -1,4 +1,4 @@
-package gvc.weaver
+package gvteal.weaver
 
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable

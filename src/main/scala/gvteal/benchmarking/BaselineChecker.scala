@@ -1,8 +1,8 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.transformer.IR
-import gvc.weaver.Collector.getCallstyle
-import gvc.weaver._
+import gvteal.transformer.IR
+import gvteal.weaver.Collector.getCallstyle
+import gvteal.weaver._
 
 object BaselineChecker {
 

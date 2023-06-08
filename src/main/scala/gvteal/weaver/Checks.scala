@@ -1,6 +1,6 @@
-package gvc.weaver
+package gvteal.weaver
 import viper.silver.{ast => vpr}
-import gvc.transformer.{IR, IRSilver}
+import gvteal.transformer.{IR, IRSilver}
 
 sealed trait Check
 

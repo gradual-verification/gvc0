@@ -1,6 +1,6 @@
-package gvc.weaver
-import gvc.transformer.IR
-import gvc.transformer.SilverProgram
+package gvteal.weaver
+import gvteal.transformer.IR
+import gvteal.transformer.SilverProgram
 
 class WeaverException(message: String) extends Exception(message)
 

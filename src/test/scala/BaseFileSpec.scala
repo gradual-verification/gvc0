@@ -1,4 +1,4 @@
-package gvc.specs
+package gvteal.specs
 
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest._

@@ -1,9 +1,9 @@
-package gvc.specs.weaver
+package gvteal.specs.weaver
 
-import gvc.specs._
+import gvteal.specs._
 import org.scalatest.funsuite.AnyFunSuite
-import gvc.transformer._
-import gvc.weaver.Weaver
+import gvteal.transformer._
+import gvteal.weaver.Weaver
 
 class WeaverSpec extends AnyFunSuite {
 

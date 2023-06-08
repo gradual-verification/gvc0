@@ -1,11 +1,11 @@
-package gvc.analyzer
+package gvteal.analyzer
 import scala.collection.mutable.HashMap
-import gvc.analyzer.ComparisonOperation.EqualTo
-import gvc.analyzer.ComparisonOperation.NotEqualTo
-import gvc.analyzer.ComparisonOperation.LessThan
-import gvc.analyzer.ComparisonOperation.GreaterThan
-import gvc.analyzer.ComparisonOperation.GreaterThanOrEqualTo
-import gvc.analyzer.ComparisonOperation.LessThanOrEqualTo
+import gvteal.analyzer.ComparisonOperation.EqualTo
+import gvteal.analyzer.ComparisonOperation.NotEqualTo
+import gvteal.analyzer.ComparisonOperation.LessThan
+import gvteal.analyzer.ComparisonOperation.GreaterThan
+import gvteal.analyzer.ComparisonOperation.GreaterThanOrEqualTo
+import gvteal.analyzer.ComparisonOperation.LessThanOrEqualTo
 
 object TypeChecker {
   def check(program: ResolvedProgram, errors: ErrorSink): Unit = {

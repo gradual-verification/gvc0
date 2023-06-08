@@ -1,5 +1,5 @@
 import org.scalatest.funsuite._
-import gvc.transformer.IR
+import gvteal.transformer.IR
 
 class IRSpec extends AnyFunSuite {
   test("get method from body block") {

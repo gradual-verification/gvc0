@@ -4,7 +4,7 @@ The GVC0 IR is a low-level representation for instructions that can target both 
 
 ## IR API
 
-The IR is a relatively simple AST structure that is mostly mutable. The data structures are defined in `src/main/scala/gvc/transformer/IR.scala`. Due to its mutability, care must be taken to preserve validity in the AST structure. Some checking of validity happens statically through the type system, or at runtime with exceptions. However, there are many possibilities for generating invalid code in the IR.
+The IR is a relatively simple AST structure that is mostly mutable. The data structures are defined in `src/main/scala/gvteal/transformer/IR.scala`. Due to its mutability, care must be taken to preserve validity in the AST structure. Some checking of validity happens statically through the type system, or at runtime with exceptions. However, there are many possibilities for generating invalid code in the IR.
 
 **Note:** referential equality (not structural equality) is used throughout. For example, two separate `Var` instances are considered distinct, even if they share the same name. This is to eliminate mishandling of vars, fields, etc from separate programs or methods. As a consequence, the exact instance returned from `addMethod`, `addVar`, etc. must be always used when referencing that method or var. **Do not** instantiate IR objects directly, except the root `Program` instance, expressions, and ops.
 
@@ -58,7 +58,7 @@ Expressions may be directly instantiated, except for scoped expressions such as 
 
 ## Transformer
 
-The transformer converts the analyzer AST into the IR. It is mostly contained in `src/main/scala/gvc/transformer/IRTransformer.scala.
+The transformer converts the analyzer AST into the IR. It is mostly contained in `src/main/scala/gvteal/transformer/IRTransformer.scala.
 
 While much of the translation process is straightforward, it may involve converting some expressions or statements into multiple IR ops. This is necessary since C0 expressions may contain side-effects (namely method calls and allocations), which must be converted to separate ops in the IR. As each expression is converted, a scope object (see below) is passed along that tracks the current position to insert any ops. When a side-effectful expression is encountered, a new variable is created to store the result, and an op which implements the side-effect is added to the current scope. The temporary variable is then used in place of the original expression.
 

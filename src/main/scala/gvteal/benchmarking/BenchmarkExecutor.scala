@@ -1,22 +1,22 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.Config.error
-import gvc.Main.writeFile
-import gvc.benchmarking.Benchmark.{
+import gvteal.Config.error
+import gvteal.Main.writeFile
+import gvteal.benchmarking.Benchmark.{
   BenchmarkException,
   injectStress,
   isInjectable
 }
-import gvc.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
-import gvc.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
-import gvc.benchmarking.Timing.{
+import gvteal.benchmarking.DAO.DynamicMeasurementMode.DynamicMeasurementMode
+import gvteal.benchmarking.DAO.{DynamicMeasurementMode, ErrorType, Permutation}
+import gvteal.benchmarking.Timing.{
   CC0CompilationException,
   CC0ExecutionException,
   TimedVerification
 }
-import gvc.transformer.{IR, IRPrinter}
-import gvc.weaver.WeaverException
-import gvc.{Config, Main, VerificationException}
+import gvteal.transformer.{IR, IRPrinter}
+import gvteal.weaver.WeaverException
+import gvteal.{Config, Main, VerificationException}
 import viper.silicon.Silicon
 
 import java.nio.file.{Files, Path}

@@ -1,4 +1,4 @@
-package gvc.analyzer
+package gvteal.analyzer
 
 // Validates that LHS of assignments are L-Values and that
 // variables are assigned before they are used

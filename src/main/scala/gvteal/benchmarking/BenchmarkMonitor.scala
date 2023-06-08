@@ -1,13 +1,13 @@
-package gvc.benchmarking
+package gvteal.benchmarking
 
-import gvc.benchmarking.DAO.{
+import gvteal.benchmarking.DAO.{
   CompletedPathMetadata,
   CompletedProgramMetadata,
   DBConnection,
   IdentifiedMetadata,
   StaticTimingMetadata
 }
-import gvc.benchmarking.Output.{green, red}
+import gvteal.benchmarking.Output.{green, red}
 
 object BenchmarkMonitor {
   def monitor(config: MonitorConfig): Unit = {
