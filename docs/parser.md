@@ -10,7 +10,7 @@ The parser code is contained in `/src/main/scala/gvc/parser`. Parser code is sep
 
  * `AST`: AST data structure definitions
  * `ParserState`: Immutable data structure that contains line indices and parser state data, used for translating string indices to line/column numbers and for tracking multi-line comment state.
- * `Whitespace`: Base psuedo-lexer, parses whitespace
+ * `Whitespace`: Base pseudo-lexer, parses whitespace
  * `Lexer`: Extends `Whitespace`, parses basic tokens such as identifiers, etc.
  * `Types`: Extends `Lexer`, parses type specifiers
  * `Expressions`: Extends `Types`, parses C0 imperative expressions
