@@ -31,9 +31,10 @@ import viper.silicon.state.BranchCond
 
 case class OutputFileCollection(
     baseName: String,
+    astFileName: String,
     irFileName: String,
     silverFileName: String,
-    c0FileName: String,
+    pyTEALFileName: String,
     profilingName: String,
     binaryName: String
 )
@@ -48,19 +49,21 @@ object Main extends App {
 
   def getOutputCollection(sourceFile: String): OutputFileCollection = {
     val baseName =
-      if (sourceFile.toLowerCase().endsWith(".c0"))
+      if (sourceFile.toLowerCase().endsWith(".py"))
         sourceFile.slice(0, sourceFile.length() - 3)
       else sourceFile
-    val irFileName = baseName + ".ir.c0"
+    val astFileName = baseName + ".ast.pyteal"
+    val irFileName = baseName + ".ir.pyteal"
     val silverFileName = baseName + ".vpr"
-    val c0FileName = baseName + ".verified.c0"
+    val pyTEALFileName = baseName + ".verified.pyteal"
     val profilingName = baseName + ".prof.out"
     val binaryName = baseName + ".bin"
     OutputFileCollection(
       baseName,
+      astFileName,
       irFileName,
       silverFileName,
-      c0FileName,
+      pyTEALFileName,
       profilingName,
       binaryName
     )
@@ -183,7 +186,7 @@ object Main extends App {
     sys.exit(0)
   }
 
-  def dumpC0(output: String): Nothing = {
+  def dumpPYTEAL(output: String): Nothing = {
     // Print runtime check information for debugging when dumping C0 output
     // This only happens after verification, so runtime checks have been initialized
 
@@ -314,8 +317,8 @@ object Main extends App {
     val weavingTime = weavingStop - weavingStart
 
     val c0Source = IRPrinter.print(ir, includeSpecs = false)
-    if (config.dump.contains(Config.DumpC0))
-      dumpC0(c0Source)
+    if (config.dump.contains(Config.DumpPYTEAL))
+      dumpPYTEAL(c0Source)
     VerifiedOutput(
       silver.program,
       c0Source,

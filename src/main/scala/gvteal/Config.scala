@@ -62,11 +62,13 @@ case class Config(
 }
 
 object Config {
+  case object DumpAST extends DumpType
+
   case object DumpIR extends DumpType
 
   case object DumpSilver extends DumpType
 
-  case object DumpC0 extends DumpType
+  case object DumpPYTEAL extends DumpType
 
   case object DefaultMode extends Mode
 
@@ -168,9 +170,10 @@ object Config {
   }
 
   private def parseDumpType(t: String) = t.toLowerCase() match {
+    case "ast"    => DumpAST
     case "ir"     => DumpIR
     case "silver" => DumpSilver
-    case "c0"     => DumpC0
+    case "pyteal"     => DumpPYTEAL
     case _        => error(s"Invalid dump output type: $t")
   }
 
