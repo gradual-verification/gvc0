@@ -8,6 +8,7 @@ trait Definitions extends Statements with Types {
       typeDefinition.map(Seq(_)) |
       methodDefinition.map(Seq(_)) |
       useDeclaration.map(Seq(_)) |
+      importDeclaration.map(Seq(_)) |
       predicateAnnotation
     )
 
@@ -43,6 +44,37 @@ trait Definitions extends Statements with Types {
       case (paramType, id) => MemberDefinition(id, paramType, SourceSpan(paramType.span.start, id.span.end))
     })
   
+  // PyTEAL imports for the head of a file
+  // TODO: Python imports aren't as simple as `use`, instead make use of `from ... import`; 
+  // we need to define both an `importPath` and an `importFnc` 
+  def importDeclaration[_: P]: P[ImportDeclaration] =
+    P("from" ~ " " importPath ~ " " ~ "import" ~ " " ~ importFnc | ("import" ~/ importPath))
+      .map({
+        case(start, p) => ImportDeclaration(p.path, p.isInstanceOf[LibraryPath], SourceSpan(start, p.path.span.end))
+    }) 
+  
+  sealed trait ImportPath {
+    val path: StringExpression
+  }
+
+  sealed trait ImportFnc {
+    val fnc: StringExpression
+  }
+
+  def importPath[_: P]: P[ImportPath] = 
+    P(useLibraryPath | useLocalPath)
+  
+  def importFnc[_: P]: P[ImportFnc] = 
+    P(importLibraryFnc)
+  
+  case class LibraryFnc(function: StringExpression) extends ImportPath
+
+  // TODO: Figure out what a `libraryfunction` looks like
+  def importLibraryFnc[_: P]: P[LibraryFnc] = 
+    P(span(library.!)).map({
+      case (raw, span) => LibraryFnc(StringExpression(raw, raw.substring(1, raw.length() - 1), span))
+    })
+
   def useDeclaration[_: P]: P[UseDeclaration] = P(pos ~~ kw("#use") ~/ usePath)
     .map({
       case(start, p) => UseDeclaration(p.path, p.isInstanceOf[LibraryPath], SourceSpan(start, p.path.span.end))

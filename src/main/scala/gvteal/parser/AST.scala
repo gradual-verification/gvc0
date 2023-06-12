@@ -40,6 +40,17 @@ case class AccessibilityExpression(field: Expression, span: SourceSpan) extends 
 
 // TODO: (PyTEAL AST)[https://github.com/algorand/pyteal/blob/master/pyteal/ast]
 
+/*
+Transaction Types numerical value evaluation:
+Unknown => 0
+Payment => 1
+KeyRegistration => 2
+AssetConfig => 3
+AssetTransfer => 4
+AssetFreeze => 5
+ApplicationCall => 6
+*/
+
 // Literal expressions
 sealed trait LiteralExpression extends Expression {
   val raw: String
@@ -192,11 +203,11 @@ case class MethodDefinition(
   span: SourceSpan
 ) extends Definition
 
-object BinaryOperator extends Enumeration {
-  type BinaryOperator = Value
+object LogicalOperator extends Enumeration {
+  type LogicalOperator = Value
   
-  val LogicalOr = Value("||")
-  val LogicalAnd = Value("&&")
+  val LogicalOr = Value("Or")
+  val LogicalAnd = Value("And")
   val BitwiseOr = Value("|")
   val BitwiseXor = Value("^")
   val BitwiseAnd = Value("&")
