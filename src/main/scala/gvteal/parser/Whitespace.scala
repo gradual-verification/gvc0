@@ -32,10 +32,7 @@ trait Whitespace {
 
   def singleLineComment[_: P] = P("#" ~~ !"@" ~~/ (!"\n" ~~ AnyChar).repX ~~ &("\n"))
 
-  def multiLineComment[_: P]: P[Unit] = P("\"\"\"" ~~ !"@" ~~/ (multiLineComment | multiLineCommentChar).repX ~~ "\"\"\"")
+  def multiLineCommentChar[_: P]: P[Unit] = P(!"\"\"\"" ~~ AnyChar)
 
-  def multiLineCommentChar[_: P]: P[Unit] = P(state.mode match {
-    case SingleLineAnnotation => !("\"\"\"" | "\n") ~~ AnyChar
-    case _ => !"\"\"\"" ~~ AnyChar
-  })
+  def multiLineComment[_: P]: P[Unit] = P("\"\"\"" ~~/ (multiLineCommentChar.repX) ~~ "\"\"\"")
 }

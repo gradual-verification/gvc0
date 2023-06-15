@@ -90,7 +90,7 @@ object Main extends App {
           val onlyFraming = config.mode == Config.FramingVerification
           val ir = generateIR(inputSource, linkedLibraries)
           BaselineChecker.check(ir, onlyFraming)
-          val outputC0Source = Paths.get(fileNames.c0FileName)
+          val outputC0Source = Paths.get(fileNames.pyTEALFileName)
           val outputBinary = Paths.get(fileNames.binaryName)
           injectAndWrite(IRPrinter.print(ir, includeSpecs = false),
                          outputC0Source)
@@ -352,12 +352,12 @@ object Main extends App {
     )
     // Always write the intermediate C0 file, but then delete it
     // if not saving intermediate files
-    writeFile(fileNames.c0FileName, verifiedSource)
+    writeFile(fileNames.pyTEALFileName, verifiedSource)
     val compilerExit =
       try {
-        CC0Wrapper.exec(fileNames.c0FileName, cc0Options)
+        CC0Wrapper.exec(fileNames.pyTEALFileName, cc0Options)
       } finally {
-        if (!cmdConfig.saveFiles) deleteFile(fileNames.c0FileName)
+        if (!cmdConfig.saveFiles) deleteFile(fileNames.pyTEALFileName)
       }
 
     if (compilerExit != 0) Config.error("Compilation failed")

@@ -188,6 +188,9 @@ case class MemberDefinition(id: Identifier, valueType: Type, span: SourceSpan) e
 case class TypeDefinition(id: Identifier, value: Type, span: SourceSpan) extends Definition
 case class StructDefinition(id: Identifier, fields: Option[List[MemberDefinition]], span: SourceSpan) extends Definition
 case class UseDeclaration(path: StringExpression, isLibrary: Boolean, span: SourceSpan) extends Definition
+case class ImportSimple(path: StringExpression, span: SourceSpan) extends Definition
+case class ImportFrom(name: StringExpression, functions: List[String], span: SourceSpan) extends Definition
+case class ImportFromAll(name: StringExpression, span: SourceSpan) extends Definition
 case class PredicateDefinition(
   id: Identifier,
   arguments: List[MemberDefinition],
@@ -203,11 +206,11 @@ case class MethodDefinition(
   span: SourceSpan
 ) extends Definition
 
-object LogicalOperator extends Enumeration {
-  type LogicalOperator = Value
+object BinaryOperator extends Enumeration {
+  type BinaryOperator = Value
   
-  val LogicalOr = Value("Or")
-  val LogicalAnd = Value("And")
+  val LogicalOr = Value("||")
+  val LogicalAnd = Value("&&")
   val BitwiseOr = Value("|")
   val BitwiseXor = Value("^")
   val BitwiseAnd = Value("&")

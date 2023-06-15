@@ -47,32 +47,56 @@ trait Definitions extends Statements with Types {
   // PyTEAL imports for the head of a file
   // TODO: Python imports aren't as simple as `use`, instead make use of `from ... import`; 
   // we need to define both an `importPath` and an `importFnc` 
-  def importDeclaration[_: P]: P[ImportDeclaration] =
-    P("from" ~ " " importPath ~ " " ~ "import" ~ " " ~ importFnc | ("import" ~/ importPath))
-      .map({
-        case(start, p) => ImportDeclaration(p.path, p.isInstanceOf[LibraryPath], SourceSpan(start, p.path.span.end))
-    }) 
+  // def importDeclaration[_: P]: P[ImportDeclaration] =
+  //   P("from" ~ " " importPath ~ " " ~ "import" ~ " " ~ importFnc | ("import" ~/ importPath))
+  //     .map({
+  //       case(start, p) => ImportDeclaration(p.path, p.isInstanceOf[LibraryPath], SourceSpan(start, p.path.span.end))
+  //   }) 
   
-  sealed trait ImportPath {
-    val path: StringExpression
-  }
+  // sealed trait ImportPath {
+  //   val path: StringExpression
+  // }
 
-  sealed trait ImportFnc {
-    val fnc: StringExpression
-  }
+  // sealed trait ImportFnc {
+  //   val fnc: StringExpression
+  // }
 
-  def importPath[_: P]: P[ImportPath] = 
-    P(useLibraryPath | useLocalPath)
+  // def importPath[_: P]: P[ImportPath] = 
+  //   P(useLibraryPath | useLocalPath)
   
-  def importFnc[_: P]: P[ImportFnc] = 
-    P(importLibraryFnc)
+  // def importFnc[_: P]: P[ImportFnc] = 
+  //   P(importLibraryFnc)
   
-  case class LibraryFnc(function: StringExpression) extends ImportPath
+  // case class LibraryFnc(function: StringExpression) extends ImportPath
 
   // TODO: Figure out what a `libraryfunction` looks like
-  def importLibraryFnc[_: P]: P[LibraryFnc] = 
-    P(span(library.!)).map({
-      case (raw, span) => LibraryFnc(StringExpression(raw, raw.substring(1, raw.length() - 1), span))
+  // def importLibraryFnc[_: P]: P[LibraryFnc] = 
+  //   P(span(library.!)).map({
+  //     case (raw, span) => LibraryFnc(StringExpression(raw, raw.substring(1, raw.length() - 1), span))
+  //   })
+
+  def importDeclaration[_: P]: P[Definition] =
+    P(importSimple | importFrom)
+  
+  def importSimple[_: P]: P[ImportSimple] = P(pos ~~ kw("import") ~/ importPath)
+    .map({
+      case(start, p) => ImportSimple(p, SourceSpan(start, p.span.end))
+  })
+  
+  def importPath[_: P]: P[StringExpression] = 
+    P(identifier.rep(1, sep=".")).map({ identifiers =>
+      val raw = identifiers.map(_.name).mkString(".")
+      val start = identifiers.head.span.start
+      val end = identifiers.last.span.end
+      StringExpression(raw, raw, SourceSpan(start, end))
+    })
+
+  def importFrom[_: P]: P[Definition] =
+    P((Index ~~ kw("from") ~/ identifier ~ kw("import") ~/ ("*".!.map(_ => Right(Nil)) | identifier.rep(sep = ",").map(Left(_))) ~~ Index).map {
+      // from vote import approval_program, clear_state_program
+      case (start, name, Left(functions), end) => ImportFrom(StringExpression(name.name, name.name, name.span), functions.map(f => f.name).toList, SourceSpan(name.span.start, name.span.end))
+      // from pyteal import *
+      case (start, name, Right(_), end) => ImportFromAll(StringExpression(name.name, name.name, name.span), SourceSpan(name.span.start, name.span.end))
     })
 
   def useDeclaration[_: P]: P[UseDeclaration] = P(pos ~~ kw("#use") ~/ usePath)
@@ -85,7 +109,7 @@ trait Definitions extends Statements with Types {
   }
   case class LibraryPath(path: StringExpression) extends UsePath
   case class LocalPath(path: StringExpression) extends UsePath
-  def usePath[_: P]: P[UsePath] =
+  def usePath[_: P]: P[UsePath] = 
     P(useLibraryPath | useLocalPath)
   def useLibraryPath[_: P]: P[LibraryPath] =
     P(span(library.!)).map({

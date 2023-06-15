@@ -11,6 +11,7 @@ object ImplementationValidator {
     val definedMethods = program.methodDefinitions.toSeq.map(_.name).toSet
     val libraryMethods = collectLibraryMethods(program.dependencies, errors)
     val definedPredicates = program.predicateDefinitions.toSeq.map(_.name).toSet
+    // TODO: Validate PyTEAL file for import always including pyteal
     if (!definedMethods.contains("main")) {
       errors.programError("'main' method not defined")
     }

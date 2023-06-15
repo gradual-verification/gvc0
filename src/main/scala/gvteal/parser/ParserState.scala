@@ -30,15 +30,21 @@ class ParserState(
     SourcePosition(lineIndex + 1, column, index)
   }
 
-  def inAnnotation(): ParserState = new ParserState(
+  def inAnnotation(): ParserState = {
+    println("Switching to inAnnotation() mode")
+    new ParserState(
     lines = lines,
     mode = MultiLineAnnotation
-  )
+    )
+  }
 
-  def inSingleLineAnnotation(): ParserState = new ParserState(
+def inSingleLineAnnotation(): ParserState = {
+  println("Switching to SingleLineAnnotation mode")
+  new ParserState(
     lines = lines,
     mode = SingleLineAnnotation
   )
+}
 }
 
 object ParserState {

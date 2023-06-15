@@ -51,7 +51,7 @@ trait Specifications extends Expressions {
   def annotation[_: P]: P[Seq[Specification]] =
     P(singleLineAnnotation | multiLineAnnotation)
   def singleLineAnnotation[_: P]: P[Seq[Specification]] =
-    P("//@"./.flatMapX(_ => new Parser(state.inSingleLineAnnotation()).specifications) ~~/ ("\n" | End))
+    P("#@"./.flatMapX(_ => new Parser(state.inSingleLineAnnotation()).specifications) ~~/ ("\n" | End))
   def multiLineAnnotation[_: P]: P[Seq[Specification]] =
-    P("/*@"./.flatMapX(_ => new Parser(state.inAnnotation()).specifications) ~/ "@*/")
+    P("\"\"\"@"./.flatMapX(_ => new Parser(state.inAnnotation()).specifications) ~/ "@\"\"\"")
 }
