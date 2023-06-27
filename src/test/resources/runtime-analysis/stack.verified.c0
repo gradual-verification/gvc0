@@ -1,0 +1,423 @@
+#use <conio>
+#use <runtime>
+struct Node;
+
+struct Node
+{
+  int val;
+  struct Node* next;
+  int _id;
+};
+
+void add_remove_seg(struct Node* start, struct OwnedFields* _ownedFields, struct OwnedFields* _tempFields);
+void add_remove_segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields, struct OwnedFields* _tempFields);
+void add_seg(struct Node* start, struct OwnedFields* _ownedFields);
+void add_segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields);
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int* _instanceCounter);
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, struct OwnedFields* _ownedFields);
+struct Node* create_list(int val, int* _instanceCounter);
+int main();
+int pop(struct Node* head, struct OwnedFields* _ownedFields);
+struct Node* push(struct Node* head, int val, struct OwnedFields* _ownedFields);
+void remove_segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields);
+void segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields);
+void sep_segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields);
+
+void add_remove_seg(struct Node* start, struct OwnedFields* _ownedFields, struct OwnedFields* _tempFields)
+{
+  add_remove_segHelper(start, NULL, _ownedFields, _tempFields);
+}
+
+void add_remove_segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields, struct OwnedFields* _tempFields)
+{
+  if (!(start == end))
+  {
+    addAcc(_ownedFields, start->_id, 3, 0);
+    loseAcc(_tempFields, start->_id, 0);
+    addAcc(_ownedFields, start->_id, 3, 1);
+    loseAcc(_tempFields, start->_id, 1);
+    add_remove_segHelper(start->next, end, _ownedFields, _tempFields);
+  }
+}
+
+void add_seg(struct Node* start, struct OwnedFields* _ownedFields)
+{
+  add_segHelper(start, NULL, _ownedFields);
+}
+
+void add_segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields)
+{
+  if (!(start == end))
+  {
+    addAcc(_ownedFields, start->_id, 3, 0);
+    addAcc(_ownedFields, start->_id, 3, 1);
+    add_segHelper(start->next, end, _ownedFields);
+  }
+}
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int* _instanceCounter)
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+    }
+    else
+    {
+      appendLemmaAfterLoopBody(a->next, b, c, _instanceCounter);
+    }
+  }
+}
+
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, struct OwnedFields* _ownedFields)
+{
+  bool _cond_1 = false;
+  bool _cond_2 = false;
+  bool _cond_3 = false;
+  bool _cond_4 = false;
+  _cond_1 = b == c;
+  if (b == c)
+  {
+  }
+  else
+  {
+    _cond_2 = a == b;
+    if (a == b)
+    {
+      _cond_3 = b == a;
+      if (!_cond_1 && _cond_2 && _cond_3 && !(b == c) || !_cond_1 && _cond_2 && _cond_3 && !(b == c))
+      {
+        assertAcc(_ownedFields, b != NULL ? b->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+      }
+      if (!_cond_1 && _cond_2 && _cond_3 && !(b == c))
+      {
+        assertAcc(_ownedFields, b != NULL ? b->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      }
+      if (!_cond_1 && _cond_2 && _cond_3 && !(b == c) || !_cond_1 && _cond_2 && _cond_3 && !(b == c))
+      {
+        assert(!(b == NULL));
+      }
+      if (!_cond_1 && _cond_2 && _cond_3 && !(b == c))
+      {
+        segHelper(a->next, c, _ownedFields);
+      }
+    }
+    else
+    {
+      _cond_4 = a == b;
+      appendLemmaLoopBody(a->next, b, c, _ownedFields);
+      if (!_cond_1 && !_cond_2 && !_cond_4 && !(a == c))
+      {
+        assertAcc(_ownedFields, a != NULL ? a->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      }
+      if (!_cond_1 && !_cond_2 && !_cond_4 && !(a == c) || !_cond_1 && !_cond_2 && !_cond_4 && !(a == c))
+      {
+        assertAcc(_ownedFields, a != NULL ? a->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+      }
+      if (!_cond_1 && !_cond_2 && !_cond_4 && !(a == c))
+      {
+        segHelper(a->next, c, _ownedFields);
+      }
+    }
+  }
+}
+
+struct Node* create_list(int val, int* _instanceCounter)
+{
+  struct Node* n = NULL;
+  n = alloc(struct Node);
+  n->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  n->val = val;
+  n->next = NULL;
+  return n;
+}
+
+int main()
+{
+  struct Node* l = NULL;
+  struct Node* l2 = NULL;
+  int* _instanceCounter = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  l = create_list(5, _instanceCounter);
+  add_seg(l, _ownedFields);
+  _tempFields = initOwnedFields(_instanceCounter);
+  add_remove_seg(l, _tempFields, _ownedFields);
+  l2 = push(l, 1, _tempFields);
+  add_seg(l2, _ownedFields);
+  pop(l2, _ownedFields);
+  return 1;
+}
+
+int pop(struct Node* head, struct OwnedFields* _ownedFields)
+{
+  struct Node* curr = NULL;
+  struct Node* prev = NULL;
+  bool _cond_1 = false;
+  bool _cond_2 = false;
+  bool _cond_3 = false;
+  bool _cond_4 = false;
+  bool _cond_5 = false;
+  struct OwnedFields* _tempFields = NULL;
+  struct OwnedFields* _tempFields1 = NULL;
+  _cond_1 = head == NULL;
+  if (head == NULL)
+  {
+    return -1;
+  }
+  else
+  {
+    curr = head;
+    _tempFields1 = initOwnedFields(_ownedFields->instanceCounter);
+    if (!_cond_1 && !(head->next == NULL) || !_cond_1 && !(head->next == NULL) || !_cond_1 || !_cond_1)
+    {
+      assertAcc(_ownedFields, head != NULL ? head->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+    }
+    if (!_cond_1)
+    {
+      assertAcc(_ownedFields, head != NULL ? head->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    }
+    if (!_cond_1 && !(head->next == NULL))
+    {
+      assertAcc(_ownedFields, head->next != NULL ? head->next->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      assertAcc(_ownedFields, head->next != NULL ? head->next->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+    }
+    if (!_cond_1 && !(head->next == NULL) || !_cond_1 && !(head->next == NULL))
+    {
+      assert(!(head->next == NULL));
+    }
+    addAccEnsureSeparate(_tempFields1, curr != NULL ? curr->_id : -1, 0, 3, "Overlapping field permissions for struct Node.val");
+    addAccEnsureSeparate(_tempFields1, curr != NULL ? curr->_id : -1, 1, 3, "Overlapping field permissions for struct Node.next");
+    if (!(curr->next == NULL))
+    {
+      addAccEnsureSeparate(_tempFields1, curr->next != NULL ? curr->next->_id : -1, 1, 3, "Overlapping field permissions for struct Node.next");
+      addAccEnsureSeparate(_tempFields1, curr->next != NULL ? curr->next->_id : -1, 0, 3, "Overlapping field permissions for struct Node.val");
+    }
+    _cond_2 = !(head == NULL) && head->next == NULL;
+    _cond_3 = !(curr == NULL) && !(curr->next == NULL) && !(curr == NULL) && !(curr->next->next == NULL) && !(curr->next == NULL);
+    _cond_5 = !(curr == NULL) && curr->next == NULL;
+    while (curr->next != NULL && curr->next->next != NULL)
+    {
+      prev = curr;
+      curr = prev->next;
+      _cond_4 = head == prev;
+      if (head == prev)
+      {
+      }
+      else
+      {
+        if (!_cond_1 && !_cond_2 && _cond_3 && !_cond_4 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4)
+        {
+          assertAcc(_ownedFields, head != NULL ? head->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+        }
+        appendLemmaLoopBody(head->next, prev, curr, _ownedFields);
+      }
+      _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+      if (!_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && curr->next == NULL || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && curr->next == NULL || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && curr->next == NULL || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && curr->next == NULL || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4)
+      {
+        assertAcc(_ownedFields, curr != NULL ? curr->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+      }
+      if (!_cond_1 && !_cond_2 && _cond_3 && !_cond_4 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4)
+      {
+        assertAcc(_ownedFields, curr != NULL ? curr->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      }
+      if (!_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && curr->next == NULL && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && curr->next == NULL && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && curr->next == NULL && !_cond_5 || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && curr->next == NULL && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && curr->next == NULL && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && curr->next == NULL && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && curr->next == NULL && !_cond_5 || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && curr->next == NULL && !_cond_5)
+      {
+        assertAcc(_ownedFields, curr->next != NULL ? curr->next->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+      }
+      if (!_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL))
+      {
+        assertAcc(_ownedFields, curr->next != NULL ? curr->next->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      }
+      if (!_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && _cond_4 && !(curr->next == NULL))
+      {
+        assert((!(head->next->next->next == NULL) && !(curr->next == NULL)) == (!(head->next->next->next == NULL) && !(curr->next == NULL)));
+      }
+      if (!_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL))
+      {
+        assert(!(curr->next == NULL));
+      }
+      if (!_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && curr->next == NULL || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && !_cond_4 && curr->next == NULL || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && curr->next == NULL || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && !(curr->next == NULL) || !_cond_1 && _cond_2 && _cond_3 && !_cond_4 && curr->next == NULL)
+      {
+        assert((!(curr->next->next == NULL) && !(curr->next == NULL)) == (!(curr->next->next == NULL) && !(curr->next == NULL)));
+      }
+      addAccEnsureSeparate(_tempFields, curr != NULL ? curr->_id : -1, 0, 3, "Overlapping field permissions for struct Node.val");
+      addAccEnsureSeparate(_tempFields, curr != NULL ? curr->_id : -1, 1, 3, "Overlapping field permissions for struct Node.next");
+      if (!(curr->next == NULL))
+      {
+        addAccEnsureSeparate(_tempFields, curr->next != NULL ? curr->next->_id : -1, 1, 3, "Overlapping field permissions for struct Node.next");
+        addAccEnsureSeparate(_tempFields, curr->next != NULL ? curr->next->_id : -1, 0, 3, "Overlapping field permissions for struct Node.val");
+      }
+    }
+    curr->next = NULL;
+    return 1;
+  }
+}
+
+struct Node* push(struct Node* head, int val, struct OwnedFields* _ownedFields)
+{
+  struct Node* n = NULL;
+  struct Node* curr = NULL;
+  struct Node* tmp = NULL;
+  struct Node* prev = NULL;
+  bool _cond_1 = false;
+  bool _cond_2 = false;
+  bool _cond_3 = false;
+  bool _cond_4 = false;
+  bool _cond_5 = false;
+  bool _cond_6 = false;
+  bool _cond_7 = false;
+  bool _cond_8 = false;
+  bool _cond_9 = false;
+  bool _cond_10 = false;
+  bool _cond_11 = false;
+  struct OwnedFields* _tempFields = NULL;
+  struct Node* _ = NULL;
+  add_seg(head, _ownedFields);
+  _cond_1 = head == NULL;
+  _cond_2 = head == NULL;
+  if (head == NULL)
+  {
+    n = alloc(struct Node);
+    n->_id = addStructAcc(_ownedFields, 3);
+    n->val = val;
+    n->next = head;
+    return n;
+  }
+  else
+  {
+    curr = head;
+    _cond_3 = !(head == NULL) && head->next == NULL;
+    _cond_4 = true;
+    _cond_5 = !(head == NULL) && head->next == NULL;
+    _cond_6 = !(curr == NULL) && curr->next == NULL;
+    while (curr->next != NULL)
+    {
+      prev = curr;
+      curr = prev->next;
+      _cond_7 = head == prev;
+      _cond_8 = curr == curr;
+      _cond_9 = head == prev;
+      if (head == prev)
+      {
+      }
+      else
+      {
+        appendLemmaLoopBody(head->next, prev, curr, _ownedFields);
+      }
+      if (!_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr))
+      {
+        assertAcc(_ownedFields, head != NULL ? head->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      }
+      if (!_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr))
+      {
+        assertAcc(_ownedFields, head != NULL ? head->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+      }
+      if (!_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !(head == curr))
+      {
+        segHelper(head->next, curr, _ownedFields);
+      }
+      _cond_10 = head == curr;
+      if (!_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10)
+      {
+        assertAcc(_ownedFields, curr != NULL ? curr->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+      }
+      _cond_11 = !(curr == NULL) && curr->next == NULL;
+      _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+      if (!_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && _cond_11 || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && _cond_11 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && _cond_11 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && _cond_11)
+      {
+        assertAcc(_ownedFields, curr != NULL ? curr->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+      }
+      if (!_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 && !(curr->next == NULL) || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 && !(curr->next == NULL))
+      {
+        assertAcc(_ownedFields, curr->next != NULL ? curr->next->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        assertAcc(_ownedFields, curr->next != NULL ? curr->next->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+        segHelper(curr->next->next, NULL, _ownedFields);
+      }
+      if (!_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && _cond_11 || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && !_cond_3 && _cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && _cond_11 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && _cond_11 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && _cond_3 && _cond_4 && _cond_5 && !_cond_6 && !_cond_7 && _cond_8 && !_cond_9 && !_cond_10 && _cond_11)
+      {
+        segHelper(head, curr, _ownedFields);
+      }
+      addAccEnsureSeparate(_tempFields, curr != NULL ? curr->_id : -1, 0, 3, "Overlapping field permissions for struct Node.val");
+      addAccEnsureSeparate(_tempFields, curr != NULL ? curr->_id : -1, 1, 3, "Overlapping field permissions for struct Node.next");
+      sep_segHelper(head, curr, _tempFields);
+      if (!(curr->next == NULL))
+      {
+        addAccEnsureSeparate(_tempFields, curr->next != NULL ? curr->next->_id : -1, 1, 3, "Overlapping field permissions for struct Node.next");
+        addAccEnsureSeparate(_tempFields, curr->next != NULL ? curr->next->_id : -1, 0, 3, "Overlapping field permissions for struct Node.val");
+        sep_segHelper(curr->next->next, NULL, _tempFields);
+      }
+    }
+    tmp = alloc(struct Node);
+    tmp->_id = addStructAcc(_ownedFields, 3);
+    tmp->val = val;
+    tmp->next = curr->next;
+    curr->next = tmp;
+    if (head == curr)
+    {
+    }
+    else
+    {
+      remove_segHelper(head->next, curr, _ownedFields);
+      if (!(_ == NULL))
+      {
+        loseAcc(_ownedFields, _->_id, 0);
+        loseAcc(_ownedFields, _->_id, 1);
+      }
+      if (!(curr == _))
+      {
+        loseAcc(_ownedFields, curr->_id, 0);
+        loseAcc(_ownedFields, curr->_id, 1);
+        remove_segHelper(curr->next, _, _ownedFields);
+      }
+      appendLemmaAfterLoopBody(head->next, curr, NULL, _ownedFields->instanceCounter);
+      add_segHelper(head->next, _, _ownedFields);
+      if (!(_ == NULL))
+      {
+        addAcc(_ownedFields, _->_id, 3, 0);
+        addAcc(_ownedFields, _->_id, 3, 1);
+      }
+    }
+    return head;
+  }
+}
+
+void remove_segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields)
+{
+  if (!(start == end))
+  {
+    loseAcc(_ownedFields, start->_id, 0);
+    loseAcc(_ownedFields, start->_id, 1);
+    remove_segHelper(start->next, end, _ownedFields);
+  }
+}
+
+void segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields)
+{
+  if (start == end)
+  {
+    assert(true);
+  }
+  else
+  {
+    assertAcc(_ownedFields, start != NULL ? start->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    assertAcc(_ownedFields, start != NULL ? start->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+    segHelper(start->next, end, _ownedFields);
+  }
+}
+
+void sep_segHelper(struct Node* start, struct Node* end, struct OwnedFields* _ownedFields)
+{
+  if (!(start == end))
+  {
+    addAccEnsureSeparate(_ownedFields, start != NULL ? start->_id : -1, 0, 3, "Overlapping field permissions for struct Node.val");
+    addAccEnsureSeparate(_ownedFields, start != NULL ? start->_id : -1, 1, 3, "Overlapping field permissions for struct Node.next");
+    sep_segHelper(start->next, end, _ownedFields);
+  }
+}

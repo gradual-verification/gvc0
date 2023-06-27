@@ -1,0 +1,186 @@
+#use <conio>
+struct Node;
+
+struct Node
+{
+  int val;
+  struct Node* next;
+};
+
+//@predicate seg(struct Node* start);
+//@predicate segHelper(struct Node* start, struct Node* end);
+
+//@predicate seg(struct Node* start) = segHelper(start, NULL);
+//@predicate segHelper(struct Node* start, struct Node* end) = start == end ? true : acc(start->val) && acc(start->next) && segHelper(start->next, end);
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c);
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c);
+struct Node* create_list(int val);
+int main();
+int pop(struct Node* head);
+struct Node* push(struct Node* head, int val);
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c)
+  //@requires segHelper(a, b) && (c == NULL ? true : acc(c->val) && acc(c->next)) && (b == c ? true : acc(b->val) && acc(b->next) && segHelper(b->next, c));
+  //@ensures segHelper(a, c) && (c == NULL ? true : acc(c->val) && acc(c->next));
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+      //@unfold segHelper(a, b);
+      //@fold segHelper(a, c);
+    }
+    else
+    {
+      //@unfold segHelper(a, b);
+      appendLemmaAfterLoopBody(a->next, b, c);
+      //@fold segHelper(a, c);
+    }
+  }
+}
+
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c)
+  //@requires ?;
+  //@ensures ?;
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+      //@unfold segHelper(a, b);
+      //@fold segHelper(a, c);
+    }
+    else
+    {
+      //@unfold segHelper(a, b);
+      appendLemmaLoopBody(a->next, b, c);
+      //@fold segHelper(a, c);
+    }
+  }
+}
+
+struct Node* create_list(int val)
+  //@requires true;
+  //@ensures seg(\result);
+{
+  struct Node* n = NULL;
+  n = alloc(struct Node);
+  n->val = val;
+  n->next = NULL;
+  //@fold segHelper(n->next, NULL);
+  //@fold segHelper(n, NULL);
+  //@fold seg(n);
+  return n;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  struct Node* l = NULL;
+  struct Node* l2 = NULL;
+  l = create_list(5);
+  l2 = push(l, 1);
+  //@assert seg(l2);
+  pop(l2);
+  return 1;
+}
+
+int pop(struct Node* head)
+  //@requires ?;
+{
+  struct Node* curr = NULL;
+  struct Node* prev = NULL;
+  if (head == NULL)
+  {
+    return -1;
+  }
+  else
+  {
+    curr = head;
+    while (curr->next != NULL && curr->next->next != NULL)
+      //@loop_invariant ? && acc(curr->val) && acc(curr->next) && (curr->next == NULL ? true : acc(curr->next->next) && acc(curr->next->val));
+    {
+      prev = curr;
+      curr = prev->next;
+      if (head == prev)
+      {
+      }
+      else
+      {
+        appendLemmaLoopBody(head->next, prev, curr);
+      }
+    }
+    curr->next = NULL;
+    return 1;
+  }
+}
+
+struct Node* push(struct Node* head, int val)
+  //@requires seg(head);
+  //@ensures seg(\result);
+{
+  struct Node* n = NULL;
+  struct Node* curr = NULL;
+  struct Node* tmp = NULL;
+  struct Node* prev = NULL;
+  //@unfold seg(head);
+  //@unfold segHelper(head, NULL);
+  if (head == NULL)
+  {
+    n = alloc(struct Node);
+    n->val = val;
+    n->next = head;
+    //@fold segHelper(n->next, NULL);
+    //@fold segHelper(n, NULL);
+    //@fold seg(n);
+    return n;
+  }
+  else
+  {
+    curr = head;
+    //@unfold segHelper(curr->next, NULL);
+    //@fold segHelper(head, curr);
+    while (curr->next != NULL)
+      //@loop_invariant acc(curr->val) && acc(curr->next) && segHelper(head, curr) && (curr->next == NULL ? true : acc(curr->next->next) && acc(curr->next->val) && segHelper(curr->next->next, NULL));
+    {
+      prev = curr;
+      curr = prev->next;
+      //@unfold segHelper(head, prev);
+      //@fold segHelper(prev->next, curr);
+      if (head == prev)
+      {
+      }
+      else
+      {
+        appendLemmaLoopBody(head->next, prev, curr);
+      }
+      //@fold segHelper(head, curr);
+      //@unfold segHelper(curr->next, NULL);
+    }
+    tmp = alloc(struct Node);
+    tmp->val = val;
+    tmp->next = curr->next;
+    curr->next = tmp;
+    //@fold segHelper(tmp->next, NULL);
+    //@fold segHelper(curr->next, NULL);
+    //@unfold segHelper(head, curr);
+    if (head == curr)
+    {
+    }
+    else
+    {
+      appendLemmaAfterLoopBody(head->next, curr, NULL);
+    }
+    //@fold segHelper(head, NULL);
+    //@fold seg(head);
+    return head;
+  }
+}

@@ -1,0 +1,196 @@
+field MinPriorityQueue$head: Ref
+
+field MinPriorityQueue$size: Int
+
+field Node$deleted: Bool
+
+field Node$next: Ref
+
+field Node$val: Int
+
+predicate isMinPQ(start: Ref) {
+  acc(orderedListSeg(start, null, -1), write)
+}
+
+predicate orderedListSeg(start: Ref, end: Ref, endVal: Int) {
+  (start == end ? true : acc(start.Node$val, write) && acc(start.Node$next, write) && acc(start.Node$deleted, write) && acc(orderedListSegWithPrev(start.Node$next, end, start.Node$val, endVal), write))
+}
+
+predicate orderedListSegWithPrev(start: Ref, end: Ref, prev: Int, endVal: Int) {
+  (start == end ? (end == null ? true : endVal >= prev) : acc(start.Node$val, write) && acc(start.Node$next, write) && acc(start.Node$deleted, write) && start.Node$val >= prev && acc(orderedListSegWithPrev(start.Node$next, end, start.Node$val, endVal), write))
+}
+
+method appendLemmaAfterLoopBody(a: Ref, b: Ref, c: Ref, aPrev: Int, bVal: Int, cVal: Int, bDeleted: Bool)
+  requires acc(orderedListSegWithPrev(a, b, aPrev, bVal), write) && (b == c ? bVal == cVal : true) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && acc(c.Node$deleted, write) && c.Node$val == cVal) && (b == c ? true : acc(b.Node$val, write) && acc(b.Node$next, write) && acc(b.Node$deleted, write) && b.Node$val == bVal && acc(orderedListSegWithPrev(b.Node$next, c, b.Node$val, cVal), write))
+  ensures acc(orderedListSegWithPrev(a, c, aPrev, cVal), write) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && acc(c.Node$deleted, write) && c.Node$val == cVal)
+{
+  if (b == c) {
+    
+  } elseif (a == b) {
+    unfold acc(orderedListSegWithPrev(a, b, aPrev, bVal), write)
+    fold acc(orderedListSegWithPrev(a, c, aPrev, cVal), write)
+  } else {
+    unfold acc(orderedListSegWithPrev(a, b, aPrev, bVal), write)
+    appendLemmaAfterLoopBody(a.Node$next, b, c, a.Node$val, bVal, cVal, b.Node$deleted)
+    fold acc(orderedListSegWithPrev(a, c, aPrev, cVal), write)
+  }
+}
+
+method appendLemmaLoopBody(a: Ref, b: Ref, c: Ref, aPrev: Int, cPrev: Int, bVal: Int, cVal: Int, bDeleted: Bool)
+  requires acc(orderedListSegWithPrev(a, b, aPrev, bVal), write) && (b == c ? bVal == cVal : true) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && acc(c.Node$deleted, write) && c.Node$val == cVal && c.Node$val >= cPrev && acc(orderedListSegWithPrev(c.Node$next, null, c.Node$val, -1), write)) && (b == c ? true : acc(b.Node$val, write) && acc(b.Node$next, write) && acc(b.Node$deleted, write) && b.Node$val == bVal && acc(orderedListSegWithPrev(b.Node$next, c, b.Node$val, cVal), write))
+  ensures acc(orderedListSegWithPrev(a, c, aPrev, cVal), write) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write) && acc(c.Node$deleted, write) && c.Node$val == cVal && c.Node$val >= cPrev && acc(orderedListSegWithPrev(c.Node$next, null, c.Node$val, -1), write))
+{
+  if (b == c) {
+    
+  } elseif (a == b) {
+    unfold acc(orderedListSegWithPrev(a, b, aPrev, bVal), write)
+    fold acc(orderedListSegWithPrev(a, c, aPrev, cVal), write)
+  } else {
+    unfold acc(orderedListSegWithPrev(a, b, aPrev, bVal), write)
+    appendLemmaLoopBody(a.Node$next, b, c, a.Node$val, cPrev, bVal, cVal, b.Node$deleted)
+    fold acc(orderedListSegWithPrev(a, c, aPrev, cVal), write)
+  }
+}
+
+method createMinPriQueue(value: Int) returns ($result: Ref)
+  requires true
+  ensures acc($result.MinPriorityQueue$size, write) && acc($result.MinPriorityQueue$head, write) && acc(isMinPQ($result.MinPriorityQueue$head), write)
+{
+  var q: Ref
+  var _: Ref
+  q := new(MinPriorityQueue$head, MinPriorityQueue$size)
+  _ := new(Node$val, Node$next, Node$deleted)
+  q.MinPriorityQueue$head := _
+  q.MinPriorityQueue$head.Node$val := value
+  q.MinPriorityQueue$head.Node$next := null
+  q.MinPriorityQueue$size := 1
+  fold acc(orderedListSegWithPrev(q.MinPriorityQueue$head.Node$next, null, q.MinPriorityQueue$head.Node$val, -1), write)
+  fold acc(orderedListSeg(q.MinPriorityQueue$head, null, -1), write)
+  fold acc(isMinPQ(q.MinPriorityQueue$head), write)
+  $result := q
+}
+
+method dequeue(q: Ref)
+  requires acc(q.MinPriorityQueue$head, write) && acc(q.MinPriorityQueue$size, write) && acc(isMinPQ(q.MinPriorityQueue$head), write)
+  ensures acc(q.MinPriorityQueue$head, write) && acc(q.MinPriorityQueue$size, write) && acc(isMinPQ(q.MinPriorityQueue$head), write)
+{
+  unfold acc(isMinPQ(q.MinPriorityQueue$head), write)
+  unfold acc(orderedListSeg(q.MinPriorityQueue$head, null, -1), write)
+  if (q.MinPriorityQueue$head == null) {
+    fold acc(orderedListSeg(q.MinPriorityQueue$head, null, -1), write)
+    fold acc(isMinPQ(q.MinPriorityQueue$head), write)
+  } else {
+    unfold acc(orderedListSegWithPrev(q.MinPriorityQueue$head.Node$next, null, q.MinPriorityQueue$head.Node$val, -1), write)
+    q.MinPriorityQueue$head.Node$deleted := true
+    fold acc(orderedListSegWithPrev(q.MinPriorityQueue$head.Node$next, null, q.MinPriorityQueue$head.Node$val, -1), write)
+    fold acc(orderedListSeg(q.MinPriorityQueue$head, null, -1), write)
+    fold acc(isMinPQ(q.MinPriorityQueue$head), write)
+  }
+  q.MinPriorityQueue$size := q.MinPriorityQueue$size - 1
+}
+
+method enqueue(q: Ref, value: Int)
+  requires ? && acc(q.MinPriorityQueue$head, write) && acc(q.MinPriorityQueue$size, write)
+  ensures ? && acc(q.MinPriorityQueue$head, write) && acc(q.MinPriorityQueue$size, write)
+{
+  var newNode: Ref
+  var curr: Ref
+  var newNode1: Ref
+  var prev: Ref
+  assert ? && true
+  assert ? && true
+  if (q.MinPriorityQueue$head == null || value <= q.MinPriorityQueue$head.Node$val) {
+    newNode := new(Node$val, Node$next, Node$deleted)
+    newNode.Node$val := value
+    newNode.Node$next := q.MinPriorityQueue$head
+    q.MinPriorityQueue$head := newNode
+    assert ? && true
+    assert ? && true
+    assert ? && true
+  } else {
+    curr := q.MinPriorityQueue$head
+    assert ? && true
+    assert ? && true
+    while (curr.Node$next != null && curr.Node$next.Node$val < value)
+      invariant acc(curr.Node$val, write) && acc(curr.Node$next, write) && acc(curr.Node$deleted, write) && acc(q.MinPriorityQueue$head, write) && (acc(orderedListSeg(q.MinPriorityQueue$head, curr, curr.Node$val), write) && curr.Node$val <= value) && (curr.Node$next == null ? true : acc(curr.Node$next.Node$next, write) && acc(curr.Node$next.Node$val, write) && acc(curr.Node$next.Node$deleted, write) && curr.Node$next.Node$val >= curr.Node$val && acc(orderedListSegWithPrev(curr.Node$next.Node$next, null, curr.Node$next.Node$val, -1), write)) 
+    {
+      prev := curr
+      curr := prev.Node$next
+      assert ? && true
+      assert ? && true
+      if (q.MinPriorityQueue$head == prev) {
+        
+      } else {
+        assert ? && true
+      }
+      assert ? && true
+      assert ? && true
+    }
+    newNode1 := new(Node$val, Node$next, Node$deleted)
+    newNode1.Node$val := value
+    newNode1.Node$next := curr.Node$next
+    newNode1.Node$deleted := false
+    curr.Node$next := newNode1
+    fold acc(orderedListSegWithPrev(newNode1.Node$next, null, newNode1.Node$val, -1), write)
+    fold acc(orderedListSegWithPrev(curr.Node$next, null, curr.Node$val, -1), write)
+    unfold acc(orderedListSeg(q.MinPriorityQueue$head, curr, curr.Node$val), write)
+    if (q.MinPriorityQueue$head == curr) {
+      
+    } else {
+      appendLemmaAfterLoopBody(q.MinPriorityQueue$head.Node$next, curr, null, q.MinPriorityQueue$head.Node$val, curr.Node$val, -1, q.MinPriorityQueue$head.Node$deleted)
+    }
+    fold acc(orderedListSeg(q.MinPriorityQueue$head, null, -1), write)
+    fold acc(isMinPQ(q.MinPriorityQueue$head), write)
+  }
+  q.MinPriorityQueue$size := q.MinPriorityQueue$size + 1
+}
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var q: Ref
+  q := createMinPriQueue(1)
+  enqueue(q, 10)
+  enqueue(q, 5)
+  enqueue(q, 20)
+  dequeue(q)
+  dequeue(q)
+  dequeue(q)
+  $result := 0
+}
+
+method printint(value: Int)
+{
+  
+}
+
+method printchar(value: Int)
+{
+  
+}
+
+method printbool(value: Bool)
+{
+  
+}
+
+method flush()
+{
+  
+}
+
+method mod(r: Int, l: Int) returns ($result: Int)
+{
+  $result := 0
+}
+
+method rand(prev: Int) returns ($result: Int)
+{
+  $result := 0
+}
+
+method readStress() returns ($result: Int)
+{
+  $result := 0
+}

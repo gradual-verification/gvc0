@@ -1,0 +1,171 @@
+field Node$next: Ref
+
+field Node$val: Int
+
+predicate seg(start: Ref) {
+  acc(segHelper(start, null), write)
+}
+
+predicate segHelper(start: Ref, end: Ref) {
+  (start == end ? true : acc(start.Node$val, write) && acc(start.Node$next, write) && acc(segHelper(start.Node$next, end), write))
+}
+
+method appendLemmaAfterLoopBody(a: Ref, b: Ref, c: Ref)
+  requires acc(segHelper(a, b), write) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write)) && (b == c ? true : acc(b.Node$val, write) && acc(b.Node$next, write) && acc(segHelper(b.Node$next, c), write))
+  ensures acc(segHelper(a, c), write) && (c == null ? true : acc(c.Node$val, write) && acc(c.Node$next, write))
+{
+  if (b == c) {
+    
+  } elseif (a == b) {
+    unfold acc(segHelper(a, b), write)
+    fold acc(segHelper(a, c), write)
+  } else {
+    unfold acc(segHelper(a, b), write)
+    appendLemmaAfterLoopBody(a.Node$next, b, c)
+    fold acc(segHelper(a, c), write)
+  }
+}
+
+method appendLemmaLoopBody(a: Ref, b: Ref, c: Ref)
+  requires ? && true
+  ensures ? && true
+{
+  if (b == c) {
+    
+  } elseif (a == b) {
+    unfold acc(segHelper(a, b), write)
+    fold acc(segHelper(a, c), write)
+  } else {
+    unfold acc(segHelper(a, b), write)
+    appendLemmaLoopBody(a.Node$next, b, c)
+    fold acc(segHelper(a, c), write)
+  }
+}
+
+method create_list(val: Int) returns ($result: Ref)
+  requires true
+  ensures acc(seg($result), write)
+{
+  var n: Ref
+  n := new(Node$val, Node$next)
+  n.Node$val := val
+  n.Node$next := null
+  fold acc(segHelper(n.Node$next, null), write)
+  fold acc(segHelper(n, null), write)
+  fold acc(seg(n), write)
+  $result := n
+}
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var l: Ref
+  var l2: Ref
+  var $result_0: Int
+  l := create_list(5)
+  l2 := push(l, 1)
+  assert acc(seg(l2), write)
+  $result_0 := pop(l2)
+  $result := 1
+}
+
+method pop(head: Ref) returns ($result: Int)
+  requires ? && true
+{
+  var curr: Ref
+  var prev: Ref
+  if (head == null) {
+    $result := -1
+  } else {
+    curr := head
+    while (curr.Node$next != null && curr.Node$next.Node$next != null)
+      invariant ? && acc(curr.Node$val, write) && acc(curr.Node$next, write) && (curr.Node$next == null ? true : acc(curr.Node$next.Node$next, write) && acc(curr.Node$next.Node$val, write)) 
+    {
+      prev := curr
+      curr := prev.Node$next
+      if (head == prev) {
+        
+      } else {
+        appendLemmaLoopBody(head.Node$next, prev, curr)
+      }
+    }
+    curr.Node$next := null
+    $result := 1
+  }
+}
+
+method push(head: Ref, val: Int) returns ($result: Ref)
+  requires acc(seg(head), write)
+  ensures acc(seg($result), write)
+{
+  var n: Ref
+  var curr: Ref
+  var tmp: Ref
+  var prev: Ref
+  unfold acc(seg(head), write)
+  unfold acc(segHelper(head, null), write)
+  if (head == null) {
+    n := new(Node$val, Node$next)
+    n.Node$val := val
+    n.Node$next := head
+    fold acc(segHelper(n.Node$next, null), write)
+    fold acc(segHelper(n, null), write)
+    fold acc(seg(n), write)
+    $result := n
+  } else {
+    curr := head
+    unfold acc(segHelper(curr.Node$next, null), write)
+    fold acc(segHelper(head, curr), write)
+    while (curr.Node$next != null)
+      invariant acc(curr.Node$val, write) && acc(curr.Node$next, write) && acc(segHelper(head, curr), write) && (curr.Node$next == null ? true : acc(curr.Node$next.Node$next, write) && acc(curr.Node$next.Node$val, write) && acc(segHelper(curr.Node$next.Node$next, null), write)) 
+    {
+      prev := curr
+      curr := prev.Node$next
+      unfold acc(segHelper(head, prev), write)
+      fold acc(segHelper(prev.Node$next, curr), write)
+      if (head == prev) {
+        
+      } else {
+        appendLemmaLoopBody(head.Node$next, prev, curr)
+      }
+      fold acc(segHelper(head, curr), write)
+      unfold acc(segHelper(curr.Node$next, null), write)
+    }
+    tmp := new(Node$val, Node$next)
+    tmp.Node$val := val
+    tmp.Node$next := curr.Node$next
+    curr.Node$next := tmp
+    fold acc(segHelper(tmp.Node$next, null), write)
+    fold acc(segHelper(curr.Node$next, null), write)
+    unfold acc(segHelper(head, curr), write)
+    if (head == curr) {
+      
+    } else {
+      appendLemmaAfterLoopBody(head.Node$next, curr, null)
+    }
+    fold acc(segHelper(head, null), write)
+    fold acc(seg(head), write)
+    $result := head
+  }
+}
+
+method printint(value: Int)
+{
+  
+}
+
+method printchar(value: Int)
+{
+  
+}
+
+method printbool(value: Bool)
+{
+  
+}
+
+method flush()
+{
+  
+}

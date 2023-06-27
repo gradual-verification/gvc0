@@ -1,0 +1,494 @@
+field Node$left: Ref
+
+field Node$right: Ref
+
+field Node$val: Int
+
+predicate bst(root: Ref, min: Int, max: Int) {
+  (root == null ? true : acc(root.Node$left, write) && acc(root.Node$right, write) && acc(root.Node$val, write) && root.Node$val >= min && root.Node$val <= max && acc(bst(root.Node$left, min, root.Node$val - 1), write) && acc(bst(root.Node$right, root.Node$val + 1, max), write))
+}
+
+predicate bstRemove(root: Ref, x: Int, min: Int, max: Int) {
+  (root == null ? true : acc(root.Node$left, write) && acc(root.Node$right, write) && acc(root.Node$val, write) && root.Node$val >= min && root.Node$val <= max && root.Node$val != x && acc(bstRemove(root.Node$left, x, min, root.Node$val - 1), write) && acc(bstRemove(root.Node$right, x, root.Node$val + 1, max), write))
+}
+
+predicate tree(root: Ref) {
+  acc(bst(root, -2147483647, 2147483647), write)
+}
+
+predicate treeRemove(root: Ref, x: Int) {
+  acc(bstRemove(root, x, -2147483647, 2147483647), write)
+}
+
+method create_tree(val: Int) returns ($result: Ref)
+  requires -2147483647 <= val && val <= 2147483647
+  ensures acc(tree($result), write)
+{
+  var res: Ref
+  res := create_tree_helper(val, -2147483647, 2147483647)
+  fold acc(tree(res), write)
+  $result := res
+}
+
+method create_tree_helper(val: Int, min: Int, max: Int) returns ($result: Ref)
+  requires min <= val && val <= max
+  ensures acc(bst($result, min, max), write)
+{
+  var root: Ref
+  root := new(Node$val, Node$left, Node$right)
+  root.Node$val := val
+  root.Node$left := null
+  root.Node$right := null
+  fold acc(bst(root.Node$left, min, root.Node$val - 1), write)
+  fold acc(bst(root.Node$right, root.Node$val + 1, max), write)
+  fold acc(bst(root, min, max), write)
+  $result := root
+}
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var stress: Int
+  var seed: Int
+  var stressCaptured: Int
+  var t1: Ref
+  var i: Int
+  var j: Int
+  var r: Int
+  var toAdd: Int
+  var test: Bool
+  var r1: Int
+  var toRemove: Int
+  var test1: Bool
+  var t11: Ref
+  var t12: Ref
+  stress := 0
+  seed := 1
+  stressCaptured := stress
+  if (stressCaptured / 2 * 2 != stressCaptured) {
+    stressCaptured := stressCaptured + 1
+  }
+  t1 := create_tree(stressCaptured)
+  i := 0
+  while (0 <= i && i < stressCaptured)
+    invariant 0 <= i && i <= stressCaptured 
+  {
+    r := rand(seed)
+    seed := r
+    toAdd := mod(r, 2 * stressCaptured)
+    t11 := tree_add(t1, toAdd)
+    test := tree_contains(t11, toAdd)
+    i := i + 1
+    t1 := t11
+  }
+  j := 0
+  while (j < stressCaptured)
+    invariant 0 <= j && j <= stressCaptured 
+  {
+    r1 := rand(seed)
+    seed := r1
+    toRemove := mod(r1, 2 * stressCaptured)
+    t12 := tree_remove(t1, toRemove)
+    tree_main_lemma(t12, toRemove)
+    test1 := tree_contains(t12, toRemove)
+    j := j + 1
+    t1 := t12
+  }
+  $result := 0
+}
+
+method tree_add(root: Ref, x: Int) returns ($result: Ref)
+  requires acc(tree(root), write) && -2147483647 <= x && x <= 2147483647
+  ensures acc(tree($result), write)
+{
+  var res: Ref
+  unfold acc(tree(root), write)
+  res := tree_add_helper(root, x, -2147483647, 2147483647)
+  fold acc(tree(res), write)
+  $result := res
+}
+
+method tree_add_helper(root: Ref, x: Int, min: Int, max: Int) returns ($result: Ref)
+  requires acc(bst(root, min, max), write) && min <= x && x <= max
+  ensures acc(bst($result, min, max), write)
+{
+  var _: Ref
+  var v: Int
+  var l: Ref
+  var r: Ref
+  var _1: Ref
+  var _2: Ref
+  var _3: Ref
+  var _4: Ref
+  unfold acc(bst(root, min, max), write)
+  if (root == null) {
+    _ := create_tree_helper(x, min, max)
+    $result := _
+  } else {
+    v := root.Node$val
+    l := root.Node$left
+    r := root.Node$right
+    if (x < v) {
+      if (l != null) {
+        _1 := tree_add_helper(l, x, min, v - 1)
+        root.Node$left := _1
+      } else {
+        _2 := create_tree_helper(x, min, v - 1)
+        root.Node$left := _2
+      }
+    } elseif (v < x) {
+      if (r != null) {
+        _3 := tree_add_helper(r, x, v + 1, max)
+        root.Node$right := _3
+      } else {
+        _4 := create_tree_helper(x, v + 1, max)
+        root.Node$right := _4
+      }
+    }
+    fold acc(bst(root, min, max), write)
+    $result := root
+  }
+}
+
+method tree_contains(root: Ref, x: Int) returns ($result: Bool)
+  requires acc(tree(root), write)
+  ensures acc(tree(root), write)
+{
+  var res: Bool
+  unfold acc(tree(root), write)
+  res := tree_contains_helper(root, x, -2147483647, 2147483647)
+  fold acc(tree(root), write)
+  $result := res
+}
+
+method tree_contains_helper(root: Ref, x: Int, min: Int, max: Int) returns ($result: Bool)
+  requires acc(bst(root, min, max), write)
+  ensures acc(bst(root, min, max), write)
+{
+  var v: Int
+  var l: Ref
+  var r: Ref
+  var temp1: Bool
+  var temp2: Bool
+  if (root == null) {
+    $result := false
+  } else {
+    unfold acc(bst(root, min, max), write)
+    v := root.Node$val
+    l := root.Node$left
+    r := root.Node$right
+    if (v == x) {
+      fold acc(bst(root, min, max), write)
+      $result := true
+    } elseif (x < v) {
+      temp1 := tree_contains_helper(l, x, min, v - 1)
+      fold acc(bst(root, min, max), write)
+      $result := temp1
+    } else {
+      temp2 := tree_contains_helper(r, x, v + 1, max)
+      fold acc(bst(root, min, max), write)
+      $result := temp2
+    }
+  }
+}
+
+method tree_main_lemma(root: Ref, x: Int)
+  requires acc(treeRemove(root, x), write)
+  ensures acc(tree(root), write)
+{
+  unfold acc(treeRemove(root, x), write)
+  tree_main_lemma_bst(root, x, -2147483647, 2147483647)
+  fold acc(tree(root), write)
+}
+
+method tree_main_lemma_bst(root: Ref, x: Int, min: Int, max: Int)
+  requires acc(bstRemove(root, x, min, max), write)
+  ensures acc(bst(root, min, max), write)
+{
+  if (root == null) {
+    
+  } else {
+    unfold acc(bstRemove(root, x, min, max), write)
+    tree_main_lemma_bst(root.Node$left, x, min, root.Node$val - 1)
+    tree_main_lemma_bst(root.Node$right, x, root.Node$val + 1, max)
+  }
+  fold acc(bst(root, min, max), write)
+}
+
+method tree_max(root: Ref) returns ($result: Int)
+  requires acc(tree(root), write) && root != null
+  ensures acc(tree(root), write)
+{
+  var res: Int
+  unfold acc(tree(root), write)
+  res := tree_max_helper(root, -2147483647, 2147483647)
+  tree_max_lemma(root, 2147483647, -2147483647, res)
+  fold acc(tree(root), write)
+  $result := res
+}
+
+method tree_max_helper(root: Ref, min: Int, max: Int) returns ($result: Int)
+  requires acc(bst(root, min, max), write) && root != null
+  ensures acc(bst(root, min, $result), write) && $result <= max
+{
+  var v: Int
+  var r: Ref
+  var m: Int
+  unfold acc(bst(root, min, max), write)
+  v := root.Node$val
+  r := root.Node$right
+  if (r == null) {
+    fold acc(bst(r, v + 1, v), write)
+    fold acc(bst(root, min, v), write)
+    $result := v
+  } else {
+    m := tree_max_helper(r, v + 1, max)
+    unfold acc(bst(r, v + 1, m), write)
+    assert v <= m
+    fold acc(bst(r, v + 1, m), write)
+    fold acc(bst(root, min, m), write)
+    $result := m
+  }
+}
+
+method tree_max_lemma(root: Ref, newMax: Int, min: Int, max: Int)
+  requires acc(bst(root, min, max), write) && max <= newMax
+  ensures acc(bst(root, min, newMax), write)
+{
+  if (root == null) {
+    
+  } else {
+    unfold acc(bst(root, min, max), write)
+    tree_max_lemma(root.Node$right, newMax, root.Node$val + 1, max)
+  }
+  fold acc(bst(root, min, newMax), write)
+}
+
+method tree_min(root: Ref) returns ($result: Int)
+  requires acc(tree(root), write) && root != null
+  ensures acc(tree(root), write)
+{
+  var res: Int
+  unfold acc(tree(root), write)
+  res := tree_min_helper(root, -2147483647, 2147483647)
+  tree_min_lemma(root, -2147483647, res, 2147483647)
+  fold acc(tree(root), write)
+  $result := res
+}
+
+method tree_min_helper(root: Ref, min: Int, max: Int) returns ($result: Int)
+  requires acc(bst(root, min, max), write) && root != null
+  ensures acc(bst(root, $result, max), write) && min <= $result
+{
+  var v: Int
+  var l: Ref
+  var m: Int
+  unfold acc(bst(root, min, max), write)
+  v := root.Node$val
+  l := root.Node$left
+  if (l == null) {
+    fold acc(bst(l, v, v - 1), write)
+    fold acc(bst(root, v, max), write)
+    $result := v
+  } else {
+    m := tree_min_helper(l, min, v - 1)
+    unfold acc(bst(l, m, v - 1), write)
+    assert m <= v
+    fold acc(bst(l, m, v - 1), write)
+    fold acc(bst(root, m, max), write)
+    $result := m
+  }
+}
+
+method tree_min_lemma(root: Ref, newMin: Int, min: Int, max: Int)
+  requires acc(bst(root, min, max), write) && newMin <= min
+  ensures acc(bst(root, newMin, max), write)
+{
+  if (root == null) {
+    
+  } else {
+    unfold acc(bst(root, min, max), write)
+    tree_min_lemma(root.Node$left, newMin, min, root.Node$val - 1)
+  }
+  fold acc(bst(root, newMin, max), write)
+}
+
+method tree_remove(root: Ref, x: Int) returns ($result: Ref)
+  requires acc(tree(root), write)
+  ensures acc(treeRemove($result, x), write)
+{
+  var res: Ref
+  unfold acc(tree(root), write)
+  res := tree_remove_helper(root, x, -2147483647, 2147483647)
+  fold acc(treeRemove(res, x), write)
+  $result := res
+}
+
+method tree_remove_helper(root: Ref, x: Int, min: Int, max: Int) returns ($result: Ref)
+  requires acc(bst(root, min, max), write)
+  ensures acc(bstRemove($result, x, min, max), write)
+{
+  var v: Int
+  var l: Ref
+  var r: Ref
+  var _: Ref
+  var _1: Ref
+  var m: Int
+  var _2: Ref
+  if (root == null) {
+    $result := root
+  } else {
+    v := root.Node$val
+    l := root.Node$left
+    r := root.Node$right
+    if (x < v) {
+      _ := tree_remove_helper(l, x, min, v - 1)
+      root.Node$left := _
+      assert ? && true
+      $result := root
+    } elseif (v < x) {
+      _1 := tree_remove_helper(r, x, v + 1, max)
+      root.Node$right := _1
+      assert ? && true
+      $result := root
+    } elseif (l == null) {
+      if (r == null) {
+        $result := null
+      } else {
+        assert ? && true
+        $result := r
+      }
+    } elseif (r == null) {
+      assert ? && true
+      $result := l
+    } else {
+      m := tree_max_helper(l, min, v - 1)
+      root.Node$val := m
+      _2 := tree_remove_helper(l, m, min, m)
+      root.Node$left := _2
+      assert ? && true
+      $result := root
+    }
+  }
+}
+
+method tree_remove_lemma(root: Ref, min: Int, max: Int)
+  requires acc(bstRemove(root, max, min, max), write)
+  ensures acc(bstRemove(root, max, min, max - 1), write)
+{
+  if (root == null) {
+    
+  } else {
+    unfold acc(bstRemove(root, max, min, max), write)
+    tree_remove_lemma(root.Node$right, root.Node$val + 1, max)
+  }
+  fold acc(bstRemove(root, max, min, max - 1), write)
+}
+
+method tree_remove_lemma_left(l: Ref, x: Int, min: Int, max: Int)
+  requires acc(bst(l, min, max), write) && max < x
+  ensures acc(bstRemove(l, x, min, max), write)
+{
+  if (l == null) {
+    
+  } else {
+    unfold acc(bst(l, min, max), write)
+    if (l.Node$left == null) {
+      tree_remove_lemma_left(l.Node$right, x, l.Node$val + 1, max)
+      fold acc(bstRemove(l.Node$left, x, min, l.Node$val - 1), write)
+    } elseif (l.Node$right == null) {
+      tree_remove_lemma_left(l.Node$left, x, min, l.Node$val - 1)
+      fold acc(bstRemove(l.Node$right, x, l.Node$val + 1, max), write)
+    } else {
+      tree_remove_lemma_left(l.Node$right, x, l.Node$val + 1, max)
+      tree_remove_lemma_left(l.Node$left, x, min, l.Node$val - 1)
+    }
+  }
+  fold acc(bstRemove(l, x, min, max), write)
+}
+
+method tree_remove_lemma_left2(l: Ref, newX: Int, x: Int, min: Int, max: Int)
+  requires acc(bstRemove(l, x, min, max), write) && max < newX
+  ensures acc(bstRemove(l, newX, min, max), write)
+{
+  if (l == null) {
+    
+  } else {
+    unfold acc(bstRemove(l, x, min, max), write)
+    if (l.Node$left == null) {
+      tree_remove_lemma_left2(l.Node$right, newX, x, l.Node$val + 1, max)
+      fold acc(bstRemove(l.Node$left, newX, min, l.Node$val - 1), write)
+    } elseif (l.Node$right == null) {
+      tree_remove_lemma_left2(l.Node$left, newX, x, min, l.Node$val - 1)
+      fold acc(bstRemove(l.Node$right, newX, l.Node$val + 1, max), write)
+    } else {
+      tree_remove_lemma_left2(l.Node$right, newX, x, l.Node$val + 1, max)
+      tree_remove_lemma_left2(l.Node$left, newX, x, min, l.Node$val - 1)
+    }
+  }
+  fold acc(bstRemove(l, newX, min, max), write)
+}
+
+method tree_remove_lemma_max(root: Ref, x: Int, newMax: Int, min: Int, max: Int)
+  requires acc(bstRemove(root, x, min, max), write) && max <= newMax
+  ensures acc(bstRemove(root, x, min, newMax), write)
+{
+  if (root == null) {
+    
+  } else {
+    unfold acc(bstRemove(root, x, min, max), write)
+    tree_remove_lemma_max(root.Node$right, x, newMax, root.Node$val + 1, max)
+  }
+  fold acc(bstRemove(root, x, min, newMax), write)
+}
+
+method tree_remove_lemma_min(root: Ref, x: Int, newMin: Int, min: Int, max: Int)
+  requires acc(bstRemove(root, x, min, max), write) && newMin <= min
+  ensures acc(bstRemove(root, x, newMin, max), write)
+{
+  if (root == null) {
+    
+  } else {
+    unfold acc(bstRemove(root, x, min, max), write)
+    tree_remove_lemma_min(root.Node$left, x, newMin, min, root.Node$val - 1)
+  }
+  fold acc(bstRemove(root, x, newMin, max), write)
+}
+
+method tree_remove_lemma_right(r: Ref, x: Int, min: Int, max: Int)
+  requires acc(bst(r, min, max), write) && x < min
+  ensures acc(bstRemove(r, x, min, max), write)
+{
+  if (r == null) {
+    
+  } else {
+    unfold acc(bst(r, min, max), write)
+    if (r.Node$left == null) {
+      tree_remove_lemma_right(r.Node$right, x, r.Node$val + 1, max)
+      fold acc(bstRemove(r.Node$left, x, min, r.Node$val - 1), write)
+    } elseif (r.Node$right == null) {
+      tree_remove_lemma_right(r.Node$left, x, min, r.Node$val - 1)
+      fold acc(bstRemove(r.Node$right, x, r.Node$val + 1, max), write)
+    } else {
+      tree_remove_lemma_right(r.Node$right, x, r.Node$val + 1, max)
+      tree_remove_lemma_right(r.Node$left, x, min, r.Node$val - 1)
+    }
+  }
+  fold acc(bstRemove(r, x, min, max), write)
+}
+
+method mod(r: Int, l: Int) returns ($result: Int)
+{
+  $result := 0
+}
+
+method rand(prev: Int) returns ($result: Int)
+{
+  $result := 0
+}
+
+method readStress() returns ($result: Int)
+{
+  $result := 0
+}

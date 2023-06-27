@@ -81,63 +81,47 @@ struct Node* create_list(int val)
 }
 
 struct Node* list_insert(struct Node* list, int val)
-  //@requires sorted(list);
-  //@ensures sorted(\result);
+  //@requires ?;
+  //@ensures ?;
 {
   struct Node* n = NULL;
   struct Node* curr = NULL;
   struct Node* tmp = NULL;
   struct Node* prev = NULL;
-  //@unfold sorted(list);
-  //@unfold sortedSeg(list, NULL, -1);
   if (list == NULL || val <= list->val)
   {
     n = alloc(struct Node);
     n->val = val;
     n->next = list;
-    //@fold sortedSegHelper(n->next, NULL, n->val, -1);
-    //@fold sortedSeg(n, NULL, -1);
-    //@fold sorted(n);
     return n;
   }
   else
   {
     curr = list;
-    //@unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
-    //@fold sortedSeg(list, curr, curr->val);
     while (curr->next != NULL && curr->next->val < val)
-      //@loop_invariant acc(curr->val) && acc(curr->next) && sortedSeg(list, curr, curr->val) && curr->val <= val && (curr->next == NULL ? true : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val && sortedSegHelper(curr->next->next, NULL, curr->next->val, -1));
+      //@loop_invariant ? && acc(curr->val) && acc(curr->next) && curr->val <= val && (? && curr->next == NULL ? true : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val);
     {
       prev = curr;
       curr = prev->next;
-      //@unfold sortedSeg(list, prev, prev->val);
-      //@fold sortedSegHelper(prev->next, curr, prev->val, curr->val);
       if (list == prev)
       {
       }
       else
       {
-        appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val);
+        //@assert ?;
       }
-      //@fold sortedSeg(list, curr, curr->val);
-      //@unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
     }
     tmp = alloc(struct Node);
     tmp->val = val;
     tmp->next = curr->next;
     curr->next = tmp;
-    //@fold sortedSegHelper(tmp->next, NULL, tmp->val, -1);
-    //@fold sortedSegHelper(curr->next, NULL, curr->val, -1);
-    //@unfold sortedSeg(list, curr, curr->val);
     if (list == curr)
     {
     }
     else
     {
-      appendLemmaAfterLoopBody(list->next, curr, NULL, list->val, curr->val, -1);
+      //@assert ?;
     }
-    //@fold sortedSeg(list, NULL, -1);
-    //@fold sorted(list);
     return list;
   }
 }

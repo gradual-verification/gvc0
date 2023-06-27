@@ -192,17 +192,14 @@ void tree_main_lemma(struct Node *root, int x)
 //------------------------------------------------------------------------ verified code starts below
 
 struct Node *create_tree_helper(int val, int min, int max)
-  //@ requires min <= val && val <= max;
-  //@ ensures bst(\result, min, max);
+  //@ requires ?;
+  //@ ensures ?;
 {
   struct Node *root = alloc(struct Node);
   root->val = val;
   root->left = NULL;
   root->right = NULL;
-
-  //@ fold bst(root->left, min, root->val-1);
-  //@ fold bst(root->right, root->val+1, max);
-  //@ fold bst(root, min, max);
+  
   return root;
 }
 
@@ -315,8 +312,9 @@ bool tree_contains(struct Node *root, int x)
   return res;
 }
 
+// Changing for runtime checks
 struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
-  //@ requires bst(root, min, max) && min <= x && x <= max;
+  //@ requires ?;
   //@ ensures bst(\result, min, max);
  {
 

@@ -1,0 +1,364 @@
+// code adapted from https://www.geeksforgeeks.org/avl-tree-set-1-insertion/
+// C program to insert a node in AVL tree
+#use <conio>
+#use <stress>
+
+// An AVL tree node
+// DESIGN NOTE: storing leftHeight and rightHeight, instead of the balance factor or just one
+// height was done for two reasons.  #1, it makes the height explicit, allowing us to easily
+// state invariants about height without using functions or ghost variables
+// (that our tool doesn't support)
+// #2, putting the left and right height in Node allows us to compare them (the balance
+// invariant) without reaching into the predicate of a subtree (which is hard since we
+// don't have unfolding...in)
+// REFLECTION: ghost variables don't play nicely with gradual verification anyway
+struct Node
+{
+	int key;
+	struct Node *left;
+	struct Node *right;
+	int leftHeight;
+	int rightHeight;
+};
+
+struct Height
+{
+	int height;
+};
+
+// DESIGN NOTE: tracks ownership recursively
+// enforces balance invariant (heights differ by less than 2)
+// computes height as a function of children within the predicate
+// NOT SPECIFIED: that nodes are in order.  But this was done in BST anyway, could be added.
+// REFLECTION: readyRightRotate invariant was wrong for the case of a right rotation done
+// as the first part of a double rotation.  Discovered this through run-time testing,
+// sooner than I would have gotten to it statically!
+// BUG?: weirdly, silicon complains if I call the parameter below height instead of height1.
+/*@
+predicate avlh(struct Node *root, int height1) =
+  root == NULL ?
+    height1 == 0
+	:
+	  acc(root->left) && acc(root->right) && acc(root->key) &&
+	  acc(root->leftHeight) && acc(root->rightHeight) &&
+	  avlh(root->left, root->leftHeight) &&
+	  avlh(root->right, root->rightHeight) &&
+	  root->leftHeight - root->rightHeight < 2 &&
+	  root->rightHeight - root->leftHeight < 2 &&
+	  root->leftHeight >= 0 && root->rightHeight >= 0 &&
+	  (root->leftHeight > root->rightHeight ?
+	    height1 == root->leftHeight+1 :
+		height1 == root->rightHeight+1)
+	;
+predicate left(struct Node *y, int xlh, int xrh, int yrh) =
+	y != NULL &&
+	acc(y->left) && acc(y->right) && acc(y->key) &&
+	acc(y->leftHeight) && acc(y->rightHeight) &&
+	y->rightHeight == yrh && avlh(y->right,yrh) &&
+	y->left != NULL &&
+	acc(y->left->left) && acc(y->left->right) && acc(y->left->key) &&
+	acc(y->left->leftHeight) && acc(y->left->rightHeight) &&
+	y->left->rightHeight == xrh && y->left->leftHeight == xlh &&
+	avlh(y->left->left, xlh) && avlh(y->left->right, xrh) &&
+    (y->left->leftHeight > y->left->rightHeight ?
+	    y->leftHeight == y->left->leftHeight+1 :
+		y->leftHeight == y->left->rightHeight+1)
+
+	;
+predicate right(struct Node *y, int ylh, int xlh, int xrh) =
+	y != NULL &&
+	acc(y->left) && acc(y->right) && acc(y->key) &&
+	acc(y->leftHeight) && acc(y->rightHeight) &&
+	y->leftHeight == ylh && avlh(y->left,ylh) &&
+	y->right != NULL &&
+	acc(y->right->left) && acc(y->right->right) && acc(y->right->key) &&
+	acc(y->right->leftHeight) && acc(y->right->rightHeight) &&
+	y->right->rightHeight == xrh && y->right->leftHeight == xlh &&
+	avlh(y->right->left, xlh) && avlh(y->right->right, xrh) &&
+    (y->right->leftHeight > y->right->rightHeight ?
+	    y->rightHeight == y->right->leftHeight+1 :
+		y->rightHeight == y->right->rightHeight+1)
+	;
+@*/
+
+// A utility function to get maximum of two integers
+int maximum(int a, int b)
+  //@ requires true;
+  //@ ensures a > b ? \result == a : \result == b;
+{
+	if (a > b) {
+		return a;
+	} else {
+		return b;
+	}
+}
+
+// DESIGN NOTE: need emptyTree() because of a limitation in the prover
+// just using null for two empty subtrees ends up with a duplicated permission,
+// which isn't handled well
+struct Node* emptyTree()
+  //@ requires true;
+  //@ ensures avlh(\result,0);
+{
+	struct Node* node = NULL;
+	//@ fold avlh(node,0);
+	return node;
+}
+
+/* Helper function that allocates a new node with the given key and
+	NULL left and right pointers. */
+struct Node* newNode(int key)
+  //@ requires true;
+  //@ ensures avlh(\result, 1) && \result != NULL;
+{
+	struct Node* node = alloc(struct Node);
+	node->key = key;
+	node->leftHeight = 0; // new node is initially a leaf
+	node->rightHeight = 0;
+	node->left = emptyTree();
+	node->right = emptyTree();
+    //@ fold avlh(node, 1);
+	return(node);
+}
+
+// A utility function to right rotate subtree rooted with y
+// See the diagram given above.
+// yrh means y right height
+// x is the node on the left of y; xrh means x right height
+struct Node *rightRotate(struct Node *y, int xlh, int xrh, int yrh)
+  //@ requires left(y, xlh, xrh, yrh);
+  //@ ensures right(\result, xlh, xrh, yrh);
+{
+	//@ unfold left(y, xlh, xrh, yrh);
+	struct Node *x = y->left;
+	struct Node *T2 = x->right;
+
+	// Perform rotation
+	x->right = y;
+	y->left = T2;
+
+    // update heights
+	y->leftHeight = xrh;
+
+	x->rightHeight = maximum(xrh+1, yrh+1);
+    //@ fold right(x, xlh, xrh, yrh);
+
+	// Return new root
+	return x;
+}
+
+// A utility function to left rotate subtree rooted with x
+// See the diagram given above.
+struct Node *leftRotate(struct Node *x, int xlh, int ylh, int yrh)
+  //@ requires right(x, xlh, ylh, yrh);
+  //@ ensures left(\result, xlh, ylh, yrh);
+{
+	//@ unfold right(x, xlh, ylh, yrh);
+	struct Node *y = x->right;
+	struct Node *T2 = y->left;
+
+	// Perform rotation
+	y->left = x;
+	x->right = T2;
+
+	// Update heights
+	x->rightHeight = ylh;
+	y->leftHeight = maximum(xlh+1, ylh+1);
+
+	// Return new root
+	//@ fold left(y, xlh, ylh, yrh);
+	return y;
+}
+
+// Get Balance factor of node N
+int getBalance(struct Node *N)
+  //@ requires N == NULL ? true : acc(N->leftHeight) && acc(N->rightHeight);
+  //@ ensures N == NULL ? \result == 0 : acc(N->leftHeight) && acc(N->rightHeight) && \result == N->leftHeight - N->rightHeight;
+{
+	if (N == NULL) {
+		return 0;
+	} else {
+		return N->leftHeight - N->rightHeight;
+	}
+}
+
+// Recursive function to insert a key in the subtree rooted
+// with node and returns the new root of the subtree.
+struct Node* insert(struct Node* node, int h, int key, struct Height *hp)
+  //@ requires ?;
+  //@ ensures ? && acc(hp->height) && avlh(\result, hp->height);
+{
+	// 1. Perform the normal BST insertion
+	//@ unfold avlh(node, h);
+	if (node == NULL) {
+		struct Node *n = newNode(key);
+		hp->height = 1;
+		//@ assert ? && avlh(n, hp->height);
+		return n;
+	} else if (key == node->key) {
+		// Equal keys are not allowed in BST
+		hp->height = h;
+		//@ fold avlh(node, hp->height);
+		//@ assert ? && acc(hp->height) && avlh(node, hp->height);
+		return node;
+	} else {
+		if (key < node->key) {
+			node->left = insert(node->left, node->leftHeight, key, hp);
+
+			// 2. Update height of this ancestor node
+			node->leftHeight = hp->height;
+
+			// are we balanced?
+			if (node->leftHeight - node->rightHeight < 2) {
+				// it's balanced! Return the (unchanged) node pointer
+				hp->height = 1+maximum(node->leftHeight, node->rightHeight);
+				//@ fold avlh(node, hp->height);
+				//@ assert ? && acc(hp->height) && avlh(node, hp->height);
+				return node;
+			} else {
+				// unbalanced!  There are two cases:
+				//@ assert ?;
+				if (node->left->leftHeight >= node->left->rightHeight) {
+					// far left is deepest; do a right rotate to balance
+					int llh = node->left->leftHeight;
+					int lrh = node->left->rightHeight;
+					int rh = node->rightHeight;
+					struct Node *n = rightRotate(node, llh, lrh, rh);
+					//@ assert ?;
+					//@ fold avlh(n->right, n->rightHeight);
+					hp->height = 1+maximum(n->leftHeight, n->rightHeight);
+					//@ fold avlh(n, hp->height);
+					//@ assert ? && acc(hp->height) && avlh(n, hp->height);
+					return n;
+				} else {
+					// need to left rotate on the left, then right rotate
+					int llh = node->left->leftHeight;
+					int lrlh = node->left->right->leftHeight;
+					int lrrh = node->left->right->rightHeight;
+					node->left = leftRotate(node->left, llh, lrlh, lrrh);
+					llh = node->left->leftHeight;
+					int lrh = node->left->rightHeight;
+					int rh = node->rightHeight;
+					struct Node *n= rightRotate(node, llh, lrh, rh);
+					//@ fold avlh(n->right, n->rightHeight);
+					hp->height = 1+maximum(n->leftHeight, n->rightHeight);
+					//@ fold avlh(n, hp->height);
+					//@ assert ? && acc(hp->height) && avlh(n, hp->height);
+					return n;
+				}
+			}
+		} else { // key > node->key
+			node->right = insert(node->right, node->rightHeight, key, hp);
+			// 2. Update height of this ancestor node
+			node->rightHeight = hp->height;
+
+			// are we balanced?
+			if (node->rightHeight - node->leftHeight < 2) {
+				// it's balanced! Return the (unchanged) node pointer
+				hp->height = 1+maximum(node->leftHeight, node->rightHeight);
+				//@ fold avlh(node, hp->height);
+				//@ assert ? && acc(hp->height) && avlh(node, hp->height);
+				return node;
+			} else {
+				// unbalanced!  There are two cases:
+				if (node->right->rightHeight >= node->right->leftHeight) {
+					// far left is deepest; do a left rotate to balance
+					int lh = node->leftHeight;
+					int rlh = node->right->leftHeight;
+					int rrh = node->right->rightHeight;
+					struct Node *n = leftRotate(node, lh, rlh, rrh);
+					hp->height = 1+maximum(n->leftHeight, n->rightHeight);
+					//@ assert ? && acc(hp->height) && avlh(n, hp->height);
+					return n;
+				} else {
+					// need to right rotate on the right, then left rotate
+					int rllh = node->right->left->leftHeight; // let bind a variable to workaround a bug
+					int rlrh = node->right->left->rightHeight;
+					int rrh = node->right->rightHeight;
+					node->right = rightRotate(node->right, rllh, rlrh, rrh);
+					//@ fold avlh(node->right->right, node->right->rightHeight);
+					rrh = node->right->rightHeight;
+					int rlh = node->right->leftHeight;
+					int lh = node->leftHeight;
+					struct Node *n = leftRotate(node, lh, rlh, rrh);
+					hp->height = 1+maximum(n->leftHeight, n->rightHeight);
+					//@ fold avlh(n, hp->height);
+					//@ assert ? && acc(hp->height) && avlh(n, hp->height);
+					return n;
+				}
+			}
+		}
+	}
+}
+
+// A utility function to print preorder traversal
+// of the tree.
+// The function also prints height of every node
+void preOrder(struct Node *root, int h)
+  //@ requires avlh(root, h);
+  //@ ensures avlh(root, h);
+{
+	//@ unfold avlh(root, h);
+	if(root != NULL)
+	{
+		printint(root->key);
+		printchar(' ');
+		preOrder(root->left, root->leftHeight);
+		preOrder(root->right, root->rightHeight);
+	}
+	//@ fold avlh(root, h);
+}
+
+int main()
+//@requires true;
+//@ensures true;
+{
+    int stress = 0;
+    int seed = 1;
+	struct Node *root = NULL;
+	struct Height *hp = alloc(struct Height);
+	hp->height = 0;
+	//@ fold avlh(root, 0);
+    int i = 0;
+    while(i < stress)
+    //@loop_invariant 0 <= i && i <= stress && acc(hp->height) && avlh(root, hp->height);
+    {
+        int r = rand(seed);
+        seed = r;
+        root = insert(root, hp->height, r, hp);
+        preOrder(root, hp->height);
+        i += 1;
+    }
+    return 0;
+}
+/*
+// Driver program to test above function
+int main()
+//@requires true;
+//@ensures true;
+{
+	struct Node *root = NULL;
+	struct Height *hp = alloc(struct Height);
+	hp->height = 0;
+	//@ fold avlh(root, 0);
+
+	// Constructing tree given in the above figure
+	root = insert(root, hp->height, 10, hp);
+	root = insert(root, hp->height, 20, hp);
+	root = insert(root, hp->height, 30, hp);
+	root = insert(root, hp->height, 40, hp);
+	root = insert(root, hp->height, 50, hp);
+	root = insert(root, hp->height, 25, hp);
+
+	// The constructed AVL Tree would be
+	//   30
+	//   / \
+	//  20 40
+	// / \   \
+	// 10 25   50
+
+	//print("Preorder traversal of the constructed AVL tree is \n");
+	preOrder(root, hp->height);
+    printchar('\n');
+	return 0;
+}*/

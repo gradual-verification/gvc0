@@ -1,0 +1,430 @@
+#use <conio>
+#use <runtime>
+#use <stress>
+struct MinPriorityQueue;
+struct Node;
+
+struct MinPriorityQueue
+{
+  struct Node* head;
+  int size;
+  int _id;
+};
+
+struct Node
+{
+  int val;
+  struct Node* next;
+  bool deleted;
+  int _id;
+};
+
+void add_isMinPQ(struct Node* start, struct OwnedFields* _ownedFields);
+void add_orderedListSeg(struct Node* start, struct Node* end, int endVal, struct OwnedFields* _ownedFields);
+void add_orderedListSegWithPrev(struct Node* start, struct Node* end, int prev, int endVal, struct OwnedFields* _ownedFields);
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, bool bDeleted, int* _instanceCounter);
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal, bool bDeleted, int* _instanceCounter);
+struct MinPriorityQueue* createMinPriQueue(int value, int* _instanceCounter);
+void dequeue(struct MinPriorityQueue* q, int* _instanceCounter);
+void enqueue(struct MinPriorityQueue* q, int value, struct OwnedFields* _ownedFields);
+void isMinPQ(struct Node* start, struct OwnedFields* _ownedFields);
+int main();
+void orderedListSeg(struct Node* start, struct Node* end, int endVal, struct OwnedFields* _ownedFields);
+void orderedListSegWithPrev(struct Node* start, struct Node* end, int prev, int endVal, struct OwnedFields* _ownedFields);
+void remove_isMinPQ(struct Node* start, struct OwnedFields* _ownedFields);
+void remove_orderedListSeg(struct Node* start, struct Node* end, int endVal, struct OwnedFields* _ownedFields);
+void remove_orderedListSegWithPrev(struct Node* start, struct Node* end, int prev, int endVal, struct OwnedFields* _ownedFields);
+void sep_isMinPQ(struct Node* start, struct OwnedFields* _ownedFields);
+void sep_orderedListSeg(struct Node* start, struct Node* end, int endVal, struct OwnedFields* _ownedFields);
+void sep_orderedListSegWithPrev(struct Node* start, struct Node* end, int prev, int endVal, struct OwnedFields* _ownedFields);
+
+void add_isMinPQ(struct Node* start, struct OwnedFields* _ownedFields)
+{
+  add_orderedListSeg(start, NULL, -1, _ownedFields);
+}
+
+void add_orderedListSeg(struct Node* start, struct Node* end, int endVal, struct OwnedFields* _ownedFields)
+{
+  if (!(start == end))
+  {
+    addAcc(_ownedFields, start->_id, 4, 0);
+    addAcc(_ownedFields, start->_id, 4, 1);
+    addAcc(_ownedFields, start->_id, 4, 2);
+    add_orderedListSegWithPrev(start->next, end, start->val, endVal, _ownedFields);
+  }
+}
+
+void add_orderedListSegWithPrev(struct Node* start, struct Node* end, int prev, int endVal, struct OwnedFields* _ownedFields)
+{
+  if (!(start == end))
+  {
+    addAcc(_ownedFields, start->_id, 4, 0);
+    addAcc(_ownedFields, start->_id, 4, 1);
+    addAcc(_ownedFields, start->_id, 4, 2);
+    add_orderedListSegWithPrev(start->next, end, start->val, endVal, _ownedFields);
+  }
+}
+
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, bool bDeleted, int* _instanceCounter)
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+    }
+    else
+    {
+      appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal, b->deleted, _instanceCounter);
+    }
+  }
+}
+
+void appendLemmaLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int cPrev, int bVal, int cVal, bool bDeleted, int* _instanceCounter)
+{
+  if (b == c)
+  {
+  }
+  else
+  {
+    if (a == b)
+    {
+    }
+    else
+    {
+      appendLemmaLoopBody(a->next, b, c, a->val, cPrev, bVal, cVal, b->deleted, _instanceCounter);
+    }
+  }
+}
+
+struct MinPriorityQueue* createMinPriQueue(int value, int* _instanceCounter)
+{
+  struct MinPriorityQueue* q = NULL;
+  struct Node* _ = NULL;
+  q = alloc(struct MinPriorityQueue);
+  q->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  _ = alloc(struct Node);
+  _->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  q->head = _;
+  q->head->val = value;
+  q->head->next = NULL;
+  q->size = 1;
+  return q;
+}
+
+void dequeue(struct MinPriorityQueue* q, int* _instanceCounter)
+{
+  if (q->head == NULL)
+  {
+    return;
+  }
+  else
+  {
+    q->head->deleted = true;
+  }
+  q->size = q->size - 1;
+}
+
+void enqueue(struct MinPriorityQueue* q, int value, struct OwnedFields* _ownedFields)
+{
+  struct Node* newNode = NULL;
+  struct Node* curr = NULL;
+  struct Node* newNode1 = NULL;
+  struct Node* prev = NULL;
+  bool _cond_1 = false;
+  bool _cond_2 = false;
+  bool _cond_3 = false;
+  bool _cond_4 = false;
+  bool _cond_5 = false;
+  bool _cond_6 = false;
+  bool _cond_7 = false;
+  bool _cond_8 = false;
+  bool _cond_9 = false;
+  bool _cond_10 = false;
+  bool _cond_11 = false;
+  bool _cond_12 = false;
+  bool _cond_13 = false;
+  bool _cond_14 = false;
+  struct OwnedFields* _tempFields = NULL;
+  struct Node* _ = NULL;
+  if (!(q->head == NULL) || !(q->head == NULL))
+  {
+    assertAcc(_ownedFields, q->head != NULL ? q->head->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+  }
+  _cond_1 = !(q == NULL) && (q->head == NULL || !(q == NULL) && !(q->head == NULL)) && (q->head == NULL || value <= q->head->val);
+  if (q->head == NULL || value <= q->head->val)
+  {
+    newNode = alloc(struct Node);
+    newNode->_id = addStructAcc(_ownedFields, 4);
+    newNode->val = value;
+    newNode->next = q->head;
+    q->head = newNode;
+  }
+  else
+  {
+    curr = q->head;
+    _tempFields = initOwnedFields(_ownedFields->instanceCounter);
+    if (!_cond_1)
+    {
+      assertAcc(_ownedFields, curr != NULL ? curr->_id : -1, 2, "Field access runtime check failed for struct Node.deleted");
+    }
+    if (!_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 || !_cond_1)
+    {
+      assertAcc(_ownedFields, curr != NULL ? curr->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+    }
+    if (!_cond_1 && !(curr->next == NULL) || !_cond_1 || !_cond_1 || !_cond_1)
+    {
+      assertAcc(_ownedFields, curr != NULL ? curr->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    }
+    if (!_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL))
+    {
+      assertAcc(_ownedFields, curr->next != NULL ? curr->next->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    }
+    if (!_cond_1 && !(curr->next == NULL))
+    {
+      assertAcc(_ownedFields, curr->next != NULL ? curr->next->_id : -1, 2, "Field access runtime check failed for struct Node.deleted");
+    }
+    if (!_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL))
+    {
+      assertAcc(_ownedFields, curr->next != NULL ? curr->next->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+    }
+    if (!_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && curr->next == NULL || !_cond_1 && curr->next == NULL)
+    {
+      assert(!(!(curr->next == NULL) && curr->next->val < value));
+    }
+    if (!_cond_1)
+    {
+      assert(curr->val <= value);
+      orderedListSeg(curr, curr, curr->val, _ownedFields);
+    }
+    if (!_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL) || !_cond_1 && !(curr->next == NULL))
+    {
+      assert(!(curr->next == NULL));
+    }
+    if (!_cond_1 && !(curr->next == NULL))
+    {
+      assert(curr->next->val >= curr->val);
+      orderedListSegWithPrev(curr->next->next, NULL, curr->next->val, -1, _ownedFields);
+    }
+    addAccEnsureSeparate(_tempFields, curr != NULL ? curr->_id : -1, 0, 4, "Overlapping field permissions for struct Node.val");
+    addAccEnsureSeparate(_tempFields, curr != NULL ? curr->_id : -1, 1, 4, "Overlapping field permissions for struct Node.next");
+    addAccEnsureSeparate(_tempFields, curr != NULL ? curr->_id : -1, 2, 4, "Overlapping field permissions for struct Node.deleted");
+    addAccEnsureSeparate(_tempFields, q != NULL ? q->_id : -1, 0, 3, "Overlapping field permissions for struct MinPriorityQueue.head");
+    sep_orderedListSeg(q->head, curr, curr->val, _tempFields);
+    if (!(curr->next == NULL))
+    {
+      addAccEnsureSeparate(_tempFields, curr->next != NULL ? curr->next->_id : -1, 1, 4, "Overlapping field permissions for struct Node.next");
+      addAccEnsureSeparate(_tempFields, curr->next != NULL ? curr->next->_id : -1, 0, 4, "Overlapping field permissions for struct Node.val");
+      addAccEnsureSeparate(_tempFields, curr->next != NULL ? curr->next->_id : -1, 2, 4, "Overlapping field permissions for struct Node.deleted");
+      sep_orderedListSegWithPrev(curr->next->next, NULL, curr->next->val, -1, _tempFields);
+    }
+    _cond_2 = !(curr == NULL) && curr->next == NULL;
+    while (curr->next != NULL && curr->next->val < value)
+    {
+      prev = curr;
+      curr = prev->next;
+      if (q->head == prev)
+      {
+      }
+      else
+      {
+      }
+    }
+    _cond_3 = !(curr == NULL) && !(curr->next == NULL) && !(curr == NULL) && curr->next->val < value && !(curr->next == NULL);
+    _cond_13 = !(curr == NULL) && !(curr == NULL) && curr->val < value && !(curr->next == NULL);
+    newNode1 = alloc(struct Node);
+    newNode1->_id = addStructAcc(_ownedFields, 4);
+    newNode1->val = value;
+    newNode1->next = curr->next;
+    newNode1->deleted = false;
+    curr->next = newNode1;
+    _cond_4 = !(newNode1 == NULL) && newNode1->next == NULL;
+    _cond_14 = true;
+    _cond_5 = newNode1 == NULL;
+    _cond_6 = !(q == NULL) && q->head == curr;
+    _cond_7 = !(q == NULL) && q->head == curr;
+    if (q->head == curr)
+    {
+    }
+    else
+    {
+      remove_orderedListSegWithPrev(q->head->next, curr, q->head->val, curr->val, _ownedFields);
+      if (!(_ == NULL))
+      {
+        loseAcc(_ownedFields, _->_id, 0);
+        loseAcc(_ownedFields, _->_id, 1);
+        loseAcc(_ownedFields, _->_id, 2);
+      }
+      if (!(curr == _))
+      {
+        loseAcc(_ownedFields, curr->_id, 0);
+        loseAcc(_ownedFields, curr->_id, 1);
+        loseAcc(_ownedFields, curr->_id, 2);
+        remove_orderedListSegWithPrev(curr->next, _, curr->val, -1, _ownedFields);
+      }
+      _cond_8 = curr == NULL;
+      _cond_9 = true;
+      appendLemmaAfterLoopBody(q->head->next, curr, NULL, q->head->val, curr->val, -1, q->head->deleted, _ownedFields->instanceCounter);
+      _cond_10 = true;
+      add_orderedListSegWithPrev(q->head->next, _, q->head->val, -1, _ownedFields);
+      if (!(_ == NULL))
+      {
+        addAcc(_ownedFields, _->_id, 4, 0);
+        addAcc(_ownedFields, _->_id, 4, 1);
+        addAcc(_ownedFields, _->_id, 4, 2);
+      }
+    }
+    _cond_11 = !(q == NULL) && q->head == NULL;
+    _cond_12 = curr == NULL;
+  }
+  if (!_cond_1 && !_cond_2 && !_cond_3 && !_cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && !_cond_8 && _cond_9 && !_cond_8 && _cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && !_cond_3 && !_cond_4 && !_cond_5 && _cond_6 && _cond_7 && !_cond_12 || !_cond_1 && !_cond_2 && !_cond_13 && _cond_4 && _cond_14 && !_cond_5 && !_cond_6 && !_cond_7 && !_cond_8 && _cond_9 && !_cond_8 && _cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && !_cond_13 && _cond_4 && _cond_14 && !_cond_5 && _cond_6 && _cond_7 && !_cond_12 || !_cond_1 && !_cond_2 && !_cond_3 && !_cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && !_cond_8 && _cond_9 && !_cond_8 && _cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && !_cond_3 && !_cond_4 && !_cond_5 && _cond_6 && _cond_7 && !_cond_12 || !_cond_1 && !_cond_2 && !_cond_13 && _cond_4 && _cond_14 && !_cond_5 && !_cond_6 && !_cond_7 && !_cond_8 && _cond_9 && !_cond_8 && _cond_10 && !_cond_11 || !_cond_1 && !_cond_2 && !_cond_13 && _cond_4 && _cond_14 && !_cond_5 && _cond_6 && _cond_7 && !_cond_12 || !_cond_1 && _cond_2 && !_cond_3 && !_cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && !_cond_8 && _cond_9 && !_cond_8 && _cond_10 && !_cond_11 || !_cond_1 && _cond_2 && !_cond_3 && !_cond_4 && !_cond_5 && _cond_6 && _cond_7 && !_cond_12 || !_cond_1 && _cond_2 && !_cond_13 && _cond_4 && _cond_14 && !_cond_5 && !_cond_6 && !_cond_7 && !_cond_8 && _cond_9 && !_cond_8 && _cond_10 && !_cond_11 || !_cond_1 && _cond_2 && !_cond_13 && _cond_4 && _cond_14 && !_cond_5 && _cond_6 && _cond_7 && !_cond_12 || !_cond_1 && _cond_2 && !_cond_3 && !_cond_4 && !_cond_5 && !_cond_6 && !_cond_7 && !_cond_8 && _cond_9 && !_cond_8 && _cond_10 && !_cond_11 || !_cond_1 && _cond_2 && !_cond_3 && !_cond_4 && !_cond_5 && _cond_6 && _cond_7 && !_cond_12 || !_cond_1 && _cond_2 && !_cond_13 && _cond_4 && _cond_14 && !_cond_5 && !_cond_6 && !_cond_7 && !_cond_8 && _cond_9 && !_cond_8 && _cond_10 && !_cond_11 || !_cond_1 && _cond_2 && !_cond_13 && _cond_4 && _cond_14 && !_cond_5 && _cond_6 && _cond_7 && !_cond_12)
+  {
+    assertAcc(_ownedFields, q != NULL ? q->_id : -1, 1, "Field access runtime check failed for struct MinPriorityQueue.size");
+  }
+  q->size = q->size + 1;
+}
+
+void isMinPQ(struct Node* start, struct OwnedFields* _ownedFields)
+{
+  orderedListSeg(start, NULL, -1, _ownedFields);
+}
+
+int main()
+{
+  struct MinPriorityQueue* q = NULL;
+  int* _instanceCounter = NULL;
+  struct OwnedFields* _ownedFields = NULL;
+  struct OwnedFields* _tempFields = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields(_instanceCounter);
+  q = createMinPriQueue(1, _instanceCounter);
+  addAcc(_ownedFields, q->_id, 3, 1);
+  addAcc(_ownedFields, q->_id, 3, 0);
+  add_isMinPQ(q->head, _ownedFields);
+  enqueue(q, 10, _ownedFields);
+  enqueue(q, 5, _ownedFields);
+  enqueue(q, 20, _ownedFields);
+  _tempFields = initOwnedFields(_instanceCounter);
+  isMinPQ(q->head, _ownedFields);
+  addAccEnsureSeparate(_tempFields, q != NULL ? q->_id : -1, 0, 3, "Overlapping field permissions for struct MinPriorityQueue.head");
+  addAccEnsureSeparate(_tempFields, q != NULL ? q->_id : -1, 1, 3, "Overlapping field permissions for struct MinPriorityQueue.size");
+  sep_isMinPQ(q->head, _tempFields);
+  loseAcc(_ownedFields, q->_id, 0);
+  loseAcc(_ownedFields, q->_id, 1);
+  remove_isMinPQ(q->head, _ownedFields);
+  dequeue(q, _instanceCounter);
+  addAcc(_ownedFields, q->_id, 3, 0);
+  addAcc(_ownedFields, q->_id, 3, 1);
+  add_isMinPQ(q->head, _ownedFields);
+  loseAcc(_ownedFields, q->_id, 0);
+  loseAcc(_ownedFields, q->_id, 1);
+  remove_isMinPQ(q->head, _ownedFields);
+  dequeue(q, _instanceCounter);
+  addAcc(_ownedFields, q->_id, 3, 0);
+  addAcc(_ownedFields, q->_id, 3, 1);
+  add_isMinPQ(q->head, _ownedFields);
+  loseAcc(_ownedFields, q->_id, 0);
+  loseAcc(_ownedFields, q->_id, 1);
+  remove_isMinPQ(q->head, _ownedFields);
+  dequeue(q, _instanceCounter);
+  addAcc(_ownedFields, q->_id, 3, 0);
+  addAcc(_ownedFields, q->_id, 3, 1);
+  add_isMinPQ(q->head, _ownedFields);
+  return 0;
+}
+
+void orderedListSeg(struct Node* start, struct Node* end, int endVal, struct OwnedFields* _ownedFields)
+{
+  if (start == end)
+  {
+    assert(true);
+  }
+  else
+  {
+    assertAcc(_ownedFields, start != NULL ? start->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    assertAcc(_ownedFields, start != NULL ? start->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+    assertAcc(_ownedFields, start != NULL ? start->_id : -1, 2, "Field access runtime check failed for struct Node.deleted");
+    orderedListSegWithPrev(start->next, end, start->val, endVal, _ownedFields);
+  }
+}
+
+void orderedListSegWithPrev(struct Node* start, struct Node* end, int prev, int endVal, struct OwnedFields* _ownedFields)
+{
+  if (start == end)
+  {
+    if (end == NULL)
+    {
+      assert(true);
+    }
+    else
+    {
+      assert(endVal >= prev);
+    }
+  }
+  else
+  {
+    assertAcc(_ownedFields, start != NULL ? start->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+    assertAcc(_ownedFields, start != NULL ? start->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+    assertAcc(_ownedFields, start != NULL ? start->_id : -1, 2, "Field access runtime check failed for struct Node.deleted");
+    assert(start->val >= prev);
+    orderedListSegWithPrev(start->next, end, start->val, endVal, _ownedFields);
+  }
+}
+
+void remove_isMinPQ(struct Node* start, struct OwnedFields* _ownedFields)
+{
+  remove_orderedListSeg(start, NULL, -1, _ownedFields);
+}
+
+void remove_orderedListSeg(struct Node* start, struct Node* end, int endVal, struct OwnedFields* _ownedFields)
+{
+  if (!(start == end))
+  {
+    loseAcc(_ownedFields, start->_id, 0);
+    loseAcc(_ownedFields, start->_id, 1);
+    loseAcc(_ownedFields, start->_id, 2);
+    remove_orderedListSegWithPrev(start->next, end, start->val, endVal, _ownedFields);
+  }
+}
+
+void remove_orderedListSegWithPrev(struct Node* start, struct Node* end, int prev, int endVal, struct OwnedFields* _ownedFields)
+{
+  if (!(start == end))
+  {
+    loseAcc(_ownedFields, start->_id, 0);
+    loseAcc(_ownedFields, start->_id, 1);
+    loseAcc(_ownedFields, start->_id, 2);
+    remove_orderedListSegWithPrev(start->next, end, start->val, endVal, _ownedFields);
+  }
+}
+
+void sep_isMinPQ(struct Node* start, struct OwnedFields* _ownedFields)
+{
+  sep_orderedListSeg(start, NULL, -1, _ownedFields);
+}
+
+void sep_orderedListSeg(struct Node* start, struct Node* end, int endVal, struct OwnedFields* _ownedFields)
+{
+  if (!(start == end))
+  {
+    addAccEnsureSeparate(_ownedFields, start != NULL ? start->_id : -1, 0, 4, "Overlapping field permissions for struct Node.val");
+    addAccEnsureSeparate(_ownedFields, start != NULL ? start->_id : -1, 1, 4, "Overlapping field permissions for struct Node.next");
+    addAccEnsureSeparate(_ownedFields, start != NULL ? start->_id : -1, 2, 4, "Overlapping field permissions for struct Node.deleted");
+    sep_orderedListSegWithPrev(start->next, end, start->val, endVal, _ownedFields);
+  }
+}
+
+void sep_orderedListSegWithPrev(struct Node* start, struct Node* end, int prev, int endVal, struct OwnedFields* _ownedFields)
+{
+  if (!(start == end))
+  {
+    addAccEnsureSeparate(_ownedFields, start != NULL ? start->_id : -1, 0, 4, "Overlapping field permissions for struct Node.val");
+    addAccEnsureSeparate(_ownedFields, start != NULL ? start->_id : -1, 1, 4, "Overlapping field permissions for struct Node.next");
+    addAccEnsureSeparate(_ownedFields, start != NULL ? start->_id : -1, 2, 4, "Overlapping field permissions for struct Node.deleted");
+    sep_orderedListSegWithPrev(start->next, end, start->val, endVal, _ownedFields);
+  }
+}

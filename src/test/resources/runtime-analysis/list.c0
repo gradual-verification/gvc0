@@ -126,47 +126,39 @@ struct Node *create_list(int val)
   return n;
 }
 
+// Realistic naively specified lists insertion 
 struct Node *list_insert(struct Node *list, int val)
-  //@ requires sorted(list);
-  //@ ensures sorted(\result);
+  //@ requires ?;
+  //@ ensures ?;
 {
-  //@ unfold sorted(list);
-  //@ unfold sortedSeg(list, NULL, -1);
   if (list == NULL || val <= list->val) {
 
     struct Node *n = alloc(struct Node);
     n->val = val;
     n->next = list;
-    //@ fold sortedSegHelper(n->next, NULL, n->val, -1);
-    //@ fold sortedSeg(n, NULL, -1);
-    //@ fold sorted(n);
+
     return n;
 
   } else {
 
     struct Node *curr = list;
-    //@ unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
 
-    //@ fold sortedSeg(list, curr, curr->val);
     while (curr->next != NULL && curr->next->val < val)
      //@ loop_invariant acc(curr->val) && acc(curr->next);
-     //@ loop_invariant sortedSeg(list, curr, curr->val) && curr->val <= val;
-     //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val && sortedSegHelper(curr->next->next, NULL, curr->next->val, -1);
+     //@ loop_invariant ? && curr->val <= val;
+     //@ loop_invariant ? && (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val;
     {
 
       struct Node *prev = curr;
       curr = prev->next;
 
-      //@ unfold sortedSeg(list, prev, prev->val);
-      //@ fold sortedSegHelper(prev->next, curr, prev->val, curr->val);
 
       if (list == prev) {
       } else {
-        appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val);
+        //@ assert ?;
+        // appendLemmaLoopBody(list->next, prev, curr, list->val, prev->val, prev->val, curr->val);
       }
 
-      //@ fold sortedSeg(list, curr, curr->val);
-      //@ unfold sortedSegHelper(curr->next, NULL, curr->val, -1);
     }
 
     struct Node *tmp = alloc(struct Node);
@@ -174,17 +166,12 @@ struct Node *list_insert(struct Node *list, int val)
     tmp->next = curr->next;
     curr->next = tmp;
 
-    //@ fold sortedSegHelper(tmp->next, NULL, tmp->val, -1);
-    //@ fold sortedSegHelper(curr->next, NULL, curr->val, -1);
-
-    //@ unfold sortedSeg(list, curr, curr->val);
     if (list == curr) {
     } else {
-      appendLemmaAfterLoopBody(list->next, curr, NULL, list->val, curr->val, -1);
+      //@ assert ?;
+      // appendLemmaAfterLoopBody(list->next, curr, NULL, list->val, curr->val, -1);
     }
 
-    //@ fold sortedSeg(list, NULL, -1);
-    //@ fold sorted(list);
     return list;
   }
 }

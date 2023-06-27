@@ -1,0 +1,319 @@
+field Height$height: Int
+
+field Node$key: Int
+
+field Node$left: Ref
+
+field Node$leftHeight: Int
+
+field Node$right: Ref
+
+field Node$rightHeight: Int
+
+predicate avlh(root: Ref, height1: Int) {
+  (root == null ? height1 == 0 : acc(root.Node$left, write) && acc(root.Node$right, write) && acc(root.Node$key, write) && acc(root.Node$leftHeight, write) && acc(root.Node$rightHeight, write) && acc(avlh(root.Node$left, root.Node$leftHeight), write) && acc(avlh(root.Node$right, root.Node$rightHeight), write) && root.Node$leftHeight - root.Node$rightHeight < 2 && root.Node$rightHeight - root.Node$leftHeight < 2 && root.Node$leftHeight >= 0 && root.Node$rightHeight >= 0 && (root.Node$leftHeight > root.Node$rightHeight ? height1 == root.Node$leftHeight + 1 : height1 == root.Node$rightHeight + 1))
+}
+
+predicate left(y: Ref, xlh: Int, xrh: Int, yrh: Int) {
+  y != null && acc(y.Node$left, write) && acc(y.Node$right, write) && acc(y.Node$key, write) && acc(y.Node$leftHeight, write) && acc(y.Node$rightHeight, write) && y.Node$rightHeight == yrh && acc(avlh(y.Node$right, yrh), write) && y.Node$left != null && acc(y.Node$left.Node$left, write) && acc(y.Node$left.Node$right, write) && acc(y.Node$left.Node$key, write) && acc(y.Node$left.Node$leftHeight, write) && acc(y.Node$left.Node$rightHeight, write) && y.Node$left.Node$rightHeight == xrh && y.Node$left.Node$leftHeight == xlh && acc(avlh(y.Node$left.Node$left, xlh), write) && acc(avlh(y.Node$left.Node$right, xrh), write) && (y.Node$left.Node$leftHeight > y.Node$left.Node$rightHeight ? y.Node$leftHeight == y.Node$left.Node$leftHeight + 1 : y.Node$leftHeight == y.Node$left.Node$rightHeight + 1)
+}
+
+predicate right(y: Ref, ylh: Int, xlh: Int, xrh: Int) {
+  y != null && acc(y.Node$left, write) && acc(y.Node$right, write) && acc(y.Node$key, write) && acc(y.Node$leftHeight, write) && acc(y.Node$rightHeight, write) && y.Node$leftHeight == ylh && acc(avlh(y.Node$left, ylh), write) && y.Node$right != null && acc(y.Node$right.Node$left, write) && acc(y.Node$right.Node$right, write) && acc(y.Node$right.Node$key, write) && acc(y.Node$right.Node$leftHeight, write) && acc(y.Node$right.Node$rightHeight, write) && y.Node$right.Node$rightHeight == xrh && y.Node$right.Node$leftHeight == xlh && acc(avlh(y.Node$right.Node$left, xlh), write) && acc(avlh(y.Node$right.Node$right, xrh), write) && (y.Node$right.Node$leftHeight > y.Node$right.Node$rightHeight ? y.Node$rightHeight == y.Node$right.Node$leftHeight + 1 : y.Node$rightHeight == y.Node$right.Node$rightHeight + 1)
+}
+
+method emptyTree() returns ($result: Ref)
+  requires true
+  ensures acc(avlh($result, 0), write)
+{
+  var node: Ref
+  node := null
+  fold acc(avlh(node, 0), write)
+  $result := node
+}
+
+method getBalance(N: Ref) returns ($result: Int)
+  requires (N == null ? true : acc(N.Node$leftHeight, write) && acc(N.Node$rightHeight, write))
+  ensures (N == null ? $result == 0 : acc(N.Node$leftHeight, write) && acc(N.Node$rightHeight, write) && $result == N.Node$leftHeight - N.Node$rightHeight)
+{
+  if (N == null) {
+    $result := 0
+  } else {
+    $result := N.Node$leftHeight - N.Node$rightHeight
+  }
+}
+
+method insert(node: Ref, h: Int, key: Int, hp: Ref) returns ($result: Ref)
+  requires ? && true
+  ensures ? && acc(hp.Height$height, write) && acc(avlh($result, hp.Height$height), write)
+{
+  var n: Ref
+  var _: Ref
+  var _1: Int
+  var llh: Int
+  var lrh: Int
+  var rh: Int
+  var n1: Ref
+  var _2: Int
+  var llh1: Int
+  var lrlh: Int
+  var lrrh: Int
+  var lrh1: Int
+  var rh1: Int
+  var n2: Ref
+  var _3: Ref
+  var _4: Int
+  var _5: Ref
+  var _6: Int
+  var lh: Int
+  var rlh: Int
+  var rrh: Int
+  var n3: Ref
+  var _7: Int
+  var rllh: Int
+  var rlrh: Int
+  var rrh1: Int
+  var rlh1: Int
+  var lh1: Int
+  var n4: Ref
+  var _8: Ref
+  var _9: Int
+  unfold acc(avlh(node, h), write)
+  if (node == null) {
+    n := newNode(key)
+    hp.Height$height := 1
+    assert ? && acc(avlh(n, hp.Height$height), write)
+    $result := n
+  } elseif (key == node.Node$key) {
+    hp.Height$height := h
+    fold acc(avlh(node, hp.Height$height), write)
+    assert ? && acc(hp.Height$height, write) && acc(avlh(node, hp.Height$height), write)
+    $result := node
+  } elseif (key < node.Node$key) {
+    _ := insert(node.Node$left, node.Node$leftHeight, key, hp)
+    node.Node$left := _
+    node.Node$leftHeight := hp.Height$height
+    if (node.Node$leftHeight - node.Node$rightHeight < 2) {
+      _1 := maximum(node.Node$leftHeight, node.Node$rightHeight)
+      hp.Height$height := 1 + _1
+      fold acc(avlh(node, hp.Height$height), write)
+      assert ? && acc(hp.Height$height, write) && acc(avlh(node, hp.Height$height), write)
+      $result := node
+    } else {
+      assert ? && true
+      if (node.Node$left.Node$leftHeight >= node.Node$left.Node$rightHeight) {
+        llh := node.Node$left.Node$leftHeight
+        lrh := node.Node$left.Node$rightHeight
+        rh := node.Node$rightHeight
+        n1 := rightRotate(node, llh, lrh, rh)
+        assert ? && true
+        fold acc(avlh(n1.Node$right, n1.Node$rightHeight), write)
+        _2 := maximum(n1.Node$leftHeight, n1.Node$rightHeight)
+        hp.Height$height := 1 + _2
+        fold acc(avlh(n1, hp.Height$height), write)
+        assert ? && acc(hp.Height$height, write) && acc(avlh(n1, hp.Height$height), write)
+        $result := n1
+      } else {
+        llh1 := node.Node$left.Node$leftHeight
+        lrlh := node.Node$left.Node$right.Node$leftHeight
+        lrrh := node.Node$left.Node$right.Node$rightHeight
+        _3 := leftRotate(node.Node$left, llh1, lrlh, lrrh)
+        node.Node$left := _3
+        llh1 := node.Node$left.Node$leftHeight
+        lrh1 := node.Node$left.Node$rightHeight
+        rh1 := node.Node$rightHeight
+        n2 := rightRotate(node, llh1, lrh1, rh1)
+        fold acc(avlh(n2.Node$right, n2.Node$rightHeight), write)
+        _4 := maximum(n2.Node$leftHeight, n2.Node$rightHeight)
+        hp.Height$height := 1 + _4
+        fold acc(avlh(n2, hp.Height$height), write)
+        assert ? && acc(hp.Height$height, write) && acc(avlh(n2, hp.Height$height), write)
+        $result := n2
+      }
+    }
+  } else {
+    _5 := insert(node.Node$right, node.Node$rightHeight, key, hp)
+    node.Node$right := _5
+    node.Node$rightHeight := hp.Height$height
+    if (node.Node$rightHeight - node.Node$leftHeight < 2) {
+      _6 := maximum(node.Node$leftHeight, node.Node$rightHeight)
+      hp.Height$height := 1 + _6
+      fold acc(avlh(node, hp.Height$height), write)
+      assert ? && acc(hp.Height$height, write) && acc(avlh(node, hp.Height$height), write)
+      $result := node
+    } elseif (node.Node$right.Node$rightHeight >= node.Node$right.Node$leftHeight) {
+      lh := node.Node$leftHeight
+      rlh := node.Node$right.Node$leftHeight
+      rrh := node.Node$right.Node$rightHeight
+      n3 := leftRotate(node, lh, rlh, rrh)
+      _7 := maximum(n3.Node$leftHeight, n3.Node$rightHeight)
+      hp.Height$height := 1 + _7
+      assert ? && acc(hp.Height$height, write) && acc(avlh(n3, hp.Height$height), write)
+      $result := n3
+    } else {
+      rllh := node.Node$right.Node$left.Node$leftHeight
+      rlrh := node.Node$right.Node$left.Node$rightHeight
+      rrh1 := node.Node$right.Node$rightHeight
+      _8 := rightRotate(node.Node$right, rllh, rlrh, rrh1)
+      node.Node$right := _8
+      fold acc(avlh(node.Node$right.Node$right, node.Node$right.Node$rightHeight), write)
+      rrh1 := node.Node$right.Node$rightHeight
+      rlh1 := node.Node$right.Node$leftHeight
+      lh1 := node.Node$leftHeight
+      n4 := leftRotate(node, lh1, rlh1, rrh1)
+      _9 := maximum(n4.Node$leftHeight, n4.Node$rightHeight)
+      hp.Height$height := 1 + _9
+      fold acc(avlh(n4, hp.Height$height), write)
+      assert ? && acc(hp.Height$height, write) && acc(avlh(n4, hp.Height$height), write)
+      $result := n4
+    }
+  }
+}
+
+method leftRotate(x: Ref, xlh: Int, ylh: Int, yrh: Int) returns ($result: Ref)
+  requires acc(right(x, xlh, ylh, yrh), write)
+  ensures acc(left($result, xlh, ylh, yrh), write)
+{
+  var y: Ref
+  var T2: Ref
+  var _: Int
+  unfold acc(right(x, xlh, ylh, yrh), write)
+  y := x.Node$right
+  T2 := y.Node$left
+  y.Node$left := x
+  x.Node$right := T2
+  x.Node$rightHeight := ylh
+  _ := maximum(xlh + 1, ylh + 1)
+  y.Node$leftHeight := _
+  fold acc(left(y, xlh, ylh, yrh), write)
+  $result := y
+}
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var stress: Int
+  var seed: Int
+  var root: Ref
+  var hp: Ref
+  var i: Int
+  var r: Int
+  var root1: Ref
+  stress := 0
+  seed := 1
+  root := null
+  hp := new(Height$height)
+  hp.Height$height := 0
+  fold acc(avlh(root, 0), write)
+  i := 0
+  while (i < stress)
+    invariant 0 <= i && i <= stress && acc(hp.Height$height, write) && acc(avlh(root, hp.Height$height), write) 
+  {
+    r := rand(seed)
+    seed := r
+    root1 := insert(root, hp.Height$height, r, hp)
+    preOrder(root1, hp.Height$height)
+    i := i + 1
+    root := root1
+  }
+  $result := 0
+}
+
+method maximum(a: Int, b: Int) returns ($result: Int)
+  requires true
+  ensures (a > b ? $result == a : $result == b)
+{
+  if (a > b) {
+    $result := a
+  } else {
+    $result := b
+  }
+}
+
+method newNode(key: Int) returns ($result: Ref)
+  requires true
+  ensures acc(avlh($result, 1), write) && $result != null
+{
+  var node: Ref
+  var _: Ref
+  var _1: Ref
+  node := new(Node$key, Node$left, Node$right, Node$leftHeight, Node$rightHeight)
+  node.Node$key := key
+  node.Node$leftHeight := 0
+  node.Node$rightHeight := 0
+  _ := emptyTree()
+  node.Node$left := _
+  _1 := emptyTree()
+  node.Node$right := _1
+  fold acc(avlh(node, 1), write)
+  $result := node
+}
+
+method preOrder(root: Ref, h: Int)
+  requires acc(avlh(root, h), write)
+  ensures acc(avlh(root, h), write)
+{
+  unfold acc(avlh(root, h), write)
+  if (root != null) {
+    printint(root.Node$key)
+    printchar(32)
+    preOrder(root.Node$left, root.Node$leftHeight)
+    preOrder(root.Node$right, root.Node$rightHeight)
+  }
+  fold acc(avlh(root, h), write)
+}
+
+method rightRotate(y: Ref, xlh: Int, xrh: Int, yrh: Int) returns ($result: Ref)
+  requires acc(left(y, xlh, xrh, yrh), write)
+  ensures acc(right($result, xlh, xrh, yrh), write)
+{
+  var x: Ref
+  var T2: Ref
+  var _: Int
+  unfold acc(left(y, xlh, xrh, yrh), write)
+  x := y.Node$left
+  T2 := x.Node$right
+  x.Node$right := y
+  y.Node$left := T2
+  y.Node$leftHeight := xrh
+  _ := maximum(xrh + 1, yrh + 1)
+  x.Node$rightHeight := _
+  fold acc(right(x, xlh, xrh, yrh), write)
+  $result := x
+}
+
+method printint(value: Int)
+{
+  
+}
+
+method printchar(value: Int)
+{
+  
+}
+
+method printbool(value: Bool)
+{
+  
+}
+
+method flush()
+{
+  
+}
+
+method mod(r: Int, l: Int) returns ($result: Int)
+{
+  $result := 0
+}
+
+method rand(prev: Int) returns ($result: Int)
+{
+  $result := 0
+}
+
+method readStress() returns ($result: Int)
+{
+  $result := 0
+}

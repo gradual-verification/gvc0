@@ -1,0 +1,351 @@
+#use <conio>
+#use <stress>
+struct Height;
+struct Node;
+
+struct Height
+{
+  int height;
+};
+
+struct Node
+{
+  int key;
+  struct Node* left;
+  struct Node* right;
+  int leftHeight;
+  int rightHeight;
+};
+
+//@predicate avlh(struct Node* root, int height1);
+//@predicate left(struct Node* y, int xlh, int xrh, int yrh);
+//@predicate right(struct Node* y, int ylh, int xlh, int xrh);
+
+//@predicate avlh(struct Node* root, int height1) = root == NULL ? height1 == 0 : acc(root->left) && acc(root->right) && acc(root->key) && acc(root->leftHeight) && acc(root->rightHeight) && avlh(root->left, root->leftHeight) && avlh(root->right, root->rightHeight) && root->leftHeight - root->rightHeight < 2 && root->rightHeight - root->leftHeight < 2 && root->leftHeight >= 0 && root->rightHeight >= 0 && (root->leftHeight > root->rightHeight ? height1 == root->leftHeight + 1 : height1 == root->rightHeight + 1);
+//@predicate left(struct Node* y, int xlh, int xrh, int yrh) = y != NULL && acc(y->left) && acc(y->right) && acc(y->key) && acc(y->leftHeight) && acc(y->rightHeight) && y->rightHeight == yrh && avlh(y->right, yrh) && y->left != NULL && acc(y->left->left) && acc(y->left->right) && acc(y->left->key) && acc(y->left->leftHeight) && acc(y->left->rightHeight) && y->left->rightHeight == xrh && y->left->leftHeight == xlh && avlh(y->left->left, xlh) && avlh(y->left->right, xrh) && (y->left->leftHeight > y->left->rightHeight ? y->leftHeight == y->left->leftHeight + 1 : y->leftHeight == y->left->rightHeight + 1);
+//@predicate right(struct Node* y, int ylh, int xlh, int xrh) = y != NULL && acc(y->left) && acc(y->right) && acc(y->key) && acc(y->leftHeight) && acc(y->rightHeight) && y->leftHeight == ylh && avlh(y->left, ylh) && y->right != NULL && acc(y->right->left) && acc(y->right->right) && acc(y->right->key) && acc(y->right->leftHeight) && acc(y->right->rightHeight) && y->right->rightHeight == xrh && y->right->leftHeight == xlh && avlh(y->right->left, xlh) && avlh(y->right->right, xrh) && (y->right->leftHeight > y->right->rightHeight ? y->rightHeight == y->right->leftHeight + 1 : y->rightHeight == y->right->rightHeight + 1);
+
+struct Node* emptyTree();
+int getBalance(struct Node* N);
+struct Node* insert(struct Node* node, int h, int key, struct Height* hp);
+struct Node* leftRotate(struct Node* x, int xlh, int ylh, int yrh);
+int main();
+int maximum(int a, int b);
+struct Node* newNode(int key);
+void preOrder(struct Node* root, int h);
+struct Node* rightRotate(struct Node* y, int xlh, int xrh, int yrh);
+
+struct Node* emptyTree()
+  //@requires true;
+  //@ensures avlh(\result, 0);
+{
+  struct Node* node = NULL;
+  node = NULL;
+  //@fold avlh(node, 0);
+  return node;
+}
+
+int getBalance(struct Node* N)
+  //@requires N == NULL ? true : acc(N->leftHeight) && acc(N->rightHeight);
+  //@ensures N == NULL ? \result == 0 : acc(N->leftHeight) && acc(N->rightHeight) && \result == N->leftHeight - N->rightHeight;
+{
+  if (N == NULL)
+  {
+    return 0;
+  }
+  else
+  {
+    return N->leftHeight - N->rightHeight;
+  }
+}
+
+struct Node* insert(struct Node* node, int h, int key, struct Height* hp)
+  //@requires acc(hp->height) && avlh(node, h);
+  //@ensures acc(hp->height) && avlh(\result, hp->height) && hp->height >= h && hp->height <= h + 1 && \result != NULL;
+{
+  struct Node* n = NULL;
+  struct Node* _ = NULL;
+  int _1 = 0;
+  int llh = 0;
+  int lrh = 0;
+  int rh = 0;
+  struct Node* n1 = NULL;
+  int _2 = 0;
+  int llh1 = 0;
+  int lrlh = 0;
+  int lrrh = 0;
+  int lrh1 = 0;
+  int rh1 = 0;
+  struct Node* n2 = NULL;
+  struct Node* _3 = NULL;
+  int _4 = 0;
+  struct Node* _5 = NULL;
+  int _6 = 0;
+  int lh = 0;
+  int rlh = 0;
+  int rrh = 0;
+  struct Node* n3 = NULL;
+  int _7 = 0;
+  int rllh = 0;
+  int rlrh = 0;
+  int rrh1 = 0;
+  int rlh1 = 0;
+  int lh1 = 0;
+  struct Node* n4 = NULL;
+  struct Node* _8 = NULL;
+  int _9 = 0;
+  //@unfold avlh(node, h);
+  if (node == NULL)
+  {
+    n = newNode(key);
+    hp->height = 1;
+    //@assert acc(hp->height) && avlh(n, hp->height) && hp->height >= h && hp->height <= h + 1 && n != NULL;
+    return n;
+  }
+  else
+  {
+    if (key == node->key)
+    {
+      hp->height = h;
+      //@fold avlh(node, hp->height);
+      //@assert acc(hp->height) && avlh(node, hp->height) && hp->height >= h && hp->height <= h + 1 && node != NULL;
+      return node;
+    }
+    else
+    {
+      if (key < node->key)
+      {
+        _ = insert(node->left, node->leftHeight, key, hp);
+        node->left = _;
+        node->leftHeight = hp->height;
+        if (node->leftHeight - node->rightHeight < 2)
+        {
+          _1 = maximum(node->leftHeight, node->rightHeight);
+          hp->height = 1 + _1;
+          //@fold avlh(node, hp->height);
+          //@assert acc(hp->height) && avlh(node, hp->height) && hp->height >= h && hp->height <= h + 1 && node != NULL;
+          return node;
+        }
+        else
+        {
+          //@assert node->left != NULL;
+          //@unfold avlh(node->left, node->leftHeight);
+          if (node->left->leftHeight >= node->left->rightHeight)
+          {
+            llh = node->left->leftHeight;
+            lrh = node->left->rightHeight;
+            rh = node->rightHeight;
+            //@fold left(node, llh, lrh, rh);
+            n1 = rightRotate(node, llh, lrh, rh);
+            //@unfold right(n1, llh, lrh, rh);
+            //@assert n1->rightHeight == 1 + lrh;
+            //@fold avlh(n1->right, n1->rightHeight);
+            _2 = maximum(n1->leftHeight, n1->rightHeight);
+            hp->height = 1 + _2;
+            //@fold avlh(n1, hp->height);
+            //@assert acc(hp->height) && avlh(n1, hp->height) && hp->height >= h && hp->height <= h + 1 && n1 != NULL;
+            return n1;
+          }
+          else
+          {
+            //@unfold avlh(node->left->right, node->left->rightHeight);
+            llh1 = node->left->leftHeight;
+            lrlh = node->left->right->leftHeight;
+            lrrh = node->left->right->rightHeight;
+            //@fold right(node->left, llh1, lrlh, lrrh);
+            _3 = leftRotate(node->left, llh1, lrlh, lrrh);
+            node->left = _3;
+            //@unfold left(node->left, llh1, lrlh, lrrh);
+            //@fold avlh(node->left->left, node->left->leftHeight);
+            llh1 = node->left->leftHeight;
+            lrh1 = node->left->rightHeight;
+            rh1 = node->rightHeight;
+            //@fold left(node, llh1, lrh1, rh1);
+            n2 = rightRotate(node, llh1, lrh1, rh1);
+            //@unfold right(n2, llh1, lrh1, rh1);
+            //@fold avlh(n2->right, n2->rightHeight);
+            _4 = maximum(n2->leftHeight, n2->rightHeight);
+            hp->height = 1 + _4;
+            //@fold avlh(n2, hp->height);
+            //@assert acc(hp->height) && avlh(n2, hp->height) && hp->height >= h && hp->height <= h + 1 && n2 != NULL;
+            return n2;
+          }
+        }
+      }
+      else
+      {
+        _5 = insert(node->right, node->rightHeight, key, hp);
+        node->right = _5;
+        node->rightHeight = hp->height;
+        if (node->rightHeight - node->leftHeight < 2)
+        {
+          _6 = maximum(node->leftHeight, node->rightHeight);
+          hp->height = 1 + _6;
+          //@fold avlh(node, hp->height);
+          //@assert acc(hp->height) && avlh(node, hp->height) && hp->height >= h && hp->height <= h + 1 && node != NULL;
+          return node;
+        }
+        else
+        {
+          //@unfold avlh(node->right, node->rightHeight);
+          if (node->right->rightHeight >= node->right->leftHeight)
+          {
+            lh = node->leftHeight;
+            rlh = node->right->leftHeight;
+            rrh = node->right->rightHeight;
+            //@fold right(node, lh, rlh, rrh);
+            n3 = leftRotate(node, lh, rlh, rrh);
+            //@unfold left(n3, lh, rlh, rrh);
+            //@fold avlh(n3->left, n3->leftHeight);
+            _7 = maximum(n3->leftHeight, n3->rightHeight);
+            hp->height = 1 + _7;
+            //@fold avlh(n3, hp->height);
+            //@assert acc(hp->height) && avlh(n3, hp->height) && hp->height >= h && hp->height <= h + 1 && n3 != NULL;
+            return n3;
+          }
+          else
+          {
+            //@unfold avlh(node->right->left, node->right->leftHeight);
+            rllh = node->right->left->leftHeight;
+            rlrh = node->right->left->rightHeight;
+            rrh1 = node->right->rightHeight;
+            //@fold left(node->right, rllh, rlrh, rrh1);
+            _8 = rightRotate(node->right, rllh, rlrh, rrh1);
+            node->right = _8;
+            //@unfold right(node->right, rllh, rlrh, rrh1);
+            //@fold avlh(node->right->right, node->right->rightHeight);
+            rrh1 = node->right->rightHeight;
+            rlh1 = node->right->leftHeight;
+            lh1 = node->leftHeight;
+            //@fold right(node, lh1, rlh1, rrh1);
+            n4 = leftRotate(node, lh1, rlh1, rrh1);
+            //@unfold left(n4, lh1, rlh1, rrh1);
+            //@fold avlh(n4->left, n4->leftHeight);
+            _9 = maximum(n4->leftHeight, n4->rightHeight);
+            hp->height = 1 + _9;
+            //@fold avlh(n4, hp->height);
+            //@assert acc(hp->height) && avlh(n4, hp->height) && hp->height >= h && hp->height <= h + 1 && n4 != NULL;
+            return n4;
+          }
+        }
+      }
+    }
+  }
+}
+
+struct Node* leftRotate(struct Node* x, int xlh, int ylh, int yrh)
+  //@requires right(x, xlh, ylh, yrh);
+  //@ensures left(\result, xlh, ylh, yrh);
+{
+  struct Node* y = NULL;
+  struct Node* T2 = NULL;
+  int _ = 0;
+  //@unfold right(x, xlh, ylh, yrh);
+  y = x->right;
+  T2 = y->left;
+  y->left = x;
+  x->right = T2;
+  x->rightHeight = ylh;
+  _ = maximum(xlh + 1, ylh + 1);
+  y->leftHeight = _;
+  //@fold left(y, xlh, ylh, yrh);
+  return y;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  int stress = 0;
+  int seed = 0;
+  struct Node* root = NULL;
+  struct Height* hp = NULL;
+  int i = 0;
+  int r = 0;
+  struct Node* root1 = NULL;
+  stress = 0;
+  seed = 1;
+  root = NULL;
+  hp = alloc(struct Height);
+  hp->height = 0;
+  //@fold avlh(root, 0);
+  i = 0;
+  while (i < stress)
+    //@loop_invariant 0 <= i && i <= stress && acc(hp->height) && avlh(root, hp->height);
+  {
+    r = rand(seed);
+    seed = r;
+    root1 = insert(root, hp->height, r, hp);
+    preOrder(root1, hp->height);
+    i = i + 1;
+    root = root1;
+  }
+  return 0;
+}
+
+int maximum(int a, int b)
+  //@requires true;
+  //@ensures a > b ? \result == a : \result == b;
+{
+  if (a > b)
+  {
+    return a;
+  }
+  else
+  {
+    return b;
+  }
+}
+
+struct Node* newNode(int key)
+  //@requires true;
+  //@ensures avlh(\result, 1) && \result != NULL;
+{
+  struct Node* node = NULL;
+  struct Node* _ = NULL;
+  struct Node* _1 = NULL;
+  node = alloc(struct Node);
+  node->key = key;
+  node->leftHeight = 0;
+  node->rightHeight = 0;
+  _ = emptyTree();
+  node->left = _;
+  _1 = emptyTree();
+  node->right = _1;
+  //@fold avlh(node, 1);
+  return node;
+}
+
+void preOrder(struct Node* root, int h)
+  //@requires avlh(root, h);
+  //@ensures avlh(root, h);
+{
+  //@unfold avlh(root, h);
+  if (root != NULL)
+  {
+    printint(root->key);
+    printchar(' ');
+    preOrder(root->left, root->leftHeight);
+    preOrder(root->right, root->rightHeight);
+  }
+  //@fold avlh(root, h);
+}
+
+struct Node* rightRotate(struct Node* y, int xlh, int xrh, int yrh)
+  //@requires left(y, xlh, xrh, yrh);
+  //@ensures right(\result, xlh, xrh, yrh);
+{
+  struct Node* x = NULL;
+  struct Node* T2 = NULL;
+  int _ = 0;
+  //@unfold left(y, xlh, xrh, yrh);
+  x = y->left;
+  T2 = x->right;
+  x->right = y;
+  y->left = T2;
+  y->leftHeight = xrh;
+  _ = maximum(xrh + 1, yrh + 1);
+  x->rightHeight = _;
+  //@fold right(x, xlh, xrh, yrh);
+  return x;
+}

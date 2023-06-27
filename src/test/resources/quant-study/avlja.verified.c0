@@ -1,0 +1,284 @@
+#use <conio>
+#use <runtime>
+#use <stress>
+struct Height;
+struct Node;
+
+struct Height
+{
+  int height;
+  int _id;
+};
+
+struct Node
+{
+  int key;
+  struct Node* left;
+  struct Node* right;
+  int leftHeight;
+  int rightHeight;
+  int _id;
+};
+
+struct Node* emptyTree(int* _instanceCounter);
+int getBalance(struct Node* N, int* _instanceCounter);
+struct Node* insert(struct Node* node, int h, int key, struct Height* hp, int* _instanceCounter);
+struct Node* leftRotate(struct Node* x, int xlh, int ylh, int yrh, int* _instanceCounter);
+int main();
+int maximum(int a, int b, int* _instanceCounter);
+struct Node* newNode(int key, int* _instanceCounter);
+void preOrder(struct Node* root, int h, int* _instanceCounter);
+struct Node* rightRotate(struct Node* y, int xlh, int xrh, int yrh, int* _instanceCounter);
+
+struct Node* emptyTree(int* _instanceCounter)
+{
+  struct Node* node = NULL;
+  node = NULL;
+  return node;
+}
+
+int getBalance(struct Node* N, int* _instanceCounter)
+{
+  if (N == NULL)
+  {
+    return 0;
+  }
+  else
+  {
+    return N->leftHeight - N->rightHeight;
+  }
+}
+
+struct Node* insert(struct Node* node, int h, int key, struct Height* hp, int* _instanceCounter)
+{
+  struct Node* n = NULL;
+  struct Node* _ = NULL;
+  int _1 = 0;
+  int llh = 0;
+  int lrh = 0;
+  int rh = 0;
+  struct Node* n1 = NULL;
+  int _2 = 0;
+  int llh1 = 0;
+  int lrlh = 0;
+  int lrrh = 0;
+  int lrh1 = 0;
+  int rh1 = 0;
+  struct Node* n2 = NULL;
+  struct Node* _3 = NULL;
+  int _4 = 0;
+  struct Node* _5 = NULL;
+  int _6 = 0;
+  int lh = 0;
+  int rlh = 0;
+  int rrh = 0;
+  struct Node* n3 = NULL;
+  int _7 = 0;
+  int rllh = 0;
+  int rlrh = 0;
+  int rrh1 = 0;
+  int rlh1 = 0;
+  int lh1 = 0;
+  struct Node* n4 = NULL;
+  struct Node* _8 = NULL;
+  int _9 = 0;
+  if (node == NULL)
+  {
+    n = newNode(key, _instanceCounter);
+    hp->height = 1;
+    return n;
+  }
+  else
+  {
+    if (key == node->key)
+    {
+      hp->height = h;
+      return node;
+    }
+    else
+    {
+      if (key < node->key)
+      {
+        _ = insert(node->left, node->leftHeight, key, hp, _instanceCounter);
+        node->left = _;
+        node->leftHeight = hp->height;
+        if (node->leftHeight - node->rightHeight < 2)
+        {
+          _1 = maximum(node->leftHeight, node->rightHeight, _instanceCounter);
+          hp->height = 1 + _1;
+          return node;
+        }
+        else
+        {
+          if (node->left->leftHeight >= node->left->rightHeight)
+          {
+            llh = node->left->leftHeight;
+            lrh = node->left->rightHeight;
+            rh = node->rightHeight;
+            n1 = rightRotate(node, llh, lrh, rh, _instanceCounter);
+            _2 = maximum(n1->leftHeight, n1->rightHeight, _instanceCounter);
+            hp->height = 1 + _2;
+            return n1;
+          }
+          else
+          {
+            llh1 = node->left->leftHeight;
+            lrlh = node->left->right->leftHeight;
+            lrrh = node->left->right->rightHeight;
+            _3 = leftRotate(node->left, llh1, lrlh, lrrh, _instanceCounter);
+            node->left = _3;
+            llh1 = node->left->leftHeight;
+            lrh1 = node->left->rightHeight;
+            rh1 = node->rightHeight;
+            n2 = rightRotate(node, llh1, lrh1, rh1, _instanceCounter);
+            _4 = maximum(n2->leftHeight, n2->rightHeight, _instanceCounter);
+            hp->height = 1 + _4;
+            return n2;
+          }
+        }
+      }
+      else
+      {
+        _5 = insert(node->right, node->rightHeight, key, hp, _instanceCounter);
+        node->right = _5;
+        node->rightHeight = hp->height;
+        if (node->rightHeight - node->leftHeight < 2)
+        {
+          _6 = maximum(node->leftHeight, node->rightHeight, _instanceCounter);
+          hp->height = 1 + _6;
+          return node;
+        }
+        else
+        {
+          if (node->right->rightHeight >= node->right->leftHeight)
+          {
+            lh = node->leftHeight;
+            rlh = node->right->leftHeight;
+            rrh = node->right->rightHeight;
+            n3 = leftRotate(node, lh, rlh, rrh, _instanceCounter);
+            _7 = maximum(n3->leftHeight, n3->rightHeight, _instanceCounter);
+            hp->height = 1 + _7;
+            return n3;
+          }
+          else
+          {
+            rllh = node->right->left->leftHeight;
+            rlrh = node->right->left->rightHeight;
+            rrh1 = node->right->rightHeight;
+            _8 = rightRotate(node->right, rllh, rlrh, rrh1, _instanceCounter);
+            node->right = _8;
+            rrh1 = node->right->rightHeight;
+            rlh1 = node->right->leftHeight;
+            lh1 = node->leftHeight;
+            n4 = leftRotate(node, lh1, rlh1, rrh1, _instanceCounter);
+            _9 = maximum(n4->leftHeight, n4->rightHeight, _instanceCounter);
+            hp->height = 1 + _9;
+            return n4;
+          }
+        }
+      }
+    }
+  }
+}
+
+struct Node* leftRotate(struct Node* x, int xlh, int ylh, int yrh, int* _instanceCounter)
+{
+  struct Node* y = NULL;
+  struct Node* T2 = NULL;
+  int _ = 0;
+  y = x->right;
+  T2 = y->left;
+  y->left = x;
+  x->right = T2;
+  x->rightHeight = ylh;
+  _ = maximum(xlh + 1, ylh + 1, _instanceCounter);
+  y->leftHeight = _;
+  return y;
+}
+
+int main()
+{
+  int stress = 0;
+  int seed = 0;
+  struct Node* root = NULL;
+  struct Height* hp = NULL;
+  int i = 0;
+  int r = 0;
+  struct Node* root1 = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  stress = 0;
+  seed = 1;
+  root = NULL;
+  hp = alloc(struct Height);
+  hp->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  hp->height = 0;
+  i = 0;
+  while (i < stress)
+  {
+    r = rand(seed);
+    seed = r;
+    root1 = insert(root, hp->height, r, hp, _instanceCounter);
+    preOrder(root1, hp->height, _instanceCounter);
+    i = i + 1;
+    root = root1;
+  }
+  return 0;
+}
+
+int maximum(int a, int b, int* _instanceCounter)
+{
+  if (a > b)
+  {
+    return a;
+  }
+  else
+  {
+    return b;
+  }
+}
+
+struct Node* newNode(int key, int* _instanceCounter)
+{
+  struct Node* node = NULL;
+  struct Node* _ = NULL;
+  struct Node* _1 = NULL;
+  node = alloc(struct Node);
+  node->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  node->key = key;
+  node->leftHeight = 0;
+  node->rightHeight = 0;
+  _ = emptyTree(_instanceCounter);
+  node->left = _;
+  _1 = emptyTree(_instanceCounter);
+  node->right = _1;
+  return node;
+}
+
+void preOrder(struct Node* root, int h, int* _instanceCounter)
+{
+  if (root != NULL)
+  {
+    printint(root->key);
+    printchar(' ');
+    preOrder(root->left, root->leftHeight, _instanceCounter);
+    preOrder(root->right, root->rightHeight, _instanceCounter);
+  }
+}
+
+struct Node* rightRotate(struct Node* y, int xlh, int xrh, int yrh, int* _instanceCounter)
+{
+  struct Node* x = NULL;
+  struct Node* T2 = NULL;
+  int _ = 0;
+  x = y->left;
+  T2 = x->right;
+  x->right = y;
+  y->left = T2;
+  y->leftHeight = xrh;
+  _ = maximum(xrh + 1, yrh + 1, _instanceCounter);
+  x->rightHeight = _;
+  return x;
+}
