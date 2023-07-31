@@ -3,7 +3,6 @@
 struct Node {
     int val;
     struct Node *next;
-    bool deleted;
 };
 typedef struct Node Node;
 
@@ -19,7 +18,7 @@ predicate orderedListSegWithPrev(struct Node *start, struct Node *end, int prev,
     ( (end == NULL) ? true : endVal >= prev )
     :
     (
-      acc(start->val) && acc(start->next) && acc(start->deleted) &&
+      acc(start->val) && acc(start->next) &&
       start->val >= prev && orderedListSegWithPrev(start->next, end, start->val, endVal)
     ) ;
 @*/
@@ -30,7 +29,7 @@ predicate orderedListSeg(struct Node *start, struct Node *end, int endVal) =
     ( true )
     :
     (
-      acc(start->val) && acc(start->next) && acc(start->deleted) &&
+      acc(start->val) && acc(start->next) &&
       orderedListSegWithPrev(start->next, end, start->val, endVal)
     ) ;
 @*/
@@ -42,14 +41,14 @@ predicate isMinPQ(Node *start) =
 
 //-------------------------------------------------------------------lemmas
 // Lemma:
-void appendLemmaLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPrev, int cPrev, int bVal, int cVal, bool bDeleted)
+void appendLemmaLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPrev, int cPrev, int bVal, int cVal)
   /*@
     requires orderedListSegWithPrev(a, b, aPrev, bVal) &&
         ( (b == c) ? bVal == cVal : true ) &&
         ( (c == NULL) ?
             ( true )
             :
-            ( acc(c->val) && acc(c->next) && acc(c->deleted) && c->val == cVal &&
+            ( acc(c->val) && acc(c->next) && c->val == cVal &&
               c->val >= cPrev && orderedListSegWithPrev(c->next, NULL, c->val, -1)
             )
         ) &&
@@ -57,7 +56,7 @@ void appendLemmaLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPr
             ( true )
             :
             (
-              acc(b->val) && acc(b->next) && acc(b->deleted) && b->val == bVal &&
+              acc(b->val) && acc(b->next) && b->val == bVal &&
               orderedListSegWithPrev(b->next, c, b->val, cVal)
             )
         ) ;
@@ -67,7 +66,7 @@ void appendLemmaLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPr
         ( (c == NULL) ?
             ( true )
             :
-            ( acc(c->val) && acc(c->next) && acc(c->deleted) && c->val == cVal &&
+            ( acc(c->val) && acc(c->next) && c->val == cVal &&
               c->val >= cPrev && orderedListSegWithPrev(c->next, NULL, c->val, -1)
             )
         ) ;
@@ -79,28 +78,28 @@ void appendLemmaLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPr
     //@ fold orderedListSegWithPrev(a, c, aPrev, cVal);
   } else {
     //@ unfold orderedListSegWithPrev(a, b, aPrev, bVal);
-    appendLemmaLoopBody(a->next, b, c, a->val, cPrev, bVal, cVal, b->deleted);
+    appendLemmaLoopBody(a->next, b, c, a->val, cPrev, bVal, cVal);
     //@ fold orderedListSegWithPrev(a, c, aPrev, cVal);
   }
 }
 
-void appendLemmaAfterLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPrev, int bVal, int cVal, bool bDeleted)
+void appendLemmaAfterLoopBody(struct Node *a, struct Node *b, struct Node *c, int aPrev, int bVal, int cVal)
   /*@
     requires orderedListSegWithPrev(a, b, aPrev, bVal) &&
         ( (b == c) ? bVal == cVal : true ) &&
-        ( (c == NULL) ? true : acc(c->val) && acc(c->next) && acc(c->deleted) && c->val == cVal ) &&
+        ( (c == NULL) ? true : acc(c->val) && acc(c->next) && c->val == cVal ) &&
         ( (b == c) ?
             ( true )
             :
             (
-              acc(b->val) && acc(b->next) && acc(b->deleted) && b->val == bVal &&
+              acc(b->val) && acc(b->next) && b->val == bVal &&
               orderedListSegWithPrev(b->next, c, b->val, cVal)
             )
         ) ;
   @*/
   /*@
     ensures orderedListSegWithPrev(a, c, aPrev, cVal) &&
-        ( (c == NULL) ? true : acc(c->val) && acc(c->next) && acc(c->deleted) && c->val == cVal) ;
+        ( (c == NULL) ? true : acc(c->val) && acc(c->next) && c->val == cVal) ;
   @*/
 {
   if (b == c) {
@@ -109,7 +108,7 @@ void appendLemmaAfterLoopBody(struct Node *a, struct Node *b, struct Node *c, in
     //@ fold orderedListSegWithPrev(a, c, aPrev, cVal);
   } else {
     //@ unfold orderedListSegWithPrev(a, b, aPrev, bVal);
-    appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal, b->deleted);
+    appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal);
     //@ fold orderedListSegWithPrev(a, c, aPrev, cVal);
   }
 }
@@ -150,10 +149,10 @@ void enqueue(MinPriorityQueue *q, int value)
         //@ unfold orderedListSegWithPrev(curr->next, NULL, curr->val, -1);
         //@ fold orderedListSeg(q->head, curr, curr->val);
         while (curr->next != NULL && curr->next->val < value) 
-        //@ loop_invariant acc(curr->val) && acc(curr->next) && acc(curr->deleted);
+        //@ loop_invariant acc(curr->val) && acc(curr->next);
         //@ loop_invariant acc(q->head);
         //@ loop_invariant orderedListSeg(q->head, curr, curr->val) && curr->val <= value;
-        //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && acc(curr->next->deleted) && curr->next->val >= curr->val && orderedListSegWithPrev(curr->next->next, NULL, curr->next->val, -1);
+        //@ loop_invariant (curr->next == NULL) ? (true) : acc(curr->next->next) && acc(curr->next->val) && curr->next->val >= curr->val && orderedListSegWithPrev(curr->next->next, NULL, curr->next->val, -1);
         { 
             Node *prev = curr;
             curr = prev->next;
@@ -162,7 +161,7 @@ void enqueue(MinPriorityQueue *q, int value)
 
             if (q->head == prev) {
             } else {
-              appendLemmaLoopBody(q->head->next, prev, curr, q->head->val, prev->val, prev->val, curr->val, prev->deleted);
+              appendLemmaLoopBody(q->head->next, prev, curr, q->head->val, prev->val, prev->val, curr->val);
             }
 
             //@ fold orderedListSeg(q->head, curr, curr->val);
@@ -171,7 +170,6 @@ void enqueue(MinPriorityQueue *q, int value)
         struct Node *newNode = alloc(struct Node);
         newNode->val = value;
         newNode->next = curr->next;
-        newNode->deleted = false;
         curr->next = newNode;
         //@ fold orderedListSegWithPrev(newNode->next, NULL, newNode->val, -1);
         //@ fold orderedListSegWithPrev(curr->next, NULL, curr->val, -1);
@@ -179,7 +177,7 @@ void enqueue(MinPriorityQueue *q, int value)
         //@ unfold orderedListSeg(q->head, curr, curr->val);
         if (q->head == curr) {
         } else {
-          appendLemmaAfterLoopBody(q->head->next, curr, NULL, q->head->val, curr->val, -1, q->head->deleted);
+          appendLemmaAfterLoopBody(q->head->next, curr, NULL, q->head->val, curr->val, -1);
         }
 
         //@ fold orderedListSeg(q->head, NULL, -1);
@@ -188,7 +186,7 @@ void enqueue(MinPriorityQueue *q, int value)
     q->size++;
 }
 
-void dequeue(MinPriorityQueue *q) 
+int dequeue(MinPriorityQueue *q) 
     //@ requires acc(q->head) && acc(q->size) && isMinPQ(q->head);
     //@ ensures acc(q->head) && acc(q->size) && isMinPQ(q->head);
 {
@@ -198,27 +196,45 @@ void dequeue(MinPriorityQueue *q)
         // Queue is empty, nothing to dequeue
         //@ fold orderedListSeg(q->head, NULL, -1);
         //@ fold isMinPQ(q->head);
-        return;
+        q->size = 0;
+        return -2147483647;
     } else {
         //@ unfold orderedListSegWithPrev(q->head->next, NULL, q->head->val, -1);
-        q->head->deleted = true; // Mark node as deleted
-        //@ fold orderedListSegWithPrev(q->head->next, NULL, q->head->val, -1);
+        // Delete node and return value
+        Node* tmp = q->head;
+        q->head = tmp->next;
         //@ fold orderedListSeg(q->head, NULL, -1);
         //@ fold isMinPQ(q->head);
-    }
-    q->size--;
+        q->size--;
+        return tmp->val;
+    }   
 }
 
 int main () 
     //@ requires true;
     //@ ensures true;
 {
-    MinPriorityQueue *q = createMinPriQueue(1);
-    enqueue(q, 10);
-    enqueue(q, 5);
-    enqueue(q, 20);
-    dequeue(q);
-    dequeue(q);
-    dequeue(q);
-    return 0;
+  int stress = 0;
+  int seed = 1;
+
+  MinPriorityQueue *q = createMinPriQueue(3);
+  int i = 0;
+  while(i < stress)
+  //@loop_invariant 0 <= i && i <= stress;
+  {
+    int r = rand(seed);
+    seed = r;
+    enqueue(q,r);
+    i += 1;
+  }
+
+  int j = 0;
+  while(j < stress)
+  //@loop_invariant 0 <= j && j <= stress;
+  {
+    int v = dequeue(q);
+    j += 1;
+  }
+
+  return 0;
 }
