@@ -150,7 +150,7 @@ struct Node *push(struct Node *head, int val)
 
     //@ fold segHelper(head, NULL);
     //@ fold seg(head);
-  return head;
+    return head;
   }
 }
 
@@ -190,19 +190,16 @@ int pop(struct Node *head)
         appendLemmaLoopBody(head->next, prev, curr);
       }
 
-           
-
       //@ fold segHelper(head, curr);
       //@ unfold segHelper(curr->next, NULL);
-
-
     }
+
     curr->next = NULL;
-  return 1;
+    return 1;
   }
 }
 
-struct Node *create_list(int val)
+struct Node *create_stack(int val)
   //@ requires true;
   //@ ensures seg(\result);
 {
@@ -219,9 +216,9 @@ int main ()
   //@ requires true;
   //@ ensures true;
 {
-    struct Node *l = create_list(5);
-    struct Node *l2 = push(l, 1);
-    //@ assert seg(l2);
+    struct Node *s = create_stack(5);
+    s = push(s,1);
+    //@ assert seg(s);
     pop(l2);
     return 1;
 }
