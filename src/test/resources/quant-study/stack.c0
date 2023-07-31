@@ -156,6 +156,7 @@ struct Node *push(struct Node *head, int val)
 
 int pop(struct Node *head)
  //@ requires seg(head);
+ //@ ensures true;
 {
 
   //@ unfold seg(head);
