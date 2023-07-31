@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<benchmark>
+    <version>evaluation-1-26-23</version>
+    <source-dir>./src/test/resources/quant-study/</source-dir>
+    <db>
+        <username>gvc0</username>
+        <url>jdbc:mysql://gradual.lan.cmu.edu:3306/gvc0</url>
+        <password>cunpim-xukra8-ziPmyn</password>
+    </db>
+    <hardware>i5-4250U</hardware>
+    <nickname>Intel NUC i5-4250U</nickname>
+    <quantity>1</quantity>
+    <workload>
+        <by-program>
+            <p>
+                <match>list,bst,avlja</match>
+                <stress>
+                    <list>32</list>
+                </stress>
+            </p>
+        </by-program>
+        <iterations>100</iterations>
+    </workload>
+</benchmark>
