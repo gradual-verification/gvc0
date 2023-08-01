@@ -1,0 +1,242 @@
+#use <conio>
+#use <stress>
+// List underlying the stack
+struct Node {
+  int value;
+  bool isTop;
+  struct Node* next;
+};
+typedef struct Node Node;
+
+// Stack
+struct Stack {
+  int size;
+  Node* top;
+};
+typedef struct Stack Stack;
+
+/*@
+predicate isTopOfStackHelper(Node* n, int size) =
+  (n == NULL) ?
+    ( size == 0 )
+    :
+    ( acc(n->value) && acc(n->isTop) && acc(n->next) &&
+      n->isTop == false && isTopOfStackHelper(n->next,size-1)
+    ) ;
+@*/
+
+/*@
+predicate isTopOfStack(Node* top, int size) =
+  (top == NULL) ?
+    ( size == 0 )
+    :
+    ( acc(top->value) && acc(top->isTop) && acc(top->next) &&
+      top->isTop == true && isTopOfStackHelper(top->next,size-1) 
+    ) ;
+@*/
+
+/*@
+predicate stack(Stack* s) = acc(s->size) && acc(s->top) && 
+  0 <= s->size &&
+  isTopOfStack(s->top,s->size);
+@*/
+
+/*@
+predicate nonEmptyStack(Stack* s) = 
+  acc(s->size) && acc(s->top) && 1 <= s->size && 
+  acc(s->top->value) && acc(s->top->isTop) && acc(s->top->next) &&
+  s->top->isTop == true && isTopOfStackHelper(s->top->next,s->size-1);
+@*/
+
+void sizePositiveLemma(Node* s, int size)
+//@ requires isTopOfStackHelper(s,size);
+//@ ensures isTopOfStackHelper(s,size) && size >= 0;
+{
+  if (s == NULL) {
+    //@ unfold isTopOfStackHelper(s,size);
+    //@ assert size == 0;
+    //@ fold isTopOfStackHelper(s,size);
+  } else {
+    //@ unfold isTopOfStackHelper(s,size);
+    sizePositiveLemma(s->next,size-1);
+    //@ assert size >= 0;
+    //@ fold isTopOfStackHelper(s,size);
+  }
+}
+
+Stack* create_stack(int val) 
+//@ requires true;
+//@ ensures stack(\result);
+{
+  Stack* s = alloc(struct Stack);
+  Node* n = alloc(struct Node);
+  n->value = val;
+  n->isTop = true;
+  n->next = NULL;
+  s->size = 1;
+  s->top = n;
+
+  //@ fold isTopOfStackHelper(n->next,0);
+  //@ fold isTopOfStack(s->top,s->size);
+  //@ fold stack(s);
+  return s;
+}
+
+bool isEmpty(Stack* s)
+//@ requires stack(s);
+//@ ensures (\result == true) ? stack(s) : nonEmptyStack(s);
+{
+  //@ unfold stack(s);
+  if (s == NULL) {
+    return true;
+  } else if (s->top == NULL) {
+    //@ unfold isTopOfStack(s->top,s->size);
+    //@ assert s->size == 0;
+    //@ fold isTopOfStack(s->top,s->size);
+    //@ fold stack(s);
+    return true;
+  } else {
+    //@ unfold isTopOfStack(s->top,s->size);
+    sizePositiveLemma(s->top->next,s->size-1);
+    //@ assert s->size >= 1;
+    //@ fold nonEmptyStack(s);
+    return false;
+  }
+}
+
+bool isFull(Stack* s) 
+//@ requires stack(s);
+//@ ensures stack(s);
+{
+  return false;
+}
+
+Stack* push(Stack* s, int val) 
+//@ requires stack(s);
+//@ ensures stack(\result);
+{
+    bool isfull = isFull(s);
+    if (isfull) {    
+      return s;
+    } else if (s == NULL) {
+      return create_stack(val);
+    } else {
+      //@ unfold stack(s);
+
+      Node* n = alloc(struct Node);
+      n->value = val;
+      n->isTop = true;
+      n->next = s->top;
+      
+      //@ unfold isTopOfStack(s->top,s->size);
+      if (s->top != NULL)
+        s->top->isTop = false;
+      
+      s->top = n;
+      int tmp = s->size;
+      s->size = tmp + 1;
+
+      //@ fold isTopOfStackHelper(s->top->next,tmp);
+      //@ fold isTopOfStack(s->top,s->size);
+      //@ fold stack(s);
+      return s;
+    }
+}
+
+int pop(Stack* s) 
+//@ requires stack(s);
+//@ ensures stack(s);
+{
+  bool isempty = isEmpty(s);
+  if (isempty) {
+    return -2147483647;
+  } else {
+    //@ unfold nonEmptyStack(s);
+    Node* tmp = s->top;
+    int res = tmp->value;
+    
+    //@ unfold isTopOfStackHelper(s->top->next,s->size-1);
+    if (tmp->next != NULL)
+      tmp->next->isTop = true;
+    
+    s->top = tmp->next;
+    s->size = s->size - 1;
+
+    //@ fold isTopOfStack(s->top,s->size);
+    //@ fold stack(s);    
+    return res;
+  }
+}
+
+int top(Stack* s) 
+//@ requires stack(s);
+//@ ensures stack(s);
+{
+  bool isempty = isEmpty(s);
+  if (isempty) {
+    return -2147483647;
+  } else {
+    //@ unfold nonEmptyStack(s);
+    int res = s->top->value;
+    //@ fold isTopOfStack(s->top,s->size);
+    //@ fold stack(s);
+    return res;
+  }
+}
+
+int size(Stack* s) 
+//@ requires stack(s);
+//@ ensures stack(s);
+{
+  if (s == NULL) {
+    return -2147483647;
+  } else {
+    //@ unfold stack(s);
+    int res = s->size;
+    //@ fold stack(s);
+    return res;
+  }
+}
+
+int main()
+//@ requires true;
+//@ ensures true;
+{
+  int stress = 0;
+  int seed = 1;
+
+  Stack *s = create_stack(3);
+  
+  int i = 0;
+  while(i < stress)
+  //@ loop_invariant 0 <= i && i <= stress && stack(s);
+  {
+    int r = rand(seed);
+    seed = r;
+    s = push(s,r);
+    int sze = size(s);
+    assert(sze == i+2);
+    int tp = top(s);
+    assert(tp == r);
+    i += 1;
+  }
+  
+  int ssize = i+1;
+
+  int j = 0;
+  while(j < stress)
+  //@ loop_invariant 0 <= j && j <= stress && stack(s);
+  {
+    int tp = top(s);
+    int v = pop(s);
+    assert(v == tp);
+    int sze = size(s);
+    assert(sze == ssize-j-1);
+    j += 1;
+  }
+
+  int sze = size(s);
+  assert(sze == 1);
+
+  return 0;
+}
