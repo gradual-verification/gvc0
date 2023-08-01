@@ -8,6 +8,7 @@ import gvc.transformer.IR.{Method, Predicate}
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuite
 
+import java.io.{File, FileWriter}
 import java.nio.file.Files
 import scala.collection.mutable
 
@@ -150,9 +151,7 @@ class PermutationSpec extends FixtureAnyFunSuite {
           for (labelIndex <- sampleToPermute.indices) {
             labelPermutation.addLabel(sampleToPermute(labelIndex))
           }
-
           val top = selector.visit(labelPermutation)
-
           val topPrinted = IRPrinter.print(top, includeSpecs = true)
           assert(topPrinted.diff(baseline).isEmpty)
         }
