@@ -1,0 +1,92 @@
+#use <conio>
+#use <stress>
+struct MinPriorityQueue;
+struct Node;
+
+struct MinPriorityQueue
+{
+  struct Node* head;
+  int size;
+};
+
+struct Node
+{
+  int val;
+  struct Node* next;
+};
+
+struct MinPriorityQueue* createMinPriQueue(int value);
+void enqueue(struct MinPriorityQueue* q, int value);
+int main();
+
+struct MinPriorityQueue* createMinPriQueue(int value)
+  //@requires ? && true;
+  //@ensures ?;
+{
+  struct MinPriorityQueue* q = NULL;
+  struct Node* _ = NULL;
+  q = alloc(struct MinPriorityQueue);
+  _ = alloc(struct Node);
+  q->head = _;
+  q->head->val = value;
+  q->head->next = NULL;
+  q->size = 1;
+  return q;
+}
+
+void enqueue(struct MinPriorityQueue* q, int value)
+  //@requires ?;
+  //@ensures ?;
+{ 
+  struct Node* newNode = NULL;
+  struct Node* curr = NULL;
+  struct Node* newNode1 = NULL;
+  struct Node* prev = NULL;
+  if (q->head == NULL || value <= q->head->val)
+  {
+    newNode = alloc(struct Node);
+    newNode->val = value;
+    newNode->next = q->head;
+    q->head = newNode;
+  }
+  else
+  {
+    curr = q->head;
+    while (curr->next != NULL && curr->next->val < value)
+      //@loop_invariant ?;
+    {
+      prev = curr;
+      curr = prev->next;
+    }
+    newNode1 = alloc(struct Node);
+    newNode1->val = value;
+    newNode1->next = curr->next;
+    curr->next = newNode1;
+  }
+  q->size = q->size + 1;
+}
+
+int main()
+  //@requires ? && true;
+  //@ensures ? && true;
+{
+  int stress = 0;
+  int seed = 0;
+  struct MinPriorityQueue* q = NULL;
+  int i = 0;
+  int r = 0;
+  int v = 0;
+  stress = 5;
+  seed = 1;
+  q = createMinPriQueue(3);
+  i = 0;
+  while (i < stress)
+    //@loop_invariant ?;
+  {
+    r = rand(seed);
+    seed = r;
+    enqueue(q, r);
+    i = i + 1;
+  }
+  return 0;
+}

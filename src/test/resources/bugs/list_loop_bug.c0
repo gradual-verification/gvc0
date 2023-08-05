@@ -1,0 +1,104 @@
+#use <stress>
+// List node
+struct Node {
+  int val;
+  struct Node *next;
+};
+
+/*@
+predicate sortedSegHelper(struct Node *start, struct Node *end, int prev, int endVal) =
+  (start == end) ?
+    ( (end == NULL) ? true : endVal >= prev )
+    :
+    (
+      acc(start->val) && acc(start->next) &&
+      start->val >= prev && sortedSegHelper(start->next, end, start->val, endVal)
+    ) ;
+@*/
+
+/*@
+// sorted seg predicate
+predicate sortedSeg(struct Node *start, struct Node *end, int endVal) =
+  (start == end) ?
+    ( true )
+    :
+    (
+      acc(start->val) && acc(start->next) &&
+      sortedSegHelper(start->next, end, start->val, endVal)
+    ) ;
+@*/
+
+/*@
+predicate sorted(struct Node *list) =
+  sortedSeg(list, NULL, -1);
+@*/
+
+//-------------------------------------------------------------------verified code starts below
+
+struct Node *create_list(int val)
+  //@ requires true;
+  //@ ensures sorted(\result);
+{
+  struct Node *n = alloc(struct Node);
+  n->val = val;
+  n->next = NULL;
+  //@ fold sortedSegHelper(n->next, NULL, n->val, -1);
+  //@ fold sortedSeg(n, NULL, -1);
+  //@ fold sorted(n);
+  return n;
+}
+
+struct Node *list_insert(struct Node *list, int val)
+  //@ requires ?;
+  //@ ensures ?;
+{
+  if (list == NULL || val <= list->val) {
+
+    struct Node *n = alloc(struct Node);
+    n->val = val;
+    n->next = list;
+    //@ fold sortedSegHelper(n->next, NULL, n->val, -1);
+    //@ fold sortedSeg(n, NULL, -1);
+    //@ fold sorted(n);
+    return n;
+
+  } else {
+
+    struct Node *curr = list;
+    
+    while (curr->next != NULL && curr->next->val < val)
+     //@ loop_invariant ?;
+    {
+      struct Node *prev = curr;
+      curr = prev->next;
+      // assert (curr->next != NULL && curr->next->val < val) == (curr->next != NULL && curr->next->val < val);
+    }
+
+    struct Node *tmp = alloc(struct Node);
+    tmp->val = val;
+    tmp->next = curr->next;
+    curr->next = tmp;
+
+    return list;
+  }
+}
+
+// main
+int main()
+  //@ requires true;
+  //@ ensures true;
+{
+  int stress = 5;
+  int seed = 1;
+  struct Node *l = create_list(3);
+  int i = 0;
+  while(i < stress)
+  //@loop_invariant 0 <= i && i <= stress;
+  {
+    int r = rand(seed);
+    seed = r;
+    l = list_insert(l, r);
+    i += 1;
+  }
+  return 0;
+}
