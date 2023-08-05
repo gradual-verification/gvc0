@@ -1,3 +1,4 @@
+#use <stress>
 // List node
 struct Node {
   int val;
@@ -269,12 +270,15 @@ int main()
   //@ ensures true;
 {
   int stress = 0;
+  int seed = 1;
   struct Node *l = create_list(3);
   int i = 0;
   while(i < stress)
   //@loop_invariant 0 <= i && i <= stress;
   {
-    l = list_insert(l, 1);
+    int r = rand(seed);
+    seed = r;
+    l = list_insert(l, r);
     i += 1;
   }
   return 0;
