@@ -8,7 +8,7 @@
     <workload>
         <by-program>
             <p>
-                <match>avlja,bst,list,minprique,stack-list</match>
+                <match>avlja,bst,list</match>
                 <stress>
                     <list>8,16,32</list>
                 </stress>
@@ -20,7 +20,7 @@
                 </stress>
             </p>
         </by-program>
-	<iterations>20</iterations>
+        <iterations>10</iterations>
     </workload>
     <save-errored-perms>./errored</save-errored-perms>
 </benchmark>
