@@ -20,7 +20,7 @@ create_summary_row <- function(data, stressLevel, prefix) {
     percent_improved_grad_per_path <- subset %>%
         group_by(path_id) %>%
         filter(diff_grad < 0) %>%
-        summarize(path_id, percent_steps_lt_dyn=n()/group_count[1] * 100) %>%
+        reframe(path_id, percent_steps_lt_dyn=n()/group_count[1] * 100) %>%
         distinct()
 
     steps_impr_mean <- round(mean(percent_improved_grad_per_path$percent_steps_lt_dyn), 1)
@@ -142,8 +142,7 @@ jumps_global <- data.frame()
 
 analyze <- function(pid, pname) {
 
-
-    g <- gradual_lattice %>% filter(program_id == pid) %>% 
+    g <- gradual_lattice %>% filter(program_id == pid) %>%
         select(
             program_id,
             permutation_id, 
@@ -155,8 +154,7 @@ analyze <- function(pid, pname) {
     print(paste("# of unique programs:", length(g$permutation_id %>% unique())))
 
     names(g)[names(g) == 'median'] <- 'gradual_median'
-
-    d <- dynamic_lattice %>% filter(program_id == pid) %>% 
+    d <- dynamic_lattice %>% filter(program_id == pid) %>%
         select(
             program_id,
             permutation_id, 
@@ -177,8 +175,7 @@ analyze <- function(pid, pname) {
             stress
         )
     names(f)[names(f) == 'median'] <- 'framing_median'
-
-    g_vs <- inner_join(g, d, by = c("path_id", "level_id", "stress", "permutation_id", "program_id")) 
+    g_vs <- inner_join(g, d, by = c("path_id", "level_id", "stress", "permutation_id", "program_id"))
     g_vs <- inner_join(g_vs, f, by = c("path_id", "level_id", "stress", "permutation_id", "program_id"))
     path_level_characteristics <- g_vs %>%
         arrange(level_id) %>%
@@ -289,8 +286,8 @@ analyze <- function(pid, pname) {
 
 
 for (row in 1:nrow(program_index)) {
-    program_name <- program_index[row, "program_name"]
-    program_id <- program_index[row, "program_id"]
+    program_name <- program_index[row, "program_name"] %>% pull()
+    program_id <- program_index[row, "program_id"] %>% pull()
 
     print(paste("Analyzing data for", program_name))
     analyze(program_id, program_name)
@@ -360,6 +357,7 @@ static_perf_lattice <- bind_rows(conj_elim, conj_total) %>%
         percent_specified
     )
 
+
 static_perf_lattice %>% write.csv(
     file.path(output_dir, paste(
         "compiled_static_performance.csv",
@@ -367,3 +365,7 @@ static_perf_lattice %>% write.csv(
     )),
     row.names = FALSE
 )
+perf_lattice %>% ungroup() %>%
+    inner_join(program_index, by=c("program_id")) %>%
+    select(program_name, level_id, stress, median, measurement_type) %>%
+    write.csv(file.path(output_dir, "full_dynamic_performance.csv"), row.names = FALSE)
