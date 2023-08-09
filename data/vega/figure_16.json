@@ -1,41 +1,60 @@
 {
-    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-    "data": {"url": "https://gist.githubusercontent.com/icmccorm/a0a363631ab4b2d80e01ea016f09f336/raw/faf6c213e93f764ec80cefa271ab709b33735391/performance.csv"},
-      "transform": [
-      {"filter": "datum.program_id == 4"}
-    ],
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "data": {
+    "url": "https://gist.githubusercontent.com/icmccorm/9f9257a97400c0b22a62fe8fe672177a/raw/e4e7118b5fed92317540b32909eec456c39f4358/full.csv"
+  },
+  "transform": [
+    {
+      "filter": "datum.program_name == 'bst'"
+    },
+    {
+      "filter": "datum.stress == 16"
+    }
+  ],
   "layer": [
-      {
-        "mark": {"type": "errorband", "extent": "ci"},
-        "encoding": {
-          "y": {
-            "field": "median",
-            "type": "quantitative",
-            "title": ""
-          },
-          "x": {
-            "field": "level_id",
-            "type": "quantitative"
-          },
-          "color": {"field": "measurement_type", "type": "nominal"}
-        }
+    {
+      "mark": {
+        "type": "errorband",
+        "extent": "ci"
       },
-      {
-        "mark": "line",
-        "encoding": {
-          "x": {
-            "field": "level_id",
-            "type": "quantitative",
-            "title": "% Specified"
-          },
-          "y": {
-            "field": "median",
-            "type": "quantitative",
-            "aggregate": "mean",
-            "axis": {"title": "Time Elapsed (ms)"}
-          },
-          "color": {"field": "measurement_type", "type": "nominal", "legend": null}
+      "encoding": {
+        "y": {
+          "field": "median",
+          "type": "quantitative",
+          "title": ""
+        },
+        "x": {
+          "field": "level_id",
+          "type": "quantitative"
+        },
+        "color": {
+          "field": "measurement_type",
+          "type": "nominal"
         }
       }
-    ]
-  }
+    },
+    {
+      "mark": "line",
+      "encoding": {
+        "x": {
+          "field": "level_id",
+          "type": "quantitative",
+          "title": "% Specified"
+        },
+        "y": {
+          "field": "median",
+          "type": "quantitative",
+          "aggregate": "mean",
+          "axis": {
+            "title": "Time Elapsed (ms)"
+          }
+        },
+        "color": {
+          "field": "measurement_type",
+          "type": "nominal",
+          "legend": null
+        }
+      }
+    }
+  ]
+}
