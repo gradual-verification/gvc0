@@ -13,6 +13,7 @@ import gvc.benchmarking.{
   BenchmarkMonitor,
   BenchmarkPopulator,
   BenchmarkRecreator,
+  LabelVisitor,
   Output,
   Timing
 }
@@ -41,9 +42,11 @@ case class OutputFileCollection(
 object Main extends App {
   object Defaults {
     val outputFileCollection: OutputFileCollection = getOutputCollection(
-      "./temp")
+      "./temp"
+    )
     val includeDirectories: List[String] = List(
-      Paths.get("src/main/resources").toAbsolutePath.toString + '/')
+      Paths.get("src/main/resources").toAbsolutePath.toString + '/'
+    )
   }
 
   def getOutputCollection(sourceFile: String): OutputFileCollection = {
@@ -89,25 +92,33 @@ object Main extends App {
           BaselineChecker.check(ir, onlyFraming)
           val outputC0Source = Paths.get(fileNames.c0FileName)
           val outputBinary = Paths.get(fileNames.binaryName)
-          injectAndWrite(IRPrinter.print(ir, includeSpecs = false),
-                         outputC0Source)
+          injectAndWrite(
+            IRPrinter.print(ir, includeSpecs = false),
+            outputC0Source
+          )
           Timing.compileTimed(
             outputC0Source,
             outputBinary,
             config,
-            profilingEnabled = config.profilingEnabled || config.profilingDirectory.nonEmpty)
-          Timing.execTimed(outputBinary,
-                           List(s"--stress ${config.stressLevel.getOrElse(1)}"))
+            profilingEnabled =
+              config.profilingEnabled || config.profilingDirectory.nonEmpty
+          )
+          Timing.execTimed(
+            outputBinary,
+            List(s"--stress ${config.stressLevel.getOrElse(1)}")
+          )
         })
       case Config.Recreate =>
         val benchConfig =
           BenchmarkExternalConfig.parseRecreator(config)
         Output.info(
-          s"Recreating permutation ID=${benchConfig.permToRecreate}...")
+          s"Recreating permutation ID=${benchConfig.permToRecreate}..."
+        )
         val recreated =
           BenchmarkRecreator.recreate(benchConfig, config, linkedLibraries)
         Output.success(
-          s"Successfully recreated permutation ID=${benchConfig.permToRecreate}!")
+          s"Successfully recreated permutation ID=${benchConfig.permToRecreate}!"
+        )
 
         recreated match {
           case BenchmarkRecreator.RecreatedUnverified(ir) =>
@@ -145,7 +156,12 @@ object Main extends App {
         val benchConfig =
           BenchmarkExternalConfig.parsePopulator(config)
         BenchmarkPopulator.populate(benchConfig, linkedLibraries)
-
+      case Config.Describe =>
+        val inputSource = readFile(config.sourceFile.get)
+        val sourceIR = Main.generateIR(inputSource, linkedLibraries)
+        val visitor = new LabelVisitor()
+        val labelOutput = visitor.visit(sourceIR)
+        visitor.printCounts(labelOutput.labels)
       case Config.DefaultMode =>
         val fileNames = getOutputCollection(config.sourceFile.get)
         val inputSource = readFile(config.sourceFile.get)
@@ -197,7 +213,8 @@ object Main extends App {
               b.branchInfo
                 .map { case BranchCond(branch, _, _) => branch }
                 .map(c => "(" + c.toString() + ")")
-                .mkString(" && ")}: ${b.checks.toString()}")
+                .mkString(" && ")}: ${b.checks.toString()}"
+          )
           .mkString("\n")
       )
     }
@@ -252,19 +269,23 @@ object Main extends App {
     )
   }
 
-  def verify(inputSource: String,
-             fileNames: OutputFileCollection,
-             config: Config): VerifiedOutput = {
+  def verify(
+      inputSource: String,
+      fileNames: OutputFileCollection,
+      config: Config
+  ): VerifiedOutput = {
     def silicon = resolveSilicon(config)
     val output = verifySiliconProvided(silicon, inputSource, fileNames, config)
     output
   }
 
-  def verifySiliconProvided(silicon: Silicon,
-                            inputSource: String,
-                            fileNames: OutputFileCollection,
-                            config: Config,
-                            stopImmediately: Boolean = true): VerifiedOutput = {
+  def verifySiliconProvided(
+      silicon: Silicon,
+      inputSource: String,
+      fileNames: OutputFileCollection,
+      config: Config,
+      stopImmediately: Boolean = true
+  ): VerifiedOutput = {
     profilingInfo.reset
     runtimeChecks.reset
 

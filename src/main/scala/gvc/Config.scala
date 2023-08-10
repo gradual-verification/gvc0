@@ -1,7 +1,8 @@
 package gvc
 
-import gvc.Config.DefaultMode
+import gvc.Config.{DefaultMode, Describe}
 import gvc.benchmarking.Output
+
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
 import java.io.File
 import scala.annotation.tailrec
@@ -35,7 +36,7 @@ case class Config(
     dbURLString: Option[String] = None,
     dbUserString: Option[String] = None,
     dbPassString: Option[String] = None,
-    recreatePerm: Option[Int] = None,
+    recreatePerm: Option[Int] = None
 ) {
   def validate(): Unit = {
     (
@@ -50,7 +51,7 @@ case class Config(
         Some("Cannot combine --output and --only-verify")
       else if (exec && onlyVerify)
         Some("Cannot combine --exec and --only-verify")
-      else if (sourceFile.isEmpty && mode == DefaultMode)
+      else if (sourceFile.isEmpty && (mode == DefaultMode || mode == Describe))
         Some("No source file specified")
       else if (sourceFile.nonEmpty && !Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
@@ -83,6 +84,8 @@ object Config {
   case object Monitor extends Mode
 
   case object Export extends Mode
+
+  case object Describe extends Mode
 
   val help =
     """Usage: gvc0 [OPTION...] SOURCEFILE
@@ -118,8 +121,10 @@ object Config {
       |                
       |                --export-benchmark             Identical to --export, but only selects data corresponding to
       |                                               pre-configured benchmark sets.
-      |                                               
-      |                --export-errors                Identical to --export, but generates a list of all errors. 
+      |
+      |                --describe                     Describe the contents of a specification.
+      |
+      |                --export-errors                Identical to --export, but generates a list of all errors.
       |                --version=<version>            Specify the version string identifying the current verifier.
       |                                               Overrides config.
       |
@@ -180,12 +185,15 @@ object Config {
     } catch {
       case _: NumberFormatException =>
         error(
-          s"Invalid option for $config; expected an integer but found '$t'.")
+          s"Invalid option for $config; expected an integer but found '$t'."
+        )
     }
   }
 
-  private def parsePath(p: String,
-                        isDir: Boolean = false): java.nio.file.Path = {
+  private def parsePath(
+      p: String,
+      isDir: Boolean = false
+  ): java.nio.file.Path = {
     try {
       val toPath = Paths.get(p).toAbsolutePath
       if (Files.exists(toPath)) {
@@ -220,11 +228,13 @@ object Config {
       case exportString(t) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(mode = Export, exportDirectory = Some(t)))
+          current.copy(mode = Export, exportDirectory = Some(t))
+        )
       case stressArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(stressLevel = Some(parseInt(t, "--stress"))))
+          current.copy(stressLevel = Some(parseInt(t, "--stress")))
+        )
       case hardwareString(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(hardwareString = Some(t)))
       case versionString(t) :: tail =>
@@ -244,15 +254,21 @@ object Config {
         fromCommandLineArgs(tail, current.copy(mode = Populate))
       case "--execute" :: tail =>
         fromCommandLineArgs(tail, current.copy(mode = Execute))
+      case "--describe" :: tail =>
+        fromCommandLineArgs(tail, current.copy(mode = Describe))
       case recreatePermString(t) :: tail =>
-        fromCommandLineArgs(tail,
-                            current.copy(recreatePerm =
-                                           Some(this.parseInt(t, "--recreate")),
-                                         mode = Recreate))
+        fromCommandLineArgs(
+          tail,
+          current.copy(
+            recreatePerm = Some(this.parseInt(t, "--recreate")),
+            mode = Recreate
+          )
+        )
       case profilingDirectory(t) :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(profilingDirectory = Some(t), profilingEnabled = true))
+          current.copy(profilingDirectory = Some(t), profilingEnabled = true)
+        )
       case configFileArg(t) :: tail =>
         fromCommandLineArgs(
           tail,
@@ -292,7 +308,7 @@ object Config {
       case "--execute-benchmark" :: tail =>
         fromCommandLineArgs(
           tail,
-          current.copy(mode = Execute, onlyBenchmark = true),
+          current.copy(mode = Execute, onlyBenchmark = true)
         )
       case "--framing" :: tail =>
         fromCommandLineArgs(
