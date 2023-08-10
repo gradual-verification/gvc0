@@ -370,5 +370,5 @@ perf_lattice %>% ungroup() %>%
     group_by(program_name) %>%
     mutate(percent_specified = level_id / max(level_id) * 100) %>%
     ungroup() %>%
-    write.csv(file.path(output_dir, "full_dynamic_performance.csv"), row.names = FALSE)
+    write.csv(file.path(output_dir, "compiled_full_dynamic_performance.csv"), row.names = FALSE)
 
