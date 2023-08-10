@@ -357,7 +357,6 @@ static_perf_lattice <- bind_rows(conj_elim, conj_total) %>%
         percent_specified
     )
 
-
 static_perf_lattice %>% write.csv(
     file.path(output_dir, paste(
         "compiled_static_performance.csv",
@@ -368,4 +367,8 @@ static_perf_lattice %>% write.csv(
 perf_lattice %>% ungroup() %>%
     inner_join(program_index, by=c("program_id")) %>%
     select(program_name, level_id, stress, median, measurement_type) %>%
+    group_by(program_name) %>%
+    mutate(percent_specified = level_id / max(level_id) * 100) %>%
+    ungroup() %>%
     write.csv(file.path(output_dir, "full_dynamic_performance.csv"), row.names = FALSE)
+
