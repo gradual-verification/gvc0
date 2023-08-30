@@ -4,7 +4,7 @@ import gvc.Config.error
 import gvc.benchmarking.DAO.{DBConnection, PathQueryCollection}
 import gvc.transformer.IR.Program
 import gvc.Main
-import gvc.benchmarking.Benchmark.BenchmarkException
+import gvc.benchmarking.BenchmarkCommon.BenchmarkException
 
 import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global

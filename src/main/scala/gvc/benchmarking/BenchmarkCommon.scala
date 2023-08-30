@@ -1,10 +1,10 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.Benchmark.Extensions.{c0, csv}
+import gvc.benchmarking.BenchmarkCommon.Extensions.{c0, csv}
 
 import scala.util.matching.Regex
 
-object Benchmark {
+object BenchmarkCommon {
   object Extensions {
     def c0(basename: String): String = basename + ".c0"
     def txt(basename: String): String = basename + ".txt"

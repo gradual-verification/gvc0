@@ -1,6 +1,6 @@
 package gvc.benchmarking
 
-import gvc.benchmarking.Benchmark.BenchmarkException
+import gvc.benchmarking.BenchmarkCommon.BenchmarkException
 import gvc.benchmarking.SamplingHeuristic.SamplingHeuristic
 import gvc.transformer.IR.{Expression, Method, Predicate}
 import java.nio.{ByteBuffer, ByteOrder}
@@ -77,7 +77,8 @@ class Sampler(labelOutput: LabelOutput) {
       }
       if (sampled.size != labelOutput.labels.size) {
         throw new BenchmarkException(
-          "Size of permutation doesn't match size of template.")
+          "Size of permutation doesn't match size of template."
+        )
       }
       sampled
     }
@@ -121,7 +122,9 @@ object LabelTools {
     contents
   }
 
-  def permutationIDToPermutation(labelOut: LabelOutput, id: Array[Byte],
+  def permutationIDToPermutation(
+      labelOut: LabelOutput,
+      id: Array[Byte]
   ): LabelPermutation = {
     val contents = byteToIntArray(id)
     val perm = new LabelPermutation(labelOut)
@@ -195,8 +198,8 @@ class LabelPermutation(
     completedSpecs.nonEmpty &&
       labelOutput.specsToSpecIndices
         .contains(template) && completedSpecs.contains(
-      labelOutput.specsToSpecIndices(template)
-    )
+        labelOutput.specsToSpecIndices(template)
+      )
 
   def id: String = {
     this.orderedIndices
@@ -209,8 +212,8 @@ class LabelPermutation(
   def idArray: Array[Byte] = {
     this.labels
       .flatMap(l => {
-        val masked: Int = 0x0000 | labelOutput.pairToLabelOrdering(
-          (l.specIndex, l.exprIndex))
+        val masked: Int =
+          0x0000 | labelOutput.pairToLabelOrdering((l.specIndex, l.exprIndex))
         (0 to 3).map(i => ((masked >> ((3 - i) * 8)) & 0xff).toByte)
       })
       .toArray
