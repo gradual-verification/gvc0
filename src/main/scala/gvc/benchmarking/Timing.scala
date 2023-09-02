@@ -110,7 +110,6 @@ object Timing {
       (o: String) => capture += o,
       (e: String) => capture += e
     )
-
     val commandAsProcess = Process(command)
     val timings = mutable.ListBuffer[Long]()
     for (_ <- 0 until iterations) {
@@ -119,17 +118,14 @@ object Timing {
       val awaitExit = ongoingProcesses.last.exitValue()
       val end = System.nanoTime()
       ongoingProcesses.trimEnd(1)
-
       profiler match {
         case Some(gprof) => gprof.merge()
         case None        =>
       }
-
       if (awaitExit != 0) {
         onNonzero(CommandOutput(awaitExit, capture))
       }
       timings += end - start
-
     }
     generatePerformanceStats(timings.toList)
   }

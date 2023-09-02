@@ -1,5 +1,5 @@
 package gvc.benchmarking
-import gvc.benchmarking.Benchmark.BenchmarkException
+import gvc.benchmarking.BenchmarkCommon.BenchmarkException
 import gvc.transformer.IR
 import gvc.transformer.IR.{
   Binary,
@@ -196,9 +196,11 @@ class SelectVisitor(program: IR.Program)
             topExpr match {
               case binary: IR.Binary if binary.operator == BinaryOp.And =>
                 var tempNode: IR.Binary = binary
-                while (tempNode.left.isInstanceOf[IR.Binary] && tempNode.left
-                         .asInstanceOf[IR.Binary]
-                         .operator == BinaryOp.And) {
+                while (
+                  tempNode.left.isInstanceOf[IR.Binary] && tempNode.left
+                    .asInstanceOf[IR.Binary]
+                    .operator == BinaryOp.And
+                ) {
                   tempNode = tempNode.left.asInstanceOf[Binary]
                 }
                 tempNode.left = new IR.Binary(BinaryOp.And, app, tempNode.left)

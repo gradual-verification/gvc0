@@ -1,0 +1,78 @@
+{
+  "title": "Composite (ω = 16)",
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "data": {
+    "url": "https://gist.githubusercontent.com/icmccorm/ee48f551ccfd8cc67ca94c4f013ce630/raw/e0ad192aad0b65baa8aaeb31ac4322f77b07713f/fixed_full.csv"
+  },
+  "transform": [
+    {
+      "filter": "datum.program_name == 'composite'"
+    },
+    {
+      "filter": "datum.stress == 16"
+    },
+    {
+      "calculate": "datum.median / 1000", "as": "median_seconds"
+    }
+  ],
+  "layer": [
+    {
+      "mark": {
+        "type": "errorband",
+        "extent": "ci"
+      },
+      "encoding": {
+        "y": {
+          "field": "median_seconds",
+          "type": "quantitative",
+          "title": ""
+        },
+        "x": {
+          "field": "percent_specified",
+          "type": "quantitative"
+        },
+        "color": {
+          "field": "measurement_type",
+          "type": "nominal",
+          "scale": {
+            "range": [
+              "#33A02C",
+              "#6a3d9a",
+              "#de2d26"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "mark": "line",
+      "encoding": {
+        "x": {
+          "field": "percent_specified",
+          "type": "quantitative",
+          "title": "% Specified"
+        },
+        "y": {
+          "field": "median_seconds",
+          "type": "quantitative",
+          "aggregate": "mean",
+          "axis": {
+            "title": "Time Elapsed (sec)"
+          }
+        },
+        "color": {
+          "field": "measurement_type",
+          "type": "nominal",
+          "legend": null,
+          "scale": {
+           "range": [
+              "#33A02C",
+              "#6a3d9a",
+              "#de2d26"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -426,10 +426,11 @@ object Checker {
 
   def implementAccCheck(
       check: FieldPermissionCheck,
+      returnValue: Option[IR.Expression],
       fields: FieldCollection,
       context: CheckContext
   ): Seq[IR.Op] = {
-    val field = check.field.toIR(context.program, context.method, None)
+    val field = check.field.toIR(context.program, context.method, returnValue)
     val (mode, perms) = check match {
       case _: FieldSeparationCheck =>
         (SeparationMode, fields.temporaryOwnedFields())
@@ -488,6 +489,7 @@ object Checker {
       case acc: FieldPermissionCheck =>
         implementAccCheck(
           acc,
+          returnValue,
           fields,
           context
         )
