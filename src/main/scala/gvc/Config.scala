@@ -29,6 +29,7 @@ case class Config(
     onlyErrors: Boolean = false,
     sourceFile: Option[String] = None,
     linkedLibraries: List[String] = List.empty,
+    includeDirectories: List[String] = List.empty,
     versionString: Option[String] = None,
     nicknameString: Option[String] = None,
     hardwareString: Option[String] = None,
@@ -95,6 +96,7 @@ object Config {
       |  -s            --save-files                   Save the intermediate files produced (IR, Silver, C0, and C)
       |  -x            --exec                         Execute the compiled file
       |  -t <n(s|m)>   --timeout=<n(s|m)>             Specify a timeout for the verifier in seconds (s) or minutes (m).
+      |  -I <dir>      --include-dir=<dir>            Specify the directory where additional headers to include exist
       |
       |  -p            --profiling                    Compile C0 binary with -pg flag to enable profiling with gprof.
       |                --profiling-dir=<dir>          Save profiling output to the specified directory.
@@ -137,6 +139,7 @@ object Config {
   private val timeoutArg = raw"--timeout=(.+)".r
   private val timeoutSec = raw"([0-9]+)s".r
   private val timeoutMin = raw"([0-9]+)m".r
+  private val includeDir = raw"--include-dir=(.+)".r
   private val configFileArg = raw"--config=(.+)".r
 
   private val versionString = raw"--version=(.+)".r
@@ -308,6 +311,10 @@ object Config {
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
       case timeoutArg(t) :: tail =>
         fromCommandLineArgs(tail, current.copy(timeout = Some(parseTimeout(t))))
+      case "-I" :: t :: tail => 
+        fromCommandLineArgs(tail, current.copy(includeDirectories = current.includeDirectories :+ parsePath(t,true).toString))
+      case includeDir(t) :: tail =>
+        fromCommandLineArgs(tail, current.copy(includeDirectories = current.includeDirectories :+ parsePath(t,true).toString))
       case "-d" :: t :: tail =>
         fromCommandLineArgs(tail, current.copy(dump = Some(parseDumpType(t))))
       case "-p" :: tail =>

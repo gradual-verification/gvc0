@@ -73,7 +73,7 @@ object Main extends App {
 
   def run(config: Config): Unit = {
     val linkedLibraries =
-      config.linkedLibraries ++ Defaults.includeDirectories
+      config.linkedLibraries ++ config.includeDirectories ++ Defaults.includeDirectories
 
     config.mode match {
       case Config.Monitor =>
@@ -272,7 +272,7 @@ object Main extends App {
     val ir =
       generateIR(
         inputSource,
-        config.linkedLibraries ++ Defaults.includeDirectories
+        config.linkedLibraries ++ config.includeDirectories ++ Defaults.includeDirectories
       )
     val silver = IRSilver.toSilver(ir)
     val translationStop = System.nanoTime()
@@ -344,7 +344,7 @@ object Main extends App {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = Defaults.includeDirectories,
+      includeDirs = cmdConfig.includeDirectories ++ Defaults.includeDirectories,
       profilingEnabled = cmdConfig.profilingEnabled
     )
     // Always write the intermediate C0 file, but then delete it
