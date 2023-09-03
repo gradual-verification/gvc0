@@ -23,9 +23,9 @@ import viper.silicon.state.{profilingInfo, runtimeChecks}
 import viper.silver.ast.Program
 import viper.silver.verifier
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Paths, FileAlreadyExistsException}
 import java.nio.charset.StandardCharsets
-import java.io.IOException
+import java.io.{IOException, File}
 import sys.process._
 import scala.language.postfixOps
 import viper.silicon.state.BranchCond
@@ -187,12 +187,36 @@ object Main extends App {
       case _: IOException => Config.error(s"Could not write file '$file'")
     }
 
+  def writeDir(dir: String): Unit =
+    try {
+      Files.createDirectory(Paths.get(dir))
+    } catch {
+      case _: IOException => Config.error(s"Could not write directory '$dir'")
+      case _: FileAlreadyExistsException => Config.error(s"Could not write directory '$dir' as it already exists")
+    }
+
   def deleteFile(file: String): Unit =
     try {
       Files.delete(Paths.get(file))
     } catch {
       case _: IOException => Config.error(s"Could not delete file 'file'")
     }
+  
+  def deleteDir(dir: String): Unit = 
+    try {
+      deleteDirRecursively(new File(dir))
+    } catch {
+      case _: IOException => Config.error(s"Could not delete directory 'dir'")
+    }
+
+  def deleteDirRecursively(file: File): Unit = {
+    if (file.isDirectory) {
+      file.listFiles.foreach(deleteDirRecursively)
+    }
+    if (file.exists && !file.delete) {
+      throw new IOException(s"Unable to delete ${file.getAbsolutePath}")
+    }
+  }   
 
   def dump(output: String): Nothing = {
     println(output)
@@ -358,6 +382,23 @@ object Main extends App {
   ): Unit = {
     val outputExe = cmdConfig.output.getOrElse("a.out")
 
+    // Temporarily copy commandline libs to tmp dir in default resources dir,
+    // removing specs (all comments) in them
+    val files = cmdConfig.includeDirectories.foldLeft(List[String]()) { (files, dir) =>
+      files ++ new File(dir)
+               .listFiles.filter(_.isFile)
+               .filter(f => f.getName.endsWith(".c0") || f.getName.endsWith(".h0"))
+               .map(_.getPath).toList
+    }
+    
+    val tmpDir = Defaults.includeDirectories(0) + "tmp" + java.time.LocalDateTime.now() + "/"
+    writeDir(tmpDir)
+    files.foreach { f =>
+      writeFile(tmpDir + (new File(f)).getName, 
+        readFile(f).replaceAll(
+                "((['\"])(?:(?!\\2|\\\\).|\\\\.)*\\2)|\\/\\/[^\\n]*|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/", "$1"))
+    }
+
     // TODO: Figure out how we can use the actual resource
     // Since it is bundled in the JAR we have to extract it and put it somewhere
 
@@ -365,7 +406,7 @@ object Main extends App {
       compilerPath = Config.resolveToolPath("cc0", "CC0_EXE"),
       saveIntermediateFiles = cmdConfig.saveFiles,
       output = Some(outputExe),
-      includeDirs = cmdConfig.includeDirectories ++ Defaults.includeDirectories,
+      includeDirs = List(tmpDir) ++ Defaults.includeDirectories,
       profilingEnabled = cmdConfig.profilingEnabled
     )
     // Always write the intermediate C0 file, but then delete it
@@ -375,6 +416,7 @@ object Main extends App {
       try {
         CC0Wrapper.exec(fileNames.c0FileName, cc0Options)
       } finally {
+        deleteDir(tmpDir) // delete the tmp lib dir
         if (!cmdConfig.saveFiles) deleteFile(fileNames.c0FileName)
       }
 
