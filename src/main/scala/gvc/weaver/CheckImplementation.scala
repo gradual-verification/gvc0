@@ -354,22 +354,32 @@ class CheckImplementation(
                                   permsSecondary: Option[IR.Var],
                                   context: SpecificationContext
                                 ): Seq[IR.Op] = {
-    val arguments = pred.arguments.map(context.convertExpression)
+    pred.predicate match {
+      case p: IR.Predicate => {
+        val arguments = pred.arguments.map(context.convertExpression)
 
-    val toAppend = mode match {
+        val toAppend = mode match {
 
-      case AddRemoveMode | CheckAddRemoveMode | CheckAddMode =>
-        permsSecondary match {
-          case Some(value) => List(permsPrimary, value)
-          case None =>
-            throw new WeaverException(
-              "Missing secondary OwnedFields reference for optimized permission tracking mode.")
+          case AddRemoveMode | CheckAddRemoveMode | CheckAddMode =>
+            permsSecondary match {
+              case Some(value) => List(permsPrimary, value)
+              case None =>
+                throw new WeaverException(
+                  "Missing secondary OwnedFields reference for optimized permission tracking mode.")
+            }
+          case _ => List(permsPrimary)
         }
-      case _ => List(permsPrimary)
+        resolvePredicateDefinition(mode, p)
+          .map(new IR.Invoke(_, arguments ++ toAppend, None))
+          .toSeq
+      }
+      case p: IR.DependencyPredicate => // Effectively ignore run-time checks for lib predicates - JD
+        println(s"[WARNING] run-time check for library predicate 'p.name' required; ignoring it for now, verification may be unsound.")
+        Seq[IR.Op]() // TODO: Better solution than ignoring all run-time checks for lib predicates, i.e. look for available impl in lib code - JD 
+      case _ =>
+        throw new WeaverException(
+          "Error: Can't translate unknown predicate instance type into run-time check.")
     }
-    resolvePredicateDefinition(mode, pred.predicate)
-      .map(new IR.Invoke(_, arguments ++ toAppend, None))
-      .toSeq
   }
 
   def trackAllocation(alloc: IR.AllocStruct, perms: IR.Var): Unit = {

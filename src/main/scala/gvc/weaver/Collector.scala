@@ -1,6 +1,6 @@
 package gvc.weaver
 
-import gvc.transformer.IR.Predicate
+import gvc.transformer.IR.PredicateDefinition
 
 import scala.collection.mutable
 import gvc.transformer.{IR, SilverProgram, SilverVarId}
@@ -489,18 +489,42 @@ object Collector {
             vprRest
           }
           case (irFold: IR.Fold, (vprFold: vpr.Fold) :: vprRest) => {
-            containsImprecision = containsImprecision || isImprecise(
-              Some(irFold.instance.predicate.expression),
-              mutable.Set(irFold.instance.predicate))
-            visit(irFold, vprFold, loopInvs)
-            vprRest
+            irFold.instance.predicate match {
+              case pred: IR.Predicate => {
+                containsImprecision = containsImprecision || isImprecise(
+                  Some(pred.expression),
+                  mutable.Set(pred))
+                visit(irFold, vprFold, loopInvs)
+                vprRest
+              }
+              case pred: IR.DependencyPredicate => // should fail in silicon-gv or gvc0 long before this
+                throw new WeaverException(
+                  s"Folding library predicate $pred.name is not allowed"
+                )
+              case _ =>
+                throw new WeaverException(
+                  s"Unexpected predicate in fold stmt: $irFold"
+                )
+            }
           }
           case (irUnfold: IR.Unfold, (vprUnfold: vpr.Unfold) :: vprRest) => {
-            containsImprecision = containsImprecision || isImprecise(
-              Some(irUnfold.instance.predicate.expression),
-              mutable.Set(irUnfold.instance.predicate))
-            visit(irUnfold, vprUnfold, loopInvs)
-            vprRest
+            irUnfold.instance.predicate match {
+              case pred: IR.Predicate => {
+                containsImprecision = containsImprecision || isImprecise(
+                  Some(pred.expression),
+                  mutable.Set(pred))
+                visit(irUnfold, vprUnfold, loopInvs)
+                vprRest
+              }
+              case pred: IR.DependencyPredicate => // should fail in silicon-gv or gvc0 long before this
+                  throw new WeaverException(
+                    s"Unfolding library predicate $pred.name is not allowed"
+                  )
+              case _ =>
+                throw new WeaverException(
+                  s"Unexpected predicate in unfold stmt: $irUnfold"
+                )
+            }
           }
           case (irError: IR.Error, (vprError: vpr.Assert) :: vprRest) => {
             visit(irError, vprError, loopInvs)
@@ -655,14 +679,25 @@ object Collector {
               }
             // TODO: Do we need unfold?
             case op: IR.Fold =>
-              (
-                op.instance.predicate.expression,
-                Some(
-                  op.instance.predicate.parameters
-                    .zip(op.instance.arguments.map(resolveValue(_)))
-                    .toMap
-                )
-              )
+              op.instance.predicate match {
+                case pred: IR.Predicate =>
+                  (
+                    pred.expression,
+                    Some(
+                      pred.parameters
+                        .zip(op.instance.arguments.map(resolveValue(_)))
+                        .toMap
+                    )
+                  )
+                case pred: IR.DependencyPredicate => // should fail in silicon-gv or gvc0 long before this
+                  throw new WeaverException(
+                    s"Folding library predicate $pred.name is not allowed"
+                  )
+                case _ =>
+                  throw new WeaverException(
+                    s"Unexpected predicate in fold stmt: $op"
+                  )
+              }
             case op: IR.While  => (op.invariant, None)
             case op: IR.Assert => (op.value, None)
             case _ =>
@@ -834,7 +869,7 @@ object Collector {
 
   def isImprecise(
       cond: Option[IR.Expression],
-      visited: mutable.Set[Predicate] = mutable.Set.empty[Predicate]): Boolean =
+      visited: mutable.Set[PredicateDefinition] = mutable.Set.empty[PredicateDefinition]): Boolean =
     cond match {
       case Some(expr: IR.Expression) =>
         expr match {
@@ -842,8 +877,14 @@ object Collector {
             if (visited.contains(instance.predicate)) {
               false
             } else {
-              visited += instance.predicate
-              isImprecise(Some(instance.predicate.expression), visited)
+              instance.predicate match {
+                case pred: IR.Predicate => {
+                  visited += instance.predicate
+                  isImprecise(Some(pred.expression), visited)
+                }
+                case _: IR.DependencyPredicate => false // TODO: try to look up dependency pred in libs
+                case _ => false
+              }
             }
           case _: IR.Imprecise => true
           case conditional: IR.Conditional =>

@@ -62,6 +62,39 @@ object IRTransformer {
         with StructItem
     class StructValue(val field: IR.StructField) extends StructItem
 
+    def transformDependency(program: IR.Program, dependency: IR.Dependency, input: ResolvedProgram): Unit = {
+      input.structDefinitions
+      .map(d => (d, dependency.defineStruct(d.name)))
+      .foreach {
+        case (input, defn) => {
+          input.fields.foreach(field => defn.addField(field.name, transformType(field.valueType)))
+        }
+      }
+
+      input.predicateDeclarations
+      .foreach(input => {
+        val pred = dependency.definePredicate(input.name)
+        input.arguments.foreach(param => pred.addParameter(transformType(param.valueType), param.name))
+      })
+
+      input.methodDeclarations
+      .foreach(input => {
+        val method = dependency.defineMethod(input.name, input.returnType match {
+          case VoidType => None
+          case t => Some(transformType(t))
+        })
+
+        input.arguments.foreach(param => method.addParameter(param.name, transformType(param.valueType)))
+
+        val scope = new DependencyScope(
+          method,
+          method.parameters.map(p => p.name -> p).toMap
+        )
+        method.precondition = input.precondition.map(transformSpec(_, scope))
+        method.postcondition = input.postcondition.map(transformSpec(_, scope))
+      })
+    }
+
     def defineDependency(declaration: ResolvedUseDeclaration): Unit = {
       if (declaration.isLibrary && !ir.dependencies.exists(
             _.path == declaration.name)) {
@@ -69,7 +102,7 @@ object IRTransformer {
         declaration.dependency match {
           case None => throw new TransformerException("Unresolved dependency")
           case Some(libraryDef) => {
-            DependencyTransformer.transform(ir, dep, libraryDef)
+            transformDependency(ir, dep, libraryDef)
           }
         }
       }
@@ -240,6 +273,22 @@ object IRTransformer {
     ) extends MethodScope {
       override def +=(op: IR.Op): Unit =
         output += op
+    }
+
+    // This scope is only used for transforming lib contracts - JD
+    class DependencyScope(
+        val method: IR.DependencyMethod,
+        val vars: Map[String, IR.Var]
+    ) extends Scope {
+      def variable(name: String): IR.Var = {
+        vars.getOrElse(
+          name,
+          throw new TransformerException(s"Variable '$name' not found")
+        )
+      }
+
+      // Cannot add operations, so conditional scope is a no-op
+      def conditional(cond: IR.Expression) = this
     }
 
     class ConditionalScope(
@@ -463,7 +512,12 @@ object IRTransformer {
     }
 
     def implementPredicate(input: ResolvedPredicateDefinition): Unit = {
-      val predicate = ir.predicate(input.name)
+      val predicate = ir.predicate(input.name) match {
+        case pred: IR.Predicate => pred
+        case pred =>
+          throw new TransformerException(s"Invalid predicate '${pred.name}'")
+      }
+
       val scope = new PredicateScope(predicate)
       predicate.expression = transformSpec(input.body, scope)
     }
@@ -477,6 +531,7 @@ object IRTransformer {
         case scope: ConditionalScope =>
           new ConditionalScope(scope.parent, scope.conditions :+ condition)
         case scope: MethodScope => new ConditionalScope(scope, List(condition))
+        case scope: DependencyScope => scope
       }
 
     def transformExpr(
@@ -499,6 +554,13 @@ object IRTransformer {
       case _: ResolvedResult =>
         scope match {
           case scope: MethodScope => new IR.Result(scope.method)
+          case scope: DependencyScope => {
+            new IR.Result(new IR.Method(
+              scope.method.name,
+              scope.method.returnType,
+              scope.method.precondition,
+              scope.method.postcondition))
+          }
           case _ =>
             throw new TransformerException("Result used in invalid context")
         }
@@ -633,7 +695,6 @@ object IRTransformer {
           scope += transformAlloc(input, temp, scope)
           temp
         }
-
         case _ => throw new TransformerException("Invalid alloc")
       }
 
@@ -676,7 +737,7 @@ object IRTransformer {
         .map(m => ir.method(m.name))
         .getOrElse(throw new TransformerException("Invalid invoke"))
 
-    def resolvePredicate(pred: ResolvedPredicate): IR.Predicate =
+    def resolvePredicate(pred: ResolvedPredicate): IR.PredicateDefinition =
       pred.predicate
         .map(p => ir.predicate(p.name))
         .getOrElse(

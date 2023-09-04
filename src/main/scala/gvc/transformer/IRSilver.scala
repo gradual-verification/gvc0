@@ -49,7 +49,10 @@ object IRSilver {
     }
 
     def convert(): SilverProgram = {
-      val predicates = ir.predicates.map(convertPredicate).toList
+      val predicates = (
+        ir.predicates.map(convertPredicate).toList ++
+        ir.dependencies.flatMap(_.predicates.map(convertLibraryPredicate))
+      ).toList
       val tempVarIndex = mutable.Map[SilverVarId, IR.Invoke]()
       val methods = (
         ir.methods.map(convertMethod(_, tempVarIndex)) ++
@@ -76,19 +79,16 @@ object IRSilver {
 
     private def convertLibraryMethod(method: IR.DependencyMethod): vpr.Method = {
       val retVar = returnVarDecl(method.returnType)
-      val body = vpr.Seqn(
-        method.returnType.map(r =>
-          vpr.LocalVarAssign(retVar.head.localVar, convertExpr(r.default))()).toSeq,
-        Seq.empty
-      )()
+      val pre = method.precondition.map(convertExpr).toSeq
+      val post = method.postcondition.map(convertExpr).toSeq
 
       vpr.Method(
         method.name,
         method.parameters.map(convertDecl).toList,
         retVar,
-        Seq.empty,
-        Seq.empty,
-        Some(body)
+        pre,
+        post,
+        None
       )()
     }
 
@@ -323,6 +323,14 @@ object IRSilver {
           case IR.UnaryOp.Not    => vpr.Not(value)()
         }
       }
+    }
+
+    private def convertLibraryPredicate(pred: IR.DependencyPredicate): vpr.Predicate = {
+      vpr.Predicate(
+        pred.name,
+        pred.parameters.map(convertDecl).toList,
+        None
+      )()
     }
 
     def convertPredicate(pred: IR.Predicate): vpr.Predicate = {

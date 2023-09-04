@@ -10,7 +10,7 @@ object IR {
       mutable.Map[String, StructDefinition]()
     private[IR] var _methods =
       mutable.Map[String, MethodDefinition]()
-    private var _predicates = mutable.Map[String, Predicate]()
+    private[IR] var _predicates = mutable.Map[String, PredicateDefinition]()
     private var _dependencies = mutable.ListBuffer[Dependency]()
 
     lazy val ownedFieldsStruct = struct(
@@ -56,7 +56,10 @@ object IR {
       .toSeq
       .sortBy(_.name)
 
-    def predicates: Seq[Predicate] = _predicates.values.toSeq.sortBy(_.name)
+    def predicates: Seq[Predicate] = _predicates.values
+      .collect { case (p: Predicate) => p }
+      .toSeq
+      .sortBy(_.name)
 
     def dependencies: Seq[Dependency] = _dependencies.toList.sortBy(_.path)
 
@@ -86,7 +89,7 @@ object IR {
         case None        => None
       }
 
-    def predicate(name: String): Predicate = _predicates.getOrElse(
+    def predicate(name: String): PredicateDefinition = _predicates.getOrElse(
       name,
       throw new IRException(s"Predicate '$name' not found")
     )
@@ -98,9 +101,9 @@ object IR {
         m + (defn.name -> defn)
       })
 
-    def replacePredicates(predicateList: Seq[Predicate]): Unit =
+    def replacePredicates(predicateList: Seq[PredicateDefinition]): Unit =
       _predicates = predicateList.foldLeft(
-        mutable.Map[String, Predicate]()
+        mutable.Map[String, PredicateDefinition]()
       )((m, pred) => { m + (pred.name -> pred) })
 
     def copy(methods: Seq[Method], predicates: Seq[Predicate]) = {
@@ -216,10 +219,16 @@ object IR {
       copyOf
     }
   }
+
+  sealed trait PredicateDefinition {
+    def name: String
+    def parameters: Seq[Parameter]
+  }
+
   class Predicate(
       val name: String,
       var expression: IR.Expression
-  ) {
+  ) extends PredicateDefinition {
     private var _parameters = mutable.ListBuffer[Parameter]()
 
     def parameters: Seq[Parameter] = _parameters
@@ -439,7 +448,7 @@ object IR {
   }
 
   class PredicateInstance(
-      var predicate: Predicate,
+      var predicate: PredicateDefinition,
       var arguments: List[IR.Expression]
   ) extends SpecificationExpression {
     override def contains(exp: Expression) =
@@ -748,9 +757,11 @@ object IR {
   ) {
     private val _methods = mutable.ListBuffer[DependencyMethod]()
     private val _structs = mutable.ListBuffer[DependencyStruct]()
+    private val _predicates = mutable.ListBuffer[DependencyPredicate]()
 
     def methods: Seq[DependencyMethod] = _methods
     def structs: Seq[DependencyStruct] = _structs
+    def predicates: Seq[DependencyPredicate] = _predicates
 
     def defineMethod(
         name: String,
@@ -781,6 +792,33 @@ object IR {
       _structs += struct
       struct
     }
+
+    def definePredicate(name: String): DependencyPredicate = {
+      val predicate = new DependencyPredicate(name)
+      if (_predicates.contains(predicate.name)) {
+        throw new IRException(
+          s"Predicate '${predicate.name}' already exists (importing from '$path'"
+        )
+      }
+
+      program._predicates += predicate.name -> predicate
+      _predicates += predicate
+      predicate
+    }
+  }
+
+  // Assumes lib predicates do not have bodies ever - JD
+  class DependencyPredicate(val name: String) 
+      extends PredicateDefinition {
+    val _parameters = mutable.ListBuffer[Parameter]()
+
+    def parameters: Seq[Parameter] = _parameters
+
+    def addParameter(valueType: Type, name: String): Parameter = {
+      val newParam = new Parameter(valueType, name)
+      _parameters += newParam
+      newParam
+    }
   }
 
   class DependencyStruct(val name: String)
@@ -805,10 +843,12 @@ object IR {
 
   class DependencyMethod(
       val name: String,
-      val returnType: Option[Type]
+      val returnType: Option[Type],
+      var precondition: Option[Expression] = None,
+      var postcondition: Option[Expression] = None
   ) extends MethodDefinition {
     val _parameters = mutable.ListBuffer[Parameter]()
-
+    
     def parameters: Seq[Parameter] = _parameters
 
     def addParameter(name: String, valueType: Type): Parameter = {
@@ -817,6 +857,15 @@ object IR {
         throw new TransformerException(s"Parameter '$name' already exists")
       _parameters += param
       param
+    }
+
+    def copy(
+        replacementPre: Option[Expression] = precondition,
+        replacementPost: Option[Expression] = postcondition
+    ): DependencyMethod = {
+      val copyOf = new DependencyMethod(name, returnType, replacementPre, replacementPost)
+      _parameters.foreach(p => copyOf.addParameter(p.name, p.varType))
+      copyOf
     }
   }
 }

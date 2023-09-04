@@ -87,9 +87,9 @@ object ImplementationValidator {
           program.structDefinitions.foreach(defn =>
             errors.error(defn, "Imported libraries may not contain struct definitions"))
 
-          // TODO: Allow abstract predicates to be imported?
-          program.predicateDeclarations.foreach(defn =>
-            errors.error(defn, "Imported predicates are not implemented"))
+          // TODO: Allow abstract predicates to be imported? - yes - JD
+          //program.predicateDeclarations.foreach(defn =>
+            //errors.error(defn, "Imported predicates are not implemented"))
 
           collectLibraryMethods(
             program.dependencies ::: rest,
