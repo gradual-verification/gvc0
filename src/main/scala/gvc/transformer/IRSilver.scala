@@ -329,7 +329,7 @@ object IRSilver {
       vpr.Predicate(
         pred.name,
         pred.parameters.map(convertDecl).toList,
-        None
+        Some(convertExpr(pred.expression))
       )()
     }
 

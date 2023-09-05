@@ -882,7 +882,7 @@ object Collector {
                   visited += instance.predicate
                   isImprecise(Some(pred.expression), visited)
                 }
-                case _: IR.DependencyPredicate => false // TODO: try to look up dependency pred in libs
+                case _: IR.DependencyPredicate => true // TODO: try to look up dependency pred in libs
                 case _ => false
               }
             }

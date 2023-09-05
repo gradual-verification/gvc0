@@ -807,9 +807,11 @@ object IR {
     }
   }
 
-  // Assumes lib predicates do not have bodies ever - JD
-  class DependencyPredicate(val name: String) 
-      extends PredicateDefinition {
+  // Assumes lib predicates have ? bodies by default - JD
+  class DependencyPredicate(
+    val name: String,
+    var expression: IR.Expression = new IR.Imprecise(Some(new IR.BoolLit(true)))
+  ) extends PredicateDefinition {
     val _parameters = mutable.ListBuffer[Parameter]()
 
     def parameters: Seq[Parameter] = _parameters
@@ -818,6 +820,14 @@ object IR {
       val newParam = new Parameter(valueType, name)
       _parameters += newParam
       newParam
+    }
+
+    def copy(
+      expr: Expression = expression
+    ) = {
+      val newPred = new DependencyPredicate(name, expr)
+      _parameters.foreach(p => newPred.addParameter(p.varType, p.name))
+      newPred
     }
   }
 
