@@ -673,6 +673,15 @@ object Collector {
                         .toMap
                     )
                   )
+                case callee: IR.DependencyMethod if callee.precondition.isDefined =>
+                  (
+                    callee.precondition.get,
+                    Some(
+                      op.callee.parameters
+                        .zip(op.arguments.map(resolveValue(_)))
+                        .toMap
+                    )
+                  )
                 case _ =>
                   throw new WeaverException(
                     s"Could not locate specification at invoke: $location")
