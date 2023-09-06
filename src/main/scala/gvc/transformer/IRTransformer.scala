@@ -28,6 +28,7 @@ object IRTransformer {
         defineMethod(method)
       for (method <- program.methodDefinitions)
         implementMethod(method)
+      
       ir
     }
 
@@ -62,29 +63,53 @@ object IRTransformer {
         with StructItem
     class StructValue(val field: IR.StructField) extends StructItem
 
+    def transformDependencyType(t: ResolvedType): IR.Type =
+      t match {
+        case UnknownType => throw new TransformerException("Unknown type")
+        case MissingNamedType(name) =>
+          throw new TransformerException(s"Missing type '$name'")
+        case ResolvedStructType(structName) =>
+          throw new TransformerException(
+            s"Invalid bare struct value '$structName'"
+          )
+        case ResolvedPointer(struct: ResolvedStructType) =>
+          new IR.ReferenceType(ir.structDependency(struct.structName))
+        case ResolvedPointer(valueType) =>
+          new IR.PointerType(transformDependencyType(valueType))
+        case ResolvedArray(valueType) =>
+          throw new TransformerException("Unsupported array type")
+        case BoolType => IR.BoolType
+        case IntType  => IR.IntType
+        case CharType => IR.CharType
+        case StringType =>
+          throw new TransformerException("Unsupported string type")
+        case NullType => throw new TransformerException("Invalid NULL type")
+        case VoidType => throw new TransformerException("Invalid void type")
+      }
+
     def transformDependency(program: IR.Program, dependency: IR.Dependency, input: ResolvedProgram): Unit = {
       input.structDefinitions
       .map(d => (d, dependency.defineStruct(d.name)))
       .foreach {
         case (input, defn) => {
-          input.fields.foreach(field => defn.addField(field.name, transformType(field.valueType)))
+          input.fields.foreach(field => defn.addField(field.name, transformDependencyType(field.valueType)))
         }
       }
-
+      
       input.predicateDeclarations
-      .foreach(input => {
+      .foreach(input => { 
         val pred = dependency.definePredicate(input.name)
-        input.arguments.foreach(param => pred.addParameter(transformType(param.valueType), param.name))
+        input.arguments.foreach(param => pred.addParameter(transformDependencyType(param.valueType), param.name))
       })
-
+      
       input.methodDeclarations
       .foreach(input => {
         val method = dependency.defineMethod(input.name, input.returnType match {
           case VoidType => None
-          case t => Some(transformType(t))
+          case t => Some(transformDependencyType(t))
         })
 
-        input.arguments.foreach(param => method.addParameter(param.name, transformType(param.valueType)))
+        input.arguments.foreach(param => method.addParameter(param.name, transformDependencyType(param.valueType)))
 
         val scope = new DependencyScope(
           method,

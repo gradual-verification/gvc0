@@ -66,6 +66,9 @@ object IR {
     // Structs can be used even if they are never declared
     def struct(name: String): StructDefinition =
       _structs.getOrElseUpdate(name, new Struct(name))
+    
+    def structDependency(name: String): StructDefinition =
+      _structs.getOrElseUpdate(name, new DependencyStruct(name))
 
     // Adds a new struct, renaming it if necessary to avoid collisions
     def newStruct(name: String): Struct = {
