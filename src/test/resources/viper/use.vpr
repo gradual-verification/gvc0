@@ -5,21 +5,12 @@ method main() returns ($result: Int)
 }
 
 method printint(value: Int)
-{
-  
-}
+
 
 method printchar(value: Int)
-{
-  
-}
+
 
 method printbool(value: Bool)
-{
-  
-}
+
 
 method flush()
-{
-  
-}
