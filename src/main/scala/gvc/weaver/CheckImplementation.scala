@@ -129,7 +129,6 @@ class CheckImplementation(
         permsPrimary,
         permsSecondary,
         context)
-
     case imp: IR.Imprecise =>
       imp.precise match {
         case None => Seq.empty
@@ -374,7 +373,7 @@ class CheckImplementation(
           .toSeq
       }
       case p: IR.DependencyPredicate => // Effectively ignore run-time checks for lib predicates - JD
-        println(s"[WARNING] run-time check for library predicate '" + p.name + "' required; ignoring it, so verification is unsound.")
+        //println(s"[WARNING] run-time check for library predicate '" + p.name + "' required; ignoring it, so verification is unsound.")
         Seq[IR.Op]() // TODO: Better solution than ignoring all run-time checks for lib predicates, i.e. look for available impl in lib code - JD 
       case _ =>
         throw new WeaverException(

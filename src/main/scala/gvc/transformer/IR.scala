@@ -55,6 +55,11 @@ object IR {
       .collect { case (m: Method) => m }
       .toSeq
       .sortBy(_.name)
+    
+    def libmethods: Seq[DependencyMethod] = _methods.values
+      .collect { case (m: DependencyMethod) => m }
+      .toSeq
+      .sortBy(_.name)
 
     def predicates: Seq[Predicate] = _predicates.values
       .collect { case (p: Predicate) => p }

@@ -47,7 +47,7 @@ object Collector {
   case object MainCallStyle extends CallStyle
 
   class CollectedMethod(
-      val method: IR.Method,
+      val method: IR.MethodDefinition,
       val conditions: List[TrackedCondition],
       val checks: List[RuntimeCheck],
       val returns: List[IR.Return],
@@ -87,11 +87,15 @@ object Collector {
             )
         ))
       .toMap
+    
+    val depmethods = irProgram.libmethods
+      .map(m => (m.name, collect(m)))
+      .toMap
 
     new CollectedProgram(
       program = irProgram,
       temporaryVars = vprProgram.temporaryVars,
-      methods = methods
+      methods = methods ++ depmethods
     )
   }
 
@@ -753,6 +757,23 @@ object Collector {
       checkedSpecificationLocations = needsFullPermissionChecking.toSet
     )
   }
+  
+  // Collect a library method (no body makes this easy) - JD
+  private def collect(irMethod: IR.DependencyMethod): CollectedMethod = {
+    new CollectedMethod(
+      method = irMethod,
+      conditions = List[TrackedCondition](),
+      checks = List[RuntimeCheck](),
+      returns = List[IR.Return](),
+      hasImplicitReturn = false,
+      calls = List[CollectedInvocation](),
+      allocations = List[IR.Op](),
+      callStyle = getCallstyle(irMethod),
+      bodyContainsImprecision = false,
+      checkedSpecificationLocations = Set[Location]()
+    )
+  }
+
   // TODO: Factor this out
   def traversePermissions(
       spec: IR.Expression,
@@ -910,7 +931,7 @@ object Collector {
       case None => false
     }
 
-  def getCallstyle(irMethod: IR.Method) =
+  def getCallstyle(irMethod: IR.Method) = {
     if (irMethod.name == "main")
       MainCallStyle
     else if (isImprecise(irMethod.precondition))
@@ -918,6 +939,17 @@ object Collector {
     else if (isImprecise(irMethod.postcondition))
       PrecisePreCallStyle
     else PreciseCallStyle
+  }
+
+  def getCallstyle(irMethod: IR.DependencyMethod) = {
+    if (irMethod.name == "main")
+      MainCallStyle
+    else if (isImprecise(irMethod.precondition))
+      ImpreciseCallStyle
+    else if (isImprecise(irMethod.postcondition))
+      PrecisePreCallStyle
+    else PreciseCallStyle
+  }
 
   // Changes an expression from an IR expression into a CheckExpression. If an argument lookup
   // mapping is given, it will use this mapping to resolve variables. Otherwise, it will assume

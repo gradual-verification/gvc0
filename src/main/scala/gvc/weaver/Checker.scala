@@ -48,7 +48,7 @@ object Checker {
     val implementation =
       new CheckImplementation(program.program, runtime, structIdFields)
 
-    program.methods.values.foreach { method =>
+    program.methods.values.filter(m => m.method.isInstanceOf[IR.Method]).foreach { method =>
       insert(program, method, runtime, implementation)
     }
   }
@@ -60,7 +60,10 @@ object Checker {
       implementation: CheckImplementation
   ): Unit = {
     val program = programData.program
-    val method = methodData.method
+    val method = methodData.method match {
+      case m: IR.Method => m
+      case _ => throw new WeaverException("Trying to insert run-time checks into an unknown method or a lib method, error!")
+    }
     val checkMethod = new CheckerMethod(method, programData.temporaryVars)
 
     val callsImprecise: Boolean = methodData.calls.exists(c =>
@@ -245,7 +248,7 @@ object Checker {
     if (needsToTrackPrecisePerms && methodData.callStyle == PreciseCallStyle) {
       primaryOwnedFields match {
         case Some(_) =>
-          initializeOps ++= methodData.method.precondition.toSeq.flatMap(
+          initializeOps ++= method.precondition.toSeq.flatMap(
             implementation.translate(
               AddMode,
               _,
@@ -260,7 +263,92 @@ object Checker {
     // Update the call sites to add any required parameters
     for (call <- methodData.calls) {
       call.ir.callee match {
-        case _: IR.DependencyMethod => ()
+        case callee: IR.DependencyMethod => {
+          val calleeData = programData.methods(callee.name)
+          val context = new CallSiteContext(call.ir, method)
+          
+          calleeData.callStyle match {
+            case MainCallStyle =>
+              throw new WeaverException(s"Libraries should not have a main method, error!")
+            case ImpreciseCallStyle => {
+              // Can't pass anything to libs
+              // need to add perms from postcondition (since no passing primary OFs to callee)
+              if (needsToTrackPrecisePerms) { // For safety but I think this is unnecessary - JD
+                // add postcondition perms
+                val addPermsAfter = callee.postcondition.toSeq
+                  .flatMap(
+                    implementation
+                      .translate(AddMode,
+                                _,
+                                getPrimaryOwnedFields(),
+                                None,
+                                context)
+                  )
+                  .toList
+                call.ir.insertAfter(addPermsAfter)
+              }
+            } 
+            case PreciseCallStyle => {
+              if (needsToTrackPrecisePerms) {
+                // remove precondition perms
+                val removePermsPrior = callee.precondition.toSeq
+                  .flatMap(
+                    implementation
+                      .translate(RemoveMode,
+                                  _,
+                                  getPrimaryOwnedFields(),
+                                  None,
+                                  context)
+                  )
+                  .toList
+                call.ir.insertBefore(removePermsPrior)
+                
+                // add postcondition perms
+                val addPermsAfter = callee.postcondition.toSeq
+                  .flatMap(
+                    implementation
+                      .translate(AddMode,
+                                _,
+                                getPrimaryOwnedFields(),
+                                None,
+                                context)
+                  )
+                  .toList
+                call.ir.insertAfter(addPermsAfter)
+              }
+            }
+            case PrecisePreCallStyle => {
+              if (needsToTrackPrecisePerms) {
+                // remove precondition perms
+                val removePermsPrior = callee.precondition.toSeq
+                  .flatMap(
+                    implementation
+                      .translate(RemoveMode,
+                                  _,
+                                  getPrimaryOwnedFields(),
+                                  None,
+                                  context)
+                  )
+                  .toList
+                call.ir.insertBefore(removePermsPrior)
+                
+                // add postcondition perms
+                val addPermsAfter = callee.postcondition.toSeq
+                  .flatMap(
+                    implementation
+                      .translate(AddMode,
+                                _,
+                                getPrimaryOwnedFields(),
+                                None,
+                                context)
+                  )
+                  .toList
+                call.ir.insertAfter(addPermsAfter)
+              }
+            }
+          }
+        }
+
         case callee: IR.Method =>
           val calleeData = programData.methods(callee.name)
           calleeData.callStyle match {
@@ -454,17 +542,30 @@ object Checker {
       context.program.predicate(check.predicateName),
       check.arguments.map(_.toIR(context.program, context.method, returnValue))
     )
-    val (mode, perms) = check match {
-      case _: PredicateSeparationCheck =>
-        (SeparationMode, fields.temporaryOwnedFields())
-      case _: PredicateAccessibilityCheck =>
-        (VerifyMode, fields.primaryOwnedFields())
+
+    instance.predicate match {
+      case _: IR.Predicate => {
+        val (mode, perms) = check match {
+          case _: PredicateSeparationCheck =>
+            (SeparationMode, fields.temporaryOwnedFields())
+          case _: PredicateAccessibilityCheck =>
+            (VerifyMode, fields.primaryOwnedFields())
+        }
+        context.implementation.translatePredicateInstance(mode,
+                                                          instance,
+                                                          perms,
+                                                          None,
+                                                          ValueContext)
+      }
+      case p: IR.DependencyPredicate => {
+        // Effectively ignore run-time checks for lib predicates - JD
+        println(s"[WARNING] run-time check for library predicate '" + p.name + "' required; ignoring it, so verification is unsound.")
+        Seq[IR.Op]() // TODO: Better solution than ignoring all run-time checks for lib predicates, i.e. look for available impl in lib code - JD 
+      }
+      case _ =>
+        throw new WeaverException(
+          "Error: Can't implement a predicate with unknown predicate type for run-time checking.")
     }
-    context.implementation.translatePredicateInstance(mode,
-                                                      instance,
-                                                      perms,
-                                                      None,
-                                                      ValueContext)
   }
 
   case class FieldCollection(
