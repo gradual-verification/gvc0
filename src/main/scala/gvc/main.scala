@@ -18,14 +18,16 @@ import gvc.benchmarking.{
   Timing
 }
 import gvc.weaver.{Weaver, WeaverException}
+import gvc.benchmarking.Timeout
 import viper.silicon.Silicon
 import viper.silicon.state.{profilingInfo, runtimeChecks}
 import viper.silver.ast.Program
 import viper.silver.verifier
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Paths, FileAlreadyExistsException}
 import java.nio.charset.StandardCharsets
 import java.io.IOException
+import java.util.Calendar
 import sys.process._
 import scala.language.postfixOps
 import viper.silicon.state.BranchCond
@@ -169,6 +171,77 @@ object Main extends App {
           val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
           execute(verifiedOutput.c0Source, fileNames)
         })
+      case Config.CaseStudyMode => {
+        val fileNames = getOutputCollection(config.sourceFile.get)
+        val inputSource = readFile(config.sourceFile.get)
+        val caseName = fileNames.baseName.split("/").last
+
+        // create new dir for collected data and files
+        val localTime = java.time.LocalDateTime.now()
+        val outputDir = Paths.get("").toAbsolutePath.toString + "/" + caseName + "-" + localTime + "/"
+        val newSourceFile = outputDir + config.sourceFile.get.split("/").last
+        val fileNames2 = getOutputCollection(newSourceFile)
+
+        val caseConfig = new Config(
+                                mode = Config.CaseStudyMode,
+                                saveFiles = true,
+                                exec = true,
+                                sourceFile = config.sourceFile,
+                                linkedLibraries = config.linkedLibraries,
+                                includeDirectories = config.includeDirectories,
+                             )
+        println(Output.purple("Verifying '" + config.sourceFile.get + "' and gathering data."))
+        println(Output.purple("Outputting collected data to " + outputDir))
+        writeDir(outputDir)
+        writeFile(newSourceFile, inputSource)
+
+        val totalTimeStart = Calendar.getInstance.getTime
+        Output.info(totalTimeStart.toString)       
+        val verifiedOutput = verify(inputSource, fileNames2, caseConfig)
+        writeFile(fileNames2.c0FileName, verifiedOutput.c0Source)
+        val outputC0Source = Paths.get(fileNames2.c0FileName)
+        val outputBinary = Paths.get(fileNames2.binaryName)
+        val cc0Perf = Timing.compileTimed(
+            outputC0Source,
+            outputBinary,
+            caseConfig,
+            profilingEnabled =
+              caseConfig.profilingEnabled || caseConfig.profilingDirectory.nonEmpty
+          )
+        val runtimePerf = Timing.execTimed(
+            outputBinary,
+            List(s"--stress ${caseConfig.stressLevel.getOrElse(1)}")
+        )
+        val totalTimeEnd = Calendar.getInstance().getTime
+        Output.info(totalTimeEnd.toString)
+        Output.info(s"Time elapsed: ${Timeout.formatMilliseconds(totalTimeEnd.getTime-totalTimeStart.getTime)}")
+
+        // create log file and add data
+        val logFile = outputDir + "logged_data.txt"
+        val logFileContents = 
+        s"""
+        Conjuncts Statically Eliminated: ${verifiedOutput.profiling.nConjunctsEliminated}
+        Total Conjuncts: ${verifiedOutput.profiling.nConjuncts}
+        Parse into IR & Translate into Silver Time: ${verifiedOutput.timing.translation} nsec
+        Static Verification Time: ${verifiedOutput.timing.verification} nsec
+        Weaver Time: ${verifiedOutput.timing.instrumentation} nsec
+        Compile Time in cc0: ${cc0Perf.mean} nsec
+        Run Time: ${runtimePerf.mean} nsec
+        Total Time: ${totalTimeEnd.getTime - totalTimeStart.getTime} msec
+        Time Stamp: ${localTime}
+        """
+        // output log file
+        writeFile(logFile, logFileContents)
+
+        // print spec summary to console
+        val sourceIR = Main.generateIR(
+                             inputSource,
+                             caseConfig.linkedLibraries ++ caseConfig.includeDirectories ++ Defaults.includeDirectories
+                            )
+        val visitor = new LabelVisitor()
+        val labelOutput = visitor.visit(sourceIR)
+        visitor.printCounts(labelOutput.labels)
+      }
       case _ =>
     }
   }
@@ -185,6 +258,14 @@ object Main extends App {
       Files.writeString(Paths.get(file), contents, StandardCharsets.UTF_8)
     } catch {
       case _: IOException => Config.error(s"Could not write file '$file'")
+    }
+  
+  def writeDir(dir: String): Unit =
+    try {
+      Files.createDirectory(Paths.get(dir))
+    } catch {
+      case _: IOException => Config.error(s"Could not write directory '$dir'")
+      case _: FileAlreadyExistsException => Config.error(s"Could not write directory '$dir' as it already exists")
     }
 
   def deleteFile(file: String): Unit =

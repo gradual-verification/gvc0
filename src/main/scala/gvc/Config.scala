@@ -1,6 +1,6 @@
 package gvc
 
-import gvc.Config.{DefaultMode, Describe}
+import gvc.Config.{DefaultMode, Describe, CaseStudyMode}
 import gvc.benchmarking.Output
 
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
@@ -52,7 +52,7 @@ case class Config(
         Some("Cannot combine --output and --only-verify")
       else if (exec && onlyVerify)
         Some("Cannot combine --exec and --only-verify")
-      else if (sourceFile.isEmpty && (mode == DefaultMode || mode == Describe))
+      else if (sourceFile.isEmpty && (mode == DefaultMode || mode == Describe || mode == CaseStudyMode))
         Some("No source file specified")
       else if (sourceFile.nonEmpty && !Files.exists(Paths.get(sourceFile.get)))
         Some(s"Source file '${sourceFile.get}' does not exist")
@@ -87,6 +87,8 @@ object Config {
   case object Export extends Mode
 
   case object Describe extends Mode
+
+  case object CaseStudyMode extends Mode
 
   val help =
     """Usage: gvc0 [OPTION...] SOURCEFILE
@@ -136,6 +138,7 @@ object Config {
       |                --db-url=<url>                 Specify the URL for the benchmarking database. Overrides config.
       |                --db-user=<username>           Specify the user for the benchmarking database. Overrides config.
       |                --db-pass=<password>           Specify the password for the benchmarking database. Overrides config.
+      |  -c            --case-study                   Run full pipeline on entry source file and output intermediate files and collected data to a new root folder
     """
 
   private val dumpArg = raw"--dump=(.+)".r
@@ -317,6 +320,11 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(mode = FramingVerification)
+        )
+      case ("-c" | "--case-study") :: tail =>
+        fromCommandLineArgs(
+          tail,
+          current.copy(mode = CaseStudyMode)
         )
       case "--profiling" :: tail =>
         fromCommandLineArgs(
