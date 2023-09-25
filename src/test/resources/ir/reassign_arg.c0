@@ -1,13 +1,19 @@
 int echo(int value)
+  //@requires true;
+  //@ensures true;
 {
   return value;
 }
 
 void use(int value)
+  //@requires true;
+  //@ensures true;
 {
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   int test = 123;
 

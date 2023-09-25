@@ -10,6 +10,8 @@ void doTest(struct Test* input)
 }
 
 int main()
+  /*@ requires true; @*/
+  /*@ ensures true; @*/  
 {
   struct Test* test = alloc(struct Test);
   doTest(test);

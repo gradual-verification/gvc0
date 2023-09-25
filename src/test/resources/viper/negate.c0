@@ -1,10 +1,13 @@
 int negate(int value)
+  //@requires true;
   //@ensures \result == -value;
 {
   return value * -1;
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   return negate(1);
 }

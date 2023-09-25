@@ -1,22 +1,26 @@
 
 void test(int x, int** y, int* z)
   //@requires ? && acc(**y) && (x == 1 ? acc(*z) : true);
+  //@ensures true;
 {
 }
 
 int get()
+  //@requires true;
   //@ensures ?;
 {
   return 1;
 }
 
 int* create()
+  //@requires true;
   //@ensures ?;
 {
   return alloc(int);
 }
 
 int **createNested()
+  //@requires true;
   //@ensures ?;
 {
   int **ptr = alloc(int*);
@@ -25,6 +29,8 @@ int **createNested()
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   int v = get();
   int **a = createNested();

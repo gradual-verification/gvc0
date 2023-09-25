@@ -27,6 +27,7 @@ struct Outer* createOuter(struct OwnedFields* _ownedFields)
   struct OwnedFields* _tempFields = NULL;
   struct OwnedFields* _contextFields = NULL;
   _contextFields = initOwnedFields(_ownedFields->instanceCounter);
+  assert(true);
   inner = alloc(struct Inner);
   inner->_id = addStructAcc(_contextFields, 2);
   outer = alloc(struct Outer);
@@ -104,7 +105,9 @@ int main()
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
   _ownedFields = initOwnedFields(_instanceCounter);
+  assert(true);
   _ = createOuter(_ownedFields);
   _1 = getValue(_, _ownedFields);
+  assert(true);
   return _1;
 }

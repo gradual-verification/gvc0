@@ -38,6 +38,8 @@ method imprecisePrecondition(a: Ref) returns ($result: Int)
 }
 
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   var a: Ref
   var _: Int

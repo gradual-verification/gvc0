@@ -1,6 +1,8 @@
 field _ptr_int$value: Int
 
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   $result := 0
 }

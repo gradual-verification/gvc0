@@ -1,4 +1,6 @@
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   var _: Int
   _ := negate(1)
@@ -6,6 +8,7 @@ method main() returns ($result: Int)
 }
 
 method negate(value: Int) returns ($result: Int)
+  requires true
   ensures $result == -value
 {
   $result := value * -1

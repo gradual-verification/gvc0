@@ -4,18 +4,22 @@ struct Test {
 };
 
 struct Test *getTest()
+  //@requires true;
   //@ensures ?;
 {
   return alloc(struct Test);
 }
 
 struct Test *getTestPrecise()
+  //@requires true;
   //@ensures acc(\result->value);
 {
   return getTest();
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   return 0;
 }

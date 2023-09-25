@@ -6,6 +6,8 @@ method doSomething(x: Int) returns ($result: Int)
 }
 
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   var x: Int
   var $result_0: Int
@@ -18,6 +20,7 @@ method main() returns ($result: Int)
 }
 
 method random() returns ($result: Int)
+  requires true
   ensures ? && true
 {
   $result := 0

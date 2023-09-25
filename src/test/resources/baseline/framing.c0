@@ -7,6 +7,7 @@ struct Inner {
 };
 
 struct Outer* createOuter()
+  //@requires true;
   //@ensures ? && acc(\result->inner->value);
 {
   struct Inner *inner = alloc(struct Inner);
@@ -40,6 +41,8 @@ int getValueSafe(struct Outer* outer)
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   return getValue(createOuter());
 }

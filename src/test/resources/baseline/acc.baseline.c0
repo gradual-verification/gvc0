@@ -17,6 +17,7 @@ struct Test* createTest(struct OwnedFields* _ownedFields)
   struct OwnedFields* _tempFields = NULL;
   struct OwnedFields* _contextFields = NULL;
   _contextFields = initOwnedFields(_ownedFields->instanceCounter);
+  assert(true);
   _ = alloc(struct Test);
   _->_id = addStructAcc(_contextFields, 2);
   assertAcc(_contextFields, _ != NULL ? _->_id : -1, 0, "Field access runtime check failed for struct Test.value");
@@ -35,6 +36,7 @@ int getValue(struct Test* test, struct OwnedFields* _ownedFields)
   addAcc(_contextFields, test != NULL ? test->_id : -1, 2, 0);
   loseAcc(_ownedFields, test != NULL ? test->_id : -1, 0);
   assertAcc(_contextFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.value");
+  assert(true);
   return test->value;
 }
 
@@ -47,7 +49,9 @@ int main()
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
   _ownedFields = initOwnedFields(_instanceCounter);
+  assert(true);
   _ = createTest(_ownedFields);
   _1 = getValue(_, _ownedFields);
+  assert(true);
   return _1;
 }

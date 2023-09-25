@@ -1,4 +1,5 @@
 int testCall(int a)
+//@requires true;
 //@ensures ? && (a == 0 ? \result == 0 : true);
 {
   return a;
@@ -6,6 +7,7 @@ int testCall(int a)
 
 void test(int x, int y)
 //@requires ?;
+//@ensures true;
 {
   if (x > 1)
   {
@@ -21,6 +23,8 @@ void test(int x, int y)
 }
 
 int main()
+//@requires true;
+//@ensures true;
 {
   return 0;
 }

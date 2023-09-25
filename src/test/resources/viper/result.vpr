@@ -1,4 +1,6 @@
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   var _result$: Int
   _result$ := 0

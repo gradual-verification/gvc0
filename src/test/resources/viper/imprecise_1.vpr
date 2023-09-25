@@ -1,4 +1,6 @@
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   test(1)
   $result := 0
@@ -6,6 +8,7 @@ method main() returns ($result: Int)
 
 method test(value: Int)
   requires ? && true
+  ensures true
 {
   
 }

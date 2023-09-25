@@ -3,6 +3,7 @@ struct Test {
 };
 
 struct Test *createTest()
+  //@requires true;
   //@ensures acc(\result->value);
 {
   return alloc(struct Test);
@@ -10,11 +11,14 @@ struct Test *createTest()
 
 int getValue(struct Test *test)
   //@requires acc(test->value);
+  //@ensures true;
 {
   return test->value;
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   return getValue(createTest());
 }

@@ -286,9 +286,11 @@ object IRTransformer {
       )
       method.precondition =
         input.declaration.precondition.map(transformSpec(_, scope))
+          .orElse(Some(new IR.Imprecise(None)))
       transformStatement(input.body, scope)
       method.postcondition =
         input.declaration.postcondition.map(transformSpec(_, scope))
+          .orElse(Some(new IR.Imprecise(None)))
 
       ReassignmentElimination.transform(method)
       ParameterAssignmentElimination.transform(method)
