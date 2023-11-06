@@ -1,4 +1,6 @@
 int test(int x)
+  //@requires true;
+  //@ensures true;
 {
   x += 1;
   if (false)
@@ -9,6 +11,8 @@ int test(int x)
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   return 0;
 }

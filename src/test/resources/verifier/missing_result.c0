@@ -10,12 +10,15 @@ int doSomething(int x)
 }
 
 int random()
+//@requires true;
 //@ensures ?;
 {
   return 0;
 }
 
 int main()
+//@requires true;
+//@ensures true;
 {
   // Result is not needed in the final program, so no temp var should be generated
   doSomething(0);

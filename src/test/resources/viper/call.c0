@@ -1,9 +1,13 @@
 int test()
+//@requires true;
+//@ensures true;
 {
   return 1;
 }
 
 int main()
+//@requires true;
+//@ensures true;
 {
   return test();
 }

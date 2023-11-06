@@ -1,9 +1,13 @@
 bool test(int value)
+  //@requires true;
+  //@ensures true;
 {
   return value < 10;
 }
 
 int main()
+ //@requires true;
+ //@ensures true;
 {
   bool cond = true;
   int value = 0;

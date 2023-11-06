@@ -2,6 +2,8 @@ int main();
 void print(int value);
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   int i = 0;
   i = 0;
@@ -15,5 +17,7 @@ int main()
 }
 
 void print(int value)
+  //@requires true;
+  //@ensures true;
 {
 }

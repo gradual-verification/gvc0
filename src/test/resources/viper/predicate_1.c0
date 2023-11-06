@@ -3,12 +3,15 @@
 
 void test(int* value)
   //@requires testPred(value);
+  //@ensures true;
 {
   //@unfold testPred(value);
   *value = 1;
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   int* a = alloc(int);
   //@fold testPred(a);

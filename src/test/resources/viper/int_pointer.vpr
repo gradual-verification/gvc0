@@ -1,11 +1,15 @@
 field _ptr_int$value: Int
 
 method deref(ptr: Ref) returns ($result: Int)
+  requires ? && true
+  ensures ? && true
 {
   $result := ptr._ptr_int$value
 }
 
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   var _: Int
   _ := deref(null)

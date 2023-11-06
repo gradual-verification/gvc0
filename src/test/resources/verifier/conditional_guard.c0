@@ -4,12 +4,15 @@ struct Test {
 };
 
 struct Test *getTest()
+  //@requires true;
   //@ensures ?;
 {
   return alloc(struct Test);
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   struct Test *test = getTest();
 

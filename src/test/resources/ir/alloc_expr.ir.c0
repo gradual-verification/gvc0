@@ -15,6 +15,8 @@ int main();
 void something(struct Test* value);
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   struct Test* _ = NULL;
   struct _ptr_int* _1 = NULL;
@@ -41,5 +43,7 @@ int main()
 }
 
 void something(struct Test* value)
+  //@requires true;
+  //@ensures true;
 {
 }

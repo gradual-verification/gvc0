@@ -8,6 +8,8 @@ struct outer {
 };
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   struct outer *test = alloc(struct outer);
   return test->test.value;

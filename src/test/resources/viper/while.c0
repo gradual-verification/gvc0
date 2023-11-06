@@ -1,4 +1,6 @@
 int main()
+  /*@ requires true; @*/
+  /*@ ensures true; @*/
 {
   int i = 0;
   while (i < 10)

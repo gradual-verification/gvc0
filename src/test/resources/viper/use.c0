@@ -1,6 +1,8 @@
 #use <conio>
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   printint(1);
   return 0;

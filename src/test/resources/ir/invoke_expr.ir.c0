@@ -4,10 +4,14 @@ void something();
 bool test();
 
 void input(bool value)
+  //@requires true;
+  //@ensures true;
 {
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   bool _ = false;
   bool _1 = false;
@@ -79,10 +83,14 @@ int main()
 }
 
 void something()
+  //@requires true;
+  //@ensures true;
 {
 }
 
 bool test()
+  //@requires true;
+  //@ensures true;
 {
   return false;
 }

@@ -44,6 +44,8 @@ struct _ptr_struct_Test_
 int main();
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   struct _ptr_struct_Test_* refPtr = NULL;
   struct _ptr_int__* intTest = NULL;

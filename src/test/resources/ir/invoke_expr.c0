@@ -1,19 +1,27 @@
 // Tests invoke used in an expression position
 
 bool test()
+  //@requires true;
+  //@ensures true;
 {
   return false;
 }
 
 void something()
+  //@requires true;
+  //@ensures true;
 {
 }
 
 void input(bool value)
+  //@requires true;
+  //@ensures true;
 {
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   // In expression statements
   true && test();

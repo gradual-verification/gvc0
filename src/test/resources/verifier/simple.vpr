@@ -1,4 +1,6 @@
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   $result := 0
 }

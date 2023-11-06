@@ -8,6 +8,8 @@ method doTest(input: Ref)
 }
 
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   var test: Ref
   test := new(Test$value)

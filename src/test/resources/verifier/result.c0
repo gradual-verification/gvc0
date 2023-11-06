@@ -1,12 +1,15 @@
 // The name `result` is reserved in Silver, so it must be renamed
 
 int get()
+  //@requires true;
   //@ensures ?;
 {
   return 2;
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   // Create a run-time check for result to test the round-trip conversion
   int result = get();

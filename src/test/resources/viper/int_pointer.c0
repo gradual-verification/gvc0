@@ -4,6 +4,8 @@ int deref(int* ptr)
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   return deref(NULL);
 }
