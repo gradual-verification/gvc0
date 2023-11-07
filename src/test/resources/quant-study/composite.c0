@@ -320,7 +320,7 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
-  int stress = 0;
+  int stress = 2;
 
   int stressCaptured = stress + ((stress/2) * 2);
   int seed = 1;
