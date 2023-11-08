@@ -20,4 +20,4 @@ jobs:
       - name: Assembly
         run: sbt assembly
       - name: Execution
-        run: export VERSION=evaluation-08-06-23 && java -Xss30M -Xmx12G -jar target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar --config=./data/config/nuc.xml --execute --nickname=${{ runner.name }} --db-url=${{ secrets.DB_URL }} --db-user=${{ secrets.DB_USER }} --db-pass=${{ secrets.DB_PASSWORD }} --version="$VERSION"
+        run: export VERSION=evaluation-11-07-23 && java -Xss30M -Xmx12G -jar target/scala-2.12/gvc0-assembly-0.1.0-SNAPSHOT.jar --config=./data/config/nuc.xml --execute --nickname=${{ runner.name }} --db-url=${{ secrets.DB_URL }} --db-user=${{ secrets.DB_USER }} --db-pass=${{ secrets.DB_PASSWORD }} --version="$VERSION"
