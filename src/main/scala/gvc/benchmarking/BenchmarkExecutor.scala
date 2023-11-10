@@ -347,6 +347,9 @@ object BenchmarkExecutor {
                         case Some(value) => value.complete()
                         case None        =>
                       }
+                      Output.info(
+                        s"Permutation ID: ${reserved.perm.id}, Mean: ${p.mean}. Median: ${p.median}, "
+                      )
                       DAO.completeProgramMeasurement(
                         id,
                         reserved,
