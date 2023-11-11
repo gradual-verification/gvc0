@@ -254,13 +254,16 @@ object BenchmarkExecutor {
         IRPrinter.print(ir, includeSpecs = false)
       this.injectAndWrite(sourceText, tempSource)
       Files.deleteIfExists(tempBinary)
-      Timing.compileTimed(
+      val cc0perf = Timing.compileTimed(
         tempSource,
         tempBinary,
         baseConfig,
         config.workload.staticIterations,
         config.profilingDirectory.nonEmpty,
         ongoingProcesses
+      )
+      Output.info(
+        s"ExecTimed: Mean: ${cc0perf.mean}. Median: ${cc0perf.median}, "
       )
       Some(tempBinary)
     }
@@ -324,7 +327,8 @@ object BenchmarkExecutor {
                             config.workload.iterations,
                             w,
                             ongoingProcesses,
-                            profiler
+                            None
+                            //profiler
                           )
                         )
                       )

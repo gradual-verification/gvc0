@@ -158,11 +158,15 @@ object Timing {
       throw new CC0ExecutionException(output, stress)
     }
 
-    runTimedCommand(iterations,
+    val perf = runTimedCommand(iterations,
                     command,
                     execNonzero,
                     ongoingProcesses,
                     profiler)
+    Output.info(
+      s"ExecTimed: Mean: ${perf.mean}. Median: ${perf.median}, "
+    )
+    perf
   }
 
   private def percentile(values: List[Long], percentile: Double): BigDecimal = {
