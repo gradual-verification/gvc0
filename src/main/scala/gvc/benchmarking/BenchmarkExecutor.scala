@@ -252,6 +252,10 @@ object BenchmarkExecutor {
       BaselineChecker.check(ir, onlyFraming)
       val sourceText =
         IRPrinter.print(ir, includeSpecs = false)
+      
+      println(".verified.c0")
+      println(sourceText)
+
       this.injectAndWrite(sourceText, tempSource)
       Files.deleteIfExists(tempBinary)
       val cc0perf = Timing.compileTimed(
@@ -263,7 +267,7 @@ object BenchmarkExecutor {
         ongoingProcesses
       )
       Output.info(
-        s"ExecTimed: Mean: ${cc0perf.mean}. Median: ${cc0perf.median}, "
+        s"CompileTimed: Mean: ${cc0perf.mean} Median: ${cc0perf.median}, "
       )
       Some(tempBinary)
     }
@@ -296,6 +300,9 @@ object BenchmarkExecutor {
 
       val reconstructedSourceText =
         IRPrinter.print(convertedToIR, includeSpecs = true)
+      
+      println("Source: ")
+      println(reconstructedSourceText)
 
       conn.dynamicModes.get(reserved.measurementMode) match {
         case Some(mode) =>
@@ -327,8 +334,7 @@ object BenchmarkExecutor {
                             config.workload.iterations,
                             w,
                             ongoingProcesses,
-                            None
-                            //profiler
+                            profiler
                           )
                         )
                       )
