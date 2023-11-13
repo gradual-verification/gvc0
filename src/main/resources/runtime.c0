@@ -145,7 +145,7 @@ void join(OwnedFields* target, OwnedFields* source){
     if(source != NULL && target != NULL){
         for(int i = 0; i<source->capacity; i += 1){
             FieldArray* currFields = source->contents[i];
-            if(currFields != NULL){
+            if(currFields != NULL && currFields->numAccessible > 0 ){
                 for(int j = 0; j< currFields->length; j += 1){
                     addAcc(target, currFields->_id, currFields->length, j);
                 }
