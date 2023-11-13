@@ -46,6 +46,7 @@ struct Node* emptyList(struct OwnedFields* _ownedFields)
   struct OwnedFields* _tempFields = NULL;
   struct OwnedFields* _contextFields = NULL;
   _contextFields = initOwnedFields(_ownedFields->instanceCounter);
+  assert(true);
   nullList = NULL;
   list(nullList, _contextFields);
   _tempFields = initOwnedFields(_contextFields->instanceCounter);
@@ -74,6 +75,8 @@ int main()
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
   _ownedFields = initOwnedFields(_instanceCounter);
+  assert(true);
+  assert(true);
   return 0;
 }
 

@@ -8,6 +8,8 @@ struct _ptr_int {
 };
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   struct Test** refPtr = alloc(struct Test*);
   *refPtr = alloc(struct Test);

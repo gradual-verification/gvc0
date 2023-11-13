@@ -5,10 +5,14 @@ struct Test {
 };
 
 void something(struct Test* value)
+  //@requires true;
+  //@ensures true;
 {
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   // Bare expressions
   alloc(struct Test);

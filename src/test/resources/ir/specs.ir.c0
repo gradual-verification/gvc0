@@ -3,6 +3,8 @@ int test(int x);
 int test2(int y);
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   //@assert ?;
   //@assert ? && false;

@@ -159,10 +159,10 @@ object Timing {
     }
 
     runTimedCommand(iterations,
-                    command,
-                    execNonzero,
-                    ongoingProcesses,
-                    profiler)
+        command,
+        execNonzero,
+        ongoingProcesses,
+        profiler)
   }
 
   private def percentile(values: List[Long], percentile: Double): BigDecimal = {

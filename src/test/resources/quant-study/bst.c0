@@ -427,11 +427,24 @@ struct Node *tree_remove(struct Node *root, int x)
   return res;
 }
 
+int mod2(int a, int b) 
+//@ requires b != 0;
+//@ ensures  0 <= \result && (b < 0 ? \result <= (-1) * b : \result <= b);
+{
+  int t = b;
+  if (a < 0)
+    a = (-1) * a;
+  if (b < 0)
+    t = (-1) * b;
+
+  return a - (a / t) * t;
+}
+
 int main()
   //@ requires true;
   //@ ensures true;
 {
-    int stress = 0;
+    int stress = 2;
     int seed = 1;
 
     int stressCaptured = stress;
@@ -443,11 +456,11 @@ int main()
 
     int i = 0;
     while(0 <= i && i < stressCaptured)
-    //@loop_invariant 0 <= i && i <= stressCaptured;
+    //@loop_invariant 0 <= i && i <= stressCaptured && tree(t1);
     {
         int r = rand(seed);
         seed = r;
-        int toAdd = mod(r, 2 * stressCaptured);
+        int toAdd = mod2(r, 2 * stressCaptured);
         t1 = tree_add(t1, toAdd);
         bool test = tree_contains(t1, toAdd);
         assert(test);
@@ -456,11 +469,11 @@ int main()
 
     int j = 0;
     while(j < stressCaptured)
-    //@loop_invariant 0 <= j && j <= stressCaptured;
+    //@loop_invariant 0 <= j && j <= stressCaptured && tree(t1);
     {
         int r = rand(seed);
         seed = r;
-        int toRemove = mod(r, 2 * stressCaptured);
+        int toRemove = mod2(r, 2 * stressCaptured);
         t1 = tree_remove(t1, toRemove);
         tree_main_lemma(t1, toRemove);
         bool test = tree_contains(t1, toRemove);

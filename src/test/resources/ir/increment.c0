@@ -1,4 +1,6 @@
 int main()
+  //@requires true;
+  //@ensures true;
 {
   int x = 0;
   x++;

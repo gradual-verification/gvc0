@@ -1,22 +1,27 @@
 void ensureSeparate(int* x, int *y)
   //@requires acc(*x) && acc(*y);
+  //@ensures true;
 {
 }
 
 void test(int *x, int *y)
   //@requires ?;
+  //@ensures true;
 {
   // Runtime check should be inserted for both presence and separation of *x and *y
   ensureSeparate(x, y);
 }
 
 int* create()
+  //@requires true;
   //@ensures ?;
 {
   return alloc(int);
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   test(create(), create());
   return 0;

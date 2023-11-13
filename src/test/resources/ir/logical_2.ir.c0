@@ -2,6 +2,8 @@ int main();
 bool test(int value);
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   bool b = false;
   bool c = false;
@@ -16,6 +18,8 @@ int main()
 }
 
 bool test(int value)
+  //@requires true;
+  //@ensures true;
 {
   return value > 0;
 }

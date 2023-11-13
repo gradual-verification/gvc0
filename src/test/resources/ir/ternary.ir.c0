@@ -2,11 +2,15 @@ bool condition();
 int main();
 
 bool condition()
+  //@requires true;
+  //@ensures true;
 {
   return true;
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   bool c = false;
   c = condition();

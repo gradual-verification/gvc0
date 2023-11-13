@@ -1,4 +1,6 @@
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   var _: Int
   _ := max(1, 2)

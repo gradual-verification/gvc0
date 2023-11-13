@@ -13,6 +13,8 @@ int main();
 void test(struct _ptr_int* value);
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   struct _ptr_int* a = NULL;
   a = alloc(struct _ptr_int);
@@ -23,6 +25,7 @@ int main()
 
 void test(struct _ptr_int* value)
   //@requires testPred(value);
+  //@ensures true;
 {
   //@unfold testPred(value);
   value->value = 1;

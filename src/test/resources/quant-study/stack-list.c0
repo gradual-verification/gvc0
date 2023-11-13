@@ -202,7 +202,7 @@ int main()
 //@ requires true;
 //@ ensures true;
 {
-  int stress = 0;
+  int stress = 1;
   int seed = 1;
 
   Stack *s = create_stack(3);

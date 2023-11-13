@@ -9,7 +9,9 @@ int main()
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
   _ownedFields = initOwnedFields(_instanceCounter);
+  assert(true);
   test(2, _ownedFields);
+  assert(true);
   return 0;
 }
 
@@ -18,6 +20,7 @@ int test(int x, struct OwnedFields* _ownedFields)
   struct OwnedFields* _tempFields = NULL;
   struct OwnedFields* _contextFields = NULL;
   _contextFields = initOwnedFields(_ownedFields->instanceCounter);
+  assert(true);
   assert(x + 1 == x + 1);
   return x + 1;
 }

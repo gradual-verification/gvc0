@@ -5,6 +5,8 @@ predicate testPred(value: Ref) {
 }
 
 method main() returns ($result: Int)
+  requires true
+  ensures true
 {
   var a: Ref
   a := new(_ptr_int$value)
@@ -15,6 +17,7 @@ method main() returns ($result: Int)
 
 method test(value: Ref)
   requires acc(testPred(value), write)
+  ensures true
 {
   unfold acc(testPred(value), write)
   value._ptr_int$value := 1

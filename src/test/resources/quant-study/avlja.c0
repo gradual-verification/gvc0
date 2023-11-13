@@ -333,7 +333,7 @@ int main()
 //@requires true;
 //@ensures true;
 {
-    int stress = 0;
+    int stress = 1;
     int seed = 1;
 	struct Node *root = NULL;
 	struct Height *hp = alloc(struct Height);

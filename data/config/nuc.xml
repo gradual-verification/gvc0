@@ -3,20 +3,14 @@
     <hardware>i5-4250U</hardware>
     <nickname>Intel NUC i5-4250U</nickname>
     <source-dir>./src/test/resources/quant-study/</source-dir>
-    <version>evaluation-08-05-23</version>
+    <version>evaluation-11-12-23</version>
     <quantity>16</quantity>
     <workload>
         <by-program>
             <p>
-                <match>avlja,bst,list</match>
+                <match>list</match>
                 <stress>
-                    <list>8,16,32</list>
-                </stress>
-            </p>
-            <p>
-                <match>composite</match>
-                <stress>
-                    <list>4,8,16</list>
+                    <list>32</list>
                 </stress>
             </p>
         </by-program>

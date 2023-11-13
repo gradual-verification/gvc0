@@ -1,9 +1,13 @@
 bool condition()
+  //@requires true;
+  //@ensures true;
 {
   return true;
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   bool c = condition();
   return c ? 0 : 1;

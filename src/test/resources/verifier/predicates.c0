@@ -37,6 +37,8 @@ int fullyPrecise(struct Node* a)
 }
 
 int main()
+//@requires true;
+//@ensures true;
 {
   struct Node* a = alloc(struct Node);
   a->next = NULL;

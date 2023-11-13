@@ -1,6 +1,8 @@
 int main();
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   int c = 0;
   int d = 0;

@@ -214,13 +214,13 @@ int main ()
     //@ requires true;
     //@ ensures true;
 {
-  int stress = 0;
+  int stress = 1;
   int seed = 1;
 
   MinPriorityQueue *q = createMinPriQueue(3);
   int i = 0;
   while(i < stress)
-  //@loop_invariant 0 <= i && i <= stress;
+  //@loop_invariant 0 <= i && i <= stress && acc(q->head) && acc(q->size) && isMinPQ(q->head);
   {
     int r = rand(seed);
     seed = r;
@@ -230,7 +230,7 @@ int main ()
 
   int j = 0;
   while(j < stress)
-  //@loop_invariant 0 <= j && j <= stress;
+  //@loop_invariant 0 <= j && j <= stress && acc(q->head) && acc(q->size) && isMinPQ(q->head);
   {
     int v = dequeue(q);
     j += 1;

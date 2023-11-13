@@ -6,6 +6,8 @@ void test(int *value)
 }
 
 int main()
+  //@requires true;
+  //@ensures true;
 {
   return 0;
 }
