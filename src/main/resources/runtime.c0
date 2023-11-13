@@ -153,3 +153,25 @@ void join(OwnedFields* target, OwnedFields* source){
         }
     }
 }
+
+void printof(OwnedFields* fields) {
+    if (fields != NULL) {
+	    print("OwnedFields: [ ");
+        for (int i = 0; i < fields->capacity; i += 1) {
+            FieldArray* currFields = fields->contents[i];
+			if (currFields != NULL && !currFields->deleted) {
+			    print("(");
+				printint(currFields->_id);
+				print(",");
+			    for (int j = 0; j < currFields->length; j +=1) {
+				    print(" ");
+			        printbool(currFields->contents[j]);
+			    }
+				print(") ");
+			}
+        }
+		print("]\n");
+    } else {
+	  println("OwnedFields is empty/NULL");
+	}
+}

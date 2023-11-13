@@ -26,3 +26,4 @@ void join(OwnedFields* target, OwnedFields* source);
 void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage);
 void addAccEnsureSeparate(OwnedFields* fields, int _id, int fieldIndex, int numFields, string errorMessage);
 FieldArray* find(OwnedFields* fields, int _id);
+void printof(OwnedFields* fields);
