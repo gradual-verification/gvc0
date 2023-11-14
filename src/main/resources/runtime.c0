@@ -65,7 +65,7 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   //@requires fields != NULL && _id >= 0 && numFields > 0;
   //@ensures fields != NULL && fields->capacity > fields->length;
 {
-  if(fields->length > (fields->capacity * (4/5))) grow(fields);
+  if(fields->length > (fields->capacity * 4 / 5)) grow(fields);
 
   int fieldIndex = hash(_id, fields->capacity);
   while(fields->contents[fieldIndex] != NULL && !fields->contents[fieldIndex]->deleted) fieldIndex = (fieldIndex + 1) % fields->capacity;
@@ -137,7 +137,10 @@ void loseAcc(OwnedFields* fields, int _id, int fieldIndex){
             toLose->contents[fieldIndex] = false;
             toLose->numAccessible -= 1;
         }
-        if(toLose->numAccessible == 0) toLose->deleted = true;
+        if(toLose->numAccessible == 0) {
+          toLose->deleted = true;
+          fields->length -= 1;
+        }
     }
 }
 
@@ -156,22 +159,30 @@ void join(OwnedFields* target, OwnedFields* source){
 
 void printof(OwnedFields* fields) {
     if (fields != NULL) {
-	    print("OwnedFields: [ ");
+        print("Capacity: ");
+        printint(fields->capacity);
+        print(" ");
+        print("Length: ");
+        printint(fields->length);
+        print(" ");
+        print("OwnedFields: [ ");
         for (int i = 0; i < fields->capacity; i += 1) {
             FieldArray* currFields = fields->contents[i];
-			if (currFields != NULL && !currFields->deleted) {
-			    print("(");
-				printint(currFields->_id);
-				print(",");
-			    for (int j = 0; j < currFields->length; j +=1) {
-				    print(" ");
-			        printbool(currFields->contents[j]);
-			    }
-				print(") ");
-			}
+            if (currFields != NULL) {
+                print("(");
+                printint(currFields->_id);
+                print(",");
+                for (int j = 0; j < currFields->length; j +=1) {
+                    print(" ");
+                    printbool(currFields->contents[j]);
+                }
+                print(", i: ");
+                printint(i);
+                print(") ");
+            }
         }
-		print("]\n");
+        print("]\n");
     } else {
-	  println("OwnedFields is empty/NULL");
-	}
+        println("OwnedFields is empty/NULL");
+    }
 }
