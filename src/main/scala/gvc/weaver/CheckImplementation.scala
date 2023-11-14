@@ -207,12 +207,12 @@ class CheckImplementation(
     print("Fields: ")
     struct.fields.foreach{f => print(f.name + " ")}
     println("");
-    val idFieldExists = struct.fields.exists(fld => {
+    /*val idFieldExists = struct.fields.exists(fld => {
       fld.name == "_id"
     })
     if (!idFieldExists) {
       throw new WeaverException("Couldn't locate _id field")
-    }
+    }*/
     val instanceId =
       if (convertedMember.root.valueType.isDefined) {
         mode match {
