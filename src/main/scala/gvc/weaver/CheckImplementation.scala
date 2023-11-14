@@ -201,11 +201,11 @@ class CheckImplementation(
                                 permsSecondary: Option[IR.Var],
                                 context: SpecificationContext
                               ): Seq[IR.Op] = {
-    program.structs.foreach{s => println(s)}
-    println("not converted member:")
-    println(member.field.struct)
     val convertedMember = context.convertFieldMember(member)
-    val struct = convertedMember.field.struct
+    val struct = program.structs.find(s => s.name == convertedMember.field.struct.name) match {
+      case Some(s) => s
+      case None => throw new WeaverException("struct not found for field member")
+    }
     println(struct.fields.length)
     print("Fields: ")
     struct.fields.foreach{f => print(f.name + " ")}
