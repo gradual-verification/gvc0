@@ -201,9 +201,9 @@ class CheckImplementation(
                                 permsSecondary: Option[IR.Var],
                                 context: SpecificationContext
                               ): Seq[IR.Op] = {
+    program.structs.foreach{s => println(s)}
     println("not converted member:")
-    member.field.struct.fields.foreach{ f => print(f.name + " ")}
-    println("")
+    println(member.field.struct)
     val convertedMember = context.convertFieldMember(member)
     val struct = convertedMember.field.struct
     println(struct.fields.length)
