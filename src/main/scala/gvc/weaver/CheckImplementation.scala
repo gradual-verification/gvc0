@@ -204,7 +204,9 @@ class CheckImplementation(
     val convertedMember = context.convertFieldMember(member)
     val struct = convertedMember.field.struct
     println(struct.fields.length)
+    print("Fields: ")
     struct.fields.foreach{f => print(f.name + " ")}
+    println("");
     val idFieldExists = struct.fields.exists(fld => {
       fld.name == "_id"
     })
