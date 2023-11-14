@@ -203,6 +203,13 @@ class CheckImplementation(
                               ): Seq[IR.Op] = {
     val convertedMember = context.convertFieldMember(member)
     val struct = convertedMember.field.struct
+    println(struct.fields.length)
+    val idFieldExists = struct.fields.exists(fld => {
+      fld.name == "_id"
+    })
+    if (!idFieldExists) {
+      throw new WeaverException("Couldn't locate _id field")
+    }
     val instanceId =
       if (convertedMember.root.valueType.isDefined) {
         mode match {
