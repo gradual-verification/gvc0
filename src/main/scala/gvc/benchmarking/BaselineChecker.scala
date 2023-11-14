@@ -7,20 +7,11 @@ import gvc.weaver._
 object BaselineChecker {
 
   def check(program: IR.Program, onlyFraming: Boolean = false): Unit = {
-    program.structs.foreach{s => s.fields.foreach { f => println(f.name)}}
     val structIds =
       program.structs.map(s => (s.name, s.addField("_id", IR.IntType))).toMap
-    println("before check runtime");
-    program.structs.foreach{s => s.fields.foreach { f => println(f.name)}}
     val runtime = CheckRuntime.addToIR(program)
-    println("after check runtime");
-    program.structs.foreach{s => s.fields.foreach { f => println(f.name)}}
     val checks = new CheckImplementation(program, runtime, structIds)
-    println("after check impl");
-    program.structs.foreach{s => s.fields.foreach { f => println(f.name)}}
     program.methods.foreach(checkMethod(_, checks, onlyFraming))
-    println("after check method");
-    program.structs.foreach{s => s.fields.foreach { f => println(f.name)}}
   }
 
   def checkFraming(program: IR.Program): Unit =
