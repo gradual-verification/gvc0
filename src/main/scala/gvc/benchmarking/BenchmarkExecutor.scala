@@ -253,6 +253,8 @@ object BenchmarkExecutor {
       val sourceText =
         IRPrinter.print(ir, includeSpecs = false)
 
+      println(sourceText)
+
       this.injectAndWrite(sourceText, tempSource)
       Files.deleteIfExists(tempBinary)
       Timing.compileTimed(

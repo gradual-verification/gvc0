@@ -206,10 +206,6 @@ class CheckImplementation(
       case Some(s) => s
       case None => throw new WeaverException("struct not found for field member")
     }
-    println(struct.fields.length)
-    print("Fields: ")
-    struct.fields.foreach{f => print(f.name + " ")}
-    println("");
     val idFieldExists = struct.fields.exists(fld => {
       fld.name == "_id"
     })
@@ -246,7 +242,9 @@ class CheckImplementation(
         }
       }
 
-    val fieldIndex = new IR.IntLit(struct.fields.indexOf(convertedMember.field))
+    val fname = convertedMember.field.name
+    val fvtype = convertedMember.field.valueType
+    val fieldIndex = new IR.IntLit(struct.fields.indexWhere(f => f.name == fname && f.valueType == fvtype))
     val numFields = new IR.IntLit(struct.fields.length)
     //TODO: add support for IRPrinter.printExpr here
     val fullName = s"struct ${struct.name}.${convertedMember.field.name}"
@@ -386,7 +384,10 @@ class CheckImplementation(
   }
 
   def trackAllocation(alloc: IR.AllocStruct, perms: IR.Var): Unit = {
-    val structType = alloc.struct
+    val structType = program.structs.find(s => s.name == alloc.struct.name) match {
+      case Some(s) => s
+      case None => throw new WeaverException("struct def not found for struct alloc")
+    }
     val idField = new IR.FieldMember(
       alloc.target,
       structIdField(alloc.struct)
