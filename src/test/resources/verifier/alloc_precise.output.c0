@@ -30,9 +30,9 @@ int main()
   _instanceCounter = alloc(int);
   _ownedFields = initOwnedFields(_instanceCounter);
   _ = create(_instanceCounter);
-  addAcc(_ownedFields, _->_id, 2, 0);
+  addAcc(_ownedFields, _->_id, 1, 0);
   _1 = create(_instanceCounter);
-  addAcc(_ownedFields, _1->_id, 2, 0);
+  addAcc(_ownedFields, _1->_id, 1, 0);
   test(_, _1, _ownedFields);
   return 0;
 }
@@ -45,8 +45,8 @@ void test(struct A* x, struct A* y, struct OwnedFields* _ownedFields)
   assertAcc(_ownedFields, x != NULL ? x->_id : -1, 0, "Field access runtime check failed for struct A.value");
   assert(!(x == NULL));
   assert(!(y == NULL));
-  addAccEnsureSeparate(_tempFields, x != NULL ? x->_id : -1, 0, 2, "Overlapping field permissions for struct A.value");
-  addAccEnsureSeparate(_tempFields, y != NULL ? y->_id : -1, 0, 2, "Overlapping field permissions for struct A.value");
+  addAccEnsureSeparate(_tempFields, x != NULL ? x->_id : -1, 0, 1, "Overlapping field permissions for struct A.value");
+  addAccEnsureSeparate(_tempFields, y != NULL ? y->_id : -1, 0, 1, "Overlapping field permissions for struct A.value");
   loseAcc(_ownedFields, x->_id, 0);
   loseAcc(_ownedFields, y->_id, 0);
   test2(x, y, _ownedFields->instanceCounter);

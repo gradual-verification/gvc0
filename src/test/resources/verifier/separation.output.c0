@@ -16,7 +16,7 @@ struct _ptr_int* create(struct OwnedFields* _ownedFields)
 {
   struct _ptr_int* _ = NULL;
   _ = alloc(struct _ptr_int);
-  _->_id = addStructAcc(_ownedFields, 2);
+  _->_id = addStructAcc(_ownedFields, 1);
   return _;
 }
 
@@ -52,8 +52,8 @@ void test(struct _ptr_int* x, struct _ptr_int* y, struct OwnedFields* _ownedFiel
   assertAcc(_ownedFields, x != NULL ? x->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
   assert(!(x == NULL));
   assert(!(y == NULL));
-  addAccEnsureSeparate(_tempFields, x != NULL ? x->_id : -1, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
-  addAccEnsureSeparate(_tempFields, y != NULL ? y->_id : -1, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
+  addAccEnsureSeparate(_tempFields, x != NULL ? x->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
+  addAccEnsureSeparate(_tempFields, y != NULL ? y->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
   loseAcc(_ownedFields, x->_id, 0);
   loseAcc(_ownedFields, y->_id, 0);
   ensureSeparate(x, y, _ownedFields->instanceCounter);

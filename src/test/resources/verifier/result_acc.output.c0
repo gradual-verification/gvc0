@@ -15,7 +15,7 @@ struct Test* getTest(struct OwnedFields* _ownedFields)
 {
   struct Test* _ = NULL;
   _ = alloc(struct Test);
-  _->_id = addStructAcc(_ownedFields, 2);
+  _->_id = addStructAcc(_ownedFields, 1);
   return _;
 }
 

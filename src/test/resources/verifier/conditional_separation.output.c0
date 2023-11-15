@@ -24,7 +24,7 @@ struct _ptr_int* create(struct OwnedFields* _ownedFields)
 {
   struct _ptr_int* _ = NULL;
   _ = alloc(struct _ptr_int);
-  _->_id = addStructAcc(_ownedFields, 2);
+  _->_id = addStructAcc(_ownedFields, 1);
   return _;
 }
 
@@ -34,7 +34,7 @@ struct _ptr_int_* createNested(struct OwnedFields* _ownedFields)
   struct _ptr_int* _ = NULL;
   struct OwnedFields* _tempFields = NULL;
   ptr = alloc(struct _ptr_int_);
-  ptr->_id = addStructAcc(_ownedFields, 2);
+  ptr->_id = addStructAcc(_ownedFields, 1);
   _tempFields = initOwnedFields(_ownedFields->instanceCounter);
   _ = create(_tempFields);
   join(_ownedFields, _tempFields);
@@ -77,11 +77,11 @@ int main()
   }
   assertAcc(_ownedFields, a->value != NULL ? a->value->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
   assert(!(a->value == NULL));
-  addAccEnsureSeparate(_tempFields, a->value != NULL ? a->value->_id : -1, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
+  addAccEnsureSeparate(_tempFields, a->value != NULL ? a->value->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
   if (v == 1)
   {
     assert(!(b == NULL));
-    addAccEnsureSeparate(_tempFields, b != NULL ? b->_id : -1, 0, 2, "Overlapping field permissions for struct _ptr_int.value");
+    addAccEnsureSeparate(_tempFields, b != NULL ? b->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
   }
   test(v, a, b, _ownedFields);
   return 0;
