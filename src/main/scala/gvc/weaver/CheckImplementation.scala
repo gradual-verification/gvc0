@@ -245,7 +245,7 @@ class CheckImplementation(
     val fname = convertedMember.field.name
     val fvtype = convertedMember.field.valueType
     val fieldIndex = new IR.IntLit(struct.fields.indexWhere(f => f.name == fname && f.valueType == fvtype))
-    val numFields = new IR.IntLit(struct.fields.length)
+    val numFields = new IR.IntLit(struct.fields.length-1)
     //TODO: add support for IRPrinter.printExpr here
     val fullName = s"struct ${struct.name}.${convertedMember.field.name}"
 
@@ -396,7 +396,7 @@ class CheckImplementation(
     alloc.insertAfter(
       new IR.Invoke(
         runtime.addStructAcc,
-        List(perms, new IR.IntLit(structType.fields.length)),
+        List(perms, new IR.IntLit(structType.fields.length-1)),
         Some(idField)
       )
     )
