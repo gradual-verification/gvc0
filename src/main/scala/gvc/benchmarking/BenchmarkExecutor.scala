@@ -216,7 +216,6 @@ object BenchmarkExecutor {
           s"The file doesn't include an assignment of the form 'int stress = ...'."
         )
       }
-      println(verifiedSource)
       val injectedSource = injectStress(verifiedSource)
       Files.writeString(tempSource, injectedSource)
       Files.deleteIfExists(tempBinary)
