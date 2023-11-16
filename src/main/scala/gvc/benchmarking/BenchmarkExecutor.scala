@@ -291,12 +291,21 @@ object BenchmarkExecutor {
           reserved.perm.permutationContents
         )
 
-      val convertedToIR = new SelectVisitor(
+      val convertedToIRTemp = new SelectVisitor(
         syncedPrograms(reserved.perm.programID).ir
       ).visit(asLabelSet)
 
       val reconstructedSourceText =
+        IRPrinter.print(convertedToIRTemp, includeSpecs = true)
+
+      // Hacky solution for issue 59; since SelectVisitor produces an IR that BaselineChecker can't
+      // use correctly. The IR produces a correct source program though.
+      // Solution: recreate IR from reconstructedSourceText (aka text from IR generated from perm in SelectVisitor)
+      // Use this fresh IR for verification
+      val convertedToIR = Main.generateIR(reconstructedSourceText, libraries)
+      val testText =
         IRPrinter.print(convertedToIR, includeSpecs = true)
+      println(testText)
 
       conn.dynamicModes.get(reserved.measurementMode) match {
         case Some(mode) =>
