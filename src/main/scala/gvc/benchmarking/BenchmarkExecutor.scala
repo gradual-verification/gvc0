@@ -216,6 +216,7 @@ object BenchmarkExecutor {
           s"The file doesn't include an assignment of the form 'int stress = ...'."
         )
       }
+      println(verifiedSource)
       val injectedSource = injectStress(verifiedSource)
       Files.writeString(tempSource, injectedSource)
       Files.deleteIfExists(tempBinary)
@@ -252,8 +253,6 @@ object BenchmarkExecutor {
       BaselineChecker.check(ir, onlyFraming)
       val sourceText =
         IRPrinter.print(ir, includeSpecs = false)
-
-      println(sourceText)
 
       this.injectAndWrite(sourceText, tempSource)
       Files.deleteIfExists(tempBinary)
@@ -303,9 +302,6 @@ object BenchmarkExecutor {
       // Solution: recreate IR from reconstructedSourceText (aka text from IR generated from perm in SelectVisitor)
       // Use this fresh IR for verification
       val convertedToIR = Main.generateIR(reconstructedSourceText, libraries)
-      val testText =
-        IRPrinter.print(convertedToIR, includeSpecs = true)
-      println(testText)
 
       conn.dynamicModes.get(reserved.measurementMode) match {
         case Some(mode) =>
