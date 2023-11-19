@@ -31,6 +31,7 @@ import java.util.Calendar
 import sys.process._
 import scala.language.postfixOps
 import viper.silicon.state.BranchCond
+import gvc.benchmarking.DAO
 
 case class OutputFileCollection(
     baseName: String,
@@ -113,37 +114,40 @@ object Main extends App {
       case Config.Recreate =>
         val benchConfig =
           BenchmarkExternalConfig.parseRecreator(config)
-        Output.info(
-          s"Recreating permutation ID=${benchConfig.permToRecreate}..."
-        )
-        val recreated =
-          BenchmarkRecreator.recreate(benchConfig, config, linkedLibraries)
-        Output.success(
-          s"Successfully recreated permutation ID=${benchConfig.permToRecreate}!"
-        )
+        val conn = DAO.connect(benchConfig.db)
+        for (permToRecreate <- benchConfig.permsToRecreate.reverse) {
+          Output.info(
+            s"Recreating permutation ID=${permToRecreate}..."
+          )
+          val recreated =
+            BenchmarkRecreator.recreate(benchConfig, config, linkedLibraries, conn, permToRecreate)
+          Output.success(
+            s"Successfully recreated permutation ID=${permToRecreate}!"
+          )
 
-        recreated match {
-          case BenchmarkRecreator.RecreatedUnverified(ir) =>
-            val recreationName = s"./recreated_${benchConfig.permToRecreate}.c0"
-            Output.info(s"Writing to $recreationName")
-            val inputSource = IRPrinter.print(ir, includeSpecs = true)
-            val sourcePath =
-              Paths.get(recreationName)
-            Files.writeString(sourcePath, inputSource)
-            val fileNames = getOutputCollection(recreationName)
-            Output.printTiming(() => {
-              val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
-              execute(verifiedOutput.c0Source, fileNames)
-            })
-          case BenchmarkRecreator.RecreatedVerified(c0) =>
-            val recreationName =
-              s"./recreated_${benchConfig.permToRecreate}.verified.c0"
-            Output.info(s"Writing to $recreationName")
-            val sourcePath =
-              Paths.get(recreationName)
-            Files.writeString(sourcePath, c0)
-            val fileNames = getOutputCollection(recreationName)
-            execute(c0, fileNames)
+          recreated match {
+            case BenchmarkRecreator.RecreatedUnverified(ir) =>
+              val recreationName = s"./recreated_${permToRecreate}.c0"
+              Output.info(s"Writing to $recreationName")
+              val inputSource = IRPrinter.print(ir, includeSpecs = true)
+              val sourcePath =
+                Paths.get(recreationName)
+              Files.writeString(sourcePath, inputSource)
+              val fileNames = getOutputCollection(recreationName)
+              Output.printTiming(() => {
+                val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+                execute(verifiedOutput.c0Source, fileNames)
+              })
+            case BenchmarkRecreator.RecreatedVerified(c0) =>
+              val recreationName =
+                s"./recreated_${permToRecreate}.verified.c0"
+              Output.info(s"Writing to $recreationName")
+              val sourcePath =
+                Paths.get(recreationName)
+              Files.writeString(sourcePath, c0)
+              val fileNames = getOutputCollection(recreationName)
+              execute(c0, fileNames)
+          }
         }
       case Config.Execute =>
         val benchConfig =
@@ -464,8 +468,6 @@ object Main extends App {
     if (cmdConfig.exec) {
       val outputCommand = Paths.get(outputExe).toAbsolutePath.toString
       sys.exit(Seq(outputCommand) !)
-    } else {
-      sys.exit(0)
     }
   }
 }

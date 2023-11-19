@@ -14,13 +14,14 @@ object BenchmarkRecreator {
 
   def recreate(config: RecreatorConfig,
                baseConfig: Config,
-               libraries: List[String]): Recreated = {
-    val conn = DAO.connect(config.db)
-    val permutation = DAO.resolvePermutation(config.permToRecreate, conn)
+               libraries: List[String],
+               conn: DAO.DBConnection,
+               permToRecreate: Int): Recreated = {
+    val permutation = DAO.resolvePermutation(permToRecreate, conn)
 
     permutation match {
       case Some(perm) =>
-        Output.success(s"Located permutation #${config.permToRecreate}")
+        Output.success(s"Located permutation #${permToRecreate}")
 
         if (config.modifiers.skipVerification) {
           DAO.resolveVersion(config.version, conn) match {
@@ -50,7 +51,7 @@ object BenchmarkRecreator {
 
       case None =>
         error(
-          s"A permutation with ID=${baseConfig.recreatePerm.get} does not exist in the database.")
+          s"A permutation with ID=${permToRecreate} does not exist in the database.")
     }
   }
 }
