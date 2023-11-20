@@ -253,9 +253,10 @@ object BenchmarkExternalConfig {
           p.getName.endsWith(".c0")
         })
         .map(_.toPath)
-      val fileCollection = rootConfig.sourceFile match {
-        case Some(value) => c0SourceFiles ++ List(Paths.get(value))
-        case None        => c0SourceFiles
+      val fileCollection = rootConfig.sourceFiles match {
+        case List(value) => c0SourceFiles ++ List(Paths.get(value))
+        case List()      => c0SourceFiles
+        case _ => Config.error("Cannot specify multiple input files")
       }
 
       val outputDir = benchmarkRoot \ "output-dir"

@@ -87,8 +87,8 @@ object Main extends App {
         BenchmarkMonitor.monitor(benchConfig)
       case Config.DynamicVerification | Config.FramingVerification =>
         Output.printTiming(() => {
-          val fileNames = getOutputCollection(config.sourceFile.get)
-          val inputSource = readFile(config.sourceFile.get)
+          val fileNames = getOutputCollection(config.getSingleSourceFile())
+          val inputSource = readFile(config.getSingleSourceFile())
           val onlyFraming = config.mode == Config.FramingVerification
           val ir = generateIR(inputSource, linkedLibraries)
           BaselineChecker.check(ir, onlyFraming)
@@ -159,38 +159,40 @@ object Main extends App {
           BenchmarkExternalConfig.parsePopulator(config)
         BenchmarkPopulator.populate(benchConfig, linkedLibraries)
       case Config.Describe =>
-        val inputSource = readFile(config.sourceFile.get)
+        val inputSource = readFile(config.getSingleSourceFile())
         val sourceIR = Main.generateIR(inputSource, linkedLibraries)
         val visitor = new LabelVisitor()
         val labelOutput = visitor.visit(sourceIR)
         visitor.printCounts(labelOutput.labels)
       case Config.DefaultMode =>
-        val fileNames = getOutputCollection(config.sourceFile.get)
-        val inputSource = readFile(config.sourceFile.get)
-        Output.printTiming(() => {
-          val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
-          execute(verifiedOutput.c0Source, fileNames)
-        })
+        for (sourceFile <- config.sourceFiles.reverse) {
+          val fileNames = getOutputCollection(sourceFile)
+          val inputSource = readFile(sourceFile)
+          Output.printTiming(() => {
+            val verifiedOutput = verify(inputSource, fileNames, cmdConfig)
+            execute(verifiedOutput.c0Source, fileNames)
+          })
+        }
       case Config.CaseStudyMode => {
-        val fileNames = getOutputCollection(config.sourceFile.get)
-        val inputSource = readFile(config.sourceFile.get)
+        val fileNames = getOutputCollection(config.getSingleSourceFile())
+        val inputSource = readFile(config.getSingleSourceFile())
         val caseName = fileNames.baseName.split("/").last
 
         // create new dir for collected data and files
         val localTime = java.time.LocalDateTime.now()
         val outputDir = Paths.get("").toAbsolutePath.toString + "/" + caseName + "-" + localTime + "/"
-        val newSourceFile = outputDir + config.sourceFile.get.split("/").last
+        val newSourceFile = outputDir + config.getSingleSourceFile().split("/").last
         val fileNames2 = getOutputCollection(newSourceFile)
 
         val caseConfig = new Config(
                                 mode = Config.CaseStudyMode,
                                 saveFiles = true,
                                 exec = true,
-                                sourceFile = config.sourceFile,
+                                sourceFiles = config.sourceFiles,
                                 linkedLibraries = config.linkedLibraries,
                                 includeDirectories = config.includeDirectories,
                              )
-        println(Output.purple("Verifying '" + config.sourceFile.get + "' and gathering data."))
+        println(Output.purple("Verifying '" + config.getSingleSourceFile() + "' and gathering data."))
         println(Output.purple("Outputting collected data to " + outputDir))
         writeDir(outputDir)
         writeFile(newSourceFile, inputSource)
@@ -464,8 +466,6 @@ object Main extends App {
     if (cmdConfig.exec) {
       val outputCommand = Paths.get(outputExe).toAbsolutePath.toString
       sys.exit(Seq(outputCommand) !)
-    } else {
-      sys.exit(0)
     }
   }
 }
