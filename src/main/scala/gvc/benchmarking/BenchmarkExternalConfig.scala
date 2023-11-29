@@ -54,7 +54,7 @@ case class PipelineModifiers(exclusiveMode: Option[DynamicMeasurementMode],
 case class RecreatorConfig(version: String,
                            db: BenchmarkDBCredentials,
                            sources: List[Path],
-                           permToRecreate: Long,
+                           permsToRecreate: List[Int],
                            modifiers: PipelineModifiers)
     extends BenchmarkingConfig
 
@@ -127,15 +127,11 @@ object BenchmarkExternalConfig {
 
   def parseRecreator(rootConfig: Config): RecreatorConfig = {
     val resolved = parseConfig(rootConfig)
-    rootConfig.recreatePerm match {
-      case Some(value) =>
-        RecreatorConfig(resolved.version,
-                        resolved.credentials,
-                        resolved.sources,
-                        value,
-                        resolved.modifiers)
-      case None => error("Expected an integer value passed to --recreate.")
-    }
+    RecreatorConfig(resolved.version,
+                    resolved.credentials,
+                    resolved.sources,
+                    rootConfig.recreatePerms,
+                    resolved.modifiers)
   }
 
   def parseExecutor(rootConfig: Config): ExecutorConfig = {

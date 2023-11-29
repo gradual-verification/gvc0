@@ -37,7 +37,7 @@ case class Config(
     dbURLString: Option[String] = None,
     dbUserString: Option[String] = None,
     dbPassString: Option[String] = None,
-    recreatePerm: Option[Int] = None
+    recreatePerms: List[Int] = List.empty
 ) {
   def validate(): Unit = {
     (
@@ -266,7 +266,7 @@ object Config {
         fromCommandLineArgs(
           tail,
           current.copy(
-            recreatePerm = Some(this.parseInt(t, "--recreate")),
+            recreatePerms = this.parseInt(t, "--recreate") :: current.recreatePerms,
             mode = Recreate
           )
         )
