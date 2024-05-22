@@ -9,18 +9,18 @@ object PointerElimination {
     def convertMember(m: IR.Member): IR.Member = m match {
       case _: IR.ArrayMember => arraysUnsupported
       case d: IR.DereferenceMember => c.dereference(convert(d.root), d)
-      case f: IR.FieldMember => new IR.FieldMember(convert(f.root), f.field)
+      case f: IR.FieldMember => new IR.FieldMember(convert(f.root), f.field, f.resolved)
     }
 
     def convert(expr: IR.Expression): IR.Expression = expr match {
-      case a: IR.Accessibility => new IR.Accessibility(convertMember(a.member))
-      case b: IR.Binary => new IR.Binary(b.operator, convert(b.left), convert(b.right))
-      case c: IR.Conditional => new IR.Conditional(convert(c.condition), convert(c.ifTrue), convert(c.ifFalse))
-      case i: IR.Imprecise => new IR.Imprecise(i.precise.map(convert))
+      case a: IR.Accessibility => new IR.Accessibility(convertMember(a.member), a.resolved)
+      case b: IR.Binary => new IR.Binary(b.operator, convert(b.left), convert(b.right), b.resolved)
+      case c: IR.Conditional => new IR.Conditional(convert(c.condition), convert(c.ifTrue), convert(c.ifFalse), c.resolved)
+      case i: IR.Imprecise => new IR.Imprecise(i.precise.map(convert), i.resolved)
       case m: IR.Member => convertMember(m)
-      case p: IR.PredicateInstance => new IR.PredicateInstance(p.predicate, p.arguments.map(convert))
-      case r: IR.Result => new IR.Result(r.method)
-      case u: IR.Unary => new IR.Unary(u.operator, convert(u.operand))
+      case p: IR.PredicateInstance => new IR.PredicateInstance(p.predicate, p.arguments.map(convert), p.resolved)
+      case r: IR.Result => new IR.Result(r.method, r.resolved)
+      case u: IR.Unary => new IR.Unary(u.operator, convert(u.operand), u.resolved)
       case v: IR.Var => v
       case l: IR.Literal => l
     }
@@ -117,7 +117,7 @@ object PointerElimination {
 
     def dereference(root: IR.Expression, deref: IR.DereferenceMember): IR.FieldMember = {
       val t = deref.valueType.getOrElse(throw new TransformerException(s"Invalid pointer dereference for ${deref.root.valueType}"))
-      new IR.FieldMember(root, lookup(t).fields.head)
+      new IR.FieldMember(root, lookup(t).fields.head, deref.resolved)
     }
 
     def convert(t: IR.Type) = t match {

@@ -10,6 +10,14 @@ trait ResolvedNode {
   val parsed: Node
 }
 
+// Eventually, we want all IR nodes to have mandatory ResolvedNodes, so that
+// Zilch will no longer be needed
+case class Zilch() extends ResolvedNode {
+  override val parsed: Node = Identifier(
+    "SUPERCALIFRAGILISTICEXPIALIDOCIOUS",
+    SourceSpan(SourcePosition(0, 0, 0), SourcePosition(0, 0, 0)))
+}
+
 case class ResolvedProgram(
     methodDeclarations: List[ResolvedMethodDeclaration],
     methodDefinitions: List[ResolvedMethodDefinition],

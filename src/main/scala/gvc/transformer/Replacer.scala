@@ -78,34 +78,36 @@ object Replacer {
 
   def replace(member: IR.Member, m: Mapping): IR.Member = member match {
     case field: IR.FieldMember =>
-      new IR.FieldMember(replace(field.root, m), field.field)
+      new IR.FieldMember(replace(field.root, m), field.field, field.resolved)
     case deref: IR.DereferenceMember =>
-      new IR.DereferenceMember(replace(deref.root, m))
+      new IR.DereferenceMember(replace(deref.root, m), deref.resolved)
     case array: IR.ArrayMember =>
-      new IR.ArrayMember(replace(array.root, m), array.index) // TODO: index
+      new IR.ArrayMember(replace(array.root, m), array.index, array.resolved) // TODO: index
   }
 
   def replace(pred: IR.PredicateInstance, m: Mapping): IR.PredicateInstance =
-    new IR.PredicateInstance(pred.predicate, pred.arguments.map(replace(_, m)))
+    new IR.PredicateInstance(pred.predicate, pred.arguments.map(replace(_, m)), pred.resolved)
 
   def replace(expr: IR.Expression, m: Mapping): IR.Expression = expr match {
     case v: IR.Var                  => replace(v, m)
     case member: IR.Member          => replace(member, m)
-    case acc: IR.Accessibility      => new IR.Accessibility(replace(acc.member, m))
+    case acc: IR.Accessibility      => new IR.Accessibility(replace(acc.member, m), acc.resolved)
     case pred: IR.PredicateInstance => replace(pred, m)
     case result: IR.Result          => result
     case imprecise: IR.Imprecise =>
-      new IR.Imprecise(imprecise.precise.map(replace(_, m)))
+      new IR.Imprecise(imprecise.precise.map(replace(_, m)), imprecise.resolved)
     case literal: IR.Literal => literal
     case cond: IR.Conditional =>
       new IR.Conditional(replace(cond.condition, m),
                          replace(cond.ifTrue, m),
-                         replace(cond.ifFalse, m))
+                         replace(cond.ifFalse, m),
+                         cond.resolved)
     case binary: IR.Binary =>
       new IR.Binary(binary.operator,
                     replace(binary.left, m),
-                    replace(binary.right, m))
+                    replace(binary.right, m),
+                    binary.resolved)
     case unary: IR.Unary =>
-      new IR.Unary(unary.operator, replace(unary.operand, m))
+      new IR.Unary(unary.operator, replace(unary.operand, m), unary.resolved)
   }
 }
