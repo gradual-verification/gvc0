@@ -20,7 +20,11 @@ lazy val gvc = (project in file("."))
   .dependsOn(silicon)
 Compile / run / fork := true
 Compile / run / javaOptions += "-Xss15m"
+// The following line is necessary for the debugger to work in IntelliJ IDEA
+Compile / run / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
 assembly / assemblyMergeStrategy := {
   case PathList("META-INF", xs @ _*) => MergeStrategy.discard
   case x                             => MergeStrategy.first
 }
+
+// Nota bene: Gradual Viper and GVC0 run on Java 17, but not Java 22
