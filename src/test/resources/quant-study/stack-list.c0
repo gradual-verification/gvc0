@@ -144,7 +144,7 @@ Stack* push(Stack* s, int val)
 }
 
 int pop(Stack* s) 
-//@ requires ?;
+//@ requires stack(s);
 //@ ensures stack(s);
 {
   bool isempty = isEmpty(s);
