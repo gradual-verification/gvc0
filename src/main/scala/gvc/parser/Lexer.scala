@@ -4,11 +4,17 @@ import fastparse._
 trait Lexer extends Whitespace {
   def ident[_: P] =
     P(CharIn("A-Za-z_") ~~ CharIn("A-Za-z0-9_").repX)
-
+  
   def identifier[_: P] =
-    P(span(ident.!)).map({
+    P(span(!keywords ~ ident.!)).map({
       case (id, span) => Identifier(id, span)
     })
+  
+  def keywords[_: P] = {
+    StringIn("while", "if", "for", "assert", "NULL", "else", "true", 
+    "false", "struct", "alloc", "alloc_array", "typedef", "error", "return",
+    "int", "char", "bool", "void") ~~ !CharIn("A-Za-z0-9_")
+  }
 
   def decimalNumber[_: P] =
     P("0" | (CharIn("1-9") ~~ CharIn("0-9").repX))
@@ -23,7 +29,6 @@ trait Lexer extends Whitespace {
   def library[_: P] = P("<" ~~/ libraryChar.repX ~~ ">")
 
   def stringChar[_: P] = P(normalChar | escape)
-
   def charChar[_: P] = P(normalChar | escape | "\"" | "\\0")
 
   def normalChar[_: P] =
