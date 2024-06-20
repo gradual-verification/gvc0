@@ -56,6 +56,7 @@ int getValue(struct Outer* outer, struct OwnedFields* _ownedFields)
 
 int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields)
 {
+  int result = 0;
   struct OwnedFields* _tempFields = NULL;
   if (outer != NULL)
   {
@@ -65,12 +66,13 @@ int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields)
   {
     assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
     assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
-    return outer->inner->value;
+    result = outer->inner->value;
   }
   else
   {
-    return 0;
+    result = 0;
   }
+  return result;
 }
 
 int getValueStatic(struct Outer* outer, struct OwnedFields* _ownedFields)

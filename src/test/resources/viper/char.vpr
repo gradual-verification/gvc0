@@ -10,10 +10,12 @@ method main() returns ($result: Int)
   ensures true
 {
   var alpha: Bool
+  var _result$: Int
   alpha := isAlphabet(48)
   if (alpha) {
-    $result := 1
+    _result$ := 1
   } else {
-    $result := 0
+    _result$ := 0
   }
+  $result := _result$
 }

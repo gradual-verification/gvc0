@@ -23,6 +23,7 @@ int main()
   struct _ptr_int* _2 = NULL;
   struct Test* _3 = NULL;
   struct Test* _4 = NULL;
+  int result = 0;
   _ = alloc(struct Test);
   _1 = alloc(struct _ptr_int);
   if (true)
@@ -37,12 +38,13 @@ int main()
   }
   if (true && _4 == NULL)
   {
-    return 1;
+    result = 1;
   }
   else
   {
-    return 0;
+    result = 0;
   }
+  return result;
 }
 
 void something(struct Test* value)

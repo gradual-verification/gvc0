@@ -7,16 +7,18 @@ int main()
 {
   bool a = false;
   bool b = false;
+  int result = 0;
   a = test(1);
   b = test(2);
   if (a || b)
   {
-    return 0;
+    result = 0;
   }
   else
   {
-    return 1;
+    result = 1;
   }
+  return result;
 }
 
 bool test(int value)

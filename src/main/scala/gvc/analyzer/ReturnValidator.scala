@@ -5,8 +5,6 @@ import scala.annotation.tailrec
 object ReturnValidator {
   def validate(program: ResolvedProgram, errors: ErrorSink): Unit = {
     validateReturn(program, errors)
-
-    // TODO: Do we want to check for early returns?
     validateTailReturn(program, errors)
   }
 
