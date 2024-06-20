@@ -5,14 +5,16 @@ int main()
   //@requires true;
   //@ensures true;
 {
+  int x = 0;
   int _ = 0;
   int _1 = 0;
   int _2 = 0;
+  x = 0;
   _ = something();
   while (_ != 0)
     //@loop_invariant ?;
   {
-    return 1;
+    x = x + 1;
     _ = something();
   }
   _1 = something();
@@ -23,14 +25,14 @@ int main()
   while (_1 > 0 && _2 < 2)
     //@loop_invariant ?;
   {
-    return 2;
+    x = x + 1;
     _1 = something();
     if (_1 > 0)
     {
       _2 = something();
     }
   }
-  return 0;
+  return x;
 }
 
 int something()

@@ -59,6 +59,8 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
     "fp-basic/compound5.c0",
     "fp-basic/compound7.c0",
     "fp-basic/compound8.c0",
+    // Early returns
+    "fp-basic/init05.c0",
     // Not used as test file
     "fp-basic/pragma1_aux.c0"
   )

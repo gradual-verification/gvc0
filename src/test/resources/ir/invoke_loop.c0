@@ -11,15 +11,16 @@ int main()
   //@requires true;
   //@ensures true;
 {
+  int x = 0;
   while (something() != 0)
   {
-    return 1;
+    x++;
   }
 
   while (something() > 0 && something() < 2)
   {
-    return 2;
+    x++;
   }
 
-  return 0;
+  return x;
 }

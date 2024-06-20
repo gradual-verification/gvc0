@@ -13,8 +13,11 @@ int main()
   {
     return 1;
   }
-  b = !b;
-  return 1;
+  else
+  {
+    b = !b;
+    return 1;
+  }
 }
 
 bool test(int value)

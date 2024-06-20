@@ -7,7 +7,7 @@ object ReturnValidator {
     validateReturn(program, errors)
 
     // TODO: Do we want to check for early returns?
-    // validateTailReturn(program, errors)
+    validateTailReturn(program, errors)
   }
 
   // Adds an error for any early return from a method
