@@ -4,14 +4,6 @@ import scala.collection.mutable
 
 case class SilverVarId(methodName: String, varName: String)
 
-class SilverProgram(
-  val program: vpr.Program,
-
-  // Map of (methodName, varName) Silver variables that represent the result
-  // of the invoke
-  val temporaryVars: Map[SilverVarId, IR.Invoke]
-)
-
 object IRSilver {
   def toSilver(program: IR.Program) = new Converter(program).convert()
 
@@ -20,22 +12,6 @@ object IRSilver {
     val TempResultPrefix = "$result_"
     val ReservedResult = "result"
     val RenamedResult = "_result$"
-  }
-
-  private class TempVars(methodName: String, index: mutable.Map[SilverVarId, IR.Invoke]) {
-    private var counter = -1
-    val declarations = mutable.ListBuffer[vpr.LocalVarDecl]()
-
-    def next(invoke: IR.Invoke, t: vpr.Type): vpr.LocalVar = {
-      counter += 1
-      val name = Names.TempResultPrefix + counter
-
-      index += SilverVarId(methodName, name) -> invoke
-
-      val decl = vpr.LocalVarDecl(name, t)()
-      declarations += decl
-      decl.localVar
-    }
   }
 
   class Converter(ir: IR.Program) {
@@ -48,11 +24,10 @@ object IRSilver {
       field
     }
 
-    def convert(): SilverProgram = {
+    def convert(): vpr.Program = {
       val predicates = ir.predicates.map(convertPredicate).toList
-      val tempVarIndex = mutable.Map[SilverVarId, IR.Invoke]()
       val methods = (
-        ir.methods.map(convertMethod(_, tempVarIndex)) ++
+        ir.methods.map(convertMethod) ++
         ir.dependencies.flatMap(_.methods.map(convertLibraryMethod))
       ).toList
       val fields = this.fields.toSeq.sortBy(_.name).toList
@@ -66,7 +41,7 @@ object IRSilver {
         Seq.empty
       )()
 
-      new SilverProgram(program, tempVarIndex.toMap)
+      program
     }
 
     private def returnVarDecl(t: Option[IR.Type]): List[vpr.LocalVarDecl] = {
@@ -92,17 +67,14 @@ object IRSilver {
       )()
     }
 
-    private def convertMethod(method: IR.Method, tempVarIndex: mutable.Map[SilverVarId, IR.Invoke]): vpr.Method = {
-      var tempCount = 0
+    private def convertMethod(method: IR.Method): vpr.Method = {
 
       val params = method.parameters.map(convertDecl).toList
-      val vars = method.variables.map(convertDecl).toList
+      val decls = method.variables.map(convertDecl).toList
       val ret = returnVarDecl(method.returnType)
       val pre = method.precondition.map(convertExpr).toSeq
       val post = method.postcondition.map(convertExpr).toSeq
-      val tempVars = new TempVars(method.name, tempVarIndex)
-      val body = method.body.flatMap(convertOp(_, tempVars)).toList
-      val decls = vars ++ tempVars.declarations.toList
+      val body = method.body.flatMap(convertOp).toList
 
       vpr.Method(
         method.name,
@@ -139,10 +111,10 @@ object IRSilver {
     def getReturnVar(method: IR.Method): vpr.LocalVar =
       vpr.LocalVar(Names.ReturnVar, convertType(method.returnType.get))()
 
-    private def convertOp(op: IR.Op, tempVars: TempVars): Seq[vpr.Stmt] = op match {
+    private def convertOp(op: IR.Op): Seq[vpr.Stmt] = op match {
       case iff: IR.If => {
-        val ifTrue = iff.ifTrue.flatMap(convertOp(_, tempVars)).toList
-        val ifFalse = iff.ifFalse.flatMap(convertOp(_, tempVars)).toList
+        val ifTrue = iff.ifTrue.flatMap(convertOp).toList
+        val ifFalse = iff.ifFalse.flatMap(convertOp).toList
         Seq(
           vpr.If(
             convertExpr(iff.condition),
@@ -157,7 +129,7 @@ object IRSilver {
           vpr.While(
             convertExpr(loop.condition),
             List(convertExpr(loop.invariant)),
-            vpr.Seqn(loop.body.flatMap(convertOp(_, tempVars)).toList, Seq.empty)()
+            vpr.Seqn(loop.body.flatMap(convertOp).toList, Seq.empty)()
           )()
         )
       }
@@ -172,7 +144,7 @@ object IRSilver {
           
           case None => invoke.callee.returnType match {
             case Some(retType) =>
-              Some(tempVars.next(invoke, convertType(retType)))
+              throw new IRException("Cannot convert invoke of non-void method with no target")
             case None =>
               None
           }

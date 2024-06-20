@@ -3,7 +3,7 @@ package gvc.weaver
 import gvc.transformer.IR.Predicate
 
 import scala.collection.mutable
-import gvc.transformer.{IR, SilverProgram, SilverVarId}
+import gvc.transformer.IR
 import viper.silver.ast.MethodCall
 import viper.silver.{ast => vpr}
 import viper.silicon.state.CheckPosition
@@ -61,7 +61,6 @@ object Collector {
 
   class CollectedProgram(
       val program: IR.Program,
-      val temporaryVars: Map[SilverVarId, IR.Invoke],
       val methods: Map[String, CollectedMethod]
   )
 
@@ -69,9 +68,9 @@ object Collector {
 
   def collect(
       irProgram: IR.Program,
-      vprProgram: SilverProgram
+      vprProgram: vpr.Program
   ): CollectedProgram = {
-    val checks = collectChecks(vprProgram.program)
+    val checks = collectChecks(vprProgram)
 
     val methods = irProgram.methods
       .map(
@@ -80,9 +79,9 @@ object Collector {
             m.name,
             collect(
               irProgram,
-              vprProgram.program,
+              vprProgram,
               m,
-              vprProgram.program.findMethod(m.name),
+              vprProgram.findMethod(m.name),
               checks
             )
         ))
@@ -90,7 +89,6 @@ object Collector {
 
     new CollectedProgram(
       program = irProgram,
-      temporaryVars = vprProgram.temporaryVars,
       methods = methods
     )
   }

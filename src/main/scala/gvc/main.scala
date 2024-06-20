@@ -391,13 +391,13 @@ object Main extends App {
         fileNames.irFileName,
         IRPrinter.print(ir, includeSpecs = true)
       )
-    if (config.dump.contains(Config.DumpSilver)) dump(silver.program.toString())
+    if (config.dump.contains(Config.DumpSilver)) dump(silver.toString())
     else if (config.saveFiles)
-      writeFile(fileNames.silverFileName, silver.program.toString())
+      writeFile(fileNames.silverFileName, silver.toString())
 
     val verificationStart = System.nanoTime()
     silicon.start()
-    silicon.verify(silver.program) match {
+    silicon.verify(silver) match {
       case verifier.Success => if (stopImmediately) silicon.stop()
       case verifier.Failure(errors) =>
         val message = errors.map(_.readableMessage).mkString("\n")
@@ -423,7 +423,7 @@ object Main extends App {
     if (config.dump.contains(Config.DumpC0))
       dumpC0(c0Source)
     VerifiedOutput(
-      silver.program,
+      silver,
       c0Source,
       ProfilingInfo(
         profilingInfo.getTotalConjuncts,

@@ -8,16 +8,17 @@ import fastparse.Parsed
 import gvc.analyzer._
 import gvc.transformer._
 import gvc.weaver.Weaver
+import viper.silver.{ast => vpr}
 
 case class TestProgram(
     ir: IR.Program,
-    silverProgram: SilverProgram
+    silverProgram: vpr.Program
 ) {
   def weave = Weaver.weave(ir, silverProgram)
 
   def irSource = IRPrinter.print(ir, true)
 
-  def silverSource = silverProgram.program.toString()
+  def silverSource = silverProgram.toString()
 }
 
 case class TestResource(file: Path) {

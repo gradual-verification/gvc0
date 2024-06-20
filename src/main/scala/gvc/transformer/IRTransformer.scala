@@ -668,10 +668,13 @@ object IRTransformer {
       scope += new IR.Invoke(method, args, Some(target))
     }
 
-    def invokeVoid(input: ResolvedInvoke, scope: Scope): Unit = {
+    def invokeVoid(input: ResolvedInvoke, scope: MethodScope): Unit = {
       val method = resolveMethod(input)
       val args = input.arguments.map(arg => transformExpr(arg, scope))
-      scope += new IR.Invoke(method, args, None)
+      // Add a variable to capture the result, even when it is not used. (The
+      // [conditions of] Viper run-time checks may reference it.)
+      val target = method.returnType.map(t => scope.method.addVar(t))
+      scope += new IR.Invoke(method, args, target)
     }
 
     def resolveMethod(invoke: ResolvedInvoke): IR.MethodDefinition =

@@ -10,11 +10,11 @@ method main() returns ($result: Int)
   ensures true
 {
   var x: Int
-  var $result_0: Int
-  var $result_1: Int
-  $result_0 := doSomething(0)
+  var _: Int
+  var _1: Int
+  _ := doSomething(0)
   x := random()
-  $result_1 := doSomething(x)
+  _1 := doSomething(x)
   assert x == 0
   $result := 0
 }

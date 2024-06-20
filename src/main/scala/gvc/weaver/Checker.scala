@@ -1,39 +1,12 @@
 package gvc.weaver
 
-import gvc.transformer.{IR, SilverVarId}
+import gvc.transformer.IR
 import Collector._
 import scala.collection.mutable
 import scala.annotation.tailrec
 
 object Checker {
   type StructIDTracker = Map[String, IR.StructField]
-
-  class CheckerMethod(
-      val method: IR.Method,
-      tempVars: Map[SilverVarId, IR.Invoke]
-  ) extends CheckMethod {
-    val resultVars = mutable.Map[String, IR.Expression]()
-    def resultVar(name: String): IR.Expression = {
-      resultVars.getOrElseUpdate(
-        name, {
-          val invoke = tempVars.getOrElse(
-            SilverVarId(method.name, name),
-            throw new WeaverException(s"Missing temporary variable '$name'")
-          )
-          invoke.target.getOrElse {
-            val retType = invoke.method.returnType.getOrElse(
-              throw new WeaverException(
-                s"Invalid temporary variable '$name' for void '${invoke.callee.name}'"
-              )
-            )
-            val tempVar = method.addVar(retType)
-            invoke.target = Some(tempVar)
-            tempVar
-          }
-        }
-      )
-    }
-  }
 
   def insert(program: Collector.CollectedProgram): Unit = {
     val runtime = CheckRuntime.addToIR(program.program)
@@ -61,7 +34,6 @@ object Checker {
   ): Unit = {
     val program = programData.program
     val method = methodData.method
-    val checkMethod = new CheckerMethod(method, programData.temporaryVars)
 
     val callsImprecise: Boolean = methodData.calls.exists(c =>
       programData.methods.get(c.ir.callee.name) match {
@@ -106,7 +78,7 @@ object Checker {
     }
 
     def getCondition(cond: Condition): IR.Expression = cond match {
-      case ImmediateCondition(expr) => expr.toIR(program, checkMethod, None)
+      case ImmediateCondition(expr) => expr.toIR(program, method, None)
       case cond: TrackedCondition   => conditionVars(cond)
       case NotCondition(value) =>
         new IR.Unary(IR.UnaryOp.Not, getCondition(value))
@@ -193,7 +165,7 @@ object Checker {
     // Insert the runtime checks
     // Group them by location and condition, so that multiple checks can be contained in a single
     // if block.
-    val context = CheckContext(program, checkMethod, implementation, runtime)
+    val context = CheckContext(program, method, implementation, runtime)
     for ((loc, checkData) <- groupChecks(methodData.checks)) {
       insertAt(
         loc,
@@ -205,7 +177,7 @@ object Checker {
 
           def getTemporaryOwnedFields(): IR.Var =
             temporaryOwnedFields.getOrElse {
-              val tempVar = context.method.method.addVar(
+              val tempVar = context.method.addVar(
                 context.runtime.ownedFieldsRef,
                 CheckRuntime.Names.temporaryOwnedFields
               )
@@ -394,7 +366,7 @@ object Checker {
             conds.map(
               c =>
                 new IR.Assign(conditionVars(c),
-                              c.value.toIR(program, checkMethod, retVal)))
+                              c.value.toIR(program, method, retVal)))
           })
       }
 
@@ -474,7 +446,7 @@ object Checker {
 
   case class CheckContext(
       program: IR.Program,
-      method: CheckMethod,
+      method: IR.Method,
       implementation: CheckImplementation,
       runtime: CheckRuntime
   )
@@ -604,7 +576,7 @@ object Checker {
     case u: CheckExpression.Unary =>
       nesting(u.operand) + 1
     case _: CheckExpression.Literal | _: CheckExpression.Var |
-        CheckExpression.Result | _: CheckExpression.ResultVar =>
+        CheckExpression.Result =>
       1
   }
 }
