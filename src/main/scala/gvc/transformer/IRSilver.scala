@@ -9,7 +9,6 @@ object IRSilver {
 
   object Names {
     val ReturnVar = "$result"
-    val TempResultPrefix = "$result_"
     val ReservedResult = "result"
     val RenamedResult = "_result$"
   }

@@ -26,6 +26,17 @@ object Checker {
     }
   }
 
+  private def insertAtReturn(block: IR.Block, ops: Option[IR.Expression] => Seq[IR.Op]) : Unit = block.lastOption match {
+    case Some(iff: IR.If) => {
+      insertAtReturn(iff.ifTrue, ops)
+      insertAtReturn(iff.ifFalse, ops)
+    }
+    case Some(ret: IR.Return) => {
+      ret.insertBefore(ops(ret.value))
+    }
+    case _ => block ++= ops(None)
+  }
+
   private def insert(
       programData: CollectedProgram,
       methodData: CollectedMethod,
@@ -34,12 +45,7 @@ object Checker {
   ): Unit = {
     val program = programData.program
     val method = methodData.method
-
-    val callsImprecise: Boolean = methodData.calls.exists(c =>
-      programData.methods.get(c.ir.callee.name) match {
-        case Some(value) => value.callStyle != PreciseCallStyle
-        case None        => false
-    })
+    val graph = new CallGraph(programData)
 
     // `ops` is a function that generates the operations, given the current return value at that
     // position. DO NOT construct the ops before passing them to this method since multiple copies
@@ -51,11 +57,7 @@ object Checker {
         case Pre(op)                 => op.insertBefore(ops(None))
         case Post(op)                => op.insertAfter(ops(None))
         case MethodPre               => ops(None) ++=: method.body
-        case MethodPost =>
-          methodData.returns.foreach(e => e.insertBefore(ops(e.value)))
-          if (methodData.hasImplicitReturn) {
-            method.body ++= ops(None)
-          }
+        case MethodPost              => insertAtReturn(method.body, ops)
         case _ => throw new WeaverException(s"Invalid location '$at'")
       }
 
@@ -87,79 +89,36 @@ object Checker {
     }
 
     val initializeOps = mutable.ListBuffer[IR.Op]()
+    val graphData = graph(method.name)
 
-    def methodContainsImprecision(methodData: CollectedMethod): Boolean = {
-      val contractImprecise = methodData.callStyle match {
-        case ImpreciseCallStyle | PrecisePreCallStyle => true
-        case _                                        => false
-      }
-
-      contractImprecise ||
-      methodData.bodyContainsImprecision ||
-      methodData.calls.exists(
-        c =>
-          c.ir.callee.isInstanceOf[IR.Method] &&
-            (programData.methods(c.ir.callee.name).callStyle match {
-              case ImpreciseCallStyle | PrecisePreCallStyle => true
-              case _                                        => false
-            })
-      )
-    }
-
-    var (primaryOwnedFields, instanceCounter) = methodData.callStyle match {
-      case MainCallStyle => {
-        val instanceCounter =
-          method.addVar(
-            new IR.PointerType(IR.IntType),
-            CheckRuntime.Names.instanceCounter
-          )
-        initializeOps += new IR.AllocValue(IR.IntType, instanceCounter)
-        (None, instanceCounter)
-      }
-
-      case PreciseCallStyle => {
-        if (methodContainsImprecision(methodData)) {
-          val ownedFields: IR.Var = method.addParameter(
+    var permScope = graphData.permissionMode match {
+      case NoPermissions => NoPermissionScope
+      case _ if method.name == "main" =>
+        throw new WeaverException("`main` method must not require permissions")
+      case RequiresPermissions => {
+        val ownedFields: IR.Var = method.addParameter(
             runtime.ownedFieldsRef,
             CheckRuntime.Names.primaryOwnedFields)
-          val instanceCounter =
-            new IR.FieldMember(ownedFields, runtime.ownedFieldInstanceCounter)
-          (Some(ownedFields), instanceCounter)
-        } else {
-          val instanceCounter =
-            method.addParameter(
-              new IR.PointerType(IR.IntType),
-              CheckRuntime.Names.instanceCounter
-            )
-          (None, instanceCounter)
-        }
+        new RequiredPermissionScope(ownedFields)
       }
-
-      case ImpreciseCallStyle | PrecisePreCallStyle => {
-        val ownedFields: IR.Var =
-          method.addParameter(
+      case OptionalPermissions => {
+        val ownedFields: IR.Var = method.addParameter(
             runtime.ownedFieldsRef,
-            CheckRuntime.Names.primaryOwnedFields
-          )
-        val instanceCounter =
-          new IR.FieldMember(ownedFields, runtime.ownedFieldInstanceCounter)
-        (Some(ownedFields), instanceCounter)
+            CheckRuntime.Names.primaryOwnedFields)
+        new OptionalPermissionScope(ownedFields)
       }
     }
 
-    def getPrimaryOwnedFields(): IR.Var = primaryOwnedFields.getOrElse {
-      val ownedFields = method.addVar(
-        runtime.ownedFieldsRef,
-        CheckRuntime.Names.primaryOwnedFields
-      )
-      primaryOwnedFields = Some(ownedFields)
-
-      initializeOps += new IR.Invoke(
-        runtime.initOwnedFields,
-        List(instanceCounter),
-        primaryOwnedFields
-      )
-      ownedFields
+    val instanceCounter = method.name match {
+      case "main" =>
+        val v = method.addVar(
+          new IR.PointerType(IR.IntType),
+          CheckRuntime.Names.instanceCounter)
+        initializeOps += new IR.AllocValue(IR.IntType, v)
+      case _ =>
+        method.addParameter(
+          new IR.PointerType(IR.IntType),
+          CheckRuntime.Names.instanceCounter)
     }
 
     // Insert the runtime checks
@@ -211,8 +170,6 @@ object Checker {
         }
       )
     }
-
-    val needsToTrackPrecisePerms = methodContainsImprecision(methodData)
 
     if (needsToTrackPrecisePerms && methodData.callStyle == PreciseCallStyle) {
       primaryOwnedFields match {

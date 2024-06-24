@@ -53,7 +53,6 @@ class CheckImplementation(
                                           mode: CheckMode,
                                           pred: IR.Predicate
                                         ): Option[IR.MethodDefinition] = {
-
     predicateImplementations.getOrElse(
       (mode, pred.name),
       implementPredicate(mode, pred)
@@ -64,7 +63,6 @@ class CheckImplementation(
                                   mode: CheckMode,
                                   pred: IR.Predicate
                                 ): Option[IR.MethodDefinition] = {
-
     // TODO: allow name collisions when adding methods
     val defn = program.addMethod(mode.prefix + pred.name, None)
     predicateImplementations += ((mode, pred.name) -> Some(defn))
@@ -79,13 +77,14 @@ class CheckImplementation(
     )
 
     val permsSecondary =
-      if (mode == AddRemoveMode || mode == CheckAddMode || mode == CheckAddRemoveMode)
-        Some(
-          defn.addParameter(
+      mode match {
+        case AddRemoveMode | CheckAddMode | CheckAddRemoveMode =>
+          Some(defn.addParameter(
             runtime.ownedFieldsRef,
             CheckRuntime.Names.temporaryOwnedFields
           ))
-      else None
+        case _ => None
+      }
 
     val context = new PredicateContext(pred, newParams)
     val ops =
@@ -172,7 +171,6 @@ class CheckImplementation(
 
       }
 
-
     case binary: IR.Binary if binary.operator == IR.BinaryOp.And =>
       translate(mode, binary.left, permsPrimary, permsSecondary, context) ++ translate(
         mode,
@@ -182,7 +180,6 @@ class CheckImplementation(
         context
       )
 
-
     case expr =>
       mode match {
         case SeparationMode | AddMode | RemoveMode | AddRemoveMode =>
@@ -190,7 +187,6 @@ class CheckImplementation(
         case VerifyMode | CheckAddMode | CheckAddRemoveMode =>
           val toAssert = context.convertExpression(expr)
           Seq(new IR.Assert(toAssert, IR.AssertKind.Imperative))
-        
       }
   }
 

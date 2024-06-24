@@ -5,14 +5,10 @@ import gvc.transformer.{IR, IRSilver}
 sealed trait Check
 
 object Check {
-  def fromViper(
-      check: vpr.Exp,
-      program: IR.Program,
-      method: IR.Method
-  ): Check = {
+  def fromViper(check: vpr.Exp): Check = {
     check match {
       case fieldAccess: vpr.FieldAccessPredicate =>
-        CheckExpression.fromViper(fieldAccess.loc, method) match {
+        CheckExpression.fromViper(fieldAccess.loc) match {
           case field: CheckExpression.Field => FieldAccessibilityCheck(field)
           case _ =>
             throw new WeaverException(
@@ -24,15 +20,15 @@ object Check {
         PredicateAccessibilityCheck(
           predicate.predicateName,
           predicate.args
-            .map(CheckExpression.fromViper(_, method))
+            .map(CheckExpression.fromViper)
             .toList
         )
 
       case predicateAccess: vpr.PredicateAccessPredicate =>
-        Check.fromViper(predicateAccess.loc, program, method)
+        Check.fromViper(predicateAccess.loc)
 
       case _ =>
-        CheckExpression.fromViper(check, method)
+        CheckExpression.fromViper(check)
     }
   }
 }
@@ -307,35 +303,33 @@ object CheckExpression {
   }
 
   def fromViper(
-      value: vpr.Exp,
-      method: IR.Method
+      value: vpr.Exp
   ): Expr = {
-    def expr(e: vpr.Exp) = fromViper(e, method)
     value match {
-      case eq: vpr.EqCmp  => Eq(expr(eq.left), expr(eq.right))
-      case ne: vpr.NeCmp  => Not(Eq(expr(ne.left), expr(ne.right)))
-      case lt: vpr.LtCmp  => Lt(expr(lt.left), expr(lt.right))
-      case lte: vpr.LeCmp => LtEq(expr(lte.left), expr(lte.right))
-      case gt: vpr.GtCmp  => Gt(expr(gt.left), expr(gt.right))
-      case gte: vpr.GeCmp => GtEq(expr(gte.left), expr(gte.right))
+      case eq: vpr.EqCmp  => Eq(fromViper(eq.left), fromViper(eq.right))
+      case ne: vpr.NeCmp  => Not(Eq(fromViper(ne.left), fromViper(ne.right)))
+      case lt: vpr.LtCmp  => Lt(fromViper(lt.left), fromViper(lt.right))
+      case lte: vpr.LeCmp => LtEq(fromViper(lte.left), fromViper(lte.right))
+      case gt: vpr.GtCmp  => Gt(fromViper(gt.left), fromViper(gt.right))
+      case gte: vpr.GeCmp => GtEq(fromViper(gte.left), fromViper(gte.right))
 
-      case and: vpr.And => And(expr(and.left), expr(and.right))
-      case or: vpr.Or   => Or(expr(or.left), expr(or.right))
+      case and: vpr.And => And(fromViper(and.left), fromViper(and.right))
+      case or: vpr.Or   => Or(fromViper(or.left), fromViper(or.right))
 
-      case add: vpr.Add => Add(expr(add.left), expr(add.right))
-      case sub: vpr.Sub => Sub(expr(sub.left), expr(sub.right))
-      case mul: vpr.Mul => Mul(expr(mul.left), expr(mul.right))
-      case div: vpr.Div => Div(expr(div.left), expr(div.right))
+      case add: vpr.Add => Add(fromViper(add.left), fromViper(add.right))
+      case sub: vpr.Sub => Sub(fromViper(sub.left), fromViper(sub.right))
+      case mul: vpr.Mul => Mul(fromViper(mul.left), fromViper(mul.right))
+      case div: vpr.Div => Div(fromViper(div.left), fromViper(div.right))
 
-      case minus: vpr.Minus => Neg(expr(minus.exp))
+      case minus: vpr.Minus => Neg(fromViper(minus.exp))
       case not: vpr.Not =>
-        expr(not.exp) match {
+        fromViper(not.exp) match {
           case Not(f) => f
           case x      => Not(x)
         }
 
       case access: vpr.FieldAccess => {
-        val root = expr(access.rcv)
+        val root = fromViper(access.rcv)
         access.field.name match {
           case field => {
             val segments = field.split('.')
@@ -378,3 +372,29 @@ object CheckExpression {
     }
   }
 }
+
+sealed trait Location
+
+sealed trait AtOp extends Location { val op: IR.Op }
+case class Pre(override val op: IR.Op) extends AtOp
+case class Post(override val op: IR.Op) extends AtOp
+case class LoopStart(override val op: IR.Op) extends AtOp
+case class LoopEnd(override val op: IR.Op) extends AtOp
+case object MethodPre extends Location
+case object MethodPost extends Location
+
+sealed trait Condition
+case class NotCondition(value: Condition) extends Condition
+case class AndCondition(values: List[Condition]) extends Condition
+case class OrCondition(values: List[Condition]) extends Condition
+case class ImmediateCondition(value: CheckExpression) extends Condition
+case class TrackedCondition(
+    location: Location,
+    value: CheckExpression
+) extends Condition
+
+case class RuntimeCheck(
+    location: Location,
+    check: Check,
+    when: Option[Condition]
+)
