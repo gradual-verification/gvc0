@@ -37,13 +37,13 @@ sealed trait Scope {
     def block: IR.Block
   }
 
-  trait MethodScope extends Scope {
-    def block = method.body
-  }
+  // trait MethodScope extends Scope {
+  //   def block = method.body
+  // }
 
-  trait LoopScope extends Scope {
-    def op: IR.While
+  // trait LoopScope extends Scope {
+  //   def op: IR.While
 
-    def block = op.body
-  }
+  //   def block = op.body
+  // }
 

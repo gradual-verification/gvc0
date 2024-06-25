@@ -7,7 +7,7 @@ import gvc.transformer.IR
 import viper.silver.{ast => vpr}
 
 object Collector {
-  class CollectedChecks {
+  class CollectedChecks(val method: IR.Method) {
     val conditions = mutable.ListBuffer[TrackedCondition]()
     val checks = mutable.ListBuffer[RuntimeCheck]()
   }
@@ -63,7 +63,7 @@ object Collector {
     // This is used for locating the correct insertion of conditionals.
     val locations = mutable.Map[Int, Location]()
 
-    val collected = new CollectedChecks()
+    val collected = new CollectedChecks(irMethod)
 
     // Indexing adds the node to the mapping of Viper locations to IR locations
     def index(node: vpr.Node, location: Location): Unit =

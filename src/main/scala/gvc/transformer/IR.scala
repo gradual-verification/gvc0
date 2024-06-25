@@ -385,7 +385,7 @@ object IR {
     def method: Method = _method
   }
 
-  class ChildBlock(op: Op) extends Block {
+  class ChildBlock(val op: Op) extends Block {
     def method = op.block.method
   }
 
