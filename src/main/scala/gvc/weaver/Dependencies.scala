@@ -43,6 +43,7 @@ sealed trait MethodDependencies extends ScopeDependencies {
   def method: IR.Method
   def precisePre: Boolean
   def precisePost: Boolean
+  def conditions: Seq[TrackedCondition]
 
   def inheritsPerms: Boolean = !precisePre
   def returnsPerms: Boolean = !precisePost
@@ -103,10 +104,11 @@ object Dependencies {
 
   private class MethodDependenciesImpl(
     val method: IR.Method,
+    val conditions: Seq[TrackedCondition],
     val checks: Seq[RuntimeCheck],
     val precisePre: Boolean,
-    val precisePost: Boolean)
-    extends DependencyScope with MethodDependencies {
+    val precisePost: Boolean
+   ) extends DependencyScope with MethodDependencies {
     
     def block: IR.Block = method.body
   }
@@ -148,6 +150,7 @@ object Dependencies {
     val method = scope.method
     val dep = new MethodDependenciesImpl(
       method,
+      scope.conditions,
       scope.checks,
       precision.isPrecise(method.precondition),
       precision.isPrecise(method.postcondition)

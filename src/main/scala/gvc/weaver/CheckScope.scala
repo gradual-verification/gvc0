@@ -12,6 +12,7 @@ sealed trait CheckScope {
 sealed trait MethodScope extends CheckScope {
   def method: IR.Method
   def block: IR.Block = method.body
+  def conditions: Seq[TrackedCondition]
 }
 
 sealed trait WhileScope extends CheckScope {
@@ -25,24 +26,31 @@ class ProgramScope(
 )
 
 object CheckScope {
-  class CheckScopeImplementation extends CheckScope {
+  private sealed abstract class CheckScopeImplementation extends CheckScope {
     val children = mutable.ListBuffer[WhileScope]()
     val checks = mutable.ArrayBuffer[RuntimeCheck]()
   }
 
-  class MethodScopeImplementation(val method: IR.Method)
-    extends CheckScopeImplementation with MethodScope
-  class WhileScopeImplementation(val op: IR.While)
+  private sealed class MethodScopeImplementation(
+    val method: IR.Method,
+    val conditions: Seq[TrackedCondition]
+  ) extends CheckScopeImplementation with MethodScope
+  private sealed class WhileScopeImplementation(val op: IR.While)
     extends CheckScopeImplementation with WhileScope
 
   def scope(collected: Collector.CollectedProgram): ProgramScope =
     new ProgramScope(
       collected.program,
-      collected.methods.mapValues(cm => scope(cm.checks, cm.method))
+      collected.methods.mapValues(cm =>
+        scope(cm.checks, cm.conditions, cm.method))
     )
 
-  def scope(checks: Seq[RuntimeCheck], method: IR.Method): MethodScope = {
-    val outer = new MethodScopeImplementation(method)
+  def scope(
+    checks: Seq[RuntimeCheck],
+    conditions: Seq[TrackedCondition],
+    method: IR.Method
+  ): MethodScope = {
+    val outer = new MethodScopeImplementation(method, conditions)
     val inner = mutable.HashMap[IR.While, WhileScopeImplementation]()
 
     def getScope(op: IR.Op): CheckScopeImplementation = {
