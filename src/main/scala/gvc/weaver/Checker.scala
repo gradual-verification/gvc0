@@ -4,11 +4,12 @@ import gvc.transformer.IR
 import Collector._
 import scala.collection.mutable
 import scala.annotation.tailrec
+import CheckRuntime.Names
 
 object Checker {
   type StructIDTracker = Map[String, IR.StructField]
 
-  def insert(program: Collector.CollectedProgram): Unit = {
+  def insert(program: ProgramDependencies): Unit = {
     val runtime = CheckRuntime.addToIR(program.program)
 
     // Add the _id field to each struct
@@ -26,47 +27,35 @@ object Checker {
     }
   }
 
-  private def insertAtReturn(block: IR.Block, ops: Option[IR.Expression] => Seq[IR.Op]) : Unit = block.lastOption match {
-    case Some(iff: IR.If) => {
-      insertAtReturn(iff.ifTrue, ops)
-      insertAtReturn(iff.ifFalse, ops)
-    }
-    case Some(ret: IR.Return) => {
-      ret.insertBefore(ops(ret.value))
-    }
-    case _ => block ++= ops(None)
+  private def insertBeforeReturn(block: IR.Block, ops: Seq[IR.Op]) : Unit = block.lastOption match {
+    case Some(ret: IR.Return) => ret.insertBefore(ops)
+    case _ => block ++= ops
   }
 
+  private def insertAt(at: Location, ops: Seq[IR.Op], method: IR.Method): Unit =
+    at match {
+      case LoopStart(op: IR.While) => ops ++=: op.body
+      case LoopEnd(op: IR.While)   => op.body ++= ops
+      case Pre(op)                 => op.insertBefore(ops)
+      case Post(op)                => op.insertAfter(ops)
+      case MethodPre               => ops ++=: method.body
+      case MethodPost              => insertBeforeReturn(method.body, ops)
+      case _ => throw new WeaverException(s"Invalid location '$at'")
+    }
+
   private def insert(
-      programData: CollectedProgram,
-      methodData: CollectedMethod,
+      programData: ProgramDependencies,
+      methodData: MethodDependencies,
       runtime: CheckRuntime,
       implementation: CheckImplementation
-  ): Unit = {
+  ): Unit = ???
+
+  /*
     val program = programData.program
     val method = methodData.method
-    val graph = new CallGraph(programData)
 
-    // `ops` is a function that generates the operations, given the current return value at that
-    // position. DO NOT construct the ops before passing them to this method since multiple copies
-    // may be required.
-    def insertAt(at: Location, ops: Option[IR.Expression] => Seq[IR.Op]): Unit =
-      at match {
-        case LoopStart(op: IR.While) => ops(None) ++=: op.body
-        case LoopEnd(op: IR.While)   => op.body ++= ops(None)
-        case Pre(op)                 => op.insertBefore(ops(None))
-        case Post(op)                => op.insertAfter(ops(None))
-        case MethodPre               => ops(None) ++=: method.body
-        case MethodPost              => insertAtReturn(method.body, ops)
-        case _ => throw new WeaverException(s"Invalid location '$at'")
-      }
-
-    var nextConditionalId = 1
-    val conditionVars = methodData.conditions.map { c =>
-      val flag = method.addVar(IR.BoolType, s"_cond_$nextConditionalId")
-      nextConditionalId += 1
-      c -> flag
-    }.toMap
+    val conditionVars = methodData.conditions.map(c =>
+      c -> method.addVar(IR.BoolType, "_cond")).toMap
 
     def foldConditionList(conds: List[Condition],
                           op: IR.BinaryOp): IR.Expression = {
@@ -89,9 +78,7 @@ object Checker {
     }
 
     val initializeOps = mutable.ListBuffer[IR.Op]()
-    val graphData = graph(method.name)
-
-    var permScope = graphData.permissionMode match {
+    val permScope = ??? match {
       case NoPermissions => NoPermissionScope
       case _ if method.name == "main" =>
         throw new WeaverException("`main` method must not require permissions")
@@ -535,5 +522,5 @@ object Checker {
     case _: CheckExpression.Literal | _: CheckExpression.Var |
         CheckExpression.Result =>
       1
-  }
+  }*/
 }
