@@ -6,6 +6,9 @@ class WeaverException(message: String) extends Exception(message)
 
 object Weaver {
   def weave(ir: IR.Program, silver: vpr.Program): Unit = {
-    Checker.insert(Collector.collect(ir, silver))
+    val collected = Collector.collect(ir, silver)
+    val scoped = CheckScope.scope(collected)
+    val deps = Dependencies.calculate(scoped)
+    Checker.insert(deps)
   }
 }
