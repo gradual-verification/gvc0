@@ -1,10 +1,16 @@
 package gvc.benchmarking
 
+import scala.collection.mutable
 import gvc.transformer.IR
-import gvc.weaver.Collector.getCallstyle
 import gvc.weaver._
 
 object BaselineChecker {
+
+  sealed trait CallStyle
+  case object PreciseCallStyle extends CallStyle
+  case object PrecisePreCallStyle extends CallStyle
+  case object ImpreciseCallStyle extends CallStyle
+  case object MainCallStyle extends CallStyle
 
   def check(program: IR.Program, onlyFraming: Boolean = false): Unit = {
     val structIds =
@@ -43,7 +49,7 @@ object BaselineChecker {
 
     callstyle match {
 
-      case Collector.PreciseCallStyle | Collector.PrecisePreCallStyle =>
+      case PreciseCallStyle | PrecisePreCallStyle =>
         val contextPerms = method.addVar(checks.runtime.ownedFieldsRef,
                                          CheckRuntime.Names.contextOwnedFields)
 
@@ -64,9 +70,9 @@ object BaselineChecker {
           )
           .toList ++=: method.body
 
-        if (Collector.hasImplicitReturn(method)) {
+        if (hasImplicitReturn(method)) {
 
-          if (callstyle == Collector.PrecisePreCallStyle) {
+          if (callstyle == PrecisePreCallStyle) {
             if (!onlyFraming) {
               method.body ++= method.postcondition.toSeq.flatMap(
                 validateSpec(_, contextPerms, tempPerms, checks)
@@ -104,7 +110,7 @@ object BaselineChecker {
             Some(contextPerms)
           )
         ) ++=: method.body
-      case Collector.ImpreciseCallStyle | Collector.MainCallStyle =>
+      case ImpreciseCallStyle | MainCallStyle =>
         checkBlock(method.body,
                    checks,
                    globalPerms,
@@ -118,13 +124,13 @@ object BaselineChecker {
           ) ++=: method.body
         }
 
-        if (!onlyFraming && Collector.hasImplicitReturn(method)) {
+        if (!onlyFraming && hasImplicitReturn(method)) {
           method.body ++= method.postcondition.toSeq.flatMap(
             validateSpec(_, globalPerms, tempPerms, checks)
           )
         }
 
-        if (callstyle == Collector.MainCallStyle) {
+        if (callstyle == MainCallStyle) {
           val instanceCounter = method.addVar(
             new IR.PointerType(IR.IntType),
             CheckRuntime.Names.instanceCounter
@@ -424,13 +430,13 @@ object BaselineChecker {
         }
 
         ret.insertBefore(validationOps ++ (getCallstyle(block.method) match {
-          case Collector.PreciseCallStyle =>
+          case PreciseCallStyle =>
             block.method.postcondition.toSeq
               .flatMap(
                 checks.translate(AddMode, _, globalPerms, None, context)
               )
               .toList
-          case Collector.PrecisePreCallStyle =>
+          case PrecisePreCallStyle =>
             Seq(
               new IR.Invoke(
                 checks.runtime.join,
@@ -489,4 +495,60 @@ object BaselineChecker {
       case _                 =>
     }
   }
+
+  def hasImplicitReturn(method: IR.Method): Boolean =
+    method.body.lastOption match {
+      case None         => true
+      case Some(tailOp) => hasImplicitReturn(tailOp)
+    }
+
+  // Checks if execution can fall-through a given Op
+  def hasImplicitReturn(tailOp: IR.Op): Boolean = tailOp match {
+    case r: IR.Return => false
+    case _: IR.While  => true
+    case iff: IR.If =>
+      (iff.ifTrue.lastOption, iff.ifFalse.lastOption) match {
+        case (Some(t), Some(f)) => hasImplicitReturn(t) || hasImplicitReturn(f)
+        case _                  => true
+      }
+    case _ => true
+  }
+
+  def isImprecise(
+      cond: Option[IR.Expression],
+      visited: mutable.Set[IR.Predicate] = mutable.Set.empty[IR.Predicate]): Boolean =
+    cond match {
+      case Some(expr: IR.Expression) =>
+        expr match {
+          case instance: IR.PredicateInstance =>
+            if (visited.contains(instance.predicate)) {
+              false
+            } else {
+              visited += instance.predicate
+              isImprecise(Some(instance.predicate.expression), visited)
+            }
+          case _: IR.Imprecise => true
+          case conditional: IR.Conditional =>
+            isImprecise(Some(conditional.condition), visited) || isImprecise(
+              Some(conditional.ifTrue),
+              visited) || isImprecise(Some(conditional.ifFalse), visited)
+          case binary: IR.Binary =>
+            isImprecise(Some(binary.left), visited) || isImprecise(
+              Some(binary.right),
+              visited)
+          case unary: IR.Unary => isImprecise(Some(unary.operand), visited)
+          case _               => false
+        }
+      case None => false
+    }
+
+  def getCallstyle(irMethod: IR.Method) =
+    if (irMethod.name == "main")
+      MainCallStyle
+    else if (isImprecise(irMethod.precondition))
+      ImpreciseCallStyle
+    else if (isImprecise(irMethod.postcondition))
+      PrecisePreCallStyle
+    else PreciseCallStyle
+
 }

@@ -1,7 +1,5 @@
 package gvc.weaver
 
-import gvc.transformer.IR.Predicate
-
 import scala.collection.mutable
 import gvc.transformer.IR
 import viper.silver.{ast => vpr}
@@ -362,61 +360,5 @@ object Collector {
 
     collected
   }
-
-  def hasImplicitReturn(method: IR.Method): Boolean =
-    method.body.lastOption match {
-      case None         => true
-      case Some(tailOp) => hasImplicitReturn(tailOp)
-    }
-
-  // Checks if execution can fall-through a given Op
-  def hasImplicitReturn(tailOp: IR.Op): Boolean = tailOp match {
-    case r: IR.Return => false
-    case _: IR.While  => true
-    case iff: IR.If =>
-      (iff.ifTrue.lastOption, iff.ifFalse.lastOption) match {
-        case (Some(t), Some(f)) => hasImplicitReturn(t) || hasImplicitReturn(f)
-        case _                  => true
-      }
-    case _ => true
-  }
-
-  def isImprecise(
-      cond: Option[IR.Expression],
-      visited: mutable.Set[Predicate] = mutable.Set.empty[Predicate]): Boolean =
-    cond match {
-      case Some(expr: IR.Expression) =>
-        expr match {
-          case instance: IR.PredicateInstance =>
-            if (visited.contains(instance.predicate)) {
-              false
-            } else {
-              visited += instance.predicate
-              isImprecise(Some(instance.predicate.expression), visited)
-            }
-          case _: IR.Imprecise => true
-          case conditional: IR.Conditional =>
-            isImprecise(Some(conditional.condition), visited) || isImprecise(
-              Some(conditional.ifTrue),
-              visited) || isImprecise(Some(conditional.ifFalse), visited)
-          case binary: IR.Binary =>
-            isImprecise(Some(binary.left), visited) || isImprecise(
-              Some(binary.right),
-              visited)
-          case unary: IR.Unary => isImprecise(Some(unary.operand), visited)
-          case _               => false
-        }
-      case None => false
-    }
-
-  // def getCallstyle(irMethod: IR.Method) =
-  //   if (irMethod.name == "main")
-  //     MainCallStyle
-  //   else if (isImprecise(irMethod.precondition))
-  //     ImpreciseCallStyle
-  //   else if (isImprecise(irMethod.postcondition))
-  //     PrecisePreCallStyle
-  //   else PreciseCallStyle
-
   
 }
