@@ -56,8 +56,6 @@ class CheckRuntime private (program: IR.Program) {
   val ownedFields: IR.StructDefinition =
     program.struct(Names.ownedFieldsStruct)
   val ownedFieldsRef = new IR.ReferenceType(ownedFields)
-  val ownedFieldInstanceCounter: IR.StructField =
-    ownedFields.fields.find(_.name == "instanceCounter").get
   val initOwnedFields: IR.MethodDefinition =
     program.method(Names.initOwnedFields)
   val addStructAcc: IR.MethodDefinition =

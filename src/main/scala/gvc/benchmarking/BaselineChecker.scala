@@ -104,7 +104,7 @@ object BaselineChecker {
             List(
               new IR.FieldMember(
                 globalPerms,
-                checks.runtime.ownedFieldInstanceCounter
+                ??? // TODO: checks.runtime.ownedFieldInstanceCounter
               )
             ),
             Some(contextPerms)
@@ -309,7 +309,7 @@ object BaselineChecker {
               List(
                 new IR.FieldMember(
                   primaryPerms,
-                  checks.runtime.ownedFieldInstanceCounter
+                  ??? //TODO: checks.runtime.ownedFieldInstanceCounter
                 )
               ),
               Some(tempPerms)
@@ -335,7 +335,8 @@ object BaselineChecker {
         throw new WeaverException("Unsupported alloc")
 
       case alloc: IR.AllocStruct => {
-        checks.trackAllocation(alloc, perms)
+        // TODO: Need to ID allocation
+        alloc.insertAfter(checks.trackAllocation(alloc, perms))
       }
 
       case assert: IR.Assert =>
