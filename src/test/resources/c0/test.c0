@@ -60,10 +60,7 @@ bool test(string header, bool condition, string message){
 }
 
 bool testOwnedFieldsInitialization(string header){
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-
-    OwnedFields* fields = initOwnedFields(_id_counter);
+    OwnedFields* fields = initOwnedFields();
     if(!test(header, fields->capacity > 0, "(initOwnedFields) OwnedFields must have a nonzero default capacity after intialization.")){
         return false;
     }
@@ -84,12 +81,10 @@ bool testOwnedFieldsInitialization(string header){
 }
 
 bool testStructCreation(string header){
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
+    OwnedFields* fields = initOwnedFields();
 
-    OwnedFields* fields = initOwnedFields(_id_counter);
-
-    int _id = addStructAcc(fields, 80);
+    int _id = 0;
+    addStructAcc(fields, _id, 80);
 
     for(int i = 0; i<80; i += 1){
         assertAcc(fields, _id, i, "(addStructAcc) Failed to verify access to the fields of a newly created struct.");
@@ -100,13 +95,11 @@ bool testStructCreation(string header){
 
 
 bool testFieldAddition(string header){
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
+    OwnedFields* fields_1 = initOwnedFields();
+    OwnedFields* fields_2 = initOwnedFields();
 
-    OwnedFields* fields_1 = initOwnedFields(_id_counter);
-    OwnedFields* fields_2 = initOwnedFields(_id_counter);
-
-    int _id = addStructAcc(fields_1, 4);
+    int _id = 0;
+    addStructAcc(fields_1, _id, 4);
 
     addAcc(fields_2, _id, 4, 2);
     assertAcc(fields_2, _id, 2, "(addAcc/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.");
@@ -115,19 +108,18 @@ bool testFieldAddition(string header){
 
 
 bool testFieldMerging(string header){
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-
     int num_fields = 20;
 
-    OwnedFields* source = initOwnedFields(_id_counter);
+    OwnedFields* source = initOwnedFields();
 
-    int _id_node_1 = addStructAcc(source, num_fields);
-    int _id_node_2 = addStructAcc(source, num_fields);
+    int _id_node_1 = 0;
+    addStructAcc(source, _id_node_1, num_fields);
+    int _id_node_2 = 1;
+    addStructAcc(source, _id_node_2, num_fields);
 
-    OwnedFields* fields_1 = initOwnedFields(_id_counter);
+    OwnedFields* fields_1 = initOwnedFields();
 
-    OwnedFields* fields_2 = initOwnedFields(_id_counter);
+    OwnedFields* fields_2 = initOwnedFields();
 
     for(int i = 0; i<num_fields; i += 1){
         addAcc(fields_1, _id_node_1, num_fields, i);
@@ -150,23 +142,20 @@ bool testFieldMerging(string header){
 
 /*
 bool testFieldLoss(string header) {
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-    OwnedFields* source = initOwnedFields(_id_counter);
+    OwnedFields* source = initOwnedFields();
 
     int num_fields = 10;
-    int _id_node = addStructAcc(source, num_fields);
+    int _id_node = addStructAcc(source, 0, num_fields);
 
 }
 */
 
 bool testNegativeAccessibility(string header) {
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-    OwnedFields* source = initOwnedFields(_id_counter);
+    OwnedFields* source = initOwnedFields();
 
     int num_fields = 10;
-    int _id_node = addStructAcc(source, num_fields);
+    int _id_node = 0;
+    addStructAcc(source, _id_node, num_fields);
 
     bool found = NassertAcc(source, _id_node+1, num_fields, "");
     if(found) error("ACK discovered.");
@@ -175,12 +164,11 @@ bool testNegativeAccessibility(string header) {
 }
 
 bool testEnsureSeparate(string header) {
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-    OwnedFields* source = initOwnedFields(_id_counter);
+    OwnedFields* source = initOwnedFields();
 
     int num_fields = 10;
-    int _id_node = addStructAcc(source, num_fields);
+    int _id_node = 0;
+    addStructAcc(source, _id_node, num_fields);
 
     for(int i = 0; i<num_fields; i+=1){
        bool shouldFail = NaddAccEnsureSeparate(source, _id_node, i, num_fields, "");
@@ -192,8 +180,10 @@ bool testEnsureSeparate(string header) {
        if(!shouldSucceed) error("Failed to add separated fields.");
     }
 
+    int _id = 1;
     for (int i = 0; i<64; i+=1){
-       addStructAcc(source, num_fields);
+       addStructAcc(source, _id, num_fields);
+       _id++;
     }
 
     for(int i = 0; i<num_fields; i+=1){
@@ -204,9 +194,6 @@ bool testEnsureSeparate(string header) {
 }
 
 int runTests() {
-    int * _id_counter = alloc(int);
-    *(_id_counter) = 0;
-
     if(testOwnedFieldsInitialization("OwnedFields Initialization")){
         println("PASS: OwnedFields Initialization");
     }else{
