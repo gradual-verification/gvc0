@@ -8,7 +8,7 @@ struct Test
 };
 
 int main();
-void test(struct Test* value, struct OwnedFields* _ownedFields);
+void test(struct Test* value, int* _instanceCounter);
 
 int main()
 {
@@ -17,7 +17,7 @@ int main()
   return 0;
 }
 
-void test(struct Test* value, struct OwnedFields* _ownedFields)
+void test(struct Test* value, int* _instanceCounter)
 {
   assert(value->value == 0);
 }

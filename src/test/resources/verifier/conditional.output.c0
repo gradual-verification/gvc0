@@ -1,6 +1,6 @@
 #use <runtime>
 int main();
-void test(int x, int y, struct OwnedFields* _ownedFields);
+void test(int x, int y, int* _instanceCounter);
 
 int main()
 {
@@ -9,17 +9,17 @@ int main()
   return 0;
 }
 
-void test(int x, int y, struct OwnedFields* _ownedFields)
+void test(int x, int y, int* _instanceCounter)
 {
-  bool _cond_1 = false;
-  bool _cond_2 = false;
-  _cond_1 = x > 1;
+  bool _cond = false;
+  bool _cond1 = false;
+  _cond = x > 1;
   if (x > 1)
   {
-    _cond_2 = x > 2;
+    _cond1 = x > 2;
     if (x > 2)
     {
-      if (_cond_1 && _cond_2)
+      if (_cond && _cond1)
       {
         assert(y == 0);
       }
