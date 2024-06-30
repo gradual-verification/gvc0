@@ -50,7 +50,7 @@ sealed trait MethodDependencies extends ScopeDependencies {
 }
 
 sealed trait WhileDependencies extends ScopeDependencies {
-  def op: IR.Op
+  def op: IR.While
   def preciseInvariant: Boolean
 
   def inheritsPerms: Boolean = !preciseInvariant

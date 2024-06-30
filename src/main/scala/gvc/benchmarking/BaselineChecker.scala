@@ -334,8 +334,9 @@ object BaselineChecker {
       case _: IR.AllocValue | _: IR.AllocArray =>
         throw new WeaverException("Unsupported alloc")
 
-      case alloc: IR.AllocStruct =>
+      case alloc: IR.AllocStruct => {
         checks.trackAllocation(alloc, perms)
+      }
 
       case assert: IR.Assert =>
         assert.kind match {

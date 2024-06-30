@@ -85,22 +85,21 @@ class ReturnContext(returnValue: IR.Expression) extends SpecificationContext {
 // the arguments specified at a given call site
 // If 'NULL' is passed as a parameter, it is replaced with a temporary variable to avoid
 // generating runtime checks or permission tracking operations with dereferences of the form 'NULL->'
-class CallSiteContext(call: IR.Invoke, caller: IR.Method)
+class CallSiteContext(call: IR.Invoke)
     extends SpecificationContext {
   val variableMapping: Map[IR.Var, IR.Expression] =
     (call.callee.parameters zip call.arguments)
-      .map(pair => {
-        pair._2 match {
-          case _: IR.NullLit =>
-            val validValueType = pair._1.valueType match {
+      .map(_ match {
+        case (param, _: IR.NullLit) => {
+            val validValueType = param.valueType match {
               case Some(value) => value
               case None =>
                 throw new WeaverException(
-                  s"Couldn't resolve parameter value type for parameter ${pair._1.name} of method ${call.callee.name}")
+                  s"Couldn't resolve parameter value type for parameter ${param.name} of method ${call.callee.name}")
             }
-            (pair._1, caller.addVar(validValueType))
-          case _ => pair
+            (param, call.method.addVar(validValueType))
         }
+        case pair => pair
       })
       .toMap
 
@@ -111,15 +110,6 @@ class CallSiteContext(call: IR.Invoke, caller: IR.Method)
         s"Could not find variable '${source.name} at call site of '${call.callee.name}'"
       ))
 
-  def convertResult: IR.Expression = call.target.getOrElse {
-    call.callee.returnType match {
-      case Some(returnType) =>
-        val target = caller.addVar(returnType)
-        call.target = Some(target)
-        target
-      case None =>
-        throw new WeaverException(
-          s"Invalid \result expression for void '${call.callee.name}'")
-    }
-  }
+  def convertResult: IR.Expression = call.target.getOrElse(
+    throw new WeaverException("Invoke of non-void method must have a target"))
 }

@@ -107,8 +107,8 @@ class CheckImplementation(
   def translate(
                  mode: CheckMode,
                  expr: IR.Expression,
-                 permsPrimary: IR.Var,
-                 permsSecondary: Option[IR.Var],
+                 permsPrimary: IR.Expression,
+                 permsSecondary: Option[IR.Expression],
                  context: SpecificationContext,
                ): Seq[IR.Op] = expr match {
     case acc: IR.Accessibility =>
@@ -193,8 +193,8 @@ class CheckImplementation(
   def translateFieldPermission(
                                 mode: CheckMode,
                                 member: IR.FieldMember,
-                                permsPrimary: IR.Var,
-                                permsSecondary: Option[IR.Var],
+                                permsPrimary: IR.Expression,
+                                permsSecondary: Option[IR.Expression],
                                 context: SpecificationContext
                               ): Seq[IR.Op] = {
     val convertedMember = context.convertFieldMember(member)
@@ -357,8 +357,8 @@ class CheckImplementation(
   def translatePredicateInstance(
                                   mode: CheckMode,
                                   pred: IR.PredicateInstance,
-                                  permsPrimary: IR.Var,
-                                  permsSecondary: Option[IR.Var],
+                                  permsPrimary: IR.Expression,
+                                  permsSecondary: Option[IR.Expression],
                                   context: SpecificationContext
                                 ): Seq[IR.Op] = {
     val arguments = pred.arguments.map(context.convertExpression)
@@ -379,40 +379,35 @@ class CheckImplementation(
       .toSeq
   }
 
-  def trackAllocation(alloc: IR.AllocStruct, perms: IR.Var): Unit = {
-    val structType = program.structs.find(s => s.name == alloc.struct.name) match {
-      case Some(s) => s
-      case None => throw new WeaverException("struct def not found for struct alloc")
+  def trackAllocation(alloc: IR.AllocStruct, perms: IR.Expression): Seq[IR.Op] = {
+    val struct = alloc.struct match {
+      case s: IR.Struct => s
+      case _: IR.DependencyStruct =>
+        throw new WeaverException("Cannot allocate library struct")
     }
     val idField = new IR.FieldMember(
       alloc.target,
-      structIdField(alloc.struct)
+      structIdField(struct)
     )
 
-    alloc.insertAfter(
-      new IR.Invoke(
-        runtime.addStructAcc,
-        List(perms, new IR.IntLit(structType.fields.length-1)),
-        Some(idField)
-      )
-    )
+    new IR.Invoke(
+      runtime.addStructAcc,
+      List(perms, idField, new IR.IntLit(struct.fields.length-1)),
+      None
+    ) :: Nil
   }
 
   def idAllocation(alloc: IR.AllocStruct,
-                   instanceCounter: IR.Expression): Unit = {
-    val idField = new IR.FieldMember(
-      alloc.target,
-      structIdField(alloc.struct)
-    )
-
-    alloc.insertAfter(
-      Seq(
-        new IR.AssignMember(idField, new IR.DereferenceMember(instanceCounter)),
-        new IR.AssignMember(
-          new IR.DereferenceMember(instanceCounter),
-          new IR.Binary(IR.BinaryOp.Add,
-            new IR.DereferenceMember(instanceCounter),
-            new IR.IntLit(1)))
-      ))
-  }
+                   instanceCounter: IR.Expression): List[IR.Op] =
+    new IR.AssignMember(
+      new IR.FieldMember(
+        alloc.target,
+        structIdField(alloc.struct)),
+      new IR.DereferenceMember(instanceCounter)) ::
+    new IR.AssignMember(
+      new IR.DereferenceMember(instanceCounter),
+      new IR.Binary(IR.BinaryOp.Add,
+        new IR.DereferenceMember(instanceCounter),
+        new IR.IntLit(1))) ::
+    Nil
 }

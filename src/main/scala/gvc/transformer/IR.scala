@@ -64,6 +64,13 @@ object IR {
     def struct(name: String): StructDefinition =
       _structs.getOrElseUpdate(name, new Struct(name))
 
+    def structDef(name: String): Struct =
+      _structs(name) match {
+        case s: Struct => s
+        case _: DependencyStruct =>
+          throw new IRException("Cannot get definition for struct declared in library")
+      }
+
     // Adds a new struct, renaming it if necessary to avoid collisions
     def newStruct(name: String): Struct = {
       val actualName = Helpers.findAvailableName(_structs, name)
