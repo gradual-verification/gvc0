@@ -1,16 +1,16 @@
 #use <runtime>
 int main();
-void test(int x, int y, int* instanceCounter);
-int testCall(int a, int* instanceCounter);
+void test(int x, int y, int* _instanceCounter);
+int testCall(int a, int* _instanceCounter);
 
 int main()
 {
-  int* instanceCounter = NULL;
-  instanceCounter = alloc(int);
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
   return 0;
 }
 
-void test(int x, int y, int* instanceCounter)
+void test(int x, int y, int* _instanceCounter)
 {
   int z = 0;
   bool _cond = false;
@@ -29,7 +29,7 @@ void test(int x, int y, int* instanceCounter)
     _cond5 = x > 2;
     if (x > 2)
     {
-      z = testCall(y, instanceCounter);
+      z = testCall(y, _instanceCounter);
       _cond6 = y == 0;
       _cond7 = z == 0;
       _cond6 = y == 0;
@@ -49,7 +49,7 @@ void test(int x, int y, int* instanceCounter)
   }
 }
 
-int testCall(int a, int* instanceCounter)
+int testCall(int a, int* _instanceCounter)
 {
   return a;
 }

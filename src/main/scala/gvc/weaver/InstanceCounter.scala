@@ -4,7 +4,7 @@ import gvc.transformer.IR
 
 object InstanceCounter {
   private val counterRef = new IR.PointerType(IR.IntType)
-  private val counterName = "instanceCounter"
+  private val counterName = "_instanceCounter"
 
   def inject(program: IR.Program, idFields: Map[String, IR.StructField]): Unit = {
     program.methods.foreach(inject(_, idFields))
@@ -28,8 +28,12 @@ object InstanceCounter {
 
   private def inject(block: IR.Block, counter: IR.Var, idFields: Map[String, IR.StructField]): Unit = {
     block.foreach(_ match {
-      case call: IR.Invoke if call.callee.name != "main" =>
-        call.arguments :+= counter
+      case call: IR.Invoke => call.callee match {
+        case m: IR.Method if m.name != "main" =>
+          call.arguments :+= counter
+        case _ => ()
+      }
+        
       case cond: IR.If => {
         inject(cond.ifTrue, counter, idFields)
         inject(cond.ifFalse, counter, idFields)

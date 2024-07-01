@@ -1,8 +1,8 @@
 #use <runtime>
-int get(int* instanceCounter);
+int get(int* _instanceCounter);
 int main();
 
-int get(int* instanceCounter)
+int get(int* _instanceCounter)
 {
   return 2;
 }
@@ -10,9 +10,9 @@ int get(int* instanceCounter)
 int main()
 {
   int result = 0;
-  int* instanceCounter = NULL;
-  instanceCounter = alloc(int);
-  result = get(instanceCounter);
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  result = get(_instanceCounter);
   result = result - 1;
   assert(result > 0);
   return 0;

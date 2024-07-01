@@ -8,33 +8,43 @@ struct Node
   int _id;
 };
 
-void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields);
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields, int* _instanceCounter);
 int main();
 
-void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields)
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
-  bool _cond_1 = false;
-  bool _cond_2 = false;
-  bool _cond_3 = false;
-  _cond_1 = b == c;
-  _cond_2 = c == b;
+  bool _cond = false;
+  bool _cond1 = false;
+  bool _cond2 = false;
+  bool _cond3 = false;
+  bool _cond4 = false;
+  bool _cond5 = false;
+  bool _cond6 = false;
+  bool _cond7 = false;
+  _cond4 = b == c;
+  _cond6 = c == b;
+  _cond6 = c == b;
+  _cond4 = b == c;
+  _cond6 = c == b;
+  _cond6 = c == b;
   if (!(b == c))
   {
   }
   else
   {
-    _cond_3 = a == c;
+    _cond7 = a == c;
+    _cond7 = a == c;
     if (a == b)
     {
     }
     else
     {
-      if (_cond_1 && _cond_2 && _cond_2 && !_cond_3)
+      if (_cond4 && _cond6 && _cond6 && !_cond7)
       {
         assertAcc(_ownedFields, a != NULL ? a->_id : -1, 1, "Field access runtime check failed for struct Node.next");
         assertAcc(_ownedFields, a != NULL ? a->_id : -1, 0, "Field access runtime check failed for struct Node.val");
       }
-      appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal, _ownedFields);
+      appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal, _ownedFields, _instanceCounter);
     }
   }
 }

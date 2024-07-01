@@ -1,8 +1,8 @@
 #use <runtime>
-int add(int a, int b, int* instanceCounter);
+int add(int a, int b, int* _instanceCounter);
 int main();
 
-int add(int a, int b, int* instanceCounter)
+int add(int a, int b, int* _instanceCounter)
 {
   return a + b;
 }
@@ -10,9 +10,9 @@ int add(int a, int b, int* instanceCounter)
 int main()
 {
   int sum = 0;
-  int* instanceCounter = NULL;
-  instanceCounter = alloc(int);
-  sum = add(1, 3, instanceCounter);
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  sum = add(1, 3, _instanceCounter);
   assert(sum == 4);
   return 0;
 }

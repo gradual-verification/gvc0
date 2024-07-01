@@ -1,9 +1,9 @@
 #use <runtime>
-int doSomething(int x, int* instanceCounter);
+int doSomething(int x, int* _instanceCounter);
 int main();
-int random(int* instanceCounter);
+int random(int* _instanceCounter);
 
-int doSomething(int x, int* instanceCounter)
+int doSomething(int x, int* _instanceCounter)
 {
   return 1;
 }
@@ -15,13 +15,13 @@ int main()
   int _1 = 0;
   bool _cond = false;
   bool _cond1 = false;
-  int* instanceCounter = NULL;
-  instanceCounter = alloc(int);
-  _ = doSomething(0, instanceCounter);
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  _ = doSomething(0, _instanceCounter);
   _cond1 = _ == 0;
   _cond1 = _ == 0;
-  x = random(instanceCounter);
-  _1 = doSomething(x, instanceCounter);
+  x = random(_instanceCounter);
+  _1 = doSomething(x, _instanceCounter);
   if (!_cond1 && !(_1 == 0))
   {
     assert(x == 0);
@@ -33,7 +33,7 @@ int main()
   return 0;
 }
 
-int random(int* instanceCounter)
+int random(int* _instanceCounter)
 {
   return 0;
 }

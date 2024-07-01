@@ -9,7 +9,7 @@ struct Test
 
 int main();
 void setValue(struct Test* t, int* _instanceCounter);
-void test(struct Test* t, struct OwnedFields* _ownedFields);
+void test(struct Test* t, struct OwnedFields* _ownedFields, int* _instanceCounter);
 
 int main()
 {
@@ -23,11 +23,9 @@ void setValue(struct Test* t, int* _instanceCounter)
   t->value = 1;
 }
 
-void test(struct Test* t, struct OwnedFields* _ownedFields)
+void test(struct Test* t, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   assertAcc(_ownedFields, t != NULL ? t->_id : -1, 0, "Field access runtime check failed for struct Test.value");
   assert(!(t == NULL));
-  loseAcc(_ownedFields, t->_id, 0);
-  setValue(t, _ownedFields->instanceCounter);
-  addAcc(_ownedFields, t->_id, 1, 0);
+  setValue(t, _instanceCounter);
 }

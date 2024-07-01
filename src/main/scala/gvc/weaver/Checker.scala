@@ -95,15 +95,32 @@ object Checker {
     def trackingPermissions: Boolean = false
   }
 
-  private def addPermissionsVar(method: IR.Method, impl: CheckImplementation): IR.Var =
+  private def addPermissionsVar(method: IR.Method, impl: CheckImplementation): IR.Var = {
     method.addVar(impl.runtime.ownedFieldsRef, Names.primaryOwnedFields)
+  }
+  
   private def addPermissionsParam(method: IR.Method, impl: CheckImplementation): IR.Var =
     method.addParameter(impl.runtime.ownedFieldsRef, Names.primaryOwnedFields)
 
+  private def initPermissions(perms: IR.Var, impl: CheckImplementation): IR.Op = {
+    new IR.Invoke(impl.runtime.initOwnedFields, Nil, Some(perms))
+  }
+
+  private def addMethodPerms(method: IR.Method, impl: CheckImplementation): IR.Var =
+    method.name match {
+      case "main" => {
+        val perms = addPermissionsVar(method, impl)
+        initPermissions(perms, impl) +=: method.body
+        perms
+      }
+
+      case _ => addPermissionsParam(method, impl)
+    }
+    
   private def getCallStyle(dep: MethodDependencies): CallStyle = {
     if (dep.returnsPerms) {
       if (dep.requiresPerms) PermissionsRequired
-      else if (dep.modifiesPerms) PermissionsOptional
+      else if (dep.modifiesPerms && dep.method.name != "main") PermissionsOptional
       else PermissionsElided
     } else {
       PermissionsElided
@@ -117,9 +134,9 @@ object Checker {
   ): PermissionScope = {
     dep match {
       case m: MethodDependencies if (m.returnsPerms && m.requiresPerms) =>
-        new RequiredPermissions(addPermissionsParam(m.method, impl))
+        new RequiredPermissions(addMethodPerms(m.method, impl))
       case m: MethodDependencies if (m.returnsPerms && m.modifiesPerms) =>
-        new OptionalPermissions(addPermissionsParam(m.method, impl))
+        new OptionalPermissions(addMethodPerms(m.method, impl))
       case w: WhileDependencies if w.returnsPerms =>
         parent.getOrElse(throw new WeaverException("Parent permissions required"))
       case dep if dep.requiresPerms => {
