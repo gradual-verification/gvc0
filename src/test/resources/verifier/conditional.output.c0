@@ -1,15 +1,15 @@
 #use <runtime>
 int main();
-void test(int x, int y, int* _instanceCounter);
+void test(int x, int y, int* instanceCounter);
 
 int main()
 {
-  int* _instanceCounter = NULL;
-  _instanceCounter = alloc(int);
+  int* instanceCounter = NULL;
+  instanceCounter = alloc(int);
   return 0;
 }
 
-void test(int x, int y, int* _instanceCounter)
+void test(int x, int y, int* instanceCounter)
 {
   bool _cond = false;
   bool _cond1 = false;

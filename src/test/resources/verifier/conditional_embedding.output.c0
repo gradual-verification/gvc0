@@ -1,15 +1,15 @@
 #use <runtime>
 int main();
-int test(int input, int* _instanceCounter);
+int test(int input, int* instanceCounter);
 
 int main()
 {
-  int* _instanceCounter = NULL;
-  _instanceCounter = alloc(int);
+  int* instanceCounter = NULL;
+  instanceCounter = alloc(int);
   return 0;
 }
 
-int test(int input, int* _instanceCounter)
+int test(int input, int* instanceCounter)
 {
   if (input > 0)
   {

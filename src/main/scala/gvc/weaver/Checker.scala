@@ -29,6 +29,8 @@ object Checker {
     program.methods.values.foreach { method =>
       insert(program, method, runtime, implementation)
     }
+
+    InstanceCounter.inject(program.program, structIdFields)
   }
 
   // Assumes that there is a single return statement at the end of the method.
@@ -151,27 +153,12 @@ object Checker {
     val conditions = methodData.conditions.map(c =>
       c -> method.addVar(IR.BoolType, "_cond")).toMap
 
-    // Add parameter for instance counter
-    val instanceCounter: IR.Expression = method.name match {
-      case "main" =>
-        val v = method.addVar(
-          new IR.PointerType(IR.IntType),
-          CheckRuntime.Names.instanceCounter)
-        new IR.AllocValue(IR.IntType, v) +=: method.body
-        v
-      case _ =>
-        method.addParameter(
-          new IR.PointerType(IR.IntType),
-          CheckRuntime.Names.instanceCounter)
-    }
-
     val context = CheckContext(
       program = programData.program,
       method = method,
       conditions = conditions,
       permissions = permissions,
       implementation = impl,
-      instanceCounter = instanceCounter,
       runtime = runtime)
 
     insert(programData, methodData, context)
@@ -310,14 +297,9 @@ object Checker {
     context: CheckContext
   ): Unit = {
     context.permissions match {
-      case NoPermissions => {
-        alloc.insertAfter(
-          context.implementation.idAllocation(alloc, context.instanceCounter))
-      }
+      case NoPermissions => ()
       case _ => {
-        alloc.insertAfter(Seq.concat(
-          context.implementation.idAllocation(alloc, context.instanceCounter),
-          context.implementation.trackAllocation(alloc, context.permissions.optionalPermissions)))
+        alloc.insertAfter(context.implementation.trackAllocation(alloc, context.permissions.optionalPermissions))
       }
     }
   }
@@ -376,7 +358,6 @@ object Checker {
       conditions: Map[TrackedCondition, IR.Var],
       permissions: PermissionScope,
       implementation: CheckImplementation,
-      instanceCounter: IR.Expression,
       runtime: CheckRuntime
   ) {
     private def foldConditionList(conds: List[Condition],

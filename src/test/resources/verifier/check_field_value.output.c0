@@ -8,16 +8,16 @@ struct Test
 };
 
 int main();
-void test(struct Test* value, int* _instanceCounter);
+void test(struct Test* value, int* instanceCounter);
 
 int main()
 {
-  int* _instanceCounter = NULL;
-  _instanceCounter = alloc(int);
+  int* instanceCounter = NULL;
+  instanceCounter = alloc(int);
   return 0;
 }
 
-void test(struct Test* value, int* _instanceCounter)
+void test(struct Test* value, int* instanceCounter)
 {
   assert(value->value == 0);
 }

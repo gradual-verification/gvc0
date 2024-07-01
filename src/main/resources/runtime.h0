@@ -2,8 +2,6 @@ struct OwnedFields {
     struct FieldArray*[] contents;
     int capacity;
     int length;
-    int* instanceCounter;
-
 };
 
 typedef struct OwnedFields OwnedFields;
@@ -18,8 +16,8 @@ struct FieldArray {
 
 typedef struct FieldArray FieldArray;
 
-OwnedFields* initOwnedFields(int * instanceCounter);
-int addStructAcc(OwnedFields * fields, int numFields);
+OwnedFields* initOwnedFields();
+void addStructAcc(OwnedFields * fields, int _id, int numFields);
 void addAcc(OwnedFields * fields, int _id, int numFields, int fieldIndex);
 void loseAcc(OwnedFields * fields, int _id, int fieldIndex);
 void join(OwnedFields* target, OwnedFields* source);

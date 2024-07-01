@@ -15,9 +15,8 @@ int hash(int index, int arrayLength)
     return index % arrayLength;
 }
 
-OwnedFields* initOwnedFields( int * instanceCounter){
+OwnedFields* initOwnedFields(){
   OwnedFields* fields = alloc(OwnedFields);
-  fields->instanceCounter = instanceCounter;
   int oldCapacity = 0;
   fields->capacity = GROW_CAPACITY(oldCapacity);
   fields->contents = alloc_array(FieldArray*, fields->capacity);
@@ -90,10 +89,9 @@ FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool ac
   return fields->contents[fieldIndex];
 }
 
-int addStructAcc(OwnedFields * fields, int numFields){
-    newFieldArray(fields, *fields->instanceCounter, numFields, true);
-    *(fields->instanceCounter) += 1;
-    return *(fields->instanceCounter) - 1;
+void addStructAcc(OwnedFields * fields, int _id, int numFields){
+    if (fields != NULL)
+        newFieldArray(fields, _id, numFields, true);
 }
 
 void addAcc(OwnedFields * fields, int _id, int numFields, int fieldIndex){
