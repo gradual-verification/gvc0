@@ -149,6 +149,7 @@ object Checker {
         }
         spec.foreach(p =>
           impl.translate(AddMode, p, variable, None, ValueContext) ++=: dep.block)
+        new IR.Invoke(impl.runtime.initOwnedFields, Nil, Some(variable)) +=: dep.block
         new RequiredPermissions(variable)
       }
       case _ => NoPermissions
@@ -238,7 +239,25 @@ object Checker {
         // required. (Thus we don't need to special-case precise pre, imprecise
         // post.)
         call.arguments :+= context.permissions.optionalPermissions
-      case PermissionsElided => ()
+      case PermissionsElided if dep.returnsPerms =>
+        // Returns permissions dynamically, but they are elided since it does
+        // not modify (or check) permissions
+        ()
+      case PermissionsElided => {
+        // Elided because the method is static
+
+        // Remove permissions in the pre-condition before calling
+        dep.method.precondition.foreach(pre => {
+          call.insertBefore(context.permissions.optionalPermissions(perms =>
+            context.implementation.translate(RemoveMode, pre, perms, None, new CallSiteContext(call))))
+        })
+
+        // Add permissions in the post-condition after the call
+        dep.method.postcondition.foreach(post => {
+          call.insertAfter(context.permissions.optionalPermissions(perms =>
+            context.implementation.translate(AddMode, post, perms, None, new CallSiteContext(call))))
+        })
+      }
     }
   }
 
@@ -293,7 +312,11 @@ object Checker {
       })
     }
 
-    // Update the call sites to add any required parameters
+    // Update the call sites to add permission tracking/passing.
+    // It is important that this gets done after checks are inserted so that
+    // the permission handling code binds closer to the call sites than checks.
+    // For example, checks required for a callee's pre-condition must be done
+    // before the permissions in the callee's pre-condition are removed.
     for (call <- scope.calls) {
       call.callee match {
         // No parameters can be added to a main method or library methods

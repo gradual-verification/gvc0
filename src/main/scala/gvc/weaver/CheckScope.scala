@@ -41,8 +41,8 @@ object CheckScope {
   def scope(collected: Collector.CollectedProgram): ProgramScope =
     new ProgramScope(
       collected.program,
-      collected.methods.mapValues(cm =>
-        scope(cm.checks, cm.conditions, cm.method))
+      collected.methods.map({ case(k, cm) =>
+        (k, scope(cm.checks, cm.conditions, cm.method)) })
     )
 
   def scope(

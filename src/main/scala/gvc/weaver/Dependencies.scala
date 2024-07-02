@@ -46,7 +46,7 @@ sealed trait MethodDependencies extends ScopeDependencies {
   def conditions: Seq[TrackedCondition]
 
   def inheritsPerms: Boolean = !precisePre
-  def returnsPerms: Boolean = !precisePost
+  def returnsPerms: Boolean = !precisePost || !precisePre
 }
 
 sealed trait WhileDependencies extends ScopeDependencies {
@@ -131,7 +131,7 @@ object Dependencies {
     val program = scope.program
     val precision = new EquirecursivePrecision(program)
 
-    val graph = scope.methods.mapValues(initDependencies(_, precision))
+    val graph = scope.methods.map({ case (k, v) => (k, initDependencies(v, precision)) })
     val deps = new ProgramDependenciesImpl(program, graph)
 
     val collect = mutable.HashSet[String]()
@@ -159,10 +159,10 @@ object Dependencies {
     traverseBlock(method.body, dep)
     dep.children ++= scope.children.map(initDependencies(_, precision))
 
-    dep.requiresPerms = dep.inheritsPerms && requiresPerms(scope.checks)
+    dep.requiresPerms = requiresPerms(scope.checks)
     dep.modifiesPerms =
-      if (dep.precisePost) refsPerms(method.precondition) || refsPerms(method.postcondition)
-      else !dep.allocations.isEmpty
+      if (dep.returnsPerms) !dep.allocations.isEmpty
+      else refsPerms(method.precondition) || refsPerms(method.postcondition)
 
     dep
   }
@@ -181,7 +181,7 @@ object Dependencies {
     traverseBlock(op.block, dep)
     dep.children ++= scope.children.map(initDependencies(_, precision))
 
-    dep.requiresPerms = dep.inheritsPerms && requiresPerms(scope.checks)
+    dep.requiresPerms = requiresPerms(scope.checks)
     dep.modifiesPerms =
       if (dep.preciseInvariant) refsPerms(dep.op.invariant)
       else !dep.allocations.isEmpty
@@ -241,24 +241,20 @@ object Dependencies {
     program: ProgramDependenciesImpl,
     collect: mutable.HashSet[String]
   ): Boolean = {
-    // Assume that if the method is precise (`inheritsPerms` is false), then it
-    // never requires permissions
-    scope.inheritsPerms && (
-      // Check the current scope
-      scope.requiresPerms ||
-      // Recursively check child scopes that inherit permissions
-      scope.children.exists(c =>
-        c.inheritsPerms &&
-        deepRequiresPerms(c, program, collect)) ||
-      // Recursively check methods when they have not been visited
-      scope.calls.exists(c => program.methods.get(c.callee.name) match {
-        case None => false // Ignore external methods
-        case Some(m) =>
-          m.inheritsPerms &&
-          collect.add(m.method.name) &&
-          deepRequiresPerms(m, program, collect)
-      })
-    )
+    // Check the current scope
+    scope.requiresPerms ||
+    // Recursively check child scopes that inherit permissions
+    scope.children.exists(c =>
+      c.inheritsPerms &&
+      deepRequiresPerms(c, program, collect)) ||
+    // Recursively check methods when they have not been visited
+    scope.calls.exists(c => program.methods.get(c.callee.name) match {
+      case None => false // Ignore external methods
+      case Some(m) =>
+        m.inheritsPerms &&
+        collect.add(m.method.name) &&
+        deepRequiresPerms(m, program, collect)
+    })
   }
 
   // Given a set of methods already explored, checks whether there are any child

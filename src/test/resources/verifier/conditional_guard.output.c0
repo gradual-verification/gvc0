@@ -8,34 +8,34 @@ struct Test
   int _id;
 };
 
-struct Test* getTest(struct OwnedFields* _ownedFields);
+struct Test* getTest(struct OwnedFields* _ownedFields, int* _instanceCounter);
 int main();
 
-struct Test* getTest(struct OwnedFields* _ownedFields)
+struct Test* getTest(struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct Test* _ = NULL;
   _ = alloc(struct Test);
-  _->_id = addStructAcc(_ownedFields, 2);
+  _->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  addStructAcc(_ownedFields, _->_id, 2);
   return _;
 }
 
 int main()
 {
   struct Test* test = NULL;
-  bool _cond_1 = false;
-  int* _instanceCounter = NULL;
   struct OwnedFields* _ownedFields = NULL;
-  struct OwnedFields* _tempFields = NULL;
+  bool _cond = false;
+  int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields(_instanceCounter);
-  _tempFields = initOwnedFields(_instanceCounter);
-  test = getTest(_tempFields);
-  join(_ownedFields, _tempFields);
+  _ownedFields = initOwnedFields();
+  test = getTest(_ownedFields, _instanceCounter);
   assertAcc(_ownedFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.a");
-  _cond_1 = !(test == NULL) && test->a == 0;
+  assertAcc(_ownedFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.a");
+  _cond = !(test == NULL) && test->a == 0;
   if (test->a == 0)
   {
-    if (_cond_1)
+    if (_cond)
     {
       assertAcc(_ownedFields, test != NULL ? test->_id : -1, 1, "Field access runtime check failed for struct Test.b");
     }
