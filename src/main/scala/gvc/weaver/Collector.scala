@@ -63,6 +63,8 @@ object Collector {
 
     val collected = new CollectedChecks(irMethod)
 
+    val separationLocations = mutable.HashSet[Location]()
+
     // Indexing adds the node to the mapping of Viper locations to IR locations
     def index(node: vpr.Node, location: Location): Unit =
       locations += node.uniqueIdentifier -> location
@@ -126,9 +128,17 @@ object Collector {
           }
         }
 
+        val check = Check.fromViper(vprCheck.check)
+        if (inSpec) {
+          check match {
+            case _: AccessibilityCheck => separationLocations += loc
+            case _ => ()
+          }
+        }
+
         RuntimeCheck(
           loc,
-          Check.fromViper(vprCheck.check),
+          check,
           branchCondition(checkLocation, vprCheck.conditions, loopInvs)
         )
     }
@@ -357,6 +367,9 @@ object Collector {
     // Index post-conditions and add required runtime checks
     vprMethod.posts.foreach(indexAll(_, MethodPost))
     vprMethod.posts.foreach(checkAll(_, MethodPost, None, Nil))
+
+    // Add separation checks
+    SeparationChecks.inject(separationLocations, irMethod, collected.checks)
 
     collected
   }

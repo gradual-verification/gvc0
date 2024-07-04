@@ -60,7 +60,7 @@ object ValueContext extends SpecificationContext {
   def convertVar(source: IR.Var): IR.Expression = source
 }
 
-class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Var])
+class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Expression])
     extends SpecificationContext {
   def convertResult: IR.Expression =
     throw new WeaverException(s"Invalid \result expression in '${pred.name}'")
