@@ -332,6 +332,14 @@ object Checker {
     for (alloc <- scope.allocations) {
       addAllocationTracking(alloc, context)
     }
+
+    for (child <- scope.children) {
+      val perms = getPermissions(
+        child,
+        context.implementation,
+        Some(context.permissions))
+      insert(programData, child, context.copy(permissions = perms))
+    }
   }
 
   def addAllocationTracking(

@@ -53,6 +53,24 @@ object CheckScope {
     val outer = new MethodScopeImplementation(method, conditions)
     val inner = mutable.HashMap[IR.While, WhileScopeImplementation]()
 
+    // Create and index all the child scopes
+    def initBlock(block: IR.Block, scope: CheckScopeImplementation): Unit =
+      block.foreach(init(_, scope))
+    def init(op: IR.Op, scope: CheckScopeImplementation): Unit =
+      op match {
+        case w: IR.While => {
+          val child = new WhileScopeImplementation(w)
+          scope.children += child
+          inner += w -> child
+
+          initBlock(w.body, child)
+        }
+        case i: IR.If => initBlock(i.ifTrue, scope); initBlock(i.ifFalse, scope)
+        case _ => ()
+      }
+
+    initBlock(method.body, outer)
+
     def getScope(op: IR.Op): CheckScopeImplementation = {
       if (op.block == method.body) {
         outer
@@ -61,11 +79,7 @@ object CheckScope {
           case c: IR.ChildBlock => c.op match {
             case cond: IR.If => getScope(cond)
             case loop: IR.While =>
-              inner.getOrElse(loop, {
-                val scope = new WhileScopeImplementation(loop)
-                getScope(loop).children += scope
-                scope
-              })
+              inner.getOrElse(loop, throw new WeaverException("Missing inner scope"))
             case _ => throw new WeaverException("Invalid IR structure")
           }
 

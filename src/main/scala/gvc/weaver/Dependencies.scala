@@ -178,7 +178,7 @@ object Dependencies {
       precision.isPrecise(op.invariant)
     )
 
-    traverseBlock(op.block, dep)
+    traverseBlock(op.body, dep)
     dep.children ++= scope.children.map(initDependencies(_, precision))
 
     dep.requiresPerms = requiresPerms(scope.checks)
