@@ -94,7 +94,7 @@ object SeparationChecks {
           case _ => throw new WeaverException("Invalid acc value")
         }
 
-      case b: IR.Binary if b.operator == IR.BinaryOp.Add => {
+      case b: IR.Binary if b.operator == IR.BinaryOp.And => {
         inject(b.left, loc, cond, context, checks)
         inject(b.right, loc, cond, context, checks)
       }
