@@ -14,19 +14,17 @@ int main()
   int _ = 0;
   int _1 = 0;
   bool _cond = false;
-  bool _cond1 = false;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
   _ = doSomething(0, _instanceCounter);
-  _cond1 = _ == 0;
-  _cond1 = _ == 0;
+  _cond = _ == 0;
   x = random(_instanceCounter);
   _1 = doSomething(x, _instanceCounter);
-  if (!_cond1 && !(_1 == 0))
+  if (!_cond && !(_1 == 0))
   {
     assert(x == 0);
   }
-  if (_cond1 && !(_1 == 0))
+  if (_cond && !(_1 == 0))
   {
     assert(x == 0);
   }

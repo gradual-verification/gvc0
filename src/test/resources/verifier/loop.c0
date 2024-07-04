@@ -1,0 +1,43 @@
+struct Box {
+  int value;
+};
+
+void fact(struct Box* box)
+  //@requires ?;
+  //@ensures ?;
+{
+  int total = 1;
+
+  // This should require a runtime check for acc(box->value) before the loop
+  // begins executing, but the loop body should run without permission tracking
+  // or any checks.
+
+  while (box->value > 1)
+    //@loop_invariant acc(box->value);
+  {
+    total *= box->value;
+    box->value--;
+
+    // No-op alloc to test if permission tracking is happening
+    alloc(int);
+  }
+
+  box->value = total;
+}
+
+int main()
+  //@requires true;
+{
+  struct Box* box = alloc(struct Box);
+  box->value = 3;
+  fact(box);
+
+  int result;
+  if (box->value == 6)
+    result = 0;
+  else
+    result = -1;
+
+  return result;
+}
+
