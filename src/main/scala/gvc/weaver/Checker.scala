@@ -189,10 +189,12 @@ object Checker {
       .foreach {
         case (loc, conds) =>
           insertAt(loc, method, retVal => {
-            conds.map(
+            val instrs = mutable.ListBuffer[IR.Op]()
+            conds.foreach(
               c =>
-                new IR.Assign(conditions(c),
-                              c.value.toIR(programData.program, method, retVal)))
+                instrs += new IR.Assign(conditions(c),
+                                        c.value.toIR(programData.program, method, retVal)))
+            instrs
           })
       }
   }

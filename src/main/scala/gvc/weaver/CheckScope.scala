@@ -12,7 +12,7 @@ sealed trait CheckScope {
 sealed trait MethodScope extends CheckScope {
   def method: IR.Method
   def block: IR.Block = method.body
-  def conditions: Seq[TrackedCondition]
+  def conditions: Iterable[TrackedCondition]
 }
 
 sealed trait WhileScope extends CheckScope {
@@ -33,7 +33,7 @@ object CheckScope {
 
   private sealed class MethodScopeImplementation(
     val method: IR.Method,
-    val conditions: Seq[TrackedCondition]
+    val conditions: Iterable[TrackedCondition]
   ) extends CheckScopeImplementation with MethodScope
   private sealed class WhileScopeImplementation(val op: IR.While)
     extends CheckScopeImplementation with WhileScope
@@ -47,7 +47,7 @@ object CheckScope {
 
   def scope(
     checks: Seq[RuntimeCheck],
-    conditions: Seq[TrackedCondition],
+    conditions: Iterable[TrackedCondition],
     method: IR.Method
   ): MethodScope = {
     val outer = new MethodScopeImplementation(method, conditions)
