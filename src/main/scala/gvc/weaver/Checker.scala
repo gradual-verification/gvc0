@@ -83,6 +83,7 @@ object Checker {
       List(cond)
     }
     def optionalPermissions: IR.Expression = permissions
+
     def trackingPermissions: Boolean = false
   }
 
@@ -200,7 +201,7 @@ object Checker {
   }
 
   // Creates a temporary set of permissions, 
-  private def useTempPermissions(call: IR.Invoke, perms: IR.Expression, context: CheckContext) = {
+  private def useTempPermissions(call: IR.Invoke, perms: PermissionScope, context: CheckContext) = {
     // Need to create temporary set and merge after
     val impl = context.implementation
     val runtime = context.runtime
@@ -216,13 +217,51 @@ object Checker {
         throw new WeaverException("Attempting to add permissions to library method")
     }
 
-    pre.foreach(pre =>
-      call.insertBefore(impl.translate(
-        AddRemoveMode, pre, tempPerms, Some(perms), new CallSiteContext(call))))
-
     call.arguments :+= tempPerms
 
-    call.insertAfter(new IR.Invoke(runtime.join, List(perms, tempPerms), None))
+    perms match {
+      case NoPermissions => {
+        pre.foreach(pre =>
+          call.insertBefore(impl.translate(
+            AddMode, pre, tempPerms, None, new CallSiteContext(call))))
+
+        // No permission tracking, so no need to join
+      }
+
+      case perms: OptionalPermissions => {
+        pre.foreach(pre => {
+          val permsVal = perms.optionalPermissions
+          val cond = new IR.If(
+            new IR.Binary(IR.BinaryOp.Equal, permsVal, new IR.NullLit()))
+          // Use AddMode if perms have not been passed
+          cond.ifTrue ++= impl.translate(
+            AddMode, pre, tempPerms, None,
+            new CallSiteContext(call))
+          // Use AddRemoveMode if perms have been passed
+          cond.ifFalse ++= impl.translate(
+            AddRemoveMode, pre, tempPerms, Some(permsVal),
+            new CallSiteContext(call))
+          call.insertBefore(cond)
+        })
+
+        // Join if perms have been passed
+        call.insertAfter(perms.optionalPermissions(permsVal => {
+          List(new IR.Invoke(runtime.join, List(permsVal, tempPerms), None))
+        }))
+      }
+
+      case perms: RequiredPermissions => {
+        // Permissions are always required, so always use AddRemoveMode and
+        // always join after
+        pre.foreach(pre =>
+          call.insertBefore(impl.translate(
+            AddRemoveMode, pre, tempPerms, Some(perms.requirePermissions), new CallSiteContext(call))))
+
+        call.insertAfter(new IR.Invoke(runtime.join, List(perms.requirePermissions, tempPerms), None))
+      }
+    }
+
+    
   }
 
   // Adds permissions to a method
@@ -234,7 +273,7 @@ object Checker {
       case PermissionsRequired =>
         // Permissions are returned, but not inherited (i.e., precise pre,
         // imprecise post)
-        useTempPermissions(call, context.permissions.requirePermissions, context)
+        useTempPermissions(call, context.permissions, context)
       case PermissionsOptional =>
         // Since permissions are optional, the presence of permissions is never
         // checked, so it doesn't matter that we send more permissions than are
