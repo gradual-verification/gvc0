@@ -4,7 +4,7 @@ import gvc.transformer.IR
 
 abstract class SpecificationContext {
   def convertVar(source: IR.Var): IR.Expression
-  def convertResult: IR.Expression
+  def convertResult(source: IR.Result): IR.Expression
 
   def convertFieldMember(member: IR.FieldMember): IR.FieldMember = {
     new IR.FieldMember(
@@ -23,7 +23,7 @@ abstract class SpecificationContext {
       case derefMember: IR.DereferenceMember =>
         new IR.DereferenceMember(convertExpression(derefMember.root))
 
-      case _: IR.Result => convertResult
+      case result: IR.Result => convertResult(result)
 
       case literal: IR.Literal => literal
 
@@ -54,15 +54,22 @@ abstract class SpecificationContext {
 // A context implementation that only validates that invalid expressions
 // like \result are not used incorrectly
 object ValueContext extends SpecificationContext {
-  def convertResult: IR.Expression =
+  def convertResult(source: IR.Result): IR.Expression =
     throw new WeaverException("Invalid result expression")
 
   def convertVar(source: IR.Var): IR.Expression = source
 }
 
+object IdentityContext extends SpecificationContext {
+  def convertResult(source: IR.Result): IR.Expression = source
+  def convertVar(source: IR.Var): IR.Expression = source
+  override def convertExpression(expr: IR.Expression): IR.Expression = expr
+  override def convertFieldMember(member: IR.FieldMember): IR.FieldMember = member
+}
+
 class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Expression])
     extends SpecificationContext {
-  def convertResult: IR.Expression =
+  def convertResult(source: IR.Result): IR.Expression =
     throw new WeaverException(s"Invalid \result expression in '${pred.name}'")
 
   def convertVar(source: IR.Var): IR.Expression =
@@ -77,7 +84,7 @@ class ReturnContext(returnValue: IR.Expression) extends SpecificationContext {
   def convertVar(source: IR.Var): IR.Expression =
     source
 
-  def convertResult: IR.Expression =
+  def convertResult(source: IR.Result): IR.Expression =
     returnValue
 }
 
@@ -110,6 +117,6 @@ class CallSiteContext(call: IR.Invoke)
         s"Could not find variable '${source.name} at call site of '${call.callee.name}'"
       ))
 
-  def convertResult: IR.Expression = call.target.getOrElse(
+  def convertResult(source: IR.Result): IR.Expression = call.target.getOrElse(
     throw new WeaverException("Invoke of non-void method must have a target"))
 }

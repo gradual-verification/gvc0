@@ -2,7 +2,6 @@ package gvc.weaver
 
 import scala.collection.mutable
 import gvc.transformer.IR
-import gvc.transformer.IR.Accessibility
 
 object SeparationChecks {
   def canOverlap(spec: IR.Expression): Boolean = countAccs(spec) > 1
@@ -65,7 +64,7 @@ object SeparationChecks {
         }
 
         case MethodPost if method.postcondition.isDefined => {
-          (method.postcondition.get, ValueContext)
+          (method.postcondition.get, IdentityContext)
         }
       }
 
@@ -82,7 +81,7 @@ object SeparationChecks {
     checks: mutable.ListBuffer[RuntimeCheck]
   ): Unit = {
     spec match {
-      case acc: Accessibility =>
+      case acc: IR.Accessibility =>
         CheckExpression.irValue(context.convertExpression(acc.member)) match {
           case f: CheckExpression.Field => {
             checks += RuntimeCheck(
