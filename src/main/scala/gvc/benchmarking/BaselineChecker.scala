@@ -12,13 +12,15 @@ object BaselineChecker {
   case object ImpreciseCallStyle extends CallStyle
   case object MainCallStyle extends CallStyle
 
-  def check(program: IR.Program, onlyFraming: Boolean = false): Unit = {
+  def check(program: IR.Program, onlyFraming: Boolean = false): Unit = ()
+
+  /*
     val structIds =
       program.structs.map(s => (s.name, s.addField("_id", IR.IntType))).toMap
     val runtime = CheckRuntime.addToIR(program)
     val checks = new CheckImplementation(program, runtime, structIds)
     program.methods.foreach(checkMethod(_, checks, onlyFraming))
-  }
+  }*/
 
   def checkFraming(program: IR.Program): Unit =
     check(program, onlyFraming = true)
