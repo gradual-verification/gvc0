@@ -1,0 +1,82 @@
+#use <runtime>
+struct Box;
+struct _ptr_int;
+
+struct Box
+{
+  int value;
+  int _id;
+};
+
+struct _ptr_int
+{
+  int value;
+  int _id;
+};
+
+void dec(struct _ptr_int* value, struct OwnedFields* _ownedFields, int* _instanceCounter);
+void fact(struct Box* box, struct OwnedFields* _ownedFields, int* _instanceCounter);
+int main();
+
+void dec(struct _ptr_int* value, struct OwnedFields* _ownedFields, int* _instanceCounter)
+{
+  assertAcc(_ownedFields, value != NULL ? value->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
+  value->value = value->value - 1;
+}
+
+void fact(struct Box* box, struct OwnedFields* _ownedFields, int* _instanceCounter)
+{
+  int total = 0;
+  struct _ptr_int* _ = NULL;
+  bool _cond = false;
+  struct OwnedFields* _ownedFields1 = NULL;
+  total = 1;
+  assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
+  if (_cond)
+  {
+    assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
+    assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
+  }
+  assert(!(box == NULL));
+  _cond = !(box == NULL) && box->value > 1;
+  while (box->value > 1)
+  {
+    _ownedFields1 = initOwnedFields();
+    addAcc(_ownedFields1, box->_id, 1, 0);
+    total = total * box->value;
+    box->value = box->value - 1;
+    _ = alloc(struct _ptr_int);
+    _->_id = *_instanceCounter;
+    *_instanceCounter = *_instanceCounter + 1;
+    addStructAcc(_ownedFields1, _->_id, 1);
+    dec(_, _ownedFields1, _instanceCounter);
+  }
+  box->value = total;
+}
+
+int main()
+{
+  struct Box* box = NULL;
+  int result = 0;
+  struct OwnedFields* _ownedFields = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = initOwnedFields();
+  box = alloc(struct Box);
+  box->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  addStructAcc(_ownedFields, box->_id, 1);
+  box->value = 3;
+  fact(box, _ownedFields, _instanceCounter);
+  assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
+  assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
+  if (box->value == 6)
+  {
+    result = 0;
+  }
+  else
+  {
+    result = -1;
+  }
+  return result;
+}

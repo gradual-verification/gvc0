@@ -119,7 +119,7 @@ object Dependencies {
     val preciseInvariant: Boolean)
     extends DependencyScope with WhileDependencies {
 
-    def block: IR.Block = op.block
+    def block: IR.Block = op.body
   }
 
   private class ProgramDependenciesImpl(
