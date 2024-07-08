@@ -82,6 +82,8 @@ object Dependencies {
 
     def isPrecise(e: IR.Expression): Boolean = e match {
       case _: IR.Imprecise => false
+      case b: IR.Binary if b.operator == IR.BinaryOp.And =>
+        isPrecise(b.left) && isPrecise(b.right)
       case c: IR.Conditional => isPrecise(c.ifTrue) && isPrecise(c.ifFalse)
       case p: IR.PredicateInstance => isPrecise(p.predicate)
       case _ => true
