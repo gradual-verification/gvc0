@@ -401,6 +401,8 @@ object IR {
 
     def contains(exp: Expression): Boolean =
       exp == this
+
+    override def toString() = IRPrinter.print(this)
   }
 
   class Parameter(varType: Type, name: String)
@@ -451,6 +453,8 @@ object IR {
   ) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || arguments.exists(_.contains(exp))
+    override def toString() =
+      predicate.name + "(" + arguments.map(IRPrinter.print).mkString(", ") + ")"
   }
 
   // Represents a \result expression in a specification
@@ -514,18 +518,18 @@ object IR {
 
   sealed trait BinaryOp
   object BinaryOp {
-    object Add extends BinaryOp
-    object Subtract extends BinaryOp
-    object Divide extends BinaryOp
-    object Multiply extends BinaryOp
-    object And extends BinaryOp
-    object Or extends BinaryOp
-    object Equal extends BinaryOp
-    object NotEqual extends BinaryOp
-    object Less extends BinaryOp
-    object LessOrEqual extends BinaryOp
-    object Greater extends BinaryOp
-    object GreaterOrEqual extends BinaryOp
+    object Add extends BinaryOp { override def toString() = "+" }
+    object Subtract extends BinaryOp { override def toString() = "-" }
+    object Divide extends BinaryOp { override def toString() = "/" }
+    object Multiply extends BinaryOp { override def toString() = "*" }
+    object And extends BinaryOp { override def toString() = "&&" }
+    object Or extends BinaryOp { override def toString() = "||" }
+    object Equal extends BinaryOp { override def toString() = "==" }
+    object NotEqual extends BinaryOp { override def toString() = "!=" }
+    object Less extends BinaryOp { override def toString() = "<" }
+    object LessOrEqual extends BinaryOp { override def toString() = "<=" }
+    object Greater extends BinaryOp { override def toString() = ">" }
+    object GreaterOrEqual extends BinaryOp { override def toString() = ">=" }
   }
 
   class Unary(
@@ -542,8 +546,8 @@ object IR {
 
   sealed trait UnaryOp
   object UnaryOp {
-    object Not extends UnaryOp
-    object Negate extends UnaryOp
+    object Not extends UnaryOp { override def toString() = "!" }
+    object Negate extends UnaryOp { override def toString() = "-" }
   }
 
   sealed trait Type {
@@ -625,6 +629,8 @@ object IR {
     // Creates a copy of the current Op
     // The new copy will not be attached to any Block
     def copy: IR.Op
+
+    def summary: String
   }
 
   class Invoke(
@@ -633,6 +639,10 @@ object IR {
       var target: Option[Expression]
   ) extends Op {
     def copy = new Invoke(callee, arguments, target)
+    def summary = (
+      target.map(e => IRPrinter.print(e) + " = ").getOrElse("")
+        + callee.name + "(" + arguments.map(IRPrinter.print) + ")"
+    )
   }
 
   class AllocValue(
@@ -640,6 +650,7 @@ object IR {
       var target: Var
   ) extends Op {
     def copy = new AllocValue(valueType, target)
+    def summary = target.name + " = alloc(" + valueType.name + ")"
   }
 
   class AllocStruct(
@@ -647,6 +658,8 @@ object IR {
       var target: Expression
   ) extends Op {
     def copy = new AllocStruct(struct, target)
+    def summary =
+      IRPrinter.print(target) + " = alloc(struct " + struct.name + ")"
   }
 
   // TODO: Length should be an expression
@@ -656,6 +669,11 @@ object IR {
       var target: Var
   ) extends Op {
     def copy = new AllocArray(valueType, length, target)
+    def summary = (
+      IRPrinter.print(target)
+      + "= alloc_array(" + valueType.name
+      + ", " + IRPrinter.print(length) + ")"
+    )
   }
 
   class Assign(
@@ -663,6 +681,7 @@ object IR {
       var value: Expression
   ) extends Op {
     def copy = new Assign(target, value)
+    def summary = target.name + " = " + IRPrinter.print(value)
   }
 
   class AssignMember(
@@ -670,6 +689,7 @@ object IR {
       var value: Expression
   ) extends Op {
     def copy = new AssignMember(member, value)
+    def summary = IRPrinter.print(member) + " = " + IRPrinter.print(value)
   }
 
   class Assert(
@@ -677,6 +697,10 @@ object IR {
       var kind: AssertKind
   ) extends Op {
     def copy = new Assert(value, kind)
+    def summary = (kind match {
+      case IR.AssertKind.Imperative => "assert "
+      case IR.AssertKind.Specification => "//@assert "
+    }) + IRPrinter.print(value)
   }
 
   sealed trait AssertKind
@@ -689,22 +713,29 @@ object IR {
       var instance: PredicateInstance
   ) extends Op {
     def copy = new Fold(instance)
+    def summary = "//@fold " + instance.toString()
   }
 
   class Unfold(
       var instance: PredicateInstance
   ) extends Op {
     def copy = new Unfold(instance)
+    def summary = "//@unfold " + instance.toString()
   }
 
   class Error(
       var value: Expression
   ) extends Op {
     def copy = new Error(value)
+    def summary = "error(" + IRPrinter.print(value) + ")"
   }
 
   class Return(var value: Option[Expression]) extends Op {
     def copy = new Return(value)
+    def summary = value match {
+      case None => "return"
+      case Some(e) => "return " + IRPrinter.print(e)
+    }
   }
 
   class If(
@@ -725,6 +756,8 @@ object IR {
       falseBranch.foreach(newIf.ifFalse += _.copy)
       newIf
     }
+
+    def summary = "if (" + IRPrinter.print(condition) + ") ..."
   }
 
   class While(
@@ -746,6 +779,8 @@ object IR {
       newBody.foreach(newWhile.body += _.copy)
       newWhile
     }
+
+    def summary = "while (" + IRPrinter.print(condition) + ") ..."
   }
 
   class Dependency(

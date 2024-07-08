@@ -26,7 +26,7 @@ object SeparationChecks {
       case Some(precise) => countAccs(precise)
     }
     
-    // Could optimize so that it explores predicats (would have to implement
+    // Could optimize so that it explores predicates (would have to implement
     // handling for mutually-recursive predicates).
     case p: IR.PredicateInstance => 2
 

@@ -49,19 +49,39 @@ sealed trait PredicatePermissionCheck extends PermissionCheck {
 case class FieldSeparationCheck(field: CheckExpression.Field)
     extends FieldPermissionCheck
     with SeparationCheck
+{
+  override def toString(): String = s"sep($field)"
+}
+
 case class FieldAccessibilityCheck(field: CheckExpression.Field)
     extends FieldPermissionCheck
     with AccessibilityCheck
+{
+  override def toString() = s"acc($field)"
+}
+
 case class PredicateSeparationCheck(
     predicateName: String,
     arguments: List[CheckExpression]
 ) extends PredicatePermissionCheck
     with SeparationCheck
+{
+  override def toString() = {
+    val args = arguments.map(_.toString()).mkString(", ")
+    s"sep($predicateName($args))"
+  }
+}
 case class PredicateAccessibilityCheck(
     predicateName: String,
     arguments: List[CheckExpression]
 ) extends PredicatePermissionCheck
     with AccessibilityCheck
+{
+  override def toString() = {
+    val args = arguments.map(_.toString()).mkString(", ")
+    s"$predicateName($args)"
+  }
+}
 
 sealed trait CheckExpression extends Check {
   def toIR(
@@ -100,6 +120,8 @@ object CheckExpression {
       new IR.Binary(op, left.toIR(p, m, r), right.toIR(p, m, r))
 
     def guard = and(left.guard, right.guard)
+
+    override def toString() = s"($left) $op ($right)"
   }
 
   case class And(left: Expr, right: Expr) extends Binary {
@@ -150,6 +172,8 @@ object CheckExpression {
     ): IR.Unary =
       new IR.Unary(op, operand.toIR(p, m, r))
     def guard = operand.guard
+
+    override def toString() = s"$op($operand)"
   }
   case class Not(operand: Expr) extends Unary {
     def op = IR.UnaryOp.Not
@@ -163,6 +187,7 @@ object CheckExpression {
       m.variable(name)
     }
     def guard = None
+    override def toString() = name
   }
 
   case class Field(root: Expr, structName: String, fieldName: String)
@@ -179,12 +204,16 @@ object CheckExpression {
       new IR.FieldMember(root.toIR(p, m, r), getIRField(p))
     
     def guard = Some(and(root.guard, Not(Eq(root, NullLit))))
+    
+    override def toString() = s"$root.$fieldName"
   }
 
   case class Deref(operand: Expr) extends Expr {
     def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
       new IR.DereferenceMember(operand.toIR(p, m, r))
     def guard = Some(and(operand.guard, Not(Eq(operand, NullLit))))
+
+    override def toString() = s"*($operand)"
   }
 
   sealed trait Literal extends Expr {
@@ -194,23 +223,28 @@ object CheckExpression {
   case class IntLit(value: Int) extends Literal {
     def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
       new IR.IntLit(value)
+    override def toString() = value.toString()
   }
   case class CharLit(value: Char) extends Literal {
     def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
       new IR.CharLit(value)
+    override def toString() = s"'$value'"
   }
   case class StrLit(value: String) extends Literal {
     def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
       new IR.StringLit(value)
+    override def toString() = "\"" + value + "\""
   }
   case object NullLit extends Literal {
     def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
       new IR.NullLit()
+    override def toString() = "NULL"
   }
   sealed trait BoolLit extends Literal {
     def value: Boolean
     def toIR(p: IR.Program, m: IR.Method, r: Option[IR.Expression]) =
       new IR.BoolLit(value)
+    override def toString() = value.toString()
   }
   object BoolLit {
     def apply(value: Boolean): BoolLit = if (value) TrueLit else FalseLit
@@ -245,6 +279,8 @@ object CheckExpression {
       // Either the true path is taken, or the false guard is satisifed
       case (None, Some(fg)) => Some(Or(cond, fg))
     })
+
+    override def toString() = s"($cond) ? ($ifTrue) : ($ifFalse)"
   }
 
   case object Result extends Expr {
@@ -257,6 +293,7 @@ object CheckExpression {
         throw new WeaverException("Invalid \\result expression")
       )
     def guard = None
+    override def toString() = "\\result"
   }
 
   def irValue(value: IR.Expression): Expr = {
@@ -376,12 +413,24 @@ object CheckExpression {
 sealed trait Location
 
 sealed trait AtOp extends Location { val op: IR.Op }
-case class Pre(override val op: IR.Op) extends AtOp
-case class Post(override val op: IR.Op) extends AtOp
-case class LoopStart(override val op: IR.Op) extends AtOp
-case class LoopEnd(override val op: IR.Op) extends AtOp
-case object MethodPre extends Location
-case object MethodPost extends Location
+case class Pre(override val op: IR.Op) extends AtOp {
+  override def toString() = "PRE:" + op.summary
+}
+case class Post(override val op: IR.Op) extends AtOp {
+  override def toString() = "POST:" + op.summary
+}
+case class LoopStart(override val op: IR.Op) extends AtOp {
+  override def toString() = "START:" + op.summary
+}
+case class LoopEnd(override val op: IR.Op) extends AtOp {
+  override def toString() = "END:" + op.summary
+}
+case object MethodPre extends Location {
+  override def toString() = "requires"
+}
+case object MethodPost extends Location {
+  override def toString() = "ensures"
+}
 
 sealed trait Condition
 case class NotCondition(value: Condition) extends Condition
@@ -398,3 +447,13 @@ case class RuntimeCheck(
     check: Check,
     when: Option[Condition]
 )
+
+object RuntimeCheck {
+  def dump(checks: Seq[RuntimeCheck]) = {
+    System.out.println(
+      checks
+        .map(c => c.location.toString() + "\n" + c.check.toString())
+        .mkString("\n\n")
+    )
+  }
+}
