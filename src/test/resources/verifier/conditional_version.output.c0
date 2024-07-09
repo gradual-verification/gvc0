@@ -17,22 +17,22 @@ void test(int x, int y, int* _instanceCounter)
   bool _cond1 = false;
   bool _cond2 = false;
   bool _cond3 = false;
-  _cond2 = x > 1;
+  _cond = x > 1;
   if (x > 1)
   {
-    _cond3 = x > 2;
+    _cond1 = x > 2;
     if (x > 2)
     {
       z = testCall(y, _instanceCounter);
-      _cond = y == 0;
-      _cond1 = z == 0;
+      _cond2 = y == 0;
+      _cond3 = z == 0;
       if (z == 0)
       {
-        if (_cond2 && _cond3 && !_cond && _cond1)
+        if (_cond && _cond1 && !_cond2 && _cond3)
         {
           assert(x > 3);
         }
-        if (_cond2 && _cond3 && _cond && _cond1)
+        if (_cond && _cond1 && _cond2 && _cond3)
         {
           assert(x > 3);
         }

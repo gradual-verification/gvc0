@@ -6,7 +6,7 @@ import viper.silver.{ast => vpr}
 
 object Collector {
   class CollectedChecks(val method: IR.Method) {
-    val conditions = mutable.HashSet[TrackedCondition]()
+    val conditions = mutable.LinkedHashSet[TrackedCondition]()
     val checks = mutable.ListBuffer[RuntimeCheck]()
   }
 
