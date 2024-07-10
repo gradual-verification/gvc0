@@ -20,7 +20,7 @@ int main();
 
 void dec(struct _ptr_int* value, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
-  assertAcc(_ownedFields, value != NULL ? value->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
+  runtime_assert(_ownedFields, value == NULL ? -1 : value->_id, 0, "No permission to access 'value->value'");
   value->value = value->value - 1;
 }
 
@@ -31,24 +31,24 @@ void fact(struct Box* box, struct OwnedFields* _ownedFields, int* _instanceCount
   bool _cond = false;
   struct OwnedFields* _ownedFields1 = NULL;
   total = 1;
-  assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
+  runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
   if (_cond)
   {
-    assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
-    assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
+    runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
+    runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
   }
   assert(!(box == NULL));
   _cond = !(box == NULL) && box->value > 1;
   while (box->value > 1)
   {
-    _ownedFields1 = initOwnedFields();
-    addAcc(_ownedFields1, box->_id, 1, 0);
+    _ownedFields1 = runtime_init();
+    runtime_add(_ownedFields1, box->_id, 1, 0, "Invalid aliasing - 'box->value' overlaps with existing permission");
     total = total * box->value;
     box->value = box->value - 1;
     _ = alloc(struct _ptr_int);
     _->_id = *_instanceCounter;
     *_instanceCounter = *_instanceCounter + 1;
-    addStructAcc(_ownedFields1, _->_id, 1);
+    runtime_addAll(_ownedFields1, _->_id, 1);
     dec(_, _ownedFields1, _instanceCounter);
   }
   box->value = total;
@@ -61,15 +61,15 @@ int main()
   struct OwnedFields* _ownedFields = NULL;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields();
+  _ownedFields = runtime_init();
   box = alloc(struct Box);
   box->_id = *_instanceCounter;
   *_instanceCounter = *_instanceCounter + 1;
-  addStructAcc(_ownedFields, box->_id, 1);
+  runtime_addAll(_ownedFields, box->_id, 1);
   box->value = 3;
   fact(box, _ownedFields, _instanceCounter);
-  assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
-  assertAcc(_ownedFields, box != NULL ? box->_id : -1, 0, "Field access runtime check failed for struct Box.value");
+  runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
+  runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
   if (box->value == 6)
   {
     result = 0;

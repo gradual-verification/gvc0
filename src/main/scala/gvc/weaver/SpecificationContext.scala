@@ -1,52 +1,45 @@
 package gvc.weaver
 import gvc.transformer.IR
 import gvc.transformer.IR
+import gvc.transformer.IR.PredicateInstance
 
 abstract class SpecificationContext {
-  def convertVar(source: IR.Var): IR.Expression
-  def convertResult(source: IR.Result): IR.Expression
+  def convert(v: IR.Var): IR.Expression
+  def convert(r: IR.Result): IR.Expression
 
-  def convertFieldMember(member: IR.FieldMember): IR.FieldMember = {
-    new IR.FieldMember(
-      convertExpression(member.root),
-      member.field
-    )
-  }
+  def convert(f: IR.FieldMember): IR.FieldMember =
+    new IR.FieldMember(convert(f.root), f.field)
+  def convert(d: IR.DereferenceMember): IR.DereferenceMember =
+    new IR.DereferenceMember(convert(d.root))
+  def convert(l: IR.Literal): IR.Literal =
+    l
+  def convert(b: IR.Binary): IR.Binary =
+    new IR.Binary(b.operator, convert(b.left), convert(b.right))
+  def convert(u: IR.Unary): IR.Unary =
+    new IR.Unary(u.operator, u.operand)
+  def convert(c: IR.Conditional): IR.Conditional =
+    new IR.Conditional(convert(c.condition), convert(c.ifTrue), convert(c.ifFalse))
+  def convert(a: IR.Accessibility): IR.Accessibility =
+    throw new WeaverException("Cannot translate acc(...) to new context")
+  def convert(p: IR.PredicateInstance): IR.PredicateInstance =
+    throw new WeaverException("Cannot translate " + p.predicate.name + "(...) to new context")
+  def convert(a: IR.ArrayMember): IR.ArrayMember =
+    throw new WeaverException("Cannot translate array access to new context")
 
-  def convertExpression(expr: IR.Expression): IR.Expression = {
+  def convert(expr: IR.Expression): IR.Expression = {
     expr match {
-      case value: IR.Var => convertVar(value)
-
-      case fieldMember: IR.FieldMember =>
-        convertFieldMember(fieldMember)
-
-      case derefMember: IR.DereferenceMember =>
-        new IR.DereferenceMember(convertExpression(derefMember.root))
-
-      case result: IR.Result => convertResult(result)
-
-      case literal: IR.Literal => literal
-
-      case binary: IR.Binary =>
-        new IR.Binary(
-          binary.operator,
-          convertExpression(binary.left),
-          convertExpression(binary.right)
-        )
-
-      case unary: IR.Unary =>
-        new IR.Unary(unary.operator, convertExpression(unary.operand))
-
-      case cond: IR.Conditional =>
-        new IR.Conditional(convertExpression(cond.condition),
-                           convertExpression(cond.ifTrue),
-                           convertExpression(cond.ifFalse))
-
-      case _: IR.Accessibility | _: IR.Imprecise | _: IR.ArrayMember |
-          _: IR.PredicateInstance =>
-        throw new WeaverException(
-          "Invalid expression; cannot convert to new context."
-        )
+      case v: IR.Var => convert(v)
+      case f: IR.FieldMember => convert(f)
+      case d: IR.DereferenceMember => convert(d)
+      case r: IR.Result => convert(r)
+      case l: IR.Literal => convert(l)
+      case b: IR.Binary => convert(b)
+      case u: IR.Unary => convert(u)
+      case c: IR.Conditional => convert(c)
+      case a: IR.Accessibility => convert(a)
+      case i: IR.Imprecise => convert(i)
+      case p: PredicateInstance => convert(p)
+      case a: IR.ArrayMember => convert(a)
     }
   }
 }
@@ -54,25 +47,28 @@ abstract class SpecificationContext {
 // A context implementation that only validates that invalid expressions
 // like \result are not used incorrectly
 object ValueContext extends SpecificationContext {
-  def convertResult(source: IR.Result): IR.Expression =
+  def convert(source: IR.Result): IR.Expression =
     throw new WeaverException("Invalid result expression")
 
-  def convertVar(source: IR.Var): IR.Expression = source
+  def convert(source: IR.Var): IR.Expression = source
 }
 
 object IdentityContext extends SpecificationContext {
-  def convertResult(source: IR.Result): IR.Expression = source
-  def convertVar(source: IR.Var): IR.Expression = source
-  override def convertExpression(expr: IR.Expression): IR.Expression = expr
-  override def convertFieldMember(member: IR.FieldMember): IR.FieldMember = member
+  def convert(source: IR.Result): IR.Expression = source
+  def convert(source: IR.Var): IR.Expression = source
+  override def convert(expr: IR.Expression): IR.Expression = expr
+  override def convert(f: IR.FieldMember): IR.FieldMember = f
+  override def convert(p: IR.PredicateInstance): IR.PredicateInstance = p
+  override def convert(a: IR.Accessibility): IR.Accessibility = a
+  override def convert(a: IR.ArrayMember): IR.ArrayMember = a
 }
 
 class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Expression])
     extends SpecificationContext {
-  def convertResult(source: IR.Result): IR.Expression =
+  def convert(source: IR.Result): IR.Expression =
     throw new WeaverException(s"Invalid \result expression in '${pred.name}'")
 
-  def convertVar(source: IR.Var): IR.Expression =
+  def convert(source: IR.Var): IR.Expression =
     params.getOrElse(
       source,
       throw new WeaverException(
@@ -81,10 +77,10 @@ class PredicateContext(pred: IR.Predicate, params: Map[IR.Var, IR.Expression])
 }
 
 class ReturnContext(returnValue: IR.Expression) extends SpecificationContext {
-  def convertVar(source: IR.Var): IR.Expression =
+  def convert(source: IR.Var): IR.Expression =
     source
 
-  def convertResult(source: IR.Result): IR.Expression =
+  def convert(source: IR.Result): IR.Expression =
     returnValue
 }
 
@@ -110,13 +106,13 @@ class CallSiteContext(call: IR.Invoke)
       })
       .toMap
 
-  def convertVar(source: IR.Var): IR.Expression =
+  def convert(source: IR.Var): IR.Expression =
     variableMapping.getOrElse(
       source,
       throw new WeaverException(
         s"Could not find variable '${source.name} at call site of '${call.callee.name}'"
       ))
 
-  def convertResult(source: IR.Result): IR.Expression = call.target.getOrElse(
+  def convert(source: IR.Result): IR.Expression = call.target.getOrElse(
     throw new WeaverException("Invoke of non-void method must have a target"))
 }

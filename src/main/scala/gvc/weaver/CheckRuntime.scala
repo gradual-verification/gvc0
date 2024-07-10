@@ -35,19 +35,14 @@ object CheckRuntime {
     val primaryOwnedFields = "_ownedFields"
     val temporaryOwnedFields = "_tempFields"
     val contextOwnedFields = "_contextFields"
-    val initOwnedFields = "initOwnedFields"
-    val addStructAcc = "addStructAcc"
-    val addAcc = "addAcc"
-    val loseAcc = "loseAcc"
-    val join = "join"
-    val assertAcc = "assertAcc"
-    val addAccEnsureSeparate = "addAccEnsureSeparate"
-    val find = "find"
+    val initOwnedFields = "runtime_init"
+    val addStruct = "runtime_addAll"
+    val remove = "runtime_remove"
+    val join = "runtime_join"
+    val assert = "runtime_assert"
+    val add = "runtime_add"
     val instanceCounter = "_instanceCounter"
     val id = "_id"
-    val removePrefix = "remove_"
-    val addPrefix = "add_"
-    val checkPrefix = "check_"
   }
 }
 
@@ -56,15 +51,13 @@ class CheckRuntime private (program: IR.Program) {
   val ownedFields: IR.StructDefinition =
     program.struct(Names.ownedFieldsStruct)
   val ownedFieldsRef = new IR.ReferenceType(ownedFields)
-  val initOwnedFields: IR.MethodDefinition =
+  val init: IR.MethodDefinition =
     program.method(Names.initOwnedFields)
-  val addStructAcc: IR.MethodDefinition =
-    program.method(Names.addStructAcc)
-  val addAcc: IR.MethodDefinition = program.method(Names.addAcc)
-  val addAccEnsureSeparate: IR.MethodDefinition =
-    program.method(Names.addAccEnsureSeparate)
-  val loseAcc: IR.MethodDefinition = program.method(Names.loseAcc)
+  val addStruct: IR.MethodDefinition =
+    program.method(Names.addStruct)
+  val add: IR.MethodDefinition =
+    program.method(Names.add)
+  val remove: IR.MethodDefinition = program.method(Names.remove)
   val join: IR.MethodDefinition = program.method(Names.join)
-  val assertAcc: IR.MethodDefinition = program.method(Names.assertAcc)
-  val find: IR.MethodDefinition = program.method(Names.find)
+  val assert: IR.MethodDefinition = program.method(Names.assert)
 }

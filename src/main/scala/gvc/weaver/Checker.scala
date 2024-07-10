@@ -104,7 +104,7 @@ object Checker {
     method.addParameter(impl.runtime.ownedFieldsRef, Names.primaryOwnedFields)
 
   private def initPermissions(perms: IR.Var, impl: CheckImplementation): IR.Op = {
-    new IR.Invoke(impl.runtime.initOwnedFields, Nil, Some(perms))
+    new IR.Invoke(impl.runtime.init, Nil, Some(perms))
   }
 
   private def addMethodPerms(method: IR.Method, impl: CheckImplementation): IR.Var =
@@ -149,8 +149,8 @@ object Checker {
           case w: WhileDependencies => Some(w.op.invariant)
         }
         spec.foreach(p =>
-          impl.translate(AddMode, p, variable, None, ValueContext) ++=: dep.block)
-        new IR.Invoke(impl.runtime.initOwnedFields, Nil, Some(variable)) +=: dep.block
+          impl.translate(p, ValueContext, List(AddMode(variable, guarded=false))) ++=: dep.block)
+        new IR.Invoke(impl.runtime.init, Nil, Some(variable)) +=: dep.block
         new RequiredPermissions(variable)
       }
       case _ => NoPermissions
@@ -209,7 +209,7 @@ object Checker {
       runtime.ownedFieldsRef, Names.temporaryOwnedFields)
 
     call.insertBefore(
-      new IR.Invoke(runtime.initOwnedFields, Nil, Some(tempPerms)))
+      new IR.Invoke(runtime.init, Nil, Some(tempPerms)))
 
     val pre = call.callee match {
       case m: IR.Method => m.precondition
@@ -219,11 +219,16 @@ object Checker {
 
     call.arguments :+= tempPerms
 
+    val specContext = new CallSiteContext(call)
     perms match {
       case NoPermissions => {
         pre.foreach(pre =>
           call.insertBefore(impl.translate(
-            AddMode, pre, tempPerms, None, new CallSiteContext(call))))
+            pre,
+            specContext,
+            List(AddMode(tempPerms, guarded=false))
+          ))
+        )
 
         // No permission tracking, so no need to join
       }
@@ -235,19 +240,22 @@ object Checker {
             new IR.Binary(IR.BinaryOp.Equal, permsVal, new IR.NullLit()))
           // Use AddMode if perms have not been passed
           cond.ifTrue ++= impl.translate(
-            AddMode, pre, tempPerms, None,
-            new CallSiteContext(call))
+            pre,
+            specContext,
+            List(AddMode(tempPerms))
+          )
           // Use AddRemoveMode if perms have been passed
           cond.ifFalse ++= impl.translate(
-            AddRemoveMode, pre, tempPerms, Some(permsVal),
-            new CallSiteContext(call))
+            pre,
+            specContext,
+            List(AddMode(tempPerms), RemoveMode(permsVal))
+          )
           call.insertBefore(cond)
         })
 
         // Join if perms have been passed
-        call.insertAfter(perms.optionalPermissions(permsVal => {
-          List(new IR.Invoke(runtime.join, List(permsVal, tempPerms), None))
-        }))
+        call.insertAfter(perms.optionalPermissions(
+          permsVal => impl.join(permsVal, tempPerms)))
       }
 
       case perms: RequiredPermissions => {
@@ -255,13 +263,15 @@ object Checker {
         // always join after
         pre.foreach(pre =>
           call.insertBefore(impl.translate(
-            AddRemoveMode, pre, tempPerms, Some(perms.requirePermissions), new CallSiteContext(call))))
+            pre,
+            specContext,
+            List(AddMode(tempPerms), RemoveMode(perms.requirePermissions))
+          ))
+        )
 
-        call.insertAfter(new IR.Invoke(runtime.join, List(perms.requirePermissions, tempPerms), None))
+        call.insertAfter(impl.join(perms.requirePermissions, tempPerms))
       }
     }
-
-    
   }
 
   // Adds permissions to a method
@@ -289,14 +299,24 @@ object Checker {
 
         // Remove permissions in the pre-condition before calling
         dep.method.precondition.foreach(pre => {
-          call.insertBefore(context.permissions.optionalPermissions(perms =>
-            context.implementation.translate(RemoveMode, pre, perms, None, new CallSiteContext(call))))
+          call.insertBefore(context.permissions.optionalPermissions(
+            perms => context.implementation.translate(
+              pre,
+              new CallSiteContext(call),
+              List(RemoveMode(perms))
+            )
+          ))
         })
 
         // Add permissions in the post-condition after the call
         dep.method.postcondition.foreach(post => {
-          call.insertAfter(context.permissions.optionalPermissions(perms =>
-            context.implementation.translate(AddMode, post, perms, None, new CallSiteContext(call))))
+          call.insertAfter(context.permissions.optionalPermissions(
+            perms => context.implementation.translate(
+              post,
+              new CallSiteContext(call),
+              List(AddMode(perms))
+            )
+          ))
         })
       }
     }
@@ -343,7 +363,7 @@ object Checker {
         // Prepend op to initialize owned fields if it is required
         temporaryOwnedFields.foreach { tempOwned =>
           new IR.Invoke(
-            context.runtime.initOwnedFields,
+            context.runtime.init,
             Nil,
             Some(tempOwned)
           ) +=: ops
@@ -400,17 +420,15 @@ object Checker {
       context: CheckContext
   ): Seq[IR.Op] = {
     val field = check.field.toIR(context.program, context.method, returnValue)
-    val (mode, perms) = check match {
+    val mode = check match {
       case _: FieldSeparationCheck =>
-        (SeparationMode, fields.temporaryOwnedFields())
+        AddMode(fields.temporaryOwnedFields(), guarded=true)
       case _: FieldAccessibilityCheck =>
-        (VerifyMode, fields.primaryOwnedFields())
+        AssertMode(fields.primaryOwnedFields())
     }
-    context.implementation.translateFieldPermission(mode,
-                                                    field,
-                                                    perms,
-                                                    None,
-                                                    ValueContext)
+
+    val impl = context.implementation
+    impl.translateFieldPermission(field, List(mode), ValueContext)
   }
 
   def implementPredicateCheck(
@@ -423,17 +441,15 @@ object Checker {
       context.program.predicate(check.predicateName),
       check.arguments.map(_.toIR(context.program, context.method, returnValue))
     )
-    val (mode, perms) = check match {
+    val mode = check match {
       case _: PredicateSeparationCheck =>
-        (SeparationMode, fields.temporaryOwnedFields())
+        AddMode(fields.temporaryOwnedFields(), guarded=true)
       case _: PredicateAccessibilityCheck =>
-        (VerifyMode, fields.primaryOwnedFields())
+        AssertMode(fields.primaryOwnedFields())
     }
-    context.implementation.translatePredicateInstance(mode,
-                                                      instance,
-                                                      perms,
-                                                      None,
-                                                      ValueContext)
+
+    val impl = context.implementation
+    impl.translatePredicateInstance(instance, List(mode), ValueContext)
   }
 
   case class FieldCollection(

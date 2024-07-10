@@ -22,7 +22,7 @@ object BaselineChecker {
     program.methods.foreach(checkMethod(_, checks, onlyFraming))
   }*/
 
-  def checkFraming(program: IR.Program): Unit =
+  /*def checkFraming(program: IR.Program): Unit =
     check(program, onlyFraming = true)
 
   private def checkMethod(
@@ -554,5 +554,5 @@ object BaselineChecker {
     else if (isImprecise(irMethod.postcondition))
       PrecisePreCallStyle
     else PreciseCallStyle
-
+*/
 }

@@ -18,7 +18,7 @@ struct _ptr_int* create(struct OwnedFields* _ownedFields, int* _instanceCounter)
   _ = alloc(struct _ptr_int);
   _->_id = *_instanceCounter;
   *_instanceCounter = *_instanceCounter + 1;
-  addStructAcc(_ownedFields, _->_id, 1);
+  runtime_addAll(_ownedFields, _->_id, 1);
   return _;
 }
 
@@ -33,7 +33,7 @@ int main()
   struct OwnedFields* _ownedFields = NULL;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields();
+  _ownedFields = runtime_init();
   _ = create(_ownedFields, _instanceCounter);
   _1 = create(_ownedFields, _instanceCounter);
   test(_, _1, _ownedFields, _instanceCounter);
@@ -43,14 +43,14 @@ int main()
 void test(struct _ptr_int* x, struct _ptr_int* y, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct OwnedFields* _tempFields = NULL;
-  _tempFields = initOwnedFields();
-  assertAcc(_ownedFields, y != NULL ? y->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
-  assertAcc(_ownedFields, x != NULL ? x->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
+  _tempFields = runtime_init();
+  runtime_assert(_ownedFields, y == NULL ? -1 : y->_id, 0, "No permission to access 'y->value'");
+  runtime_assert(_ownedFields, x == NULL ? -1 : x->_id, 0, "No permission to access 'x->value'");
   assert(!(x == NULL));
   assert(!(y == NULL));
-  addAccEnsureSeparate(_tempFields, x != NULL ? x->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
-  addAccEnsureSeparate(_tempFields, y != NULL ? y->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
-  loseAcc(_ownedFields, x->_id, 0);
-  loseAcc(_ownedFields, y->_id, 0);
+  runtime_add(_tempFields, x == NULL ? -1 : x->_id, 1, 0, "Invalid aliasing - 'x->value' overlaps with existing permission");
+  runtime_add(_tempFields, y == NULL ? -1 : y->_id, 1, 0, "Invalid aliasing - 'y->value' overlaps with existing permission");
+  runtime_remove(_ownedFields, x->_id, 0, "No permission to access 'x->value'");
+  runtime_remove(_ownedFields, y->_id, 0, "No permission to access 'y->value'");
   ensureSeparate(x, y, _instanceCounter);
 }

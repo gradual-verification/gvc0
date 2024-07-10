@@ -17,7 +17,7 @@ struct Test* getTest(struct OwnedFields* _ownedFields, int* _instanceCounter)
   _ = alloc(struct Test);
   _->_id = *_instanceCounter;
   *_instanceCounter = *_instanceCounter + 1;
-  addStructAcc(_ownedFields, _->_id, 2);
+  runtime_addAll(_ownedFields, _->_id, 2);
   return _;
 }
 
@@ -28,16 +28,16 @@ int main()
   bool _cond = false;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields();
+  _ownedFields = runtime_init();
   test = getTest(_ownedFields, _instanceCounter);
-  assertAcc(_ownedFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.a");
-  assertAcc(_ownedFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.a");
+  runtime_assert(_ownedFields, test == NULL ? -1 : test->_id, 0, "No permission to access 'test->a'");
+  runtime_assert(_ownedFields, test == NULL ? -1 : test->_id, 0, "No permission to access 'test->a'");
   _cond = !(test == NULL) && test->a == 0;
   if (test->a == 0)
   {
     if (_cond)
     {
-      assertAcc(_ownedFields, test != NULL ? test->_id : -1, 1, "Field access runtime check failed for struct Test.b");
+      runtime_assert(_ownedFields, test == NULL ? -1 : test->_id, 1, "No permission to access 'test->b'");
     }
     test->b = 1;
   }

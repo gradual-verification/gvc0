@@ -1,251 +1,303 @@
 #use <runtime>
 
-bool NassertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
-    FieldArray* toCheck = find(fields, _id);
-    if(toCheck == NULL || !toCheck->contents[fieldIndex]){
-        return false;
-    }else{
-        return true;
-    }
+// Use some internal methods for testing
+FieldArray* runtime_find(OwnedFields* fields, int id);
+bool runtime_tryAdd(OwnedFields* fields, int id, int numFields, int fieldIndex);
+
+bool checkAcc(OwnedFields* fields, int id, int fieldIndex) {
+    FieldArray* entry = runtime_find(fields, id);
+    return entry != NULL && entry->contents[fieldIndex];
 }
 
-bool NaddAccEnsureSeparate(OwnedFields* fields, int _id, int fieldIndex, int numFields, string errorMessage){
-    FieldArray* toCheck = find(fields, _id);
-    if (toCheck == NULL) {
-        toCheck = newFieldArray(fields, _id, numFields, false);
-    } else if (toCheck->contents[fieldIndex]) {
-        return false;
-    }
-    toCheck->contents[fieldIndex] = true;
-    toCheck->numAccessible += 1;
-    return true;
+void test_init() {
+    print("test_init: ");
+
+    OwnedFields* fields = runtime_init();
+    assert(fields->capacity > 0);
+    assert(fields->length == 0);
+    for (int i = 0; i < fields->capacity; i++)
+        assert(fields->contents[i] == NULL);
+
+    println("PASS");
 }
 
-void debugOwnedFields(OwnedFields* fields, string name) {
-    print("---[ ");
-    print(name);
-    print(" ]---\n");
-    print("* Num. of structs: ");
-    printint(fields->length);
-    print("\n");
-    print("* Capacity: ");
-    printint(fields->capacity);
-    print("\n");
-    print("[");
-    if(fields->capacity > 0){
-        if(fields->contents[0] != NULL){
-            printint(fields->contents[0]->_id);
-        }else{
-            print("NULL");
+void test_addAll() {
+    print("test_addAll: ");
+    OwnedFields* fields = runtime_init();
+
+    int id = 123;
+    int numFields = 80;
+    runtime_addAll(fields, id, numFields);
+
+    FieldArray* entry = runtime_find(fields, id);
+    assert(entry != NULL);
+    assert(entry->accessible == numFields);
+
+    for (int i = 0; i < numFields; i++) {
+        runtime_assert(fields, id, i,
+            "(addAll) Failed to verify access to the fields of a newly created struct.");
+    }
+
+    println("PASS");
+}
+
+void test_add(){
+    print("test_add: ");
+
+    OwnedFields* fields_1 = runtime_init();
+    OwnedFields* fields_2 = runtime_init();
+
+    int id = 0;
+    runtime_addAll(fields_1, id, 4);
+
+    runtime_add(fields_2, id, 4, 2, "add failed (2)");
+    runtime_add(fields_2, id, 4, 3, "add failed (3)");
+
+    // Has the fields we added
+    runtime_assert(fields_2, id, 2, "assert failed (2)");
+    runtime_assert(fields_2, id, 3, "assert failed (3)");
+
+    // Doesn't have another field
+    assert(!checkAcc(fields_2, id, 1));
+
+    println("PASS");
+}
+
+void test_remove() {
+    print("test_remove: ");
+
+    OwnedFields* fields = runtime_init();
+    
+    int numFields = 2;
+    runtime_addAll(fields, 0, numFields);
+    runtime_addAll(fields, 1, numFields);
+    runtime_addAll(fields, 2, numFields);
+
+    runtime_remove(fields, 0, 0, "remove failed (0.0)");
+    runtime_remove(fields, 0, 1, "remove failed (0.1)");
+    runtime_remove(fields, 1, 1, "remove failed (1.1)");
+    runtime_remove(fields, 2, 0, "remove failed (2.0)");
+
+    assert(!checkAcc(fields, 0, 0));
+    assert(!checkAcc(fields, 0, 1));
+    assert(checkAcc(fields, 1, 0));
+    assert(!checkAcc(fields, 1, 1));
+    assert(!checkAcc(fields, 2, 0));
+    assert(checkAcc(fields, 2, 1));
+
+    println("PASS");
+}
+
+void test_resizing() {
+    print("test_resizing: ");
+
+    OwnedFields* fields = runtime_init();
+
+    int numFields = 5;
+    for (int id = 0; id < 1024; id++) {
+        runtime_add(fields, id, numFields, id % numFields, "add failed");
+    }
+
+    for (int id = 0; id < 1024; id++) {
+        assert(checkAcc(fields, id, id % numFields));
+    }
+
+    for (int id = 0; id < 1024; id++) {
+        for (int f = 0; f < numFields; f++) {
+            assert((f == id % numFields) || !checkAcc(fields, id, f));
         }
-        for(int i = 1; i < fields->capacity; i+=1){
-            print(", ");
-            if(fields->contents[i] != NULL){
-                printint(fields->contents[i]->_id);
-            }else{
-                print("NULL");
-            }
+    }
+
+    println("PASS");
+}
+
+void test_resizingRemove() {
+    print("test_resizingRemove: ");
+
+    OwnedFields* fields = runtime_init();
+
+    // Depends on implementation details
+    assert(fields->capacity == 128);
+
+    // Add 1024 records, forcing a resize
+    int numFields = 2;
+    for (int i = 0; i < 1023; i++) {
+        runtime_addAll(fields, i, numFields);
+    }
+
+    assert(fields->length == 1023);
+    assert(fields->capacity == 1280); // 80% of 1280 is 1024, and we added 1023
+
+    // Remove all (both) fields from the first 1000 records
+    for (int i = 0; i < 1000; i++) {
+        runtime_remove(fields, i, 0, "remove failed (0)");
+        runtime_remove(fields, i, 1, "remove failed (1)");
+    }
+
+    assert(fields->length == 1023); // Unused records are included in length
+    assert(fields->capacity == 1280);
+
+    // Add back 1000 more records (with different IDs)
+    // But this should not need to allocate more records since it can drop the
+    // now-unused ones
+    for (int i = 2000; i < 3000; i++) {
+        runtime_addAll(fields, i, numFields);
+    }
+
+    // Theoretically, this could proceed without hitting the resize logic, if
+    // every new insertion collided with an unused index. However, there is low
+    // probability of this happening.
+
+    assert(fields->length == 1023);
+    assert(fields->capacity == 1280);
+
+    // Verify that we still have access to IDs 1000-1022 and 2000-2999
+    for (int i = 1000; i < 1023; i++) {
+        assert(checkAcc(fields, i, 0));
+        assert(checkAcc(fields, i, 1));
+    }
+    for (int i = 2000; i < 3000; i++) {
+        assert(checkAcc(fields, i, 0));
+        assert(checkAcc(fields, i, 1));
+    }
+
+    println("PASS");
+}
+
+void test_join() {
+    print("test_join: ");
+
+    int num_fields = 4;
+    int num_items = 20;
+
+    OwnedFields* source = runtime_init();
+    OwnedFields* target = runtime_init();
+
+    for (int i = 0; i < num_items; i++) {
+        if (i % 2 == 0) {
+            // Even IDs: field 0 added to source, 1 added to target
+            runtime_add(source, i, num_fields, 0, "add failed");
+            runtime_add(target, i, num_fields, 1, "add failed");
+        } else {
+            // Odd IDs: fields 0 & 2 added to source, 1 & 3 added to target
+            runtime_add(source, i, num_fields, 0, "add failed");
+            runtime_add(source, i, num_fields, 2, "add failed");
+            runtime_add(target, i, num_fields, 1, "add failed");
+            runtime_add(target, i, num_fields, 3, "add failed");
         }
     }
-    print("]\n");
-}
 
-bool test(string header, bool condition, string message){
-    if(!condition){
-        error(string_join(string_join(header, " - "), message));
-        return false;
-    }else{
-        return true;
-    }
-}
-
-bool testOwnedFieldsInitialization(string header){
-    OwnedFields* fields = initOwnedFields();
-    if(!test(header, fields->capacity > 0, "(initOwnedFields) OwnedFields must have a nonzero default capacity after intialization.")){
-        return false;
-    }
-    if(!test(header, fields->length == 0, "(initOwnedFields) OwnedFields must have a length of zero after initialization.")){
-        return false;
-    }
-
-    bool allNULL = true;
-    for(int i = 0; i < fields->length; i+=1){
-        if(fields->contents[i] != NULL){
-            allNULL = false;
+    runtime_join(target, source);
+    
+    for (int i = 0; i < num_items; i++) {
+        if (i % 2 == 0) {
+            // Even IDs: should have fields 0, 1
+            assert(checkAcc(target, i, 0));
+            assert(checkAcc(target, i, 1));
+            assert(!checkAcc(target, i, 2));
+            assert(!checkAcc(target, i, 3));
+        } else {
+            // Odd IDs: should have fields 0, 1, 2, 3
+            assert(checkAcc(target, i, 0));
+            assert(checkAcc(target, i, 1));
+            assert(checkAcc(target, i, 2));
+            assert(checkAcc(target, i, 3));
         }
     }
-    if(!test(header, allNULL, "(initOwnedFields) The contents of OwnedFields must all be set to NULL after initialization.")){
-        return false;
-    }
-    return true;
+
+    println("PASS");
 }
 
-bool testStructCreation(string header){
-    OwnedFields* fields = initOwnedFields();
+// Tests join in the case where `target` needs to be resized
+void test_joinLarger() {
+    print("test_joinLarger: ");
 
-    int _id = 0;
-    addStructAcc(fields, _id, 80);
+    int numFields = 2;
+    OwnedFields* source = runtime_init();
+    OwnedFields* target = runtime_init();
 
-    for(int i = 0; i<80; i += 1){
-        assertAcc(fields, _id, i, "(addStructAcc) Failed to verify access to the fields of a newly created struct.");
+    // Target has field 0 for IDs 0-19
+    for (int i = 0; i < 20; i++) {
+        runtime_add(target, i, numFields, 0, "add failed (0)");
     }
-    return true;
+    // Source has field 1 for IDs 0-999
+    for (int i = 0; i < 1000; i++) {
+        runtime_add(source, i, numFields, 1, "add failed (1)");
+    }
+
+    runtime_join(target, source);
+
+    for (int i = 0; i < 1000; i++) {
+        if (i < 20) assert(checkAcc(target, i, 0));
+        assert(checkAcc(target, i, 1));
+    }
+
+    println("PASS");
 }
 
+void test_missing() {
+    print("test_missing: ");
 
+    OwnedFields* fields = runtime_init();
 
-bool testFieldAddition(string header){
-    OwnedFields* fields_1 = initOwnedFields();
-    OwnedFields* fields_2 = initOwnedFields();
+    int id = 10;
+    runtime_addAll(fields, id, 5);
+    
+    for (int i = 0; i < 128; i++) {
+        if (i != id)
+            assert(!checkAcc(fields, i, 1));
+    }
 
-    int _id = 0;
-    addStructAcc(fields_1, _id, 4);
-
-    addAcc(fields_2, _id, 4, 2);
-    assertAcc(fields_2, _id, 2, "(addAcc/assertAcc) Failed to add an arbitrary singular field access permission to an OwnedFields struct.");
-    return true;
+    println("PASS");
 }
 
+void test_ensureSeparate() {
+    print("test_ensureSeparate: ");
 
-bool testFieldMerging(string header){
-    int num_fields = 20;
+    OwnedFields* fields = runtime_init();
 
-    OwnedFields* source = initOwnedFields();
+    int numFields = 10;
+    int id = 0;
+    runtime_addAll(fields, id, numFields);
 
-    int _id_node_1 = 0;
-    addStructAcc(source, _id_node_1, num_fields);
-    int _id_node_2 = 1;
-    addStructAcc(source, _id_node_2, num_fields);
-
-    OwnedFields* fields_1 = initOwnedFields();
-
-    OwnedFields* fields_2 = initOwnedFields();
-
-    for(int i = 0; i<num_fields; i += 1){
-        addAcc(fields_1, _id_node_1, num_fields, i);
-        assertAcc(fields_1, _id_node_1, i, "(addAcc/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
-
-        addAcc(fields_2, _id_node_2, num_fields, i);
-        assertAcc(fields_2, _id_node_2, i, "(addAcc/assertAcc) Failed to add permission to new OwnedFields from source OwnedFields.");
+    for (int i = 0; i < numFields; i++) {
+       assert(!runtime_tryAdd(fields, id, numFields, i));
     }
 
-
-    join(fields_1, fields_2);
-
-    for(int i = 0; i<num_fields; i += 1){
-        assertAcc(fields_1, _id_node_1, i, "(join/assertAcc) Failed to preserve existing permissions after join.");
-        assertAcc(fields_1, _id_node_2, i, "(join/assertAcc) Failed to add new permissions from join.");
+    id = 1;
+    for (int i = 0; i < numFields; i++) {
+        assert(runtime_tryAdd(fields, id, numFields, i));
     }
-    return true;
+
+    // Add a bunch of items to force rehashing
+    for (int i = 0; i < 128; i++){
+        id++;
+        runtime_addAll(fields, id, numFields);
+    }
+
+    // At this point, all fields (up to `numFields`) have been added for all IDs
+    // from 0 to `id`. Check that none of these fields can be re-added.
+    for (int i = 0; i < id; i++) {
+        for (int f = 0; f < numFields; f++) {
+            assert(!runtime_tryAdd(fields, i, numFields, f));
+        }
+    }
+
+    println("PASS");
 }
 
+int main() {
+    test_init();
+    test_addAll();
+    test_add();
+    test_remove();
+    test_resizing();
+    test_resizingRemove();
+    test_join();
+    test_joinLarger();
+    test_missing();
+    test_ensureSeparate();
 
-/*
-bool testFieldLoss(string header) {
-    OwnedFields* source = initOwnedFields();
-
-    int num_fields = 10;
-    int _id_node = addStructAcc(source, 0, num_fields);
-
-}
-*/
-
-bool testNegativeAccessibility(string header) {
-    OwnedFields* source = initOwnedFields();
-
-    int num_fields = 10;
-    int _id_node = 0;
-    addStructAcc(source, _id_node, num_fields);
-
-    bool found = NassertAcc(source, _id_node+1, num_fields, "");
-    if(found) error("ACK discovered.");
-
-    return true;
-}
-
-bool testEnsureSeparate(string header) {
-    OwnedFields* source = initOwnedFields();
-
-    int num_fields = 10;
-    int _id_node = 0;
-    addStructAcc(source, _id_node, num_fields);
-
-    for(int i = 0; i<num_fields; i+=1){
-       bool shouldFail = NaddAccEnsureSeparate(source, _id_node, i, num_fields, "");
-       if(shouldFail) error("Failed to ensure separation.");
-    }
-
-    for(int i = 0; i<num_fields; i+=1){
-       bool shouldSucceed = NaddAccEnsureSeparate(source, 200, i, num_fields, "");
-       if(!shouldSucceed) error("Failed to add separated fields.");
-    }
-
-    int _id = 1;
-    for (int i = 0; i<64; i+=1){
-       addStructAcc(source, _id, num_fields);
-       _id++;
-    }
-
-    for(int i = 0; i<num_fields; i+=1){
-       bool shouldFail = NaddAccEnsureSeparate(source, 200, i, num_fields, "");
-       if(shouldFail) error("Failed to add separated fields after rehashing.");
-    }
-    return true;
-}
-
-int runTests() {
-    if(testOwnedFieldsInitialization("OwnedFields Initialization")){
-        println("PASS: OwnedFields Initialization");
-    }else{
-        println("FAIL: OwnedFields Initialization");
-        return 1;
-    }
-
-    if(testStructCreation("Field Creation")){
-        println("PASS: Field Creation");
-    }else{
-        println("FAIL: Field Creation");
-        return 1;
-    }
-
-    if(testFieldAddition("Field Addition")){
-        println("PASS: Field Addition");
-    }else{
-        println("FAIL: Field Addition");
-        return 1;
-    }
-
-    if(testFieldMerging("Join")){
-        println("PASS: Join");
-    }else{
-        println("FAIL: Join");
-        return 1;
-    }
-/*
-    if(testFieldLoss("loseAcc")){
-        println("PASS: loseAck");
-    }else{
-        println("FAIL: loseAck");
-        return 1;
-    }
-*/
-    if(testNegativeAccessibility("Nacc")){
-        println("PASS: Nacc");
-    }else{
-        println("FAIL: Nacc");
-        return 1;
-    }
-
-    if(testEnsureSeparate("addAccEnsureSeparate")){
-        println("PASS: addAccEnsureSeparate");
-    }else{
-        println("FAIL: addAccEnsureSeparate");
-        return 1;
-    }
-
+    println("All runtime tests passed");
     return 0;
-}
-
-int main(){
-    return runTests();
 }

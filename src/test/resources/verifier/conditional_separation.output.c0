@@ -26,7 +26,7 @@ struct _ptr_int* create(struct OwnedFields* _ownedFields, int* _instanceCounter)
   _ = alloc(struct _ptr_int);
   _->_id = *_instanceCounter;
   *_instanceCounter = *_instanceCounter + 1;
-  addStructAcc(_ownedFields, _->_id, 1);
+  runtime_addAll(_ownedFields, _->_id, 1);
   return _;
 }
 
@@ -37,7 +37,7 @@ struct _ptr_int_* createNested(struct OwnedFields* _ownedFields, int* _instanceC
   ptr = alloc(struct _ptr_int_);
   ptr->_id = *_instanceCounter;
   *_instanceCounter = *_instanceCounter + 1;
-  addStructAcc(_ownedFields, ptr->_id, 1);
+  runtime_addAll(_ownedFields, ptr->_id, 1);
   _ = create(_ownedFields, _instanceCounter);
   ptr->value = _;
   return ptr;
@@ -57,23 +57,23 @@ int main()
   struct OwnedFields* _tempFields = NULL;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields();
+  _ownedFields = runtime_init();
   v = get(_instanceCounter);
   a = createNested(_ownedFields, _instanceCounter);
   b = create(_ownedFields, _instanceCounter);
-  _tempFields = initOwnedFields();
-  assertAcc(_ownedFields, a != NULL ? a->_id : -1, 0, "Field access runtime check failed for struct _ptr_int_.value");
+  _tempFields = runtime_init();
+  runtime_assert(_ownedFields, a == NULL ? -1 : a->_id, 0, "No permission to access 'a->value'");
   if (v == 1)
   {
-    assertAcc(_ownedFields, b != NULL ? b->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
+    runtime_assert(_ownedFields, b == NULL ? -1 : b->_id, 0, "No permission to access 'b->value'");
   }
-  assertAcc(_ownedFields, a->value != NULL ? a->value->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
+  runtime_assert(_ownedFields, a->value == NULL ? -1 : a->value->_id, 0, "No permission to access 'a->value->value'");
   assert(!(a->value == NULL));
-  addAccEnsureSeparate(_tempFields, a->value != NULL ? a->value->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
+  runtime_add(_tempFields, a->value == NULL ? -1 : a->value->_id, 1, 0, "Invalid aliasing - 'a->value->value' overlaps with existing permission");
   if (v == 1)
   {
     assert(!(b == NULL));
-    addAccEnsureSeparate(_tempFields, b != NULL ? b->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
+    runtime_add(_tempFields, b == NULL ? -1 : b->_id, 1, 0, "Invalid aliasing - 'b->value' overlaps with existing permission");
   }
   test(v, a, b, _instanceCounter);
   return 0;

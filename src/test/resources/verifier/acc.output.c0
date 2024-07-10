@@ -25,9 +25,9 @@ void setValue(struct Test* t, int* _instanceCounter)
 
 void test(struct Test* t, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
-  assertAcc(_ownedFields, t != NULL ? t->_id : -1, 0, "Field access runtime check failed for struct Test.value");
+  runtime_assert(_ownedFields, t == NULL ? -1 : t->_id, 0, "No permission to access 't->value'");
   assert(!(t == NULL));
-  loseAcc(_ownedFields, t->_id, 0);
+  runtime_remove(_ownedFields, t->_id, 0, "No permission to access 't->value'");
   setValue(t, _instanceCounter);
-  addAcc(_ownedFields, t->_id, 1, 0);
+  runtime_add(_ownedFields, t == NULL ? -1 : t->_id, 1, 0, "Invalid aliasing - 't->value' overlaps with existing permission");
 }

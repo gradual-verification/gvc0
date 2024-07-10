@@ -13,7 +13,7 @@ class RuntimeSpec extends AnyFunSuite with BaseFileSpec {
 
     assert(IRPrinter.print(program, true).trim() == "#use <runtime>")
 
-    assert(program.method(CheckRuntime.Names.assertAcc) == runtime.assertAcc)
+    assert(program.method(CheckRuntime.Names.assert) == runtime.assert)
     assert(
       program.struct(
         CheckRuntime.Names.ownedFieldsStruct

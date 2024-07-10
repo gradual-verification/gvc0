@@ -82,7 +82,7 @@ object SeparationChecks {
   ): Unit = {
     spec match {
       case acc: IR.Accessibility =>
-        CheckExpression.irValue(context.convertExpression(acc.member)) match {
+        CheckExpression.irValue(context.convert(acc.member)) match {
           case f: CheckExpression.Field => {
             checks += RuntimeCheck(
               loc,
@@ -99,7 +99,7 @@ object SeparationChecks {
       }
 
       case c: IR.Conditional => {
-        val t = CheckExpression.irValue(context.convertExpression(c.condition))
+        val t = CheckExpression.irValue(context.convert(c.condition))
         val f = CheckExpression.Not(t)
         val (trueCond, falseCond) = cond match {
           case None =>
@@ -124,7 +124,7 @@ object SeparationChecks {
           PredicateSeparationCheck(
             p.predicate.name,
             p.arguments.map(arg =>
-              CheckExpression.irValue(context.convertExpression(arg)))
+              CheckExpression.irValue(context.convert(arg)))
           ),
           cond.map(ImmediateCondition)
         )
