@@ -186,24 +186,11 @@ class BaselineChecks(
     case unfold: IR.Unfold =>
       unfold.remove()
 
-    case loop: IR.While => loop.invariant match {
-      case imprecise: IR.Imprecise => {
-        // Inherit the current permission set
-        insertChecks(loop.body, perms, callerPerms)
+    case loop: IR.While => {
+      if (precision.isPrecise(loop.invariant)) {
+        // Precise invariant
 
-        // Check loop invariant and framing of loop condition before the loop
-        // and at the end of the loop body
-        loop.insertBefore(
-          checkFraming(loop.condition, perms, ValueContext) ++
-          assertSpec(imprecise, perms, loop.method, ValueContext)
-        )
-
-        loop.body ++= checkFraming(loop.condition, perms, ValueContext)
-        loop.body ++= assertSpec(imprecise, perms, loop.method, ValueContext)
-      }
-      case precise => {
         val method = loop.method
-
         val loopPerms = method.addVar(impl.permsType, Names.primaryOwnedFields)
         insertChecks(loop.body, loopPerms, callerPerms)
 
@@ -214,7 +201,7 @@ class BaselineChecks(
           checkFraming(loop.condition, perms, ValueContext) ++
           impl.init(loopPerms) ++
           impl.translate(
-            precise,
+            loop.invariant,
             ValueContext,
             (if (checkSpecs) AssertMode(perms) :: Nil else Nil) :::
               RemoveMode(perms) :: AddMode(loopPerms) :: Nil
@@ -228,9 +215,9 @@ class BaselineChecks(
         loop.body ++= impl.init(newPerms)
         // Add invariant perms from the existing set to the new one
         // No need to remove since the existing set will be discarded
-        loop.body ++= checkSpecFraming(precise, loopPerms, ValueContext)
+        loop.body ++= checkSpecFraming(loop.invariant, loopPerms, ValueContext)
         loop.body ++= impl.translate(
-          precise,
+          loop.invariant,
           ValueContext,
           (if (checkSpecs) AssertMode(loopPerms) :: Nil else Nil) :::
             AddMode(newPerms) :: Nil
@@ -240,8 +227,22 @@ class BaselineChecks(
 
         // After the loop ends, add the invariant perms back to the main set
         loop.insertAfter(
-          impl.translate(precise, ValueContext, List(AddMode(perms)))
+          impl.translate(loop.invariant, ValueContext, List(AddMode(perms)))
         )
+      } else {
+        // Imprecise invariant -- inherit the current permission set
+        insertChecks(loop.body, perms, callerPerms)
+
+        // Check loop invariant and framing of loop condition before the loop
+        // and at the end of the loop body
+        loop.insertBefore(
+          checkFraming(loop.condition, perms, ValueContext) ++
+          assertSpec(loop.invariant, perms, loop.method, ValueContext)
+        )
+
+        loop.body ++= checkFraming(loop.condition, perms, ValueContext)
+        loop.body ++= assertSpec(
+          loop.invariant, perms, loop.method, ValueContext)
       }
     }
   }

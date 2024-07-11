@@ -1,0 +1,24 @@
+//@predicate nested(int* value) = ? && true;
+//@predicate test(int* value) = nested(value);
+
+int main()
+  //@requires true;
+{
+  int* value = alloc(int);
+  //@fold nested(value);
+  //@fold test(value);
+
+  // Loop invariant is precise but equi-recursively imprecise
+  for (int i = 0; i < 10; i++)
+    //@loop_invariant test(value);
+  {
+    //@unfold test(value);
+    //@unfold nested(value);
+    // If equi-recursive imprecision is not respected, this will fail
+    (*value)++;
+  }
+
+  assert(*value == 10);
+  return 0;
+}
+
