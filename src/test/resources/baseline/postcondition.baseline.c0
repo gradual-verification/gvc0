@@ -1,26 +1,24 @@
 #use <runtime>
 int main();
-int test(int x, struct OwnedFields* _ownedFields);
+int test(int x, struct OwnedFields* _ownedFields, int* _instanceCounter);
 
 int main()
 {
   int _ = 0;
   struct OwnedFields* _ownedFields = NULL;
-  struct OwnedFields* _tempFields = NULL;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields(_instanceCounter);
+  _ownedFields = runtime_init();
   assert(true);
-  _ = test(2, _ownedFields);
+  _ = test(2, _ownedFields, _instanceCounter);
   assert(true);
   return 0;
 }
 
-int test(int x, struct OwnedFields* _ownedFields)
+int test(int x, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct OwnedFields* _tempFields = NULL;
-  struct OwnedFields* _contextFields = NULL;
-  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
+  _tempFields = runtime_init();
   assert(true);
   assert(x + 1 == x + 1);
   return x + 1;

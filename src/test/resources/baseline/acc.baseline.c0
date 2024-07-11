@@ -7,35 +7,33 @@ struct Test
   int _id;
 };
 
-struct Test* createTest(struct OwnedFields* _ownedFields);
-int getValue(struct Test* test, struct OwnedFields* _ownedFields);
+struct Test* createTest(struct OwnedFields* _ownedFields, int* _instanceCounter);
+int getValue(struct Test* test, struct OwnedFields* _ownedFields, int* _instanceCounter);
 int main();
 
-struct Test* createTest(struct OwnedFields* _ownedFields)
+struct Test* createTest(struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct Test* _ = NULL;
   struct OwnedFields* _tempFields = NULL;
-  struct OwnedFields* _contextFields = NULL;
-  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
+  _tempFields = runtime_init();
   assert(true);
   _ = alloc(struct Test);
-  _->_id = addStructAcc(_contextFields, 1);
-  assertAcc(_contextFields, _ != NULL ? _->_id : -1, 0, "Field access runtime check failed for struct Test.value");
-  _tempFields = initOwnedFields(_contextFields->instanceCounter);
-  addAccEnsureSeparate(_tempFields, _ != NULL ? _->_id : -1, 0, 1, "Overlapping field permissions for struct Test.value");
-  addAcc(_ownedFields, _->_id, 1, 0);
+  _->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  runtime_addAll(_tempFields, _->_id, 1);
+  runtime_assert(_tempFields, _ == NULL ? -1 : _->_id, 0, "No permission to access '_->value'");
+  runtime_add(_ownedFields, _ == NULL ? -1 : _->_id, 1, 0, "Invalid aliasing - '_->value' overlaps with existing permission");
   return _;
 }
 
-int getValue(struct Test* test, struct OwnedFields* _ownedFields)
+int getValue(struct Test* test, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct OwnedFields* _tempFields = NULL;
-  struct OwnedFields* _contextFields = NULL;
-  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
-  assertAcc(_ownedFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.value");
-  addAcc(_contextFields, test != NULL ? test->_id : -1, 1, 0);
-  loseAcc(_ownedFields, test != NULL ? test->_id : -1, 0);
-  assertAcc(_contextFields, test != NULL ? test->_id : -1, 0, "Field access runtime check failed for struct Test.value");
+  _tempFields = runtime_init();
+  runtime_assert(_ownedFields, test == NULL ? -1 : test->_id, 0, "No permission to access 'test->value'");
+  runtime_remove(_ownedFields, test == NULL ? -1 : test->_id, 0, "No permission to access 'test->value'");
+  runtime_add(_tempFields, test == NULL ? -1 : test->_id, 1, 0, "Invalid aliasing - 'test->value' overlaps with existing permission");
+  runtime_assert(_tempFields, test == NULL ? -1 : test->_id, 0, "No permission to access 'test->value'");
   assert(true);
   return test->value;
 }
@@ -45,13 +43,12 @@ int main()
   struct Test* _ = NULL;
   int _1 = 0;
   struct OwnedFields* _ownedFields = NULL;
-  struct OwnedFields* _tempFields = NULL;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields(_instanceCounter);
+  _ownedFields = runtime_init();
   assert(true);
-  _ = createTest(_ownedFields);
-  _1 = getValue(_, _ownedFields);
+  _ = createTest(_ownedFields, _instanceCounter);
+  _1 = getValue(_, _ownedFields, _instanceCounter);
   assert(true);
   return _1;
 }

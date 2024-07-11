@@ -5,10 +5,9 @@ int main()
 {
   int a = 0;
   struct OwnedFields* _ownedFields = NULL;
-  struct OwnedFields* _tempFields = NULL;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields(_instanceCounter);
+  _ownedFields = runtime_init();
   a = 1;
   return a;
 }

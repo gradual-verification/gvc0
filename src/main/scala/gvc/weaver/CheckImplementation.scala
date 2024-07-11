@@ -200,7 +200,7 @@ class CheckImplementation(
 
     case expr => {
       val converted = context.convert(expr)
-      modes.flatMap(_.visitBool(runtime, expr))
+      modes.flatMap(_.visitBool(runtime, converted))
     }
   }
 
@@ -283,6 +283,11 @@ class CheckImplementation(
       None
     ) :: Nil
   }
+
+  def permsType: IR.Type = runtime.ownedFieldsRef
+
+  def init(target: IR.Expression): Seq[IR.Op] =
+    Seq(new IR.Invoke(runtime.init, Nil, Some(target)))
 
   def join(target: IR.Expression, source: IR.Expression): Seq[IR.Op] = {
     Seq(new IR.Invoke(runtime.join, List(target, source), None))
