@@ -261,6 +261,8 @@ object Dependencies {
     spec match {
       case _: IR.Accessibility | _: IR.PredicateInstance | _: IR.Imprecise => true
       case x: IR.Conditional => refsPerms(x.ifTrue) || refsPerms(x.ifFalse)
+      case x: IR.Binary if x.operator == IR.BinaryOp.And =>
+        refsPerms(x.left) || refsPerms(x.right)
       case _ => false
     }
   }
