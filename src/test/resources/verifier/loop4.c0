@@ -1,0 +1,44 @@
+struct Node {
+  int value;
+  struct Node* next;
+};
+
+/*@ predicate list(struct Node* node) =
+        node == NULL ? true : acc(node->value) && acc(node->next) && list(node->next); @*/
+
+struct Node* cons(struct Node* tl, int value)
+  //@requires list(tl);
+  //@ensures list(\result);
+{
+  struct Node* hd = alloc(struct Node);
+  hd->value = value;
+  hd->next = tl;
+  //@fold list(hd);
+  return hd;
+}
+
+int sum_list(struct Node* node)
+  //@requires ?;
+  //@ensures ?;
+{
+  int sum = node->value;
+  if (node->next != NULL)
+    sum += sum_list(node->next);
+  return sum;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  struct Node* l = NULL;
+  //@fold list(l);
+  for (int i = 0; i < 10; i++)
+    //@loop_invariant list(l);
+    l = cons(l, i);
+
+  int total = sum_list(l);
+  assert(total == 1+2+3+4+5+6+7+8+9);
+
+  return 0;
+}

@@ -398,6 +398,22 @@ object Checker {
         context.implementation,
         Some(context.permissions))
       insert(programData, child, context.copy(permissions = perms))
+      
+      if (!child.returnsPerms && child.modifiesPerms) {
+        // While loop that maintains its perms internally but may modify the
+        // outer permissions. Insert code before and after to remove and
+        // then add (respectively) the permissions to/from the outer scope,
+        // if the outer scope is tracking permissions.
+        val op = child.op
+        op.insertBefore(context.permissions.optionalPermissions(perms => {
+          context.implementation.translate(
+            op.invariant, ValueContext, RemoveMode(perms) :: Nil)
+        }))
+        op.insertAfter(context.permissions.optionalPermissions(perms => {
+          context.implementation.translate(
+            op.invariant, ValueContext, AddMode(perms) :: Nil)
+        }))
+      }
     }
   }
 
