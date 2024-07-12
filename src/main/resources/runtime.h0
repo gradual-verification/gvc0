@@ -5,6 +5,7 @@ struct OwnedFields {
 };
 
 struct FieldArray {
+  int psl;
   int id;
   int length;
   int accessible;

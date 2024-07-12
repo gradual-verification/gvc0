@@ -1,0 +1,217 @@
+#use <runtime>
+#use <rand>
+#use <util>
+
+// Use some internal methods for testing
+FieldArray* runtime_find(OwnedFields* fields, int id);
+bool runtime_tryAdd(OwnedFields* fields, int id, int numFields, int fieldIndex);
+bool runtime_tryRemove(OwnedFields* fields, int id, int fieldIndex);
+int runtime_hash(int index, int arrayLength);
+
+struct List {
+  int[] values;
+  int length;
+  int capacity;
+};
+
+typedef struct List List;
+
+List* list_new() {
+  List* l = alloc(struct List);
+  l->capacity = 2048;
+  l->values = alloc_array(int, l->capacity);
+  return l;
+}
+
+void list_add(List* l, int value) {
+  int length = l->length;
+  if (length == l->capacity) {
+    int capacity = l->capacity;
+    int[] values = l->values;
+    int newCapacity = capacity * 2;
+    int[] newValues = alloc_array(int, newCapacity);
+    for (int i = 0; i < capacity; i++) {
+      newValues[i] = values[i];
+    }
+    l->values = newValues;
+    l->capacity = newCapacity;
+  }
+  l->values[length] = value;
+  l->length = length + 1;
+}
+
+int list_index(List* l, int value) {
+  int length = l->length;
+  int[] values = l->values;
+  for (int i = 0; i < length; i++) {
+    if (values[i] == value) return i;
+  }
+  return -1;
+}
+
+void list_remove(List* l, int value) {
+  int i = list_index(l, value);
+  if (i == -1) return;
+
+  int length = l->length - 1;
+  l->length = length;
+  int[] values = l->values;
+  for (; i < length; i++)
+    values[i] = values[i + 1];
+}
+
+bool list_contains(List* l, int value) {
+  return list_index(l, value) != -1;
+}
+
+// Expected value: 25.5
+int field_count(int id) {
+  return ((id + 13) % 51) + 1;
+}
+
+int tag(int id, int field) {
+  return (id << 16) | field;
+}
+
+int tag_id(int t) {
+  return t >> 16;
+}
+
+int tag_field(int t) {
+  return t & 0xFFFF;
+}
+
+bool contains_id(List* l, int id) {
+  int length = l->length;
+  int[] values = l->values;
+  for (int i = 0; i < length; i++) {
+    if (values[i] >> 16 == id)
+      return true;
+  }
+  return false;
+}
+
+void check_fields(OwnedFields* fields) {
+  // Checks properties:
+  // (1) Entries should be sorted by hash key (modulo wrap-around)
+  // (2) `length` should count the number of non-NULL entries
+  // (3) The number of fields marked `true` should be equal to `accessible
+  // (4) Hash + PSL == index
+
+  int capacity = fields->capacity;
+  FieldArray*[] contents = fields->contents;
+
+  int start = 0;
+  while (contents[start] != NULL && contents[start]->psl != 0)
+    start++;
+
+  int i = start;
+  int count = 0;
+  int lastKey = -1;
+  for (int c = 0; c < capacity; c++) {
+    if (contents[i] != NULL) {
+      count++;
+
+      FieldArray* entry = contents[i];
+      int key = runtime_hash(entry->id, capacity);
+      if (key < lastKey) { // (1)
+        runtime_print(fields);
+        printf("Error: Hash key %d is smaller than previous %d (at %d)\n", key, lastKey, i);
+        assert(false);
+      }
+      if ((key + entry->psl) % capacity != i) { // (4)
+        runtime_print(fields);
+        printf("Error: Index %d != key %d + PSL %d\n", i, key, entry->psl);
+        assert(false);
+      }
+
+      int acc = 0;
+      for (int j = 0; j < entry->length; j++) {
+        if (entry->contents[j]) acc++;
+      }
+      assert(acc == entry->accessible); // (3)
+
+      lastKey = key;
+    }
+
+    i = (i + 1) % capacity;
+  }
+
+  assert(count == fields->length); // (2)
+}
+
+int main() {
+  int INITIAL_SIZE = 2048;
+  int MAX_ID = 1024;
+  int REPS = 10000;
+  bool PRINT = true;
+
+  rand_t r = init_rand(0);
+
+  List* tags = list_new();
+  int length = 0;
+
+  OwnedFields* fields = runtime_init();
+
+  int i = 0;
+  while (i < INITIAL_SIZE) {
+    check_fields(fields);
+
+    int id = abs(rand(r)) % MAX_ID;
+    int numFields = field_count(id);
+    int field = abs(rand(r)) % numFields;
+    int t = tag(id, field);
+    if (!list_contains(tags, t)) {
+      if (PRINT) printf("add(%d, %d, %d)\n", id, numFields, field);
+      list_add(tags, t);
+      runtime_add(fields, id, numFields, field, "Could not add (initial)");
+    }
+    i++;
+  }
+
+  for (i = 0; i < REPS; i++) {
+    check_fields(fields);
+
+    int type = abs(rand(r)) % 100;
+    int id = abs(rand(r)) % MAX_ID;
+    int numFields = field_count(id);
+    if (type < 10) {
+      // 10% of the time: Add a struct
+      if (!contains_id(tags, id)) {
+        if (PRINT) printf("addAll(%d, %d)\n", id, numFields);
+        runtime_addAll(fields, id, numFields);
+        for (int j = 0; j< numFields; j++)
+          list_add(tags, tag(id, j));
+      } else {
+        // if (PRINT) printf("Skipped: addAll(%d, %d)\n", id, numFields);
+        i--; // Don't count this iteration
+      }
+    } else if (type < 40) {
+      // 30% of the time: Add a single field
+      int field = abs(rand(r)) % numFields;
+      int t = tag(id, field);
+      bool contained = list_contains(tags, t);
+      if (PRINT) {
+        printf("add(%d, %d, %d)", id, numFields, field);
+        println(contained ? " - overlaps" : "");
+      }
+      bool result = runtime_tryAdd(fields, id, numFields, field);
+      assert(result == !contained);
+      list_add(tags, t);
+    } else {
+      // 60% of the time: Remove a single field
+      int field = abs(rand(r)) % numFields;
+      int t = tag(id, field);
+      bool contained = list_contains(tags, t);
+      if (PRINT) {
+        printf("remove(%d, %d)", id, field);
+        println(contained ? "" : " - missing");
+      }
+      bool result = runtime_tryRemove(fields, id, field);
+      assert(result == contained);
+      list_remove(tags, t);
+    }
+  }
+
+  return 0;
+}
