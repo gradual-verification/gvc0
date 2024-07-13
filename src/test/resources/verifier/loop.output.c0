@@ -24,6 +24,7 @@ void fact(struct Box* box, struct OwnedFields* _ownedFields, int* _instanceCount
   total = 1;
   runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
   assert(!(box == NULL));
+  runtime_remove(_ownedFields, box->_id, 0, "No permission to access 'box->value'");
   while (box->value > 1)
   {
     total = total * box->value;
@@ -32,6 +33,7 @@ void fact(struct Box* box, struct OwnedFields* _ownedFields, int* _instanceCount
     _->_id = *_instanceCounter;
     *_instanceCounter = *_instanceCounter + 1;
   }
+  runtime_add(_ownedFields, box == NULL ? -1 : box->_id, 1, 0, "Invalid aliasing - 'box->value' overlaps with existing permission");
   box->value = total;
 }
 
