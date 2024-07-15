@@ -138,14 +138,16 @@ FieldArray* runtime_find(OwnedFields* fields, int id) {
     FieldArray*[] contents = fields->contents;
     int capacity = fields->capacity;
     int index = runtime_hash(id, capacity);
+    int psl = 0;
     while (true) {
       FieldArray* entry = contents[index];
-      if (entry == NULL)
+      if (entry == NULL || entry->psl < psl)
         return NULL;
       else if (entry->id == id)
         return entry;
       else
         index = (index + 1) % capacity;
+      psl++;
     }
   }
 
