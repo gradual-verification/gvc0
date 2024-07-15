@@ -90,13 +90,11 @@ void runtime_grow(OwnedFields* fields, int newId)
   // I.e., length is always < 80% of capacity
   int capacity = fields->capacity;
   if (newLength * 5 >= capacity * 4) {
-    println("resizing");
     int GROW_CONST = 128;
     FieldArray*[] contents = fields->contents;
 
     // Check if we can gain enough space just by dropping unused entries
     int unused = runtime_compact(contents, capacity, newId);
-    printf("Unused: %d\n", unused);
     if (unused != 0)
       fields->length -= unused;
     if (unused >= GROW_CONST)
@@ -114,9 +112,22 @@ void runtime_grow(OwnedFields* fields, int newId)
       FieldArray* entry = contents[i];
       if (entry != NULL) {
         int k = runtime_hash(entry->id, newCapacity);
-        while (newContents[k] != NULL)
+        int psl = 0;
+        while (newContents[k] != NULL) {
+          FieldArray* existing = newContents[k];
+          if (psl > existing->psl) {
+            entry->psl = psl;
+            psl = existing->psl;
+
+            newContents[k] = entry;
+            entry = existing;
+          }
+
           k = (k + 1) % newCapacity;
+          psl++;
+        }
         newContents[k] = entry;
+        entry->psl = psl;
       }
     }
   }
@@ -155,10 +166,10 @@ FieldArray* runtime_newFieldArray(OwnedFields* fields, int id, int numFields) {
     FieldArray* entry = contents[index];
     if (entry->accessible == 0) {
       if (current == NULL) {
-        entry->psl = psl;
         entry->id = id;
         if (entry->length < numFields) {
           entry->contents = alloc_array(bool, numFields);
+          entry->length = numFields;
           // Because we do not shrink `length` when we re-use the `contents`
           // array, we can end up with entries that have a larger `length` than
           // the number of fields contained at the heap location. But, assuming
@@ -166,12 +177,23 @@ FieldArray* runtime_newFieldArray(OwnedFields* fields, int id, int numFields) {
           // prioritize memory reuse above memory usage (on the assumption that
           // GC/allocation is slow).
         }
-        return entry;
-      } else {
-        contents[index] = current;
-        current->psl = psl;
-        return newEntry;
+
+        current = entry;
+        newEntry = entry;
       }
+
+      entry = contents[(index + 1) % capacity];
+      while (entry != NULL && psl < entry->psl) {
+        entry->psl--;
+        contents[index] = entry;
+        index = (index + 1) % capacity;
+        entry = contents[(index + 1) % capacity];
+        psl++;
+      }
+
+      current->psl = psl;
+      contents[index] = current;
+      return newEntry;
     }
 
     // Robin-hood hashing: For any i, the values that hash to bucket i precede
@@ -214,7 +236,6 @@ FieldArray* runtime_newFieldArray(OwnedFields* fields, int id, int numFields) {
 
   contents[index] = current;
   current->psl = psl;
-  printf("PSL: %d\n", psl);
   runtime_grow(fields, id);
   return newEntry;
 }
@@ -224,7 +245,11 @@ FieldArray* runtime_newFieldArray(OwnedFields* fields, int id, int numFields) {
 void runtime_addAll(OwnedFields* fields, int id, int numFields) {
   if (fields == NULL) return;
 
-  FieldArray* entry = runtime_newFieldArray(fields, id, numFields);
+  // Reuse the entry if one already exists with that ID
+  // Cannot let a duplicate (unused) entry exist with the same ID
+  FieldArray* entry = runtime_find(fields, id);
+  if (entry == NULL)
+    entry = runtime_newFieldArray(fields, id, numFields);
   bool[] entryContents = entry->contents;
   for (int i = 0; i < numFields; i++){
     entryContents[i] = true;
@@ -239,13 +264,13 @@ bool runtime_tryAdd(OwnedFields* fields, int id, int numFields, int fieldIndex) 
   FieldArray*[] contents = fields->contents;
 
   FieldArray* entry = runtime_find(fields, id);
-  if (entry == NULL)
+  if (entry == NULL) {
     entry = runtime_newFieldArray(fields, id, numFields);
-
-  if (entry->contents[fieldIndex])
+  } else  if (entry->contents[fieldIndex]) {
     return false;
-  else
-    entry->contents[fieldIndex] = true;
+  }
+
+  entry->contents[fieldIndex] = true;
   entry->accessible++;
 
   return true;

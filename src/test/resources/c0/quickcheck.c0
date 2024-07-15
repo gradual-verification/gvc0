@@ -49,6 +49,10 @@ int list_index(List* l, int value) {
   return -1;
 }
 
+bool list_contains(List* l, int value) {
+  return list_index(l, value) != -1;
+}
+
 void list_remove(List* l, int value) {
   int i = list_index(l, value);
   if (i == -1) return;
@@ -58,10 +62,8 @@ void list_remove(List* l, int value) {
   int[] values = l->values;
   for (; i < length; i++)
     values[i] = values[i + 1];
-}
 
-bool list_contains(List* l, int value) {
-  return list_index(l, value) != -1;
+  assert(!list_contains(l, value));
 }
 
 // Expected value: 25.5
@@ -102,8 +104,17 @@ void check_fields(OwnedFields* fields) {
   FieldArray*[] contents = fields->contents;
 
   int start = 0;
-  while (contents[start] != NULL && contents[start]->psl != 0)
-    start++;
+  int min = int_max();
+  for (int a = 0; a < capacity; a++) {
+    FieldArray* entry = contents[a];
+    if (entry != NULL) {
+      int k = runtime_hash(entry->id, capacity);
+      if (k < min) {
+        min = k;
+        start = a;
+      }
+    }
+  }
 
   int i = start;
   int count = 0;
@@ -129,7 +140,11 @@ void check_fields(OwnedFields* fields) {
       for (int j = 0; j < entry->length; j++) {
         if (entry->contents[j]) acc++;
       }
-      assert(acc == entry->accessible); // (3)
+      if (acc != entry->accessible) { // (3)
+        runtime_print(fields);
+        printf("Invalid accessible count @ %d: expected %d, found %d\n", i, entry->accessible, acc);
+        assert(false);
+      }
 
       lastKey = key;
     }
@@ -143,10 +158,10 @@ void check_fields(OwnedFields* fields) {
 int main() {
   int INITIAL_SIZE = 2048;
   int MAX_ID = 1024;
-  int REPS = 10000;
-  bool PRINT = true;
+  int REPS = 100000;
+  bool PRINT = false;
 
-  rand_t r = init_rand(0);
+  rand_t r = init_rand(2);
 
   List* tags = list_new();
   int length = 0;
@@ -172,6 +187,27 @@ int main() {
   for (i = 0; i < REPS; i++) {
     check_fields(fields);
 
+    /*
+    // Check that tags coincides with the entries
+    // This takes a bit of time
+    for (int j = 0; j < tags->length; j++) {
+      int tag = tags->values[j];
+      runtime_assert(fields, tag_id(tag), tag_field(tag), "Missing field");
+    }
+    for (int j = 0; j < fields->length; j++) {
+      FieldArray* entry = fields->contents[j];
+      if (entry != NULL) {
+        for (int f = 0; f < entry->length; f++) {
+          if (entry->contents[f] && !list_contains(tags, tag(entry->id, f))) {
+            runtime_print(fields);
+            printf("Unexpected field %d.%d @ %d", entry->id, f, j);
+            assert(false);
+          }
+        }
+      }
+    }
+    */
+
     int type = abs(rand(r)) % 100;
     int id = abs(rand(r)) % MAX_ID;
     int numFields = field_count(id);
@@ -182,6 +218,16 @@ int main() {
         runtime_addAll(fields, id, numFields);
         for (int j = 0; j< numFields; j++)
           list_add(tags, tag(id, j));
+
+        FieldArray* entry = runtime_find(fields, id);
+        assert(entry != NULL);
+        for (int k = 0; k < numFields; k++) {
+          if (!entry->contents[k]) {
+            runtime_print(fields);
+            assert(false);
+          }
+        }
+        assert(entry->length >= numFields);
       } else {
         // if (PRINT) printf("Skipped: addAll(%d, %d)\n", id, numFields);
         i--; // Don't count this iteration
@@ -196,8 +242,21 @@ int main() {
         println(contained ? " - overlaps" : "");
       }
       bool result = runtime_tryAdd(fields, id, numFields, field);
-      assert(result == !contained);
-      list_add(tags, t);
+      if (result != !contained) {
+        runtime_print(fields);
+        printf("Unexpected result\n");
+        assert(false);
+      }
+
+      if (result)
+        list_add(tags, t);
+
+      FieldArray* entry = runtime_find(fields, id);
+      if (entry == NULL || !entry->contents[field]) {
+        runtime_print(fields);
+        printf("Added field missing\n");
+        assert(false);
+      }
     } else {
       // 60% of the time: Remove a single field
       int field = abs(rand(r)) % numFields;
@@ -209,6 +268,14 @@ int main() {
       }
       bool result = runtime_tryRemove(fields, id, field);
       assert(result == contained);
+
+      FieldArray* entry = runtime_find(fields, id);
+      if (entry != NULL && entry->contents[field]) {
+        runtime_print(fields);
+        printf("Removed field still exists\n");
+        assert(false);
+      }
+
       list_remove(tags, t);
     }
   }
