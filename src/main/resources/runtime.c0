@@ -25,7 +25,7 @@ int runtime_compact(FieldArray*[] contents, int capacity, int newId) {
     start++;
 
   int removed = 0;
-  int insert = -1;
+  int insert = start;
   int i = start + 1;
   while (i != start) {
     FieldArray* entry = contents[i];
@@ -33,45 +33,42 @@ int runtime_compact(FieldArray*[] contents, int capacity, int newId) {
       // skip
     } else if (entry->accessible == 0 && entry->id != newId) {
       removed++;
-      if (insert == -1)
-        insert = i;
-    } else if (insert != -1) {
-      int psl = entry->psl;
-      if (psl == 0) {
-        // NULL all locations from `insert` up to `i`
-        while (insert != i) {
-          contents[insert] = NULL;
-          insert = (insert + 1) % capacity;
-        }
-
-        insert = -1;
-      } else {
+    } else {
+      if (insert != i) {
+        int psl = entry->psl;
         // Calculate the distance between `insert` and `i`
         // Allow `i` to wrap around before `insert` does
-        int distance = insert < i ? insert - i : capacity + i - insert;
+        int distance = insert <= i ? i - insert : capacity + i - insert;
         if (psl < distance) {
           // Only move up to `psl` spots backwards, otherwise it would be prior
           // to the hash location
-          insert = (insert + distance - psl) % capacity;
+          int newInsert = (insert + distance - psl) % capacity;
+          while (insert != newInsert) {
+            contents[insert] = NULL;
+            insert = (insert + 1) % capacity;
+          }
+
           distance = psl;
         }
 
-        contents[insert] = entry;
-        insert = (insert + 1) % capacity;
-        entry->psl -= distance;
+        if (distance != 0) {
+          contents[insert] = entry;
+          entry->psl -= distance;
+        }
+        
       }
+
+      insert = (insert + 1) % capacity;
     }
 
     i = (i + 1) % capacity;
   }
 
   // `i == start`
-  if (insert != -1) {
-    // NULL all locations from `insert` up to `start` (which is already NULL)
-    while (insert != i) {
-      contents[insert] = NULL;
-      insert = (insert + 1) % capacity;
-    }
+  // NULL all locations from `insert` up to `start` (which is already NULL)
+  while (insert != i) {
+    contents[insert] = NULL;
+    insert = (insert + 1) % capacity;
   }
 
   return removed;
@@ -95,10 +92,11 @@ void runtime_grow(OwnedFields* fields, int newId)
 
     // Check if we can gain enough space just by dropping unused entries
     int unused = runtime_compact(contents, capacity, newId);
-    if (unused != 0)
+    if (unused != 0) {
       fields->length -= unused;
-    if (unused >= GROW_CONST)
-      return;
+      if (unused >= GROW_CONST)
+        return;
+    }
     
     // Otherwise, use a larger array and rehash
     int newCapacity = capacity + GROW_CONST;

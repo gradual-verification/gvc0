@@ -89,7 +89,7 @@ void test_remove() {
 }
 
 void test_resizing() {
-    println("test_resizing: ");
+    print("test_resizing: ");
 
     OwnedFields* fields = runtime_init();
 
@@ -152,9 +152,7 @@ void test_resizingRemove() {
     assert(fields->capacity == 1280);
 
     // Verify that we still have access to IDs 1000-1022 and 2000-2999
-    runtime_print(fields);
     for (int i = 1000; i < 1023; i++) {
-        printf("i: %d\n", i);
         assert(checkAcc(fields, i, 0));
         assert(checkAcc(fields, i, 1));
     }
@@ -301,6 +299,5 @@ int main() {
     test_ensureSeparate();
 
     println("All runtime tests passed");
-    printint(-5 % 10);
     return 0;
 }

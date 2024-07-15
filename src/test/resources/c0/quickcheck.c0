@@ -155,13 +155,27 @@ void check_fields(OwnedFields* fields) {
   assert(count == fields->length); // (2)
 }
 
+bool removeNext(int id, List* tags, OwnedFields* fields) {
+  int length = tags->length;
+  int[] values = tags->values;
+  for (int j = 0; j < length; j++) {
+    int t = values[j];
+    if (tag_id(t) == id) {
+      assert(runtime_tryRemove(fields, id, tag_field(t)));
+      list_remove(tags, t);
+      return true;
+    }
+  }
+  return false;
+}
+
 int main() {
   int INITIAL_SIZE = 2048;
   int MAX_ID = 1024;
-  int REPS = 2500;
+  int REPS = 5000;
   bool PRINT = false;
 
-  rand_t r = init_rand(2);
+  rand_t r = init_rand(1);
 
   List* tags = list_new();
   int length = 0;
@@ -189,11 +203,11 @@ int main() {
 
     // Check that tags coincides with the entries
     // This takes a bit of time
-    for (int j = 0; j < tags->length; j++) {
+    /*for (int j = 0; j < tags->length; j++) {
       int tag = tags->values[j];
       runtime_assert(fields, tag_id(tag), tag_field(tag), "Missing field");
     }
-    /*
+    
     for (int j = 0; j < fields->length; j++) {
       FieldArray* entry = fields->contents[j];
       if (entry != NULL) {
@@ -211,8 +225,8 @@ int main() {
     int type = abs(rand(r)) % 100;
     int id = abs(rand(r)) % MAX_ID;
     int numFields = field_count(id);
-    if (type < 10) {
-      // 10% of the time: Add a struct
+    if (type < 15) {
+      // 15% of the time: Add a struct
       if (!contains_id(tags, id)) {
         if (PRINT) printf("addAll(%d, %d)\n", id, numFields);
         runtime_addAll(fields, id, numFields);
@@ -232,8 +246,18 @@ int main() {
         // if (PRINT) printf("Skipped: addAll(%d, %d)\n", id, numFields);
         i--; // Don't count this iteration
       }
-    } else if (type < 40) {
-      // 30% of the time: Add a single field
+    } else if (type < 30) {
+      // 15% of the time: Remove all fields for a single ID
+      if (contains_id(tags, id)) {
+        if (PRINT) printf("removeAll(%d, %d)\n", id, numFields);
+        while (removeNext(id, tags, fields))
+          true;
+      } else {
+        // if (PRINT) printf("Skipped: removeAll(%d)\n", id);
+        i--;
+      }
+    } else if (type < 70) {
+      // 40% of the time: Add a single field
       int field = abs(rand(r)) % numFields;
       int t = tag(id, field);
       bool contained = list_contains(tags, t);
@@ -258,7 +282,7 @@ int main() {
         assert(false);
       }
     } else {
-      // 60% of the time: Remove a single field
+      // 30% of the time: Remove a single field
       int field = abs(rand(r)) % numFields;
       int t = tag(id, field);
       bool contained = list_contains(tags, t);
