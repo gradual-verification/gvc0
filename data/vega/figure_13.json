@@ -7,7 +7,7 @@
   "height": 200,
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
   "data": {
-    "url": "https://gist.githubusercontent.com/icmccorm/2674826b14d2d1a8c388fe57debd6661/raw/32407bd839f74916cfbff0cf7c42a1919f5d5862/jumps_popl.csv"
+    "url": "https://raw.githubusercontent.com/gradual-verification/gvc0/master/data/compiled/07-12-24/compiled_jumps.csv"
   },
   "mark": "bar",
   "transform": [
@@ -18,7 +18,7 @@
       }
     },
     {
-      "calculate": "{'assert': 'Assert', 'fold': 'Fold', 'inv':'Loop Inv.', 'post':'Postcond.', 'pre':'Precond.', 'pred':'Pred. Body', 'unfold':'Unfold'}[datum.context_type]",
+      "calculate": "{'assert': 'Assert', 'fold': 'Fold', 'inv':'Loop Inv.', 'post':'Postcond.', 'pre':'Precond.', 'pred':'Pred. Body', 'unfold':'Unfold'}[datum.spec_type]",
       "as": "Location Added Within Specification"
     }
   ],
@@ -40,12 +40,13 @@
       }
     },
     "color": {
-      "field": "component_type",
+      "field": "expr_type",
       "scale": {
         "range": [
           "#33A02C",
-          "#de2d26",
-          "#6a3d9a"
+          "#FFD700",
+          "#6a3d9a",
+          "#de2d26"
         ]
       },
       "legend": null
