@@ -28,8 +28,13 @@ class BaselineChecks(
   val precision = new EquirecursivePrecision(program)
 
   def insert(): Unit = {
+    // Only inject instance counter into existing methods, not methods that are
+    // added to implement predicates
+    val programMethods = program.methods.toList
+
     program.methods.foreach(insertChecks)
-    InstanceCounter.inject(program, structIds)
+
+    InstanceCounter.inject(programMethods, structIds)
   }
 
   def insertChecks(

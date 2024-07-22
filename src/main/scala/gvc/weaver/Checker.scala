@@ -30,7 +30,11 @@ object Checker {
       insert(program, method, runtime, implementation)
     }
 
-    InstanceCounter.inject(program.program, structIdFields)
+    // Use the methods from the ProgramDependencies object, to avoid injecting
+    // instance counter into predicate implementations
+    InstanceCounter.inject(
+      program.methods.values.map(_.method).toSeq,
+      structIdFields)
   }
 
   // Assumes that there is a single return statement at the end of the method.

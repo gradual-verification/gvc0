@@ -49,12 +49,12 @@ struct _ptr_struct_Test_
   int _id;
 };
 
-void add_accInt(struct _ptr_int* ptr, struct OwnedFields* add_perms, int* _instanceCounter);
+void add_accInt(struct _ptr_int* ptr, struct OwnedFields* add_perms);
 int main();
-void remove_accInt(struct _ptr_int* ptr, struct OwnedFields* remove_perms, int* _instanceCounter);
+void remove_accInt(struct _ptr_int* ptr, struct OwnedFields* remove_perms);
 void test(struct _ptr_int* input, int* _instanceCounter);
 
-void add_accInt(struct _ptr_int* ptr, struct OwnedFields* add_perms, int* _instanceCounter)
+void add_accInt(struct _ptr_int* ptr, struct OwnedFields* add_perms)
 {
   runtime_add(add_perms, ptr == NULL ? -1 : ptr->_id, 1, 0, "Invalid aliasing - 'ptr->value' overlaps with existing permission");
 }
@@ -110,12 +110,12 @@ int main()
   runtime_addAll(_ownedFields, ptr->_id, 1);
   if (_ownedFields != NULL)
   {
-    remove_accInt(ptr, _ownedFields, _instanceCounter);
+    remove_accInt(ptr, _ownedFields);
   }
   test(ptr, _instanceCounter);
   if (_ownedFields != NULL)
   {
-    add_accInt(ptr, _ownedFields, _instanceCounter);
+    add_accInt(ptr, _ownedFields);
   }
   wrapper = alloc(struct Wrapper);
   wrapper->_id = *_instanceCounter;
@@ -135,7 +135,7 @@ int main()
   return 0;
 }
 
-void remove_accInt(struct _ptr_int* ptr, struct OwnedFields* remove_perms, int* _instanceCounter)
+void remove_accInt(struct _ptr_int* ptr, struct OwnedFields* remove_perms)
 {
   runtime_remove(remove_perms, ptr->_id, 0, "No permission to access 'ptr->value'");
 }

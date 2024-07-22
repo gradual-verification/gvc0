@@ -8,21 +8,21 @@ struct Node
   int _id;
 };
 
-void add_wrappedAcc(struct Node* node, struct OwnedFields* add_perms, int* _instanceCounter);
-void assert_wrappedAcc(struct Node* node, struct OwnedFields* assert_perms, int* _instanceCounter);
+void add_wrappedAcc(struct Node* node, struct OwnedFields* add_perms);
+void assert_wrappedAcc(struct Node* node, struct OwnedFields* assert_perms);
 int fullyImprecise(struct Node* a, struct OwnedFields* _ownedFields, int* _instanceCounter);
 int fullyPrecise(struct Node* a, int* _instanceCounter);
 int imprecisePostcondition(struct Node* a, int* _instanceCounter);
 int imprecisePrecondition(struct Node* a, struct OwnedFields* _ownedFields, int* _instanceCounter);
 int main();
 
-void add_wrappedAcc(struct Node* node, struct OwnedFields* add_perms, int* _instanceCounter)
+void add_wrappedAcc(struct Node* node, struct OwnedFields* add_perms)
 {
   runtime_add(add_perms, node == NULL ? -1 : node->_id, 2, 0, "Invalid aliasing - 'node->value' overlaps with existing permission");
   runtime_add(add_perms, node == NULL ? -1 : node->_id, 2, 1, "Invalid aliasing - 'node->next' overlaps with existing permission");
 }
 
-void assert_wrappedAcc(struct Node* node, struct OwnedFields* assert_perms, int* _instanceCounter)
+void assert_wrappedAcc(struct Node* node, struct OwnedFields* assert_perms)
 {
   runtime_assert(assert_perms, node == NULL ? -1 : node->_id, 0, "No permission to access 'node->value'");
   runtime_assert(assert_perms, node == NULL ? -1 : node->_id, 1, "No permission to access 'node->next'");
@@ -40,11 +40,11 @@ int fullyPrecise(struct Node* a, int* _instanceCounter)
   struct OwnedFields* _ownedFields = NULL;
   struct OwnedFields* _tempFields = NULL;
   _ownedFields = runtime_init();
-  add_wrappedAcc(a, _ownedFields, _instanceCounter);
+  add_wrappedAcc(a, _ownedFields);
   _ = imprecisePostcondition(a, _instanceCounter);
   _tempFields = runtime_init();
-  assert_wrappedAcc(a, _ownedFields, _instanceCounter);
-  add_wrappedAcc(a, _tempFields, _instanceCounter);
+  assert_wrappedAcc(a, _ownedFields);
+  add_wrappedAcc(a, _tempFields);
   return _;
 }
 

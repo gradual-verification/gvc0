@@ -7,28 +7,28 @@ struct _ptr_int
   int _id;
 };
 
-void add_nested(struct _ptr_int* value, struct OwnedFields* add_perms, int* _instanceCounter);
-void add_test(struct _ptr_int* value, struct OwnedFields* add_perms, int* _instanceCounter);
-void assert_nested(struct _ptr_int* value, struct OwnedFields* assert_perms, int* _instanceCounter);
-void assert_test(struct _ptr_int* value, struct OwnedFields* assert_perms, int* _instanceCounter);
+void add_nested(struct _ptr_int* value, struct OwnedFields* add_perms);
+void add_test(struct _ptr_int* value, struct OwnedFields* add_perms);
+void assert_nested(struct _ptr_int* value, struct OwnedFields* assert_perms);
+void assert_test(struct _ptr_int* value, struct OwnedFields* assert_perms);
 int main();
 
-void add_nested(struct _ptr_int* value, struct OwnedFields* add_perms, int* _instanceCounter)
+void add_nested(struct _ptr_int* value, struct OwnedFields* add_perms)
 {
 }
 
-void add_test(struct _ptr_int* value, struct OwnedFields* add_perms, int* _instanceCounter)
+void add_test(struct _ptr_int* value, struct OwnedFields* add_perms)
 {
 }
 
-void assert_nested(struct _ptr_int* value, struct OwnedFields* assert_perms, int* _instanceCounter)
+void assert_nested(struct _ptr_int* value, struct OwnedFields* assert_perms)
 {
   assert(true);
 }
 
-void assert_test(struct _ptr_int* value, struct OwnedFields* assert_perms, int* _instanceCounter)
+void assert_test(struct _ptr_int* value, struct OwnedFields* assert_perms)
 {
-  assert_nested(value, assert_perms, _instanceCounter);
+  assert_nested(value, assert_perms);
 }
 
 int main()
@@ -49,7 +49,7 @@ int main()
   _tempFields = runtime_init();
   if (_cond)
   {
-    assert_test(value, _ownedFields, _instanceCounter);
+    assert_test(value, _ownedFields);
   }
   _cond = i < 10;
   while (i < 10)
