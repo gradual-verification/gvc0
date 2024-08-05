@@ -249,7 +249,7 @@ object BenchmarkExecutor {
         ir: IR.Program,
         onlyFraming: Boolean
     ): Option[Path] = {
-      BaselineChecker.check(ir, onlyFraming)
+      BaselineChecks.insert(ir, true, !onlyFraming)
       val sourceText =
         IRPrinter.print(ir, includeSpecs = false)
 

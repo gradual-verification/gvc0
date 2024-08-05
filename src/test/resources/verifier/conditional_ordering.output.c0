@@ -8,33 +8,33 @@ struct Node
   int _id;
 };
 
-void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields);
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields, int* _instanceCounter);
 int main();
 
-void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields)
+void appendLemmaAfterLoopBody(struct Node* a, struct Node* b, struct Node* c, int aPrev, int bVal, int cVal, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
-  bool _cond_1 = false;
-  bool _cond_2 = false;
-  bool _cond_3 = false;
-  _cond_1 = b == c;
-  _cond_2 = c == b;
+  bool _cond = false;
+  bool _cond1 = false;
+  bool _cond2 = false;
+  _cond = b == c;
+  _cond1 = c == b;
   if (!(b == c))
   {
   }
   else
   {
-    _cond_3 = a == c;
+    _cond2 = a == c;
     if (a == b)
     {
     }
     else
     {
-      if (_cond_1 && _cond_2 && _cond_2 && !_cond_3)
+      if (_cond && _cond1 && _cond1 && !_cond2)
       {
-        assertAcc(_ownedFields, a != NULL ? a->_id : -1, 1, "Field access runtime check failed for struct Node.next");
-        assertAcc(_ownedFields, a != NULL ? a->_id : -1, 0, "Field access runtime check failed for struct Node.val");
+        runtime_assert(_ownedFields, a == NULL ? -1 : a->_id, 1, "No permission to access 'a->next'");
+        runtime_assert(_ownedFields, a == NULL ? -1 : a->_id, 0, "No permission to access 'a->val'");
       }
-      appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal, _ownedFields);
+      appendLemmaAfterLoopBody(a->next, b, c, a->val, bVal, cVal, _ownedFields, _instanceCounter);
     }
   }
 }

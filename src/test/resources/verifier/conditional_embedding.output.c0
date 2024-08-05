@@ -1,6 +1,6 @@
 #use <runtime>
 int main();
-int test(int input, struct OwnedFields* _ownedFields);
+int test(int input, int* _instanceCounter);
 
 int main()
 {
@@ -9,7 +9,7 @@ int main()
   return 0;
 }
 
-int test(int input, struct OwnedFields* _ownedFields)
+int test(int input, int* _instanceCounter)
 {
   if (input > 0)
   {

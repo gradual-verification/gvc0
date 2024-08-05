@@ -1,0 +1,65 @@
+#use <runtime>
+struct Box;
+struct _ptr_int;
+
+struct Box
+{
+  int value;
+  int _id;
+};
+
+struct _ptr_int
+{
+  int value;
+  int _id;
+};
+
+void fact(struct Box* box, struct OwnedFields* _ownedFields, int* _instanceCounter);
+int main();
+
+void fact(struct Box* box, struct OwnedFields* _ownedFields, int* _instanceCounter)
+{
+  int total = 0;
+  struct _ptr_int* _ = NULL;
+  total = 1;
+  runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
+  assert(!(box == NULL));
+  runtime_remove(_ownedFields, box->_id, 0, "No permission to access 'box->value'");
+  while (box->value > 1)
+  {
+    total = total * box->value;
+    box->value = box->value - 1;
+    _ = alloc(struct _ptr_int);
+    _->_id = *_instanceCounter;
+    *_instanceCounter = *_instanceCounter + 1;
+  }
+  runtime_add(_ownedFields, box == NULL ? -1 : box->_id, 1, 0, "Invalid aliasing - 'box->value' overlaps with existing permission");
+  box->value = total;
+}
+
+int main()
+{
+  struct Box* box = NULL;
+  int result = 0;
+  struct OwnedFields* _ownedFields = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = runtime_init();
+  box = alloc(struct Box);
+  box->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  runtime_addAll(_ownedFields, box->_id, 1);
+  box->value = 3;
+  fact(box, _ownedFields, _instanceCounter);
+  runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
+  runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
+  if (box->value == 6)
+  {
+    result = 0;
+  }
+  else
+  {
+    result = -1;
+  }
+  return result;
+}

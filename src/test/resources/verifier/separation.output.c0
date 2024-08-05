@@ -7,16 +7,18 @@ struct _ptr_int
   int _id;
 };
 
-struct _ptr_int* create(struct OwnedFields* _ownedFields);
+struct _ptr_int* create(struct OwnedFields* _ownedFields, int* _instanceCounter);
 void ensureSeparate(struct _ptr_int* x, struct _ptr_int* y, int* _instanceCounter);
 int main();
-void test(struct _ptr_int* x, struct _ptr_int* y, struct OwnedFields* _ownedFields);
+void test(struct _ptr_int* x, struct _ptr_int* y, struct OwnedFields* _ownedFields, int* _instanceCounter);
 
-struct _ptr_int* create(struct OwnedFields* _ownedFields)
+struct _ptr_int* create(struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct _ptr_int* _ = NULL;
   _ = alloc(struct _ptr_int);
-  _->_id = addStructAcc(_ownedFields, 1);
+  _->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  runtime_addAll(_ownedFields, _->_id, 1);
   return _;
 }
 
@@ -28,33 +30,27 @@ int main()
 {
   struct _ptr_int* _ = NULL;
   struct _ptr_int* _1 = NULL;
-  int* _instanceCounter = NULL;
-  struct OwnedFields* _tempFields = NULL;
   struct OwnedFields* _ownedFields = NULL;
-  struct OwnedFields* _tempFields1 = NULL;
+  int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields(_instanceCounter);
-  _tempFields = initOwnedFields(_instanceCounter);
-  _ = create(_tempFields);
-  join(_ownedFields, _tempFields);
-  _tempFields1 = initOwnedFields(_instanceCounter);
-  _1 = create(_tempFields1);
-  join(_ownedFields, _tempFields1);
-  test(_, _1, _ownedFields);
+  _ownedFields = runtime_init();
+  _ = create(_ownedFields, _instanceCounter);
+  _1 = create(_ownedFields, _instanceCounter);
+  test(_, _1, _ownedFields, _instanceCounter);
   return 0;
 }
 
-void test(struct _ptr_int* x, struct _ptr_int* y, struct OwnedFields* _ownedFields)
+void test(struct _ptr_int* x, struct _ptr_int* y, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct OwnedFields* _tempFields = NULL;
-  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  assertAcc(_ownedFields, y != NULL ? y->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
-  assertAcc(_ownedFields, x != NULL ? x->_id : -1, 0, "Field access runtime check failed for struct _ptr_int.value");
+  _tempFields = runtime_init();
+  runtime_assert(_ownedFields, y == NULL ? -1 : y->_id, 0, "No permission to access 'y->value'");
+  runtime_assert(_ownedFields, x == NULL ? -1 : x->_id, 0, "No permission to access 'x->value'");
   assert(!(x == NULL));
   assert(!(y == NULL));
-  addAccEnsureSeparate(_tempFields, x != NULL ? x->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
-  addAccEnsureSeparate(_tempFields, y != NULL ? y->_id : -1, 0, 1, "Overlapping field permissions for struct _ptr_int.value");
-  loseAcc(_ownedFields, x->_id, 0);
-  loseAcc(_ownedFields, y->_id, 0);
-  ensureSeparate(x, y, _ownedFields->instanceCounter);
+  runtime_add(_tempFields, x == NULL ? -1 : x->_id, 1, 0, "Invalid aliasing - 'x->value' overlaps with existing permission");
+  runtime_add(_tempFields, y == NULL ? -1 : y->_id, 1, 0, "Invalid aliasing - 'y->value' overlaps with existing permission");
+  runtime_remove(_ownedFields, x->_id, 0, "No permission to access 'x->value'");
+  runtime_remove(_ownedFields, y->_id, 0, "No permission to access 'y->value'");
+  ensureSeparate(x, y, _instanceCounter);
 }

@@ -13,17 +13,135 @@ object IRPrinter {
     val Top = 9
   }
 
-  def print(program: IR.Program, includeSpecs: Boolean): String = {
-    val p = new Printer()
+  private def printExpr(
+      p: Printer,
+      expr: IR.Expression,
+      precedence: Int = Precedence.Top
+  ): Unit = expr match {
+    case v: IR.Var => p.print(v.name)
+    case m: IR.FieldMember => {
+      printExpr(p, m.root)
+      p.print("->")
+      p.print(m.field.name)
+    }
+    case deref: IR.DereferenceMember =>
+      wrapExpr(p, precedence, Precedence.Unary) {
+        p.print("*")
+        printExpr(p, deref.root, Precedence.Unary)
+      }
+    case acc: IR.Accessibility => {
+      p.print("acc(")
+      printExpr(p, acc.member)
+      p.print(")")
+    }
+    case pred: IR.PredicateInstance => {
+      p.print(pred.predicate.name)
+      p.print("(")
+      printList(p, pred.arguments) { arg => printExpr(p, arg) }
+      p.print(")")
+    }
+    case arr: IR.ArrayMember => {
+      printExpr(p, arr.root)
+      p.print("[")
+      printExpr(p, arr.index)
+      p.print("]")
+    }
+    case res: IR.Result => p.print("\\result")
+    case imp: IR.Imprecise =>
+      imp.precise match {
+        case None => p.print("?")
+        case Some(precise) =>
+          wrapExpr(p, precedence, Precedence.And) {
+            p.print("? && ")
+            printExpr(p, precise, Precedence.And)
+          }
+      }
+    case int: IR.IntLit => p.print(int.value.toString())
+    case str: IR.StringLit =>
+      p.print("\"")
+      p.print(str.value)
+      p.print("\"")
+    case char: IR.CharLit => {
+      p.print("'")
+      p.print(char.value match {
+        case '\\'  => "\\\\"
+        case '\n'  => "\\n"
+        case '\r'  => "\\r"
+        case '\t'  => "\\t"
+        case '\u0000' => "\\0"
+        case other => other.toString()
+      })
+      p.print("'")
+    }
+    case bool: IR.BoolLit => p.print(if (bool.value) "true" else "false")
+    case _: IR.NullLit    => p.print("NULL")
 
-    def printList[T](values: Seq[T])(action: T => Unit): Unit = {
-      var first = true
-      for (value <- values) {
-        if (first) first = false
-        else p.print(", ")
-        action(value)
+    case cond: IR.Conditional =>
+      wrapExpr(p, precedence, Precedence.Conditional) {
+        printExpr(p, cond.condition, Precedence.Conditional)
+        p.print(" ? ")
+        printExpr(p, cond.ifTrue, Precedence.Conditional)
+        p.print(" : ")
+        printExpr(p, cond.ifFalse, Precedence.Conditional)
+      }
+
+    case binary: IR.Binary => {
+      val (sep, opPrecedence) = binary.operator match {
+        case IR.BinaryOp.Add            => (" + ", Precedence.Add)
+        case IR.BinaryOp.Subtract       => (" - ", Precedence.Add)
+        case IR.BinaryOp.Divide         => (" / ", Precedence.Multiply)
+        case IR.BinaryOp.Multiply       => (" * ", Precedence.Multiply)
+        case IR.BinaryOp.And            => (" && ", Precedence.And)
+        case IR.BinaryOp.Or             => (" || ", Precedence.Or)
+        case IR.BinaryOp.Equal          => (" == ", Precedence.Equality)
+        case IR.BinaryOp.NotEqual       => (" != ", Precedence.Equality)
+        case IR.BinaryOp.Less           => (" < ", Precedence.Inequality)
+        case IR.BinaryOp.LessOrEqual    => (" <= ", Precedence.Inequality)
+        case IR.BinaryOp.Greater        => (" > ", Precedence.Inequality)
+        case IR.BinaryOp.GreaterOrEqual => (" >= ", Precedence.Inequality)
+      }
+
+      wrapExpr(p, precedence, opPrecedence) {
+        printExpr(p, binary.left, opPrecedence)
+        p.print(sep)
+        printExpr(p, binary.right, opPrecedence)
       }
     }
+
+    case unary: IR.Unary =>
+      wrapExpr(p, precedence, Precedence.Unary) {
+        p.print(unary.operator match {
+          case IR.UnaryOp.Not    => "!"
+          case IR.UnaryOp.Negate => "-"
+        })
+        printExpr(p, unary.operand, Precedence.Unary)
+      }
+  }
+
+  def printList[T](p: Printer, values: Seq[T])(action: T => Unit): Unit = {
+    var first = true
+    for (value <- values) {
+      if (first) first = false
+      else p.print(", ")
+      action(value)
+    }
+  }
+
+  def wrapExpr(p: Printer, currentPrecedence: Int, exprPrecedence: Int)(
+        action: => Unit
+  ): Unit = {
+    if (currentPrecedence < exprPrecedence) {
+      p.print("(")
+      action
+      p.print(")")
+    } else {
+      action
+    }
+  }
+
+
+  def print(program: IR.Program, includeSpecs: Boolean): String = {
+    val p = new Printer()
 
     def printDependency(dependency: IR.Dependency): Unit = {
       p.print("#use ")
@@ -59,7 +177,7 @@ object IRPrinter {
       p.print("//@predicate ")
       p.print(predicate.name)
       p.print("(")
-      printList(predicate.parameters) { param =>
+      printList(p, predicate.parameters) { param =>
         printType(param.varType)
         p.print(" ")
         p.print(param.name)
@@ -70,7 +188,7 @@ object IRPrinter {
     def printPredicate(predicate: IR.Predicate): Unit = {
       printPredicateHeader(predicate)
       p.print(" = ")
-      printExpr(predicate.expression)
+      printExpr(p, predicate.expression)
       p.println(";")
     }
 
@@ -85,7 +203,7 @@ object IRPrinter {
       p.print("(")
 
       var first = true
-      printList(method.parameters) { param =>
+      printList(p, method.parameters) { param =>
         printType(param.varType)
         p.print(" ")
         p.print(param.name)
@@ -102,7 +220,7 @@ object IRPrinter {
         method.precondition.foreach { pre =>
           p.withIndent {
             p.print("//@requires ")
-            printExpr(pre)
+            printExpr(p, pre)
             p.println(";")
           }
         }
@@ -110,7 +228,7 @@ object IRPrinter {
         method.postcondition.foreach { post =>
           p.withIndent {
             p.print("//@ensures ")
-            printExpr(post)
+            printExpr(p, post)
             p.println(";")
           }
         }
@@ -131,7 +249,7 @@ object IRPrinter {
         case _: IR.ArrayType | _: IR.ReferenceArrayType => ()
         case varType => {
           p.print(" = ")
-          printExpr(varType.default)
+          printExpr(p, varType.default)
         }
       }
       p.println(";")
@@ -146,70 +264,70 @@ object IRPrinter {
     def printOp(op: IR.Op): Unit = op match {
       case invoke: IR.Invoke => {
         invoke.target.foreach { target =>
-          printExpr(target)
+          printExpr(p, target)
           p.print(" = ")
         }
 
         p.print(invoke.callee.name)
         p.print("(")
 
-        printList(invoke.arguments) { arg =>
-          printExpr(arg)
+        printList(p, invoke.arguments) { arg =>
+          printExpr(p, arg)
         }
 
         p.println(");")
       }
       case alloc: IR.AllocValue => {
-        printExpr(alloc.target)
+        printExpr(p, alloc.target)
         p.print(" = alloc(")
         printType(alloc.valueType)
         p.println(");")
       }
 
       case alloc: IR.AllocArray => {
-        printExpr(alloc.target)
+        printExpr(p, alloc.target)
         p.print(" = alloc_array(")
         printType(alloc.valueType)
         p.print(", ")
-        printExpr(alloc.length)
+        printExpr(p, alloc.length)
         p.println(");")
       }
 
       case alloc: IR.AllocStruct => {
-        printExpr(alloc.target)
+        printExpr(p, alloc.target)
         p.print(" = alloc(struct ")
         p.print(alloc.struct.name)
         p.println(");")
       }
 
       case assign: IR.Assign => {
-        printExpr(assign.target)
+        printExpr(p, assign.target)
         p.print(" = ")
-        printExpr(assign.value)
+        printExpr(p, assign.value)
         p.println(";")
       }
 
       case assign: IR.AssignMember => {
         assign.member match {
           case member: IR.FieldMember => {
-            printExpr(member.root)
+            printExpr(p, member.root)
             p.print("->")
             p.print(member.field.name)
           }
           case member: IR.DereferenceMember => {
             p.print("*")
-            printExpr(member.root, Precedence.Unary)
+            printExpr(p, member.root, Precedence.Unary)
           }
           case member: IR.ArrayMember => {
-            printExpr(member.root)
+            printExpr(p, member.root)
             p.print("[")
-            printExpr(member.index)
+            printExpr(p, member.index)
             p.print("]")
           }
         }
 
         p.print(" = ")
-        printExpr(assign.value)
+        printExpr(p, assign.value)
         p.println(";")
       }
 
@@ -218,12 +336,12 @@ object IRPrinter {
           case IR.AssertKind.Specification =>
             if (includeSpecs) {
               p.print("//@assert ")
-              printExpr(assert.value)
+              printExpr(p, assert.value)
               p.println(";")
             }
           case IR.AssertKind.Imperative => {
             p.print("assert(")
-            printExpr(assert.value)
+            printExpr(p, assert.value)
             p.println(");")
           }
         }
@@ -231,20 +349,20 @@ object IRPrinter {
       case fold: IR.Fold =>
         if (includeSpecs) {
           p.print("//@fold ")
-          printExpr(fold.instance)
+          printExpr(p, fold.instance)
           p.println(";")
         }
 
       case unfold: IR.Unfold =>
         if (includeSpecs) {
           p.print("//@unfold ")
-          printExpr(unfold.instance)
+          printExpr(p, unfold.instance)
           p.println(";")
         }
 
       case error: IR.Error => {
         p.print("error(")
-        printExpr(error.value)
+        printExpr(p, error.value)
         p.println(");")
       }
 
@@ -252,14 +370,14 @@ object IRPrinter {
         p.print("return")
         ret.value.foreach { value =>
           p.print(" ")
-          printExpr(value)
+          printExpr(p, value)
         }
         p.println(";")
       }
 
       case iff: IR.If => {
         p.print("if (")
-        printExpr(iff.condition)
+        printExpr(p, iff.condition)
         p.println(")")
         printBlock(iff.ifTrue)
 
@@ -271,12 +389,12 @@ object IRPrinter {
 
       case w: IR.While => {
         p.print("while (")
-        printExpr(w.condition)
+        printExpr(p, w.condition)
         p.println(")")
         if (includeSpecs) {
           p.withIndent {
             p.print("//@loop_invariant ")
-            printExpr(w.invariant)
+            printExpr(p, w.invariant)
             p.println(";")
           }
         }
@@ -284,121 +402,6 @@ object IRPrinter {
       }
     }
 
-    def wrapExpr(currentPrecedence: Int, exprPrecedence: Int)(
-        action: => Unit
-    ): Unit = {
-      if (currentPrecedence < exprPrecedence) {
-        p.print("(")
-        action
-        p.print(")")
-      } else {
-        action
-      }
-    }
-
-    def printExpr(
-        expr: IR.Expression,
-        precedence: Int = Precedence.Top
-    ): Unit = expr match {
-      case v: IR.Var => p.print(v.name)
-      case m: IR.FieldMember => {
-        printExpr(m.root)
-        p.print("->")
-        p.print(m.field.name)
-      }
-      case deref: IR.DereferenceMember =>
-        wrapExpr(precedence, Precedence.Unary) {
-          p.print("*")
-          printExpr(deref.root, Precedence.Unary)
-        }
-      case acc: IR.Accessibility => {
-        p.print("acc(")
-        printExpr(acc.member)
-        p.print(")")
-      }
-      case pred: IR.PredicateInstance => {
-        p.print(pred.predicate.name)
-        p.print("(")
-        printList(pred.arguments) { arg => printExpr(arg) }
-        p.print(")")
-      }
-      case arr: IR.ArrayMember => {
-        printExpr(arr.root)
-        p.print("[")
-        printExpr(arr.index)
-        p.print("]")
-      }
-      case res: IR.Result => p.print("\\result")
-      case imp: IR.Imprecise =>
-        imp.precise match {
-          case None => p.print("?")
-          case Some(precise) =>
-            wrapExpr(precedence, Precedence.And) {
-              p.print("? && ")
-              printExpr(precise, Precedence.And)
-            }
-        }
-      case int: IR.IntLit => p.print(int.value.toString())
-      case str: IR.StringLit =>
-        p.print("\"")
-        p.print(str.value)
-        p.print("\"")
-      case char: IR.CharLit => {
-        p.print("'")
-        p.print(char.value match {
-          case '\\'  => "\\\\"
-          case '\n'  => "\\n"
-          case '\r'  => "\\r"
-          case '\t'  => "\\t"
-          case '\u0000' => "\\0"
-          case other => other.toString()
-        })
-        p.print("'")
-      }
-      case bool: IR.BoolLit => p.print(if (bool.value) "true" else "false")
-      case _: IR.NullLit    => p.print("NULL")
-
-      case cond: IR.Conditional =>
-        wrapExpr(precedence, Precedence.Conditional) {
-          printExpr(cond.condition, Precedence.Conditional)
-          p.print(" ? ")
-          printExpr(cond.ifTrue, Precedence.Conditional)
-          p.print(" : ")
-          printExpr(cond.ifFalse, Precedence.Conditional)
-        }
-
-      case binary: IR.Binary => {
-        val (sep, opPrecedence) = binary.operator match {
-          case IR.BinaryOp.Add            => (" + ", Precedence.Add)
-          case IR.BinaryOp.Subtract       => (" - ", Precedence.Add)
-          case IR.BinaryOp.Divide         => (" / ", Precedence.Multiply)
-          case IR.BinaryOp.Multiply       => (" * ", Precedence.Multiply)
-          case IR.BinaryOp.And            => (" && ", Precedence.And)
-          case IR.BinaryOp.Or             => (" || ", Precedence.Or)
-          case IR.BinaryOp.Equal          => (" == ", Precedence.Equality)
-          case IR.BinaryOp.NotEqual       => (" != ", Precedence.Equality)
-          case IR.BinaryOp.Less           => (" < ", Precedence.Inequality)
-          case IR.BinaryOp.LessOrEqual    => (" <= ", Precedence.Inequality)
-          case IR.BinaryOp.Greater        => (" > ", Precedence.Inequality)
-          case IR.BinaryOp.GreaterOrEqual => (" >= ", Precedence.Inequality)
-        }
-
-        wrapExpr(precedence, opPrecedence) {
-          printExpr(binary.left, opPrecedence)
-          p.print(sep)
-          printExpr(binary.right, opPrecedence)
-        }
-      }
-
-      case unary: IR.Unary =>
-        wrapExpr(precedence, Precedence.Unary) {
-          p.print(unary.operator match {
-            case IR.UnaryOp.Not    => "!"
-            case IR.UnaryOp.Negate => "-"
-          })
-          printExpr(unary.operand, Precedence.Unary)
-        }
-    }
 
     var empty = true
     def printSeparator() = {
@@ -458,6 +461,12 @@ object IRPrinter {
       printMethod(method)
     }
 
+    p.toString()
+  }
+
+  def print(expr: IR.Expression) = {
+    val p = new Printer()
+    printExpr(p, expr)
     p.toString()
   }
 

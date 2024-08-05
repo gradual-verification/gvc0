@@ -1,188 +1,367 @@
 #use <conio>
 #use <string>
 
-int GROW_CAPACITY (int oldCapacity){
-  return ((oldCapacity) < 128 ? 128 : (oldCapacity) + 128);
-}
-
-int hash(int index, int arrayLength)
+int runtime_hash(int index, int arrayLength)
     //@requires index >= 0;
     //@ensures \result >= 0 && \result < arrayLength;
 {
-    index = ((index >> 16) ^ index) * 0x45d9f3b;
-    index = ((index >> 16) ^ index) * 0x45d9f3b;
-    index = (index >> 16) ^ index;
-    return index % arrayLength;
+  index = ((index >> 16) ^ index) * 0x45d9f3b;
+  index = ((index >> 16) ^ index) * 0x45d9f3b;
+  index = (index >> 16) ^ index;
+  return index % arrayLength;
 }
 
-OwnedFields* initOwnedFields( int * instanceCounter){
+OwnedFields* runtime_init(){
   OwnedFields* fields = alloc(OwnedFields);
-  fields->instanceCounter = instanceCounter;
-  int oldCapacity = 0;
-  fields->capacity = GROW_CAPACITY(oldCapacity);
+  fields->capacity = 128;
   fields->contents = alloc_array(FieldArray*, fields->capacity);
-
-  for(int i = 0; i < fields->capacity; i += 1){
-    fields->contents[i] = NULL;
-  }
   return fields;
 }
 
-void grow(OwnedFields* fields)
+int runtime_compact(FieldArray*[] contents, int capacity, int newId) {
+  // Find first NULL
+  int start = 0;
+  while (contents[start] != NULL)
+    start++;
 
-{
-  int oldCapacity = fields->capacity;
-  fields->capacity = GROW_CAPACITY(oldCapacity);
-  FieldArray*[] newContents = alloc_array(FieldArray*, fields->capacity);
-  for(int i = 0; i<oldCapacity; i += 1){
-    if(fields->contents[i] != NULL && !fields->contents[i]->deleted){
-        int _id = fields->contents[i]->_id;
-        int newIndex = hash(_id, fields->capacity);
-        while(newContents[newIndex] != NULL){
-            newIndex = (newIndex + 1) % fields->capacity;
+  int removed = 0;
+  int insert = start;
+  int i = start + 1;
+  while (i != start) {
+    FieldArray* entry = contents[i];
+    if (entry == NULL) {
+      // skip
+    } else if (entry->accessible == 0 && entry->id != newId) {
+      removed++;
+    } else {
+      if (insert != i) {
+        int psl = entry->psl;
+        // Calculate the distance between `insert` and `i`
+        // Allow `i` to wrap around before `insert` does
+        int distance = insert <= i ? i - insert : capacity + i - insert;
+        if (psl < distance) {
+          // Only move up to `psl` spots backwards, otherwise it would be prior
+          // to the hash location
+          int newInsert = (insert + distance - psl) % capacity;
+          while (insert != newInsert) {
+            contents[insert] = NULL;
+            insert = (insert + 1) % capacity;
+          }
+
+          distance = psl;
         }
-        newContents[newIndex] = fields->contents[i];
+
+        if (distance != 0) {
+          contents[insert] = entry;
+          entry->psl -= distance;
+        }
+        
+      }
+
+      insert = (insert + 1) % capacity;
     }
+
+    i = (i + 1) % capacity;
   }
-  fields->contents = newContents;
+
+  // `i == start`
+  // NULL all locations from `insert` up to `start` (which is already NULL)
+  while (insert != i) {
+    contents[insert] = NULL;
+    insert = (insert + 1) % capacity;
+  }
+
+  return removed;
 }
 
-FieldArray* find(OwnedFields* fields, int _id){
-  if(_id >= 0){
-    int index = hash(_id, fields->capacity);
-    while(fields->contents[index] != NULL){
-        if(!fields->contents[index]->deleted && fields->contents[index]->_id == _id){
-            return fields->contents[index];
-        }else{
-            index = (index + 1) % fields->capacity;
+// Called whenever a new element is added. Increments the `length` and resizes
+// the backing array whenever necessary.
+// `newIndex` specifies an index that will not be dropped, even if no fields in
+// it are accessible (i.e., if it has just been added to the array).
+void runtime_grow(OwnedFields* fields, int newId)
+{
+  int newLength = fields->length + 1;
+  fields->length = newLength;
+
+  // Keep the hash table's "load factor" under 80%
+  // I.e., length is always < 80% of capacity
+  int capacity = fields->capacity;
+  if (newLength * 5 >= capacity * 4) {
+    int GROW_CONST = 128;
+    FieldArray*[] contents = fields->contents;
+
+    // Check if we can gain enough space just by dropping unused entries
+    int unused = runtime_compact(contents, capacity, newId);
+    if (unused != 0) {
+      fields->length -= unused;
+      if (unused >= GROW_CONST)
+        return;
+    }
+    
+    // Otherwise, use a larger array and rehash
+    int newCapacity = capacity + GROW_CONST;
+    fields->capacity = newCapacity;
+
+    FieldArray*[] newContents = alloc_array(FieldArray*, newCapacity);
+    fields->contents = newContents;
+
+    // Add all items into the new array
+    for (int i = 0; i < capacity; i++) {
+      FieldArray* entry = contents[i];
+      if (entry != NULL) {
+        int k = runtime_hash(entry->id, newCapacity);
+        int psl = 0;
+        while (newContents[k] != NULL) {
+          FieldArray* existing = newContents[k];
+          if (psl > existing->psl) {
+            entry->psl = psl;
+            psl = existing->psl;
+
+            newContents[k] = entry;
+            entry = existing;
+          }
+
+          k = (k + 1) % newCapacity;
+          psl++;
         }
+        newContents[k] = entry;
+        entry->psl = psl;
       }
     }
+  }
+}
+
+FieldArray* runtime_find(OwnedFields* fields, int id) {
+  if (id >= 0) {
+    FieldArray*[] contents = fields->contents;
+    int capacity = fields->capacity;
+    int index = runtime_hash(id, capacity);
+    int psl = 0;
+    while (true) {
+      FieldArray* entry = contents[index];
+      if (entry == NULL || entry->psl < psl)
+        return NULL;
+      else if (entry->id == id)
+        return entry;
+      else
+        index = (index + 1) % capacity;
+      psl++;
+    }
+  }
+
   return NULL;
 }
 
-FieldArray * newFieldArray(OwnedFields * fields, int _id, int numFields, bool accAll)
-  //@requires fields != NULL && _id >= 0 && numFields > 0;
-  //@ensures fields != NULL && fields->capacity > fields->length;
-{
-  if(fields->length > (fields->capacity * 4 / 5)) grow(fields);
+// Add a new field array with the specified reference ID
+// NOTE: This assumes that no field with the same reference ID have been added
+FieldArray* runtime_newFieldArray(OwnedFields* fields, int id, int numFields) {
+  FieldArray*[] contents = fields->contents;
+  int capacity = fields->capacity;
+  int index = runtime_hash(id, capacity);
+  int psl = 0;
+  FieldArray* current = NULL;
+  FieldArray* newEntry = NULL;
 
-  int fieldIndex = hash(_id, fields->capacity);
-  while(fields->contents[fieldIndex] != NULL && !fields->contents[fieldIndex]->deleted) fieldIndex = (fieldIndex + 1) % fields->capacity;
+  while (contents[index] != NULL) {
+    FieldArray* entry = contents[index];
+    if (entry->accessible == 0) {
+      if (current == NULL) {
+        entry->id = id;
+        if (entry->length < numFields) {
+          entry->contents = alloc_array(bool, numFields);
+          entry->length = numFields;
+          // Because we do not shrink `length` when we re-use the `contents`
+          // array, we can end up with entries that have a larger `length` than
+          // the number of fields contained at the heap location. But, assuming
+          // sound type-checking, this is not problematic. For performance we
+          // prioritize memory reuse above memory usage (on the assumption that
+          // GC/allocation is slow).
+        }
 
-  FieldArray * array = alloc(FieldArray);
-  fields->contents[fieldIndex] = array;
-  fields->length += 1;
+        current = entry;
+        newEntry = entry;
+      }
 
-  array->contents = alloc_array(bool, numFields);
-  array->length = numFields;
-  array->_id = _id;
-  array->deleted = false;
+      entry = contents[(index + 1) % capacity];
+      while (entry != NULL && psl < entry->psl) {
+        entry->psl--;
+        contents[index] = entry;
+        index = (index + 1) % capacity;
+        entry = contents[(index + 1) % capacity];
+        psl++;
+      }
 
-  for(int i = 0; i<array->length; i += 1){
-    array->contents[i] = accAll;
+      current->psl = psl;
+      contents[index] = current;
+      return newEntry;
+    }
+
+    // Robin-hood hashing: For any i, the values that hash to bucket i precede
+    // the values that hash to bucket i+1
+    // https://www.cs.cornell.edu/courses/JavaAndDS/files/hashing_RobinHood.pdf
+    if (psl > entry->psl) {
+      // If the current PSL is longer than this PSL, we replace this one with
+      // the new item, and then "re-insert" the item we just replaced
+
+      if (current == NULL) {
+        newEntry = alloc(FieldArray);
+        newEntry->id = id;
+        newEntry->length = numFields;
+        newEntry->contents = alloc_array(bool, numFields);
+        current = newEntry;
+      }
+
+      // Swap psl and contents[index]->psl
+      current->psl = psl;
+      psl = entry->psl;
+
+      // Swap current and contents[index]
+      contents[index] = current;
+      current = entry;
+
+      // Continue inserting `entry`
+    }
+
+    index = (index + 1) % capacity;
+    psl++;
   }
-  if(accAll) {
-    array->numAccessible = array->length;
+
+  if (current == NULL) {
+    newEntry = alloc(FieldArray);
+    newEntry->id = id;
+    newEntry->length = numFields;
+    newEntry->contents = alloc_array(bool, numFields);
+    current = newEntry;
+  }
+
+  contents[index] = current;
+  current->psl = psl;
+  runtime_grow(fields, id);
+  return newEntry;
+}
+
+// Adds a new FieldArray and marks all fields as accessible
+// NOTE: This assumes that no field with the same reference ID have been added
+void runtime_addAll(OwnedFields* fields, int id, int numFields) {
+  if (fields == NULL) return;
+
+  // Reuse the entry if one already exists with that ID
+  // Cannot let a duplicate (unused) entry exist with the same ID
+  FieldArray* entry = runtime_find(fields, id);
+  if (entry == NULL)
+    entry = runtime_newFieldArray(fields, id, numFields);
+  bool[] entryContents = entry->contents;
+  for (int i = 0; i < numFields; i++){
+    entryContents[i] = true;
+  }
+  entry->accessible = numFields;
+}
+
+// Adds the specified permission (id, fieldIndex) to the set of permissions.
+// Returns false if permission already exists, otherwise returns true.
+bool runtime_tryAdd(OwnedFields* fields, int id, int numFields, int fieldIndex) {
+  int capacity = fields->capacity;
+  FieldArray*[] contents = fields->contents;
+
+  FieldArray* entry = runtime_find(fields, id);
+  if (entry == NULL) {
+    entry = runtime_newFieldArray(fields, id, numFields);
+  } else  if (entry->contents[fieldIndex]) {
+    return false;
+  }
+
+  entry->contents[fieldIndex] = true;
+  entry->accessible++;
+
+  return true;
+}
+
+// Adds the specified permission (id, fieldIndex) to the set of permissions.
+// Throws `errorMessage` if the permission already exists.
+void runtime_add(OwnedFields* fields, int id, int numFields, int fieldIndex, string errorMessage) {
+  if (!runtime_tryAdd(fields, id, numFields, fieldIndex))
+    error(errorMessage);
+}
+
+// Assert that the permission (id, fieldIndex) is already contained, otherwise
+// throws `errorMessage`
+void runtime_assert(OwnedFields* fields, int id, int fieldIndex, string errorMessage) {
+  FieldArray* entry = runtime_find(fields, id);
+  if (entry == NULL || !entry->contents[fieldIndex]){
+    println(errorMessage);
+    assert(false);
+  }
+}
+
+bool runtime_tryRemove(OwnedFields* fields, int id, int fieldIndex) {
+  FieldArray* entry = runtime_find(fields, id);
+  if (entry == NULL || !entry->contents[fieldIndex]) {
+    return false;
+  }
+
+  entry->contents[fieldIndex] = false;
+  entry->accessible--;
+  return true;
+}
+
+// Removes the permission (id, fieldIndex) from the set of permissions. Throws
+// `errorMessage` if the permission does not exist.
+void runtime_remove(OwnedFields* fields, int id, int fieldIndex, string errorMessage) {
+  if (!runtime_tryRemove(fields, id, fieldIndex))
+    error(errorMessage);
+}
+
+void runtime_join(OwnedFields* target, OwnedFields* source) {
+  if (target == NULL || source == NULL)
+    return;
+
+  int sourceCapacity = source->capacity;
+  FieldArray*[] sourceContents = source->contents;
+  for (int i = 0; i < sourceCapacity; i++) {
+    FieldArray* sourceEntry = sourceContents[i];
+    if (sourceEntry != NULL && sourceEntry->accessible != 0) {
+      // Add all fields from `sourceEntry` to an existing or new entry in target
+      int id = sourceEntry->id;
+      FieldArray* targetEntry = runtime_find(target, id);
+      if (targetEntry == NULL)
+        targetEntry = runtime_newFieldArray(target, id, sourceEntry->length);
+
+      // Assume that they both have the same length
+      int length = sourceEntry->length;
+      bool[] sc = sourceEntry->contents;
+      bool[] tc = targetEntry->contents;
+      for (int j = 0; j < length; j++) {
+        if (sc[j]) {
+          assert(!tc[j]);
+          tc[j] = true;
+        }
+      }
+
+      targetEntry->accessible += sourceEntry->accessible;
+    }
+  }
+}
+
+void runtime_print(OwnedFields* fields) {
+  if (fields != NULL) {
+    print("{ ");
+
+    bool first = true;
+    for (int i = 0; i < fields->capacity; i++) {
+      FieldArray* entry = fields->contents[i];
+      if (entry != NULL) {
+        if (first) first = false;
+        else print(", ");
+
+        printf("%d@%d#%d+%d:", entry->id, i, runtime_hash(entry->id, fields->capacity), entry->psl);
+        for (int j = 0; j < entry->length; j++) {
+          print(entry->contents[j] ? "X" : "_");
+        }
+      }
+    }
+
+    printf(" } (%d of %d)\n", fields->length, fields->capacity);
   } else {
-    array->numAccessible = 0;
+    println("OwnedFields is empty/NULL");
   }
-  return fields->contents[fieldIndex];
-}
-
-int addStructAcc(OwnedFields * fields, int numFields){
-    newFieldArray(fields, *fields->instanceCounter, numFields, true);
-    *(fields->instanceCounter) += 1;
-    return *(fields->instanceCounter) - 1;
-}
-
-void addAcc(OwnedFields * fields, int _id, int numFields, int fieldIndex){
-  FieldArray * array = find(fields, _id);
-  if(array != NULL){
-    if(!array->contents[fieldIndex]){
-        array->numAccessible += 1;
-        array->contents[fieldIndex] = true;
-    }
-  }else{
-    array = newFieldArray(fields, _id, numFields, false);
-    array->contents[fieldIndex] = true;
-    array->numAccessible += 1;
-  }
-}
-
-void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage){
-    FieldArray* toCheck = find(fields, _id);
-    if(toCheck == NULL || !toCheck->contents[fieldIndex]){
-        error(errorMessage);
-    }
-}
-
-void addAccEnsureSeparate(OwnedFields* fields, int _id, int fieldIndex, int numFields, string errorMessage){
-    FieldArray* toCheck = find(fields, _id);
-    if (toCheck == NULL) {
-        toCheck = newFieldArray(fields, _id, numFields, false);
-    } else if (toCheck->contents[fieldIndex]) {
-        error(errorMessage);
-    }
-    toCheck->contents[fieldIndex] = true;
-    toCheck->numAccessible += 1;
-}
-
-void loseAcc(OwnedFields* fields, int _id, int fieldIndex){
-    FieldArray * toLose = find(fields, _id);
-    if(toLose != NULL){
-        if(fieldIndex >= toLose->length){
-            error("[INTERNAL] Field index exceeds maximum for the given struct.\n");
-        }else if(toLose->contents[fieldIndex]){
-            toLose->contents[fieldIndex] = false;
-            toLose->numAccessible -= 1;
-        }
-        if(toLose->numAccessible == 0) {
-          toLose->deleted = true;
-          fields->length -= 1;
-        }
-    }
-}
-
-void join(OwnedFields* target, OwnedFields* source){
-    if(source != NULL && target != NULL){
-        for(int i = 0; i<source->capacity; i += 1){
-            FieldArray* currFields = source->contents[i];
-            if(currFields != NULL && currFields->numAccessible > 0 ){
-                for(int j = 0; j< currFields->length; j += 1){
-                    addAcc(target, currFields->_id, currFields->length, j);
-                }
-            }
-        }
-    }
-}
-
-void printof(OwnedFields* fields) {
-    if (fields != NULL) {
-        print("Capacity: ");
-        printint(fields->capacity);
-        print(" ");
-        print("Length: ");
-        printint(fields->length);
-        print(" ");
-        print("OwnedFields: [ ");
-        for (int i = 0; i < fields->capacity; i += 1) {
-            FieldArray* currFields = fields->contents[i];
-            if (currFields != NULL) {
-                print("(");
-                printint(currFields->_id);
-                print(",");
-                for (int j = 0; j < currFields->length; j +=1) {
-                    print(" ");
-                    printbool(currFields->contents[j]);
-                }
-                print(", i: ");
-                printint(i);
-                print(") ");
-            }
-        }
-        print("]\n");
-    } else {
-        println("OwnedFields is empty/NULL");
-    }
 }

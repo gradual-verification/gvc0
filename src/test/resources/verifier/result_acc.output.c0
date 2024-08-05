@@ -7,26 +7,27 @@ struct Test
   int _id;
 };
 
-struct Test* getTest(struct OwnedFields* _ownedFields);
-struct Test* getTestPrecise(struct OwnedFields* _ownedFields);
+struct Test* getTest(struct OwnedFields* _ownedFields, int* _instanceCounter);
+struct Test* getTestPrecise(int* _instanceCounter);
 int main();
 
-struct Test* getTest(struct OwnedFields* _ownedFields)
+struct Test* getTest(struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct Test* _ = NULL;
   _ = alloc(struct Test);
-  _->_id = addStructAcc(_ownedFields, 1);
+  _->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  runtime_addAll(_ownedFields, _->_id, 1);
   return _;
 }
 
-struct Test* getTestPrecise(struct OwnedFields* _ownedFields)
+struct Test* getTestPrecise(int* _instanceCounter)
 {
   struct Test* _ = NULL;
-  struct OwnedFields* _tempFields = NULL;
-  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  _ = getTest(_tempFields);
-  join(_ownedFields, _tempFields);
-  assertAcc(_ownedFields, _ != NULL ? _->_id : -1, 0, "Field access runtime check failed for struct Test.value");
+  struct OwnedFields* _ownedFields = NULL;
+  _ownedFields = runtime_init();
+  _ = getTest(_ownedFields, _instanceCounter);
+  runtime_assert(_ownedFields, _ == NULL ? -1 : _->_id, 0, "No permission to access '_->value'");
   assert(!(_ == NULL));
   return _;
 }

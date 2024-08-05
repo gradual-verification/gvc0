@@ -300,7 +300,9 @@ object Resolver {
               )
             )
           ),
-          specifications = f.specifications
+          // Specifications have already been resolved prior to resolving this
+          // statement
+          specifications = List.empty
         )
       }
 

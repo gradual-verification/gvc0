@@ -6,7 +6,7 @@ import gvc.analyzer._
 import gvc.benchmarking.BenchmarkExecutor.injectAndWrite
 import gvc.transformer._
 import gvc.benchmarking.{
-  BaselineChecker,
+  BaselineChecks,
   BenchmarkExecutor,
   BenchmarkExporter,
   BenchmarkExternalConfig,
@@ -92,7 +92,7 @@ object Main extends App {
           val inputSource = readFile(config.sourceFile.get)
           val onlyFraming = config.mode == Config.FramingVerification
           val ir = generateIR(inputSource, linkedLibraries)
-          BaselineChecker.check(ir, onlyFraming)
+          BaselineChecks.insert(ir, true, !onlyFraming)
           val outputC0Source = Paths.get(fileNames.c0FileName)
           val outputBinary = Paths.get(fileNames.binaryName)
           injectAndWrite(

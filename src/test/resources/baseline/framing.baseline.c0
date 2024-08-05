@@ -14,58 +14,53 @@ struct Outer
   int _id;
 };
 
-struct Outer* createOuter(struct OwnedFields* _ownedFields);
-int getValue(struct Outer* outer, struct OwnedFields* _ownedFields);
-int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields);
-int getValueStatic(struct Outer* outer, struct OwnedFields* _ownedFields);
+struct Outer* createOuter(struct OwnedFields* _ownedFields, int* _instanceCounter);
+int getValue(struct Outer* outer, struct OwnedFields* _ownedFields, int* _instanceCounter);
+int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields, int* _instanceCounter);
+int getValueStatic(struct Outer* outer, struct OwnedFields* _ownedFields, int* _instanceCounter);
 int main();
 
-struct Outer* createOuter(struct OwnedFields* _ownedFields)
+struct Outer* createOuter(struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct Inner* inner = NULL;
   struct Outer* outer = NULL;
   struct OwnedFields* _tempFields = NULL;
-  struct OwnedFields* _contextFields = NULL;
-  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
+  _tempFields = runtime_init();
   assert(true);
   inner = alloc(struct Inner);
-  inner->_id = addStructAcc(_contextFields, 1);
+  inner->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  runtime_addAll(_tempFields, inner->_id, 1);
   outer = alloc(struct Outer);
-  outer->_id = addStructAcc(_contextFields, 1);
-  assertAcc(_contextFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
+  outer->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  runtime_addAll(_tempFields, outer->_id, 1);
+  runtime_assert(_tempFields, outer == NULL ? -1 : outer->_id, 0, "No permission to access 'outer->inner'");
   outer->inner = inner;
-  assertAcc(_contextFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_contextFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
-  _tempFields = initOwnedFields(_contextFields->instanceCounter);
-  addAccEnsureSeparate(_tempFields, outer->inner != NULL ? outer->inner->_id : -1, 0, 1, "Overlapping field permissions for struct Inner.value");
-  join(_ownedFields, _contextFields);
+  runtime_assert(_tempFields, outer == NULL ? -1 : outer->_id, 0, "No permission to access 'outer->inner'");
+  runtime_assert(_tempFields, outer->inner == NULL ? -1 : outer->inner->_id, 0, "No permission to access 'outer->inner->value'");
+  runtime_join(_ownedFields, _tempFields);
   return outer;
 }
 
-int getValue(struct Outer* outer, struct OwnedFields* _ownedFields)
+int getValue(struct Outer* outer, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
-  struct OwnedFields* _tempFields = NULL;
-  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
-  _tempFields = initOwnedFields(_ownedFields->instanceCounter);
-  addAccEnsureSeparate(_tempFields, outer->inner != NULL ? outer->inner->_id : -1, 0, 1, "Overlapping field permissions for struct Inner.value");
-  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
+  runtime_assert(_ownedFields, outer == NULL ? -1 : outer->_id, 0, "No permission to access 'outer->inner'");
+  runtime_assert(_ownedFields, outer->inner == NULL ? -1 : outer->inner->_id, 0, "No permission to access 'outer->inner->value'");
+  runtime_assert(_ownedFields, outer->inner == NULL ? -1 : outer->inner->_id, 0, "No permission to access 'outer->inner->value'");
   return outer->inner->value;
 }
 
-int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields)
+int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   int result = 0;
-  struct OwnedFields* _tempFields = NULL;
   if (outer != NULL)
   {
-    assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
+    runtime_assert(_ownedFields, outer == NULL ? -1 : outer->_id, 0, "No permission to access 'outer->inner'");
   }
   if (outer != NULL && outer->inner != NULL)
   {
-    assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
-    assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
+    runtime_assert(_ownedFields, outer->inner == NULL ? -1 : outer->inner->_id, 0, "No permission to access 'outer->inner->value'");
     result = outer->inner->value;
   }
   else
@@ -75,26 +70,21 @@ int getValueSafe(struct Outer* outer, struct OwnedFields* _ownedFields)
   return result;
 }
 
-int getValueStatic(struct Outer* outer, struct OwnedFields* _ownedFields)
+int getValueStatic(struct Outer* outer, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct OwnedFields* _tempFields = NULL;
-  struct OwnedFields* _contextFields = NULL;
-  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
-  assertAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
-  addAcc(_contextFields, outer != NULL ? outer->_id : -1, 1, 0);
-  loseAcc(_ownedFields, outer != NULL ? outer->_id : -1, 0);
-  assertAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
-  addAcc(_contextFields, outer->inner != NULL ? outer->inner->_id : -1, 1, 0);
-  loseAcc(_ownedFields, outer->inner != NULL ? outer->inner->_id : -1, 0);
-  assertAcc(_contextFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_contextFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
-  assertAcc(_contextFields, outer != NULL ? outer->_id : -1, 0, "Field access runtime check failed for struct Outer.inner");
-  assertAcc(_contextFields, outer->inner != NULL ? outer->inner->_id : -1, 0, "Field access runtime check failed for struct Inner.value");
-  _tempFields = initOwnedFields(_contextFields->instanceCounter);
-  addAccEnsureSeparate(_tempFields, outer != NULL ? outer->_id : -1, 0, 1, "Overlapping field permissions for struct Outer.inner");
-  addAccEnsureSeparate(_tempFields, outer->inner != NULL ? outer->inner->_id : -1, 0, 1, "Overlapping field permissions for struct Inner.value");
-  addAcc(_ownedFields, outer->_id, 1, 0);
-  addAcc(_ownedFields, outer->inner->_id, 1, 0);
+  _tempFields = runtime_init();
+  runtime_assert(_ownedFields, outer == NULL ? -1 : outer->_id, 0, "No permission to access 'outer->inner'");
+  runtime_remove(_ownedFields, outer == NULL ? -1 : outer->_id, 0, "No permission to access 'outer->inner'");
+  runtime_add(_tempFields, outer == NULL ? -1 : outer->_id, 1, 0, "Invalid aliasing - 'outer->inner' overlaps with existing permission");
+  runtime_assert(_ownedFields, outer->inner == NULL ? -1 : outer->inner->_id, 0, "No permission to access 'outer->inner->value'");
+  runtime_remove(_ownedFields, outer->inner == NULL ? -1 : outer->inner->_id, 0, "No permission to access 'outer->inner->value'");
+  runtime_add(_tempFields, outer->inner == NULL ? -1 : outer->inner->_id, 1, 0, "Invalid aliasing - 'outer->inner->value' overlaps with existing permission");
+  runtime_assert(_tempFields, outer->inner == NULL ? -1 : outer->inner->_id, 0, "No permission to access 'outer->inner->value'");
+  runtime_assert(_tempFields, outer == NULL ? -1 : outer->_id, 0, "No permission to access 'outer->inner'");
+  runtime_add(_ownedFields, outer == NULL ? -1 : outer->_id, 1, 0, "Invalid aliasing - 'outer->inner' overlaps with existing permission");
+  runtime_assert(_tempFields, outer->inner == NULL ? -1 : outer->inner->_id, 0, "No permission to access 'outer->inner->value'");
+  runtime_add(_ownedFields, outer->inner == NULL ? -1 : outer->inner->_id, 1, 0, "Invalid aliasing - 'outer->inner->value' overlaps with existing permission");
   return outer->inner->value;
 }
 
@@ -103,13 +93,12 @@ int main()
   struct Outer* _ = NULL;
   int _1 = 0;
   struct OwnedFields* _ownedFields = NULL;
-  struct OwnedFields* _tempFields = NULL;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields(_instanceCounter);
+  _ownedFields = runtime_init();
   assert(true);
-  _ = createOuter(_ownedFields);
-  _1 = getValue(_, _ownedFields);
+  _ = createOuter(_ownedFields, _instanceCounter);
+  _1 = getValue(_, _ownedFields, _instanceCounter);
   assert(true);
   return _1;
 }

@@ -1,0 +1,66 @@
+#use <runtime>
+struct _ptr_int;
+
+struct _ptr_int
+{
+  int value;
+  int _id;
+};
+
+void add_nested(struct _ptr_int* value, struct OwnedFields* add_perms);
+void add_test(struct _ptr_int* value, struct OwnedFields* add_perms);
+void assert_nested(struct _ptr_int* value, struct OwnedFields* assert_perms);
+void assert_test(struct _ptr_int* value, struct OwnedFields* assert_perms);
+int main();
+
+void add_nested(struct _ptr_int* value, struct OwnedFields* add_perms)
+{
+}
+
+void add_test(struct _ptr_int* value, struct OwnedFields* add_perms)
+{
+}
+
+void assert_nested(struct _ptr_int* value, struct OwnedFields* assert_perms)
+{
+  assert(true);
+}
+
+void assert_test(struct _ptr_int* value, struct OwnedFields* assert_perms)
+{
+  assert_nested(value, assert_perms);
+}
+
+int main()
+{
+  struct _ptr_int* value = NULL;
+  int i = 0;
+  struct OwnedFields* _ownedFields = NULL;
+  bool _cond = false;
+  struct OwnedFields* _tempFields = NULL;
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  _ownedFields = runtime_init();
+  value = alloc(struct _ptr_int);
+  value->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  runtime_addAll(_ownedFields, value->_id, 1);
+  i = 0;
+  _tempFields = runtime_init();
+  if (_cond)
+  {
+    assert_test(value, _ownedFields);
+  }
+  _cond = i < 10;
+  while (i < 10)
+  {
+    if (_cond)
+    {
+      runtime_assert(_ownedFields, value == NULL ? -1 : value->_id, 0, "No permission to access 'value->value'");
+    }
+    value->value = value->value + 1;
+    i = i + 1;
+  }
+  assert(value->value == 10);
+  return 0;
+}

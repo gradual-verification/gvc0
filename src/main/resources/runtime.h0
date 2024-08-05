@@ -2,28 +2,23 @@ struct OwnedFields {
     struct FieldArray*[] contents;
     int capacity;
     int length;
-    int* instanceCounter;
+};
 
+struct FieldArray {
+  int psl;
+  int id;
+  int length;
+  int accessible;
+  bool[] contents;
 };
 
 typedef struct OwnedFields OwnedFields;
-
-struct FieldArray {
-  bool[] contents;
-  int length;
-  int _id;
-  int numAccessible;
-  bool deleted;
-};
-
 typedef struct FieldArray FieldArray;
 
-OwnedFields* initOwnedFields(int * instanceCounter);
-int addStructAcc(OwnedFields * fields, int numFields);
-void addAcc(OwnedFields * fields, int _id, int numFields, int fieldIndex);
-void loseAcc(OwnedFields * fields, int _id, int fieldIndex);
-void join(OwnedFields* target, OwnedFields* source);
-void assertAcc(OwnedFields* fields, int _id, int fieldIndex, string errorMessage);
-void addAccEnsureSeparate(OwnedFields* fields, int _id, int fieldIndex, int numFields, string errorMessage);
-FieldArray* find(OwnedFields* fields, int _id);
-void printof(OwnedFields* fields);
+OwnedFields* runtime_init();
+void runtime_addAll(OwnedFields* fields, int id, int numFields);
+void runtime_add(OwnedFields* fields, int id, int numFields, int fieldIndex, string errorMessage);
+void runtime_remove(OwnedFields* fields, int id, int fieldIndex, string errorMessage);
+void runtime_join(OwnedFields* target, OwnedFields* source);
+void runtime_assert(OwnedFields* fields, int id, int fieldIndex, string errorMessage);
+void runtime_print(OwnedFields* fields);

@@ -8,24 +8,13 @@ struct Node
   int _id;
 };
 
-void add_list(struct Node* node, struct OwnedFields* _ownedFields);
-void check_add_remove_list(struct Node* node, struct OwnedFields* _ownedFields, struct OwnedFields* _tempFields);
-struct Node* emptyList(struct OwnedFields* _ownedFields);
-void list(struct Node* node, struct OwnedFields* _ownedFields);
+void assert_add_list(struct Node* node, struct OwnedFields* assert_perms, struct OwnedFields* add_perms);
+void assert_remove_add_list(struct Node* node, struct OwnedFields* assert_perms, struct OwnedFields* remove_perms, struct OwnedFields* add_perms);
+struct Node* emptyList(struct OwnedFields* _ownedFields, int* _instanceCounter);
 int main();
-struct Node* prependList(int value, struct Node* node, struct OwnedFields* _ownedFields);
-void sep_list(struct Node* node, struct OwnedFields* _ownedFields);
+struct Node* prependList(int value, struct Node* node, struct OwnedFields* _ownedFields, int* _instanceCounter);
 
-void add_list(struct Node* node, struct OwnedFields* _ownedFields)
-{
-  if (!(node == NULL))
-  {
-    addAcc(_ownedFields, node->_id, 2, 0);
-    add_list(node->next, _ownedFields);
-  }
-}
-
-void check_add_remove_list(struct Node* node, struct OwnedFields* _ownedFields, struct OwnedFields* _tempFields)
+void assert_add_list(struct Node* node, struct OwnedFields* assert_perms, struct OwnedFields* add_perms)
 {
   if (node == NULL)
   {
@@ -33,78 +22,63 @@ void check_add_remove_list(struct Node* node, struct OwnedFields* _ownedFields, 
   }
   else
   {
-    assertAcc(_tempFields, node != NULL ? node->_id : -1, 0, "Field access runtime check failed for struct Node.value");
-    addAcc(_ownedFields, node != NULL ? node->_id : -1, 2, 0);
-    loseAcc(_tempFields, node != NULL ? node->_id : -1, 0);
-    check_add_remove_list(node->next, _ownedFields, _tempFields);
+    runtime_assert(assert_perms, node == NULL ? -1 : node->_id, 0, "No permission to access 'node->value'");
+    runtime_add(add_perms, node == NULL ? -1 : node->_id, 2, 0, "Invalid aliasing - 'node->value' overlaps with existing permission");
+    assert_add_list(node->next, assert_perms, add_perms);
   }
 }
 
-struct Node* emptyList(struct OwnedFields* _ownedFields)
+void assert_remove_add_list(struct Node* node, struct OwnedFields* assert_perms, struct OwnedFields* remove_perms, struct OwnedFields* add_perms)
+{
+  if (node == NULL)
+  {
+    assert(true);
+  }
+  else
+  {
+    runtime_assert(assert_perms, node == NULL ? -1 : node->_id, 0, "No permission to access 'node->value'");
+    runtime_remove(remove_perms, node == NULL ? -1 : node->_id, 0, "No permission to access 'node->value'");
+    runtime_add(add_perms, node == NULL ? -1 : node->_id, 2, 0, "Invalid aliasing - 'node->value' overlaps with existing permission");
+    assert_remove_add_list(node->next, assert_perms, remove_perms, add_perms);
+  }
+}
+
+struct Node* emptyList(struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct Node* nullList = NULL;
   struct OwnedFields* _tempFields = NULL;
-  struct OwnedFields* _contextFields = NULL;
-  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
+  _tempFields = runtime_init();
   assert(true);
   nullList = NULL;
-  list(nullList, _contextFields);
-  _tempFields = initOwnedFields(_contextFields->instanceCounter);
-  sep_list(nullList, _tempFields);
-  add_list(nullList, _ownedFields);
+  assert_add_list(nullList, _tempFields, _ownedFields);
   return nullList;
-}
-
-void list(struct Node* node, struct OwnedFields* _ownedFields)
-{
-  if (node == NULL)
-  {
-    assert(true);
-  }
-  else
-  {
-    assertAcc(_ownedFields, node != NULL ? node->_id : -1, 0, "Field access runtime check failed for struct Node.value");
-    list(node->next, _ownedFields);
-  }
 }
 
 int main()
 {
   struct OwnedFields* _ownedFields = NULL;
-  struct OwnedFields* _tempFields = NULL;
   int* _instanceCounter = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields(_instanceCounter);
+  _ownedFields = runtime_init();
   assert(true);
   assert(true);
   return 0;
 }
 
-struct Node* prependList(int value, struct Node* node, struct OwnedFields* _ownedFields)
+struct Node* prependList(int value, struct Node* node, struct OwnedFields* _ownedFields, int* _instanceCounter)
 {
   struct Node* newNode = NULL;
   struct OwnedFields* _tempFields = NULL;
-  struct OwnedFields* _contextFields = NULL;
-  _contextFields = initOwnedFields(_ownedFields->instanceCounter);
-  check_add_remove_list(node, _contextFields, _ownedFields);
+  _tempFields = runtime_init();
+  assert_remove_add_list(node, _ownedFields, _ownedFields, _tempFields);
   newNode = alloc(struct Node);
-  newNode->_id = addStructAcc(_contextFields, 2);
-  assertAcc(_contextFields, newNode != NULL ? newNode->_id : -1, 1, "Field access runtime check failed for struct Node.next");
+  newNode->_id = *_instanceCounter;
+  *_instanceCounter = *_instanceCounter + 1;
+  runtime_addAll(_tempFields, newNode->_id, 2);
+  runtime_assert(_tempFields, newNode == NULL ? -1 : newNode->_id, 1, "No permission to access 'newNode->next'");
   newNode->next = node;
-  assertAcc(_contextFields, newNode != NULL ? newNode->_id : -1, 0, "Field access runtime check failed for struct Node.value");
+  runtime_assert(_tempFields, newNode == NULL ? -1 : newNode->_id, 0, "No permission to access 'newNode->value'");
   newNode->value = value;
-  list(newNode, _contextFields);
-  _tempFields = initOwnedFields(_contextFields->instanceCounter);
-  sep_list(newNode, _tempFields);
-  add_list(newNode, _ownedFields);
+  assert_add_list(newNode, _tempFields, _ownedFields);
   return newNode;
-}
-
-void sep_list(struct Node* node, struct OwnedFields* _ownedFields)
-{
-  if (!(node == NULL))
-  {
-    addAccEnsureSeparate(_ownedFields, node != NULL ? node->_id : -1, 0, 2, "Overlapping field permissions for struct Node.value");
-    sep_list(node->next, _ownedFields);
-  }
 }

@@ -1,7 +1,7 @@
 #use <runtime>
 int doSomething(int x, int* _instanceCounter);
 int main();
-int random(struct OwnedFields* _ownedFields);
+int random(int* _instanceCounter);
 
 int doSomething(int x, int* _instanceCounter)
 {
@@ -13,26 +13,25 @@ int main()
   int x = 0;
   int _ = 0;
   int _1 = 0;
-  bool _cond_1 = false;
+  bool _cond = false;
   int* _instanceCounter = NULL;
-  struct OwnedFields* _ownedFields = NULL;
-  struct OwnedFields* _tempFields = NULL;
   _instanceCounter = alloc(int);
-  _ownedFields = initOwnedFields(_instanceCounter);
   _ = doSomething(0, _instanceCounter);
-  _tempFields = initOwnedFields(_instanceCounter);
-  _cond_1 = _ == 0;
-  x = random(_tempFields);
-  join(_ownedFields, _tempFields);
+  _cond = _ == 0;
+  x = random(_instanceCounter);
   _1 = doSomething(x, _instanceCounter);
-  if (!_cond_1 && !(_1 == 0) || _cond_1 && !(_1 == 0))
+  if (!_cond && !(_1 == 0))
+  {
+    assert(x == 0);
+  }
+  if (_cond && !(_1 == 0))
   {
     assert(x == 0);
   }
   return 0;
 }
 
-int random(struct OwnedFields* _ownedFields)
+int random(int* _instanceCounter)
 {
   return 0;
 }
