@@ -86,17 +86,23 @@ object PointerElimination {
     }
 
     for (method <- program.methods) {
-      for (p <- method.parameters)
+      for (p <- method.parameters) {
         p.varType = c.convert(p.varType)
-      for (v <- method.variables)
+        p.updateChildren()
+      }
+      for (v <- method.variables) {
         v.varType = c.convert(v.varType)
+        v.updateChildren()
+      }
 
       method.returnType = method.returnType.map(c.convert(_))
     }
 
     for (pred <- program.predicates) {
-      for (p <- pred.parameters)
+      for (p <- pred.parameters) {
         p.varType = c.convert(p.varType)
+        p.updateChildren()
+      }
     }
   }
 

@@ -199,6 +199,7 @@ object IRTransformer {
         input.name,
         transformReturnType(input.declaration.returnType)
       )
+      method.resolved = input
       for (param <- input.declaration.arguments) {
         method.addParameter(transformType(param.valueType), param.name)
       }
@@ -211,7 +212,11 @@ object IRTransformer {
         input.variable match {
           case None =>
             throw new TransformerException("Invalid variable reference")
-          case Some(v) => variable(v.name)
+          case Some(v) => {
+            val irVar = variable(v.name)
+            irVar.resolved = input
+            irVar
+          }
         }
       }
 
@@ -229,7 +234,7 @@ object IRTransformer {
         vars.getOrElse(
           name,
           throw new TransformerException(s"Variable '$name' not found")
-        )
+        ).copy
       }
     }
 
@@ -464,7 +469,7 @@ object IRTransformer {
             throw new TransformerException(
               s"Predicate parameter '$name' not found"
             )
-          )
+          ).copy
 
       // Cannot add operations, so conditional scope is a no-op
       def conditional(cond: IR.Expression) = this
@@ -642,6 +647,7 @@ object IRTransformer {
         case scope: MethodScope => {
           val valueType = transformType(input.valueType)
           val temp = scope.method.addVar(valueType)
+          temp.resolved = input // required to propagate position information
           scope += transformAlloc(input, temp)
           temp
         }
@@ -658,6 +664,7 @@ object IRTransformer {
           )
           val args = input.arguments.map(arg => transformExpr(arg, scope))
           val temp = scope.method.addVar(retType)
+          temp.resolved = input // required to propagate position information
           scope += new IR.Invoke(callee, args, Some(temp), input)
           temp
         case _ =>

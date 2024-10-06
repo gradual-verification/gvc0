@@ -36,7 +36,7 @@ object Timing {
     val verifierTimings = ListBuffer[Long]()
     val weaverTimings = ListBuffer[Long]()
     for (_ <- 0 until iterations) {
-      val silicon = resolveSilicon(config)
+      val silicon = resolveSilicon()
       state.trackInstance(silicon)
       val out = verifySiliconProvided(silicon,
                                       inputSource,
