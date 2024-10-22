@@ -19,8 +19,9 @@ static_performance2 <- read_csv(
 
 static_perf2_lattice <- static_performance2 %>%
   group_by(program_name) %>%
-  mutate(program_specified = round(level_id / max(level_id), 3) * 100) %>%
-  select(program_name, program_specified, mean)
+  mutate(percent_specified = round(level_id / max(level_id), 3) * 100) %>%
+  mutate(mean = mean / 1E9) %>%
+  select(program_name, percent_specified, mean)
 
 static_perf2_lattice %>% 
   write.csv(

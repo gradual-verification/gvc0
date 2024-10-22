@@ -1,0 +1,12 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "description": "Google's stock price over time.",
+  "data": {"url": "https://raw.githubusercontent.com/gradual-verification/gvc0/refs/heads/static_perf/data/compiled/10-15-24/compiled_static_performance2.csv"},
+  "transform": [{"filter": "datum.program_name==='avlja'"}],
+  "mark": "line",
+  "encoding": {
+    "x": {"field": "percent_specified", "type": "quantitative", "title": "percent specified"},
+    "y": {"aggregate": "mean", "field": "mean", "type": "quantitative", "title": "time"}
+  }
+}
+
