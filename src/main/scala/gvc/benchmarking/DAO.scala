@@ -1033,6 +1033,45 @@ object DAO {
       }
     }
 
+    def generateStaticPerformanceData2(id: AssertedPartialIdentity,
+                                      paths: List[Long],
+                                      c: DBConnection): String = {
+      
+      case class StaticEntry(permutation_id: Long,
+                            measurement_id: Long,
+                            program_id: Long,
+                            filename: String,
+                            levelID: Long,
+                            iter: Long, 
+                            mean: Double)
+
+      (for {
+        //_ <- Exporter.generatePathIDTemporaryTable(paths)
+        l <- sql"""
+              SELECT s.permutation_id,measurement_id,
+                program_id,src_filename,level_id,iter,mean FROM static_performance s
+                INNER JOIN measurements m ON 
+                  s.measurement_id = m.id
+                INNER JOIN permutations p ON 
+                  s.permutation_id = p.id
+                INNER JOIN programs pr ON 
+                  pr.id = p.program_id
+                INNER JOIN steps st ON
+                  st.permutation_id = p.id;
+               """.query[StaticEntry].to[List]
+        
+      } yield l).transact(c.xa).attempt.unsafeRunSync() match {
+        case Left(t) =>
+          prettyPrintException("Unable to resolve static performance list 2", t)
+        case Right(value) =>
+          value
+            .map(v => {
+              List(v.permutation_id, v.measurement_id, v.program_id, v.filename, v.levelID, v.iter, v.mean).mkString(",")
+            })
+            .mkString("\n")
+      }
+    }
+
     def generatePathIDTemporaryTable(
         paths: List[Long]): Free[connection.ConnectionOp, Int] = {
       for {

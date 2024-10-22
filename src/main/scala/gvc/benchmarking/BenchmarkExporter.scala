@@ -22,6 +22,7 @@ object BenchmarkExporter {
     val DefaultErrorOutputDir: String = "export-error" + this.DateFormat
     val DynamicPerformanceCSV: String = csv("dynamic_perf")
     val StaticPerformanceCSV: String = csv("static_perf")
+    val StaticPerformance2CSV: String = csv("static_perf2")
     val PathIndexCSV: String = csv("path_index")
     val MeasurementIndexCSV: String = csv("measurement_type_index")
     val ProgramIndexCSV: String = csv("program_index")
@@ -33,6 +34,8 @@ object BenchmarkExporter {
       "measurement_type_id,measurement_type"
     val StaticPerformanceCSVColumnNames =
       "permutation_id,conj_elim,conj_total"
+    val StaticPerformance2CSVColumnNames =
+      "permutation_id,measurement_id,program_id,program_name,level_id,iter,mean"
     val PathIndexCSVColumnNames =
       "program_id,permutation_id,path_id,level_id,context_name,spec_type,expr_type"
     val ProgramIndexCSVColumnNames =
@@ -77,6 +80,14 @@ object BenchmarkExporter {
 
     val pathIDsToPull =
       DAO.Exporter.getPathIDList(id.versionID, id.hardwareID, stressTable, conn)
+    
+    pathIDsToPull.map(p => {
+      DAO.resolveProgramName(p._1, conn) match {
+        case Some(name) =>
+          Output.info(name)
+        case None => ()
+      }
+    })
 
     val requestedSubsetOfPathIDs = if (pathIDsToPull.isEmpty) {
       error(s"There are no completed paths matching the requested criteria.")
@@ -128,6 +139,14 @@ object BenchmarkExporter {
         conn
       )
 
+    Output.info("Collecting static performance data 2...")
+    val staticData2 = 
+      DAO.Exporter.generateStaticPerformanceData2(
+        id,
+        requestedSubsetOfPathIDs,
+        conn
+      )
+
     val outDir = Paths.get(
       config.outputDir.getOrElse(
         Names.DefaultMassOutputDir + List(config.hardware, config.version)
@@ -168,6 +187,12 @@ object BenchmarkExporter {
     Files.writeString(
       staticPerformancePath,
       List(Names.StaticPerformanceCSVColumnNames, staticData).mkString("\n")
+    )
+
+    val staticPerformance2Path = outDir.resolve(Names.StaticPerformance2CSV)
+    Files.writeString(
+      staticPerformance2Path,
+      List(Names.StaticPerformance2CSVColumnNames, staticData2).mkString("\n")
     )
   }
 
