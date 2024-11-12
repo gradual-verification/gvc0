@@ -1057,7 +1057,8 @@ object DAO {
                 INNER JOIN programs pr ON 
                   pr.id = p.program_id
                 INNER JOIN steps st ON
-                  st.permutation_id = p.id;
+                  st.permutation_id = p.id
+                WHERE version_id>=110 AND version_id<=117;
                """.query[StaticEntry].to[List]
         
       } yield l).transact(c.xa).attempt.unsafeRunSync() match {
