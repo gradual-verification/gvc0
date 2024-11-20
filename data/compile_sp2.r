@@ -17,15 +17,18 @@ static_performance2 <- read_csv(
     show_col_types = FALSE
 )
 
-static_perf2_lattice <- static_performance2 %>%
+sp2 <- static_performance2 %>%
   group_by(program_name) %>%
   mutate(percent_specified = round(level_id / max(level_id), 3) * 100) %>%
-  mutate(mean = mean / 1E9) %>%
+  mutate(mean = mean / 1E9)
+
+static_perf2_lattice <- sp2 %>%
   select(permutation_id, program_name, percent_specified, mean)
 
-path_level_characteristics <- static_perf2_lattice %>%
+
+path_level_characteristics <- sp2 %>%
   mutate(diff = mean - lag(mean)) %>%
-  select(permutation_id, program_name, percent_specified, mean, diff)
+  select(permutation_id, program_name, percent_specified, mean, diff, spec_type, expr_type)
 
 increases <- path_level_characteristics %>% filter(diff > 0)
 decreases <- path_level_characteristics %>% filter(diff < 0)
