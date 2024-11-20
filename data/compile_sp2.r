@@ -27,7 +27,10 @@ static_perf2_lattice <- sp2 %>%
 
 
 path_level_characteristics <- sp2 %>%
+  arrange(level_id) %>%
+  group_by(permutation_id) %>%
   mutate(diff = mean - lag(mean)) %>%
+  filter(level_id > 0) %>%
   select(permutation_id, program_name, percent_specified, mean, diff, spec_type, expr_type)
 
 increases <- path_level_characteristics %>% filter(diff > 0)
