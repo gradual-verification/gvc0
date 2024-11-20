@@ -35,7 +35,7 @@ object BenchmarkExporter {
     val StaticPerformanceCSVColumnNames =
       "permutation_id,conj_elim,conj_total"
     val StaticPerformance2CSVColumnNames =
-      "permutation_id,measurement_id,program_id,program_name,level_id,iter,mean"
+      "permutation_id,measurement_id,program_id,program_name,level_id,iter,mean,spec_type,expr_type"
     val PathIndexCSVColumnNames =
       "program_id,permutation_id,path_id,level_id,context_name,spec_type,expr_type"
     val ProgramIndexCSVColumnNames =

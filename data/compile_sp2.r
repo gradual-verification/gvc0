@@ -23,51 +23,23 @@ static_perf2_lattice <- static_performance2 %>%
   mutate(mean = mean / 1E9) %>%
   select(permutation_id, program_name, percent_specified, mean)
 
-list_752 <- static_perf2_lattice %>%
-  filter(program_name == "list", percent_specified == 75.2) %>%
-  select(mean)
+path_level_characteristics <- static_perf2_lattice %>%
+  mutate(diff = mean - lag(mean)) %>%
+  select(permutation_id, program_name, percent_specified, mean, diff)
 
-list_761 <- static_perf2_lattice %>%
-  filter(program_name == "list", percent_specified == 76.1) %>%
-  select(mean)
+increases <- path_level_characteristics %>% filter(diff > 0)
+decreases <- path_level_characteristics %>% filter(diff < 0)
 
-list_826 <- static_perf2_lattice %>%
-  filter(program_name == "list", percent_specified == 82.6) %>%
-  select(mean)
+quantile_max <- unname(quantile(increases$diff, c(.99)))[[1]]
+quantile_min <- -unname(quantile(abs(decreases$diff), c(.99)))[[1]]
 
-list_835 <- static_perf2_lattice %>%
-  filter(program_name == "list", percent_specified == 83.5) %>%
-  select(mean)
+quantile_min_jumps <- decreases %>% filter(diff <= quantile_min)
+quantile_min_jumps['classification'] <- "min"
 
-list_862 <- static_perf2_lattice %>%
-  filter(program_name == "list", percent_specified == 86.2) %>%
-  select(mean)
+quantile_max_jumps <- increases %>% filter(diff >= quantile_max)
+quantile_max_jumps['classification'] <- "max"
 
-list_872 <- static_perf2_lattice %>%
-  filter(program_name == "list", percent_specified == 87.2) %>%
-  select(mean)
-
-print("75.2 -> 76.1")
-print(summary(list_752))
-print(summary(list_761))
-print("98 percentile")
-print(quantile(list_761$mean, c(.98)))
-print("99 percentile")
-print(quantile(list_761$mean, c(.99)))
-print("82.6 -> 83.5")
-print(summary(list_826))
-print(summary(list_835))
-print("98 percentile")
-print(quantile(list_835$mean, c(.98)))
-print("99 percentile")
-print(quantile(list_835$mean, c(.99)))
-print("86.2 -> 87.2")
-print(summary(list_862))
-print(summary(list_872))
-print("98 percentile")
-print(quantile(list_872$mean, c(.98)))
-print("99 percentile")
-print(quantile(list_872$mean, c(.99)))
+jumps_global <<- bind_rows(quantile_min_jumps, quantile_max_jumps)
 
 static_perf2_lattice %>% 
   write.csv(
@@ -77,4 +49,9 @@ static_perf2_lattice %>%
     )),
     row.names = FALSE
 )
-                                  
+
+jumps_global %>%
+    write.csv(
+        file.path(output_dir, "static2_jumps.csv"),
+        row.names = FALSE
+    )

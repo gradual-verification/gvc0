@@ -1043,13 +1043,15 @@ object DAO {
                             filename: String,
                             levelID: Long,
                             iter: Long, 
-                            mean: Double)
+                            mean: Double,
+                            spec_type: String,
+                            expr_type: String)
 
       (for {
         //_ <- Exporter.generatePathIDTemporaryTable(paths)
         l <- sql"""
               SELECT s.permutation_id,measurement_id,
-                program_id,src_filename,level_id,iter,mean FROM static_performance s
+                p.program_id,src_filename,st.level_id,iter,mean,spec_type,expr_type FROM static_performance s
                 INNER JOIN measurements m ON 
                   s.measurement_id = m.id
                 INNER JOIN permutations p ON 
@@ -1058,6 +1060,8 @@ object DAO {
                   pr.id = p.program_id
                 INNER JOIN steps st ON
                   st.permutation_id = p.id
+                INNER JOIN path_step_index psi ON
+                  psi.permutation_id = p.id
                 WHERE version_id>=110 AND version_id<=117;
                """.query[StaticEntry].to[List]
         
@@ -1067,7 +1071,15 @@ object DAO {
         case Right(value) =>
           value
             .map(v => {
-              List(v.permutation_id, v.measurement_id, v.program_id, v.filename, v.levelID, v.iter, v.mean).mkString(",")
+              List(v.permutation_id, 
+                v.measurement_id, 
+                v.program_id, 
+                v.filename, 
+                v.levelID, 
+                v.iter, 
+                v.mean,
+                v.spec_type,
+                v.expr_type).mkString(",")
             })
             .mkString("\n")
       }
