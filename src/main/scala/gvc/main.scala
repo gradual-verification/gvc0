@@ -347,6 +347,7 @@ object Main extends App {
 
   def verifyFromPlugin(inputSource: String): Unit = {
     SymbExLogger.reset()
+    SymbExLogger.resetMaps()
     val silicon = resolveSilicon(true)
     val lib = System.getenv("GVC0_PATH") + "/src/main/resources"
     val ir = generateIR(inputSource, List(lib))
@@ -382,6 +383,7 @@ object Main extends App {
       fileNames: OutputFileCollection,
       config: Config
   ): VerifiedOutput = {
+    SymbExLogger.resetMaps()
     def silicon = resolveSilicon()
     val output = verifySiliconProvided(silicon, inputSource, fileNames, config)
     output
