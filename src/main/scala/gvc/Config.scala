@@ -162,9 +162,11 @@ object Config {
   private val recreatePermString = raw"--recreate=(.+)".r
   private val profilingDirectory = raw"--profiling-dir=(.+)".r
 
+  class GVC0Exception(message: String) extends Exception(message)
+
   def error(message: String): Nothing = {
     Output.error(message)
-    sys.exit(1)
+    throw new GVC0Exception(message)
   }
 
   def prettyPrintException(message: String, throwable: Throwable): Nothing = {
