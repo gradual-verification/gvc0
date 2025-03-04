@@ -9,7 +9,8 @@ trait Specifications extends Expressions {
       loopInvariantSpecification |
       assertSpecification |
       foldSpecification |
-      unfoldSpecification
+      unfoldSpecification |
+      unfoldingSpecification
     ).opaque("<specification>")
 
   // Explicitly add space tokens here because whitespace handling is may be different
@@ -44,6 +45,11 @@ trait Specifications extends Expressions {
   def unfoldSpecification[_: P]: P[UnfoldSpecification] =
     P(span(kw("unfold") ~/ identifier ~ "(" ~ expression.rep(sep=",") ~ ")" ~ ";"))
       .map { case ((ident, args), span) => UnfoldSpecification(ident, args.toList, span) }
+  
+  def unfoldingSpecification[_: P]: P[UnfoldingSpecification] = 
+    P(span(kw("unfolding") ~/ identifier ~ "(" ~ expression.rep(sep = ",") ~ ")" ~/ "in" ~/ expression)).map({
+      case ((ident, args, expr), span) => UnfoldingSpecification(ident, args, expr, span)
+    })
   
   def annotations[_: P]: P[List[Specification]] =
     P(annotation.rep).map(a => a.flatten.toList)
