@@ -26,6 +26,14 @@ case class ResolvedPredicate(
   def valueType: ResolvedType = BoolType
 }
 
+case class ResolvedUnfolding(
+  parsed: Node,
+  predicate: ResolvedPredicate,
+  expr: ResolvedExpression
+) extends ResolvedExpression {
+  def valueType: ResolvedType = expr.valueType
+}
+
 case class ResolvedInvoke(
   parsed: Node,
   method: Option[ResolvedMethodDeclaration],
