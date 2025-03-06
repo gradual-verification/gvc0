@@ -113,7 +113,7 @@ object SpecificationValidator {
         predicate.arguments.foreach(validateValue(_, errors))
       }
 
-      case unfolding: UnfoldingSpecification => {
+      case unfolding: ResolvedUnfolding => {
         validateSpecification(unfolding.predicate, errors)
         validateValue(unfolding.expr, errors)
       }

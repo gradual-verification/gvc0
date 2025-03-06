@@ -93,7 +93,7 @@ object Replacer {
     case member: IR.Member          => replace(member, m)
     case acc: IR.Accessibility      => new IR.Accessibility(replace(acc.member, m))
     case pred: IR.PredicateInstance => replace(pred, m)
-    case unfolding: IR.Unfolding => new IR.Unfolding(replace(unfolding.instance), replace(unfolding.expr))
+    case unfolding: IR.Unfolding => new IR.Unfolding(replace(unfolding.instance, m), replace(unfolding.expr, m))
     case result: IR.Result          => result
     case imprecise: IR.Imprecise =>
       new IR.Imprecise(imprecise.precise.map(replace(_, m)))

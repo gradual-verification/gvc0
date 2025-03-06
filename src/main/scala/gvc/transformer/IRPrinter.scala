@@ -43,9 +43,9 @@ object IRPrinter {
 
     case unfolding: IR.Unfolding => {
       p.print("unfolding ")
-      printExpr(unfolding.instance)
+      printExpr(p, unfolding.instance)
       p.print(" in")
-      printExpr(unfolding.expr)
+      printExpr(p, unfolding.expr)
     }
 
     case arr: IR.ArrayMember => {

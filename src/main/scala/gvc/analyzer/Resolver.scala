@@ -546,7 +546,7 @@ object Resolver {
           unfolding,
            "unfolding expressions cannot appear outside of specifications",
         )
-                val predicate = resolvePredicate(
+          val predicate = resolvePredicate(
           unfolding,
           unfolding.predicate,
           unfolding.arguments,

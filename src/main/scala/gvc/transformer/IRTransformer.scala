@@ -490,7 +490,7 @@ object IRTransformer {
       case pred: ResolvedPredicate  => transformPredicate(pred, scope)
       case invoke: ResolvedInvoke   => invokeToValue(invoke, scope)
       case alloc: ResolvedAlloc     => allocToValue(alloc, scope)
-      case unfolding: ResolvedUnfolding => new IR.Unfolding(transformPredicate(unfolding.predicate, scope), transformExpr(unfolding.expr))
+      case unfolding: ResolvedUnfolding => new IR.Unfolding(transformPredicate(unfolding.predicate, scope), transformExpr(unfolding.expr, scope))
 
       case m: ResolvedMember => {
         val (parent, field) = transformField(m)

@@ -48,7 +48,7 @@ trait Specifications extends Expressions {
   
   def unfoldingSpecification[_: P]: P[UnfoldingSpecification] = 
     P(span(kw("unfolding") ~/ identifier ~ "(" ~ expression.rep(sep = ",") ~ ")" ~/ "in" ~/ expression)).map({
-      case ((ident, args, expr), span) => UnfoldingSpecification(ident, args, expr, span)
+      case ((ident, args, expr), span) => UnfoldingSpecification(ident, args.toList, expr, span)
     })
   
   def annotations[_: P]: P[List[Specification]] =
