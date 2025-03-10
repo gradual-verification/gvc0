@@ -121,7 +121,8 @@ trait Expressions extends Types {
     allocExpression |
     allocArrayExpression |
     invokeExpression |
-    variableExpression
+    variableExpression |
+    unfoldingExpression
   )
 
   def parenExpression[_: P]: P[Expression] = P("(" ~ expression ~ ")")
@@ -163,6 +164,11 @@ trait Expressions extends Types {
   def accessibilityExpression[_: P]: P[AccessibilityExpression] = P(span(kw("acc") ~ "(" ~ expression ~ ")"))
     .map { case (expr, span) => AccessibilityExpression(expr, span) }
 
+  def unfoldingExpression[_: P]: P[UnfoldingExpression] = 
+    P(span(kw("unfolding") ~/ identifier ~ "(" ~ expression.rep(sep = ",") ~ ")" ~/ kw("in") ~/ expression)).map({
+      case ((ident, args, expr), span) => UnfoldingExpression(ident, args.toList, expr, span)
+    })
+    
   def parseString(raw: String): String = {
     // TODO: Replace this with a better solution that doesn't search the string
     // multiple times

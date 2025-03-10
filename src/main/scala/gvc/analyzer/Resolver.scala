@@ -529,7 +529,7 @@ object Resolver {
           resolveExpression(ternary.ifFalse, scope, context)
         )
       
-      case unfolding: UnfoldingSpecification if context != MethodContext => {
+      case unfolding: UnfoldingExpression if context != MethodContext => {
         val predicate = resolvePredicate(
           unfolding,
           unfolding.predicate,
@@ -541,7 +541,7 @@ object Resolver {
         ResolvedUnfolding(unfolding, predicate, expr)
       }
 
-      case unfolding: UnfoldingSpecification =>
+      case unfolding: UnfoldingExpression =>
         scope.errors.error(
           unfolding,
            "unfolding expressions cannot appear outside of specifications",
