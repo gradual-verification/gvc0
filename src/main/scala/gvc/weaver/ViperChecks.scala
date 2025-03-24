@@ -20,6 +20,7 @@ object ViperLocation {
   case object PostLoop extends ViperLocation
   case object Fold extends ViperLocation
   case object Unfold extends ViperLocation
+  case object Unfolding extends ViperLocation
   case object InvariantLoopStart extends ViperLocation
   case object InvariantLoopEnd extends ViperLocation
 
@@ -35,7 +36,7 @@ object ViperLocation {
       case at: AtOp =>
         vprLocation match {
           case ViperLocation.PreInvoke | ViperLocation.PreLoop |
-              ViperLocation.Fold | ViperLocation.Unfold |
+              ViperLocation.Fold | ViperLocation.Unfold | ViperLocation.Unfolding |
               ViperLocation.Value =>
             Pre(at.op)
           case ViperLocation.PostInvoke | ViperLocation.PostLoop =>
@@ -43,9 +44,9 @@ object ViperLocation {
           case ViperLocation.InvariantLoopStart => LoopStart(at.op)
           case ViperLocation.InvariantLoopEnd   => LoopEnd(at.op)
         }
-      case _ => {
-        if (vprLocation != ViperLocation.Value)
-          throw new WeaverException("Invalid location")
+      case p => {
+        if (vprLocation != ViperLocation.Value && vprLocation != ViperLocation.Unfolding)
+          throw new WeaverException(s"Invalid location '$vprLocation' '$p'")
         irLocation
       }
     }
@@ -86,6 +87,14 @@ object ViperBranch {
         Some(CheckPosition.GenericNode(unfold: vpr.Unfold))
         ) =>
       new ViperBranch(unfold, ViperLocation.Fold, condition)
+    
+    case BranchCond(
+        condition,
+        position,
+        Some(CheckPosition.GenericNode(unfolding: vpr.Unfolding))
+        ) =>
+      new ViperBranch(unfolding, ViperLocation.Unfolding, condition)
+      
     case BranchCond(
         condition,
         position,

@@ -112,7 +112,7 @@ object Collector {
                   case _ => (Pre(at.op), false)
                 }
               case ViperLocation.PreLoop | ViperLocation.PreInvoke |
-                  ViperLocation.Fold | ViperLocation.Unfold =>
+                  ViperLocation.Fold | ViperLocation.Unfold | ViperLocation.Unfolding =>
                 (Pre(at.op), true)
               case ViperLocation.PostLoop | ViperLocation.PostInvoke =>
                 (Post(at.op), true)

@@ -25,6 +25,8 @@ abstract class SpecificationContext {
     throw new WeaverException("Cannot translate " + p.predicate.name + "(...) to new context")
   def convert(a: IR.ArrayMember): IR.ArrayMember =
     throw new WeaverException("Cannot translate array access to new context")
+  def convert(u: IR.Unfolding): IR.Expression = 
+    convert(u.expr)
 
   def convert(expr: IR.Expression): IR.Expression = {
     expr match {
@@ -40,6 +42,7 @@ abstract class SpecificationContext {
       case i: IR.Imprecise => convert(i)
       case p: PredicateInstance => convert(p)
       case a: IR.ArrayMember => convert(a)
+      case u: IR.Unfolding => convert(u)
     }
   }
 }
