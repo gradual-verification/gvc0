@@ -1,0 +1,26 @@
+field one: Int
+field two: Int
+field val: Int
+
+predicate pair(this: Ref) {
+  acc(this.one) && acc(this.two)
+}
+
+method first_is_greater(this: Ref, num: Ref) returns (answer: Bool)
+  requires ? && acc(num.val) 
+  ensures pair(this) 
+{
+    unfold pair(this) // check pair(this)
+    assert(this.one >= this.two) // check this.one >= this.two
+    fold pair(this) 
+  
+}
+
+// WORKING
+
+/*
+[info] Total Conjuncts: 16
+[info] Eliminated Conjuncts: 15
+[info] Final runtime checks: TrieMap(GenericNode(this.one >= this.two) -> List(CheckInfo(this.one >= this.two,List(),this.one >= this.two,false)), 
+GenericNode(unfold acc(pair(this), write)) -> List(CheckInfo(acc(pair(this), write),List(),pair(this),false)))
+*/

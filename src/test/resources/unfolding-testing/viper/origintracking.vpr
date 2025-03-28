@@ -1,0 +1,34 @@
+field first: Int
+field second: Int
+field val: Int
+
+predicate pair(this1: Ref, num1: Ref) {
+  ? && ((num1.val < 0) ? acc(this1.first) && acc(this1.second) && this1.first > 0 : acc(this1.second))
+}
+
+method test(this: Ref, num: Ref) returns (answer: Bool)
+  requires ? && pair(this, num)
+  ensures pair(this, num)
+{
+  answer := unfolding pair(this, num) in this.first > 0  // check acc(num.val), acc(this.first)
+}
+
+// WORKING 
+
+/*
+[info] Total Conjuncts: 17
+[info] Eliminated Conjuncts: 15
+[info] Final runtime checks: TrieMap(GenericNode((unfolding acc(pair(this, num), write) in this.first > 0)) -> List(CheckInfo(acc(num.val, write),List(),num1.val,false)), 
+GenericNode(this.first) -> List(CheckInfo(acc(this.first, write),List(BranchCond(!(num.val < 0),num1.val < 0,Some(GenericNode((unfolding acc(pair(this, num), write) in this.first > 0))))),this.first,false)))
+*/
+
+
+// Without origin tracking (no modifications): 
+// Final runtime checks: TrieMap(GenericNode(this.first) -> List(CheckInfo(acc(this.first, write),List(BranchCond(!(num.val < 0),num1.val < 0,None)),this.first,false)))
+
+// with tracking origin as unfolding for branch condition: 
+// Final runtime checks: TrieMap(GenericNode(this.first) -> List(CheckInfo(acc(this.first, write),List(BranchCond(!(num.val < 0),num1.val < 0,Some(GenericNode((unfolding acc(pair(this, num), write) in this.first > 0))))),this.first,false)))
+
+// After accounting for edge case (final): 
+// Final runtime checks: TrieMap(GenericNode((unfolding acc(pair(this, num), write) in this.first > 0)) -> List(CheckInfo(acc(num.val, write),List(),num1.val,false)), 
+// GenericNode(this.first) -> List(CheckInfo(acc(this.first, write),List(BranchCond(!(num.val < 0),num1.val < 0,Some(GenericNode((unfolding acc(pair(this, num), write) in this.first > 0))))),this.first,false)))

@@ -1,0 +1,16 @@
+field f : Int
+
+method inc(x: Ref, i: Int)
+  requires ? && x.f == 2
+  ensures true
+{
+  x.f := x.f + i
+}
+
+// WORKING
+
+/*
+[info] Total Conjuncts: 6
+[info] Eliminated Conjuncts: 6
+[info] Final runtime checks: TrieMap()
+*/

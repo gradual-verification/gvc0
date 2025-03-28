@@ -1,0 +1,25 @@
+// num1->val checked correctly at run-time in produce context (edge case) when origin is set to unfolding
+
+struct Node {
+    int first;
+    int second;
+    int val;
+};
+
+/*@
+predicate pair(struct Node *this1, struct Node *num1) = ? && ((num1->val < 0) ? acc(this1->second): acc(this1->second)); 
+@*/
+
+int test(struct Node *this, struct Node *num)
+//@ requires ? && true;
+//@ ensures ? && pair(this, num) && unfolding pair(this, num) in this->second > 0;
+{
+    return 0;
+}
+
+int main()
+//@requires true;
+//@ensures true;
+{
+    return 0;
+}

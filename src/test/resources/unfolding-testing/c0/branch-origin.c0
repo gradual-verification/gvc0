@@ -1,0 +1,28 @@
+// predicate pair body causes branching for which the origin is unfolding in method test
+struct Node {
+    int first;
+    int second;
+    int val;
+};
+
+/*@
+predicate pair(struct Node *this1, struct Node *num1) = acc(num1->val) && ((num1->val < 0) ? acc(this1->first) && this1->first > 0 : acc(this1->second));
+@*/
+
+int test(struct Node *this, struct Node *num)
+//@ requires ?;
+//@ ensures ? && pair(this, num) && unfolding pair(this, num) in this->second > 0;
+{
+    return 0;
+}
+
+int main()
+//@requires true;
+//@ensures true;
+{
+    struct Node* a = alloc(struct Node);
+    struct Node* b = alloc(struct Node);
+    a->second = 2;
+    test(a, b);
+    return 0;
+}

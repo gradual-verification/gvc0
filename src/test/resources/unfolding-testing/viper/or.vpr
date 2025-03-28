@@ -1,0 +1,13 @@
+field data: Int
+field next: Ref
+
+predicate sortedList(this: Ref) {
+    (this == null) ? ( true ) : (acc(this.data) && acc(this.next) && sortedList(this.next) && (this.next == null || (unfolding sortedList(this.next) in 0 <= (this.next).data)))
+}
+
+// WORKING
+/*
+[info] Total Conjuncts: 37
+[info] Eliminated Conjuncts: 37
+[info] Final runtime checks: TrieMap()
+*/

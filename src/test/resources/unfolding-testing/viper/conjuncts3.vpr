@@ -1,0 +1,29 @@
+field first: Int
+field second: Int
+field val: Int
+field third: Int
+
+predicate pair(this1: Ref, num1: Ref) {
+  ? && ((unfolding another(this1) in this1.third < 0) ? acc(this1.first) && acc(this1.second) : acc(this1.second))
+}
+
+predicate another(here: Ref) {
+    acc(here.third)
+}
+
+method pair_sum_greater_than_num(this: Ref, num: Ref) returns (answer: Bool)
+  requires pair(this, num)
+  ensures pair(this, num)
+{
+  answer := unfolding pair(this, num) in this.second > 0 // check acc(this.second) when this1.third < 0 
+}
+
+// WORKING (with the possible exception of tracking conjuncts)
+// Question: Should uneliminated conjuncts increase when producing body of pair?? It does cause of consumption of another(this1)
+/*
+[info] Total Conjuncts: 20
+[info] Eliminated Conjuncts: 16
+
+[info] Final runtime checks: TrieMap()
+
+*/

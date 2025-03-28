@@ -1,0 +1,10 @@
+field first: Int
+
+predicate other(this1: Ref) {
+  other(this1) && acc(this1.first) && unfolding other(this1) in this1.first > 0
+}
+
+// This passes in Viper
+// Explanation: Viper treats predicate other's body as false instead of throwing well-formedness error. 
+
+// WORKING (as expected)

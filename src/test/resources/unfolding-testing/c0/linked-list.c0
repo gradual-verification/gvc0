@@ -1,0 +1,28 @@
+// final verified program correctly handles the unfolding expression in predicate body i.e. it treats 'unfolding p in e' as 'e'
+
+struct Node {
+    int data;
+    struct Node* next;
+};
+
+/*@
+predicate lseg(struct Node *this, struct Node *end) = acc(this->data) && acc(this->next) && lseg(this->next, end) &&
+        unfolding lseg(this->next, end) in this->data <= this->next->data;
+@*/
+
+int contentNodes(struct Node *this, struct Node *end) 
+//@ requires ? && lseg(this, end) && this != end;
+//@ ensures lseg(this, end);
+{
+    //@ unfold lseg(this, end);
+    int r = this->data;
+    // //@fold lseg(this, end);
+    return r;
+}
+
+int main()
+//@requires true;
+//@ensures true;
+{
+    return 0;
+}
