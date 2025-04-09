@@ -1,0 +1,24 @@
+field one: Int
+field two: Int
+field val: Int
+
+predicate pair(this: Ref) {
+  acc(this.one) && acc(this.two)
+}
+
+method pair_diff_greater_than_num(this: Ref, num: Ref) returns (answer: Bool)
+  requires ? && acc(num.val) && unfolding pair(this) in this.one >= this.two
+  ensures acc(num.val) && pair(this)  // check pair(this)
+{
+  answer := unfolding pair(this) in this.one - this.two > num.val // check num.val
+}
+
+// WORKING (with the possible exception of correctly tracking Conjuncts; Also, can pair(this) check be optimized since strengthened pre-condition will contain information about disjointness with num.val)
+// Question: Why an extra non-eliminated conjunct for eval this.one - this.two?
+/*
+[info] Total Conjuncts: 18
+[info] Eliminated Conjuncts: 14
+
+[info] Final runtime checks: TrieMap(GenericNode(acc(pair(this), write)) -> List(CheckInfo(acc(pair(this), write),List(),acc(pair(this), write),false)), 
+GenericNode(num.val) -> List(CheckInfo(acc(num.val, write),List(),num.val,false)))
+*/

@@ -457,6 +457,16 @@ object IR {
       predicate.name + "(" + arguments.map(IRPrinter.print).mkString(", ") + ")"
   }
 
+  // "unfolding" expressions in a specification
+  class Unfolding(
+    var instance: PredicateInstance,
+    var expr: IR.Expression
+  ) extends SpecificationExpression {
+    override def contains(exp: Expression) =
+      super.contains(exp) || instance.contains(exp) || expr.contains(exp)
+    override def valueType: Option[Type] = expr.valueType
+  }
+
   // Represents a \result expression in a specification
   class Result(var method: Method) extends SpecificationExpression {
     override def valueType = method.returnType

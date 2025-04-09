@@ -1,0 +1,28 @@
+field data: Int
+field next: Ref
+
+predicate sortedList(this: Ref) {
+    (this == null) ? ( true ) : (acc(this.data) && acc(this.next) && sortedList(this.next) && (this.next == null || (unfolding sortedList(this.next) in this.data <= this.next.data)))
+}
+
+
+method frontInsert(head: Ref, item: Ref) returns (newlist: Ref)
+    requires sortedList(head) && acc(item.data) && acc(item.next) && (head == null || unfolding sortedList(head) in (head.data >= item.data))
+    ensures sortedList(item)
+{
+    item.next := head
+    fold sortedList(item)
+    newlist := item
+}
+
+// WORKING
+/*
+[info] Total Conjuncts: 110
+[info] Eliminated Conjuncts: 110
+[info] Final runtime checks: TrieMap()
+*/
+
+// Previously, Error on identifying AST node for run-time check generation (multiple nodes potentially)
+
+// Question: when fold and unfolding both are set as origin, fold should be the origin? -> Yes
+

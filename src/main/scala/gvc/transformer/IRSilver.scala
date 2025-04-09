@@ -252,6 +252,7 @@ object IRSilver {
       case acc: IR.Accessibility =>
         vpr.FieldAccessPredicate(convertMember(acc.member), vpr.FullPerm()())()
       case pred: IR.PredicateInstance => convertPredicateInstance(pred)
+      case unfolding: IR.Unfolding => vpr.Unfolding(convertPredicateInstance(unfolding.instance), convertExpr(unfolding.expr))()
       case result: IR.Result          => getReturnVar(result.method)
       case imp: IR.Imprecise =>
         vpr.ImpreciseExp(

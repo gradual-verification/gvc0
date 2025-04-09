@@ -1,0 +1,23 @@
+field one: Int
+field two: Int
+field val: Int
+
+predicate pair(this: Ref) {
+  acc(this.one) && acc(this.two)
+}
+
+method one_greater_than_zero(this: Ref, num: Ref) returns (answer: Bool)
+  requires ? && acc(num.val)
+  ensures pair(this) && acc(num.val)  // check num.val // no check pair(this)
+{
+  answer := unfolding pair(this) in 1 > 0 // check pair(this)
+}
+
+// WORKING
+
+/*
+[info] Total Conjuncts: 6
+[info] Eliminated Conjuncts: 4
+[info] Final runtime checks: TrieMap(GenericNode(acc(pair(this), write)) -> List(CheckInfo(acc(pair(this), write),List(),acc(pair(this), write),true)), 
+GenericNode(num.val) -> List(CheckInfo(acc(num.val, write),List(),acc(num.val, write),false)))
+*/

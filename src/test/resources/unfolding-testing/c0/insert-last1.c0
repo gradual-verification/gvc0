@@ -1,0 +1,50 @@
+struct Node {
+    int val;
+    struct Node* next;
+};
+struct List {
+    struct Node* head;
+};
+
+/*@
+predicate acyclic(struct List *l) = ?;
+@*/
+
+void insertLastHelper(int val, struct List* this)
+//@requires acyclic(this) && unfolding acyclic(this) in this->head != NULL;
+//@ensures acyclic(this);
+{
+    //@unfold acyclic(this);
+    struct Node* y = this->head;
+    while (y->next != NULL)
+    //@loop_invariant ? && y != NULL;
+    {
+        y = y->next;
+    }
+    y->next = alloc(struct Node);
+    y->next->val = val;
+    //@fold acyclic(this);
+}
+
+void insertLast(int val, struct List* this)
+//@requires acyclic(this);
+//@ensures acyclic(this);
+{
+    //@unfold acyclic(this);
+    if (this->head == NULL) {
+        this->head = alloc(struct Node);
+        this->head->val = val;
+        //@fold acyclic(this);
+    } 
+    else {
+        //@fold acyclic(this);
+        insertLastHelper(val, this);
+    }
+}
+
+int main()
+//@requires true;
+//@ensures true;
+{
+    return 0;
+}

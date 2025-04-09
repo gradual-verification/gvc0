@@ -1,0 +1,25 @@
+field one: Int
+field two: Int
+field val: Int
+
+predicate pair(this: Ref) {
+  acc(this.one) && acc(this.two)
+}
+
+method num_greater(this: Ref, num: Ref, num2: Ref) returns (answer: Bool)
+  requires ? && acc(num2.val) && acc(num.val) 
+  ensures acc(num.val) 
+{
+  answer := unfolding pair(this) in num.val > num2.val // check pair(this), num.val, num2.val
+}
+
+// WORKING
+/*
+[info] Total Conjuncts: 8
+[info] Eliminated Conjuncts: 5
+[info] Final runtime checks: TrieMap(GenericNode(num2.val) -> List(CheckInfo(acc(num2.val, write),List(),num2.val,false)), 
+GenericNode(num.val) -> List(CheckInfo(acc(num.val, write),List(),num.val,false)), 
+GenericNode(acc(pair(this), write)) -> List(CheckInfo(acc(pair(this), write),List(),acc(pair(this), write),true)))
+*/
+
+// Note, due to optimizations, some permissions are present in both optimistic heap and regular heap after unfolding evaluation is complete (this is ok)

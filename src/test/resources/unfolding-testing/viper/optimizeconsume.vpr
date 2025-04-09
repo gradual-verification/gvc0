@@ -1,0 +1,23 @@
+field one: Int
+field two: Int
+field val: Int
+
+predicate pair(this: Ref) {
+  acc(this.one) && acc(this.two)
+}
+
+method pair_diff_greater_than_num(this: Ref, num: Ref) returns (answer: Bool)
+  requires ? && acc(num.val) 
+  ensures pair(this) && (unfolding pair(this) in this.one >= this.two) // check pair.this, this.one >= this.two
+{
+  answer := num.val > 0
+}
+
+// WORKING (checks pair(this) twice; consume needs optimization -> when predicate instance is removed from the passed-in heaps, it should be added to state's heap that helps in framing)
+/*
+[info] Total Conjuncts: 16
+[info] Eliminated Conjuncts: 13
+[info] Final runtime checks: TrieMap(GenericNode(acc(pair(this), write)) -> List(CheckInfo(acc(pair(this), write),List(),acc(pair(this), write),false)), 
+GenericNode((unfolding acc(pair(this), write) in this.one >= this.two)) -> List(CheckInfo(this.one >= this.two,List(),(unfolding acc(pair(this), write) in this.one >= this.two),false)), 
+GenericNode(acc(pair(this), write)) -> List(CheckInfo(acc(pair(this), write),List(),acc(pair(this), write),true)))
+*/

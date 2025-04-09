@@ -13,7 +13,7 @@ trait Lexer extends Whitespace {
   def keywords[_: P] = {
     StringIn("while", "if", "for", "assert", "NULL", "else", "true", 
     "false", "struct", "alloc", "alloc_array", "typedef", "error", "return",
-    "int", "char", "bool", "void") ~~ !CharIn("A-Za-z0-9_")
+    "int", "char", "bool", "void", "unfolding", "in") ~~ !CharIn("A-Za-z0-9_")
   }
 
   def decimalNumber[_: P] =

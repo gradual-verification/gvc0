@@ -40,6 +40,14 @@ object IRPrinter {
       printList(p, pred.arguments) { arg => printExpr(p, arg) }
       p.print(")")
     }
+
+    case unfolding: IR.Unfolding => {
+      p.print("unfolding ")
+      printExpr(p, unfolding.instance)
+      p.print(" in ")
+      printExpr(p, unfolding.expr)
+    }
+
     case arr: IR.ArrayMember => {
       printExpr(p, arr.root)
       p.print("[")

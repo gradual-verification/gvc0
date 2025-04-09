@@ -1,0 +1,25 @@
+field one: Int
+field two: Int
+field val: Int
+
+predicate pair(this: Ref) {
+  acc(this.one) && acc(this.two)
+}
+
+method first_greater_than_second(this: Ref, num: Ref) returns (answer: Bool)
+  requires ? && acc(num.val)// && num.val > 0
+  ensures pair(this) && acc(num.val) && (num.val > 0 || unfolding pair(this) in this.one > this.two) // check pair(this), acc(num.val), pair(this), num.val > 0 || this.one > this.two,List(),num.val > 0
+{
+}
+
+// WORKING
+/*
+[info] Total Conjuncts: 20
+[info] Eliminated Conjuncts: 16
+[info] Final runtime checks: TrieMap(GenericNode(acc(pair(this), write)) -> List(CheckInfo(acc(pair(this), write),List(),acc(pair(this), write),false)), 
+GenericNode(acc(pair(this), write)) -> List(CheckInfo(acc(pair(this), write),List(BranchCond(!(num.val > 0),num.val > 0,None)),acc(pair(this), write),true)), 
+GenericNode(num.val) -> List(CheckInfo(acc(num.val, write),List(),acc(num.val, write),false)), 
+GenericNode(num.val > 0 || (unfolding acc(pair(this), write) in this.one > this.two)) -> List(CheckInfo(num.val > 0 || this.one > this.two,List(),num.val > 0 || (unfolding acc(pair(this), write) in this.one > this.two),false)))
+*/
+
+// Note: translating the or'ed check requires old heap info to translate the second conjunct (unfolding).

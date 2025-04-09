@@ -37,6 +37,7 @@ case class ResultExpression(span: SourceSpan) extends Expression
 case class LengthExpression(value: Expression, span: SourceSpan) extends Expression
 case class ImprecisionExpression(span: SourceSpan) extends Expression
 case class AccessibilityExpression(field: Expression, span: SourceSpan) extends Expression
+case class UnfoldingExpression(predicate: Identifier, arguments: List[Expression], expr: Expression, span: SourceSpan) extends Expression
 
 // Literal expressions
 sealed trait LiteralExpression extends Expression {

@@ -1,0 +1,49 @@
+struct Node {
+  int value;
+  struct Node* next;
+};
+
+/*@
+predicate wrappedAcc(struct Node *node) = ? && acc(node->value) && acc(node->next);
+@*/
+
+int fullyImprecise(struct Node* a)
+//@requires ?;
+//@ensures ?;
+{
+    return a->value;
+
+}
+
+int imprecisePrecondition(struct Node* a)
+//@requires ?;
+//@ensures ? && unfolding wrappedAcc(a) in a->value > 0;
+{
+    return a->value;
+}
+
+int imprecisePostcondition(struct Node* a)
+//@requires wrappedAcc(a);
+//@ensures ?;
+{
+    //@unfold wrappedAcc(a);
+    return a->value;
+}
+
+int fullyPrecise(struct Node* a)
+//@requires wrappedAcc(a);
+//@ensures wrappedAcc(a);
+{
+    return imprecisePostcondition(a);
+}
+
+int main()
+//@requires true;
+//@ensures true;
+{
+  struct Node* a = alloc(struct Node);
+  a->next = NULL;
+  //@assert acc(a->value) && acc(a->next);
+  //@fold wrappedAcc(a);
+  return fullyPrecise(a);
+}

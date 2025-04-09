@@ -28,6 +28,11 @@ object SpecificationValidator {
         predicate.arguments.foreach(validateValue(_, errors))
       }
 
+      case unfolding: ResolvedUnfolding => {
+        validateSpecification(unfolding.predicate, errors)
+        validateValue(unfolding.expr, errors)
+      }
+
       case imp: ResolvedImprecision if imprecisionAllowed => ()
       case imp: ResolvedImprecision => {
         // TODO: Better error message
@@ -88,7 +93,7 @@ object SpecificationValidator {
   }
 
   // Validates a value used in an expression
-  // Must not escape back to validateSpecification for a nested value
+  // Must not escape back to validateSpecification for a nested value except unfolding
   def validateValue(value: ResolvedExpression, errors: ErrorSink): Unit = {
     value match {
       case _: ResolvedVariableRef
@@ -106,6 +111,11 @@ object SpecificationValidator {
       case predicate: ResolvedPredicate => {
         errors.error(value, "Invalid predicate in specification value. Predicates may only be used in specifications, not as values.")
         predicate.arguments.foreach(validateValue(_, errors))
+      }
+
+      case unfolding: ResolvedUnfolding => {
+        validateSpecification(unfolding.predicate, errors)
+        validateValue(unfolding.expr, errors)
       }
 
       case member: ResolvedMember => validateField(member.parent, errors)

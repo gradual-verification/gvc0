@@ -5,7 +5,7 @@
 * [X] Check that every assignment left-hand side is an L-Value
 * [X] Ensure that every non-void method terminates in either a return or error
 * [X] Ensure that arguments used in a postcondition are not assigned
-* [X] Ensure that `\result` and `\length` are only used inside annotations
+* [X] Ensure that `\result`, `\length` and unfolding expressions are only used inside annotations
 * [X] Ensure variables are assigned before they are used
 * [X] RESOLVER: Ensure that `requires` and `ensures` are only used in method annotations
 * [X] RESOLVER: Ensure that `loop_invariant` is only used in `while`/`for` annotations

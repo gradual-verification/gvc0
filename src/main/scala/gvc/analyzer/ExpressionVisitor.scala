@@ -36,6 +36,10 @@ object ExpressionVisitor {
       case length: ResolvedLength => visit(length.array, visitor)
       case acc: ResolvedAccessibility => visit(acc.field, visitor)
       case pred: ResolvedPredicate => pred.arguments.foreach(visit(_, visitor))
+      case unfolding: ResolvedUnfolding => {
+        visit(unfolding.predicate, visitor)
+        visit(unfolding.expr, visitor)
+      }
       case _: ResolvedVariableRef | _: ResolvedAlloc | _: ResolvedResult | _: ResolvedImprecision
         | _: ResolvedInt | _: ResolvedString | _: ResolvedChar | _: ResolvedBool | _: ResolvedNull => ()
     }

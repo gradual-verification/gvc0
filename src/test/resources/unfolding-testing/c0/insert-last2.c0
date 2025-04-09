@@ -1,0 +1,60 @@
+struct Node {
+    int val;
+    struct Node* next;
+};
+struct List {
+    struct Node* head;
+};
+
+
+/*@
+predicate listSeg(struct Node *from, struct Node *to) = from == to ? true : acc(from->val) && acc(from->next) && listSeg(from->next, to);
+@*/
+
+/*@
+predicate acyclic(struct List *l) = acc(l->head) && listSeg(l->head, NULL);
+@*/
+
+
+void insertLastHelper(int val, struct List* this)
+//@requires acyclic(this) && unfolding acyclic(this) in this->head != NULL;
+//@ensures ?;
+{
+    //@unfold acyclic(this);
+    struct Node* y = this->head;
+    //@unfold listSeg(y, NULL);
+    while (y->next != NULL)
+    //@loop_invariant y != NULL && acc(y->val) && acc(y->next) && listSeg(y->next, NULL);
+    {
+        y = y->next;
+        //@unfold listSeg(y, NULL);
+    }
+    y->next = alloc(struct Node);
+    y->next->val = val;
+}
+
+void insertLast(int val, struct List* this)
+//@requires acyclic(this);
+//@ensures acyclic(this);
+{
+    //@unfold acyclic(this);
+    if (this->head == NULL) {
+        this->head = alloc(struct Node);
+        this->head->val = val;
+        this->head->next = NULL;
+        // //@fold listSeg(this->head->next, NULL); - commenting this makes verification succeed
+        //@fold listSeg(this->head, NULL);
+        //@fold acyclic(this);
+    } 
+    else {
+        //@fold acyclic(this);
+        insertLastHelper(val, this);
+    }
+}
+
+int main()
+//@requires true;
+//@ensures true;
+{
+    return 2;
+}

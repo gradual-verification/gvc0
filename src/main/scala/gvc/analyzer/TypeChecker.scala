@@ -183,6 +183,11 @@ object TypeChecker {
         }
       }
 
+      case unfolding: ResolvedUnfolding => {
+        checkExpression(errors, unfolding.predicate)
+        checkExpression(errors, unfolding.expr)
+      }
+
       case member: ResolvedMember => checkExpression(errors, member.parent)
 
       case index: ResolvedArrayIndex => {

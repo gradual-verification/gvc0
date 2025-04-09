@@ -1,0 +1,26 @@
+field first: Int
+field second: Int
+field val: Int
+field third: Int
+field next: Ref
+
+predicate other(this1: Ref) {
+  acc(this1.next) && acc(this1.val) && other(this1.next) && unfolding other(this1.next) in this1.next.val > 0
+}
+
+method pair_sum_greater_than_num(this: Ref, num: Ref) returns (answer: Bool)
+  requires ? && other(this) //&& acc(num.val) && num.val < 0
+  ensures other(this)
+{
+//   unfold pair(this, num)
+//   answer := this.first > 0
+//   fold pair(this, num)
+  answer := unfolding other(this) in num.val > 0 // check num.val
+}
+
+// WORKING
+/*
+[info] Total Conjuncts: 49
+[info] Eliminated Conjuncts: 47
+[info] Final runtime checks: TrieMap(GenericNode(num.val) -> List(CheckInfo(acc(num.val, write),List(),num.val,false)))
+*/

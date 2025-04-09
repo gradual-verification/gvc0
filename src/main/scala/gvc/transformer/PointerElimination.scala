@@ -14,6 +14,10 @@ object PointerElimination {
 
     def convert(expr: IR.Expression): IR.Expression = expr match {
       case a: IR.Accessibility => new IR.Accessibility(convertMember(a.member))
+      case u: IR.Unfolding => {
+        val inst = convert(u.instance)
+        new IR.Unfolding(inst.asInstanceOf[IR.PredicateInstance], convert(u.expr))
+      }
       case b: IR.Binary => new IR.Binary(b.operator, convert(b.left), convert(b.right))
       case c: IR.Conditional => new IR.Conditional(convert(c.condition), convert(c.ifTrue), convert(c.ifFalse))
       case i: IR.Imprecise => new IR.Imprecise(i.precise.map(convert))

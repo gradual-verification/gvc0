@@ -528,6 +528,33 @@ object Resolver {
           resolveExpression(ternary.ifTrue, scope, context),
           resolveExpression(ternary.ifFalse, scope, context)
         )
+      
+      case unfolding: UnfoldingExpression if context != MethodContext => {
+        val predicate = resolvePredicate(
+          unfolding,
+          unfolding.predicate,
+          unfolding.arguments,
+          scope,
+          context
+        )
+        val expr = resolveExpression(unfolding.expr, scope, context)
+        ResolvedUnfolding(unfolding, predicate, expr)
+      }
+
+      case unfolding: UnfoldingExpression =>
+        scope.errors.error(
+          unfolding,
+           "unfolding expressions cannot appear outside of specifications",
+        )
+          val predicate = resolvePredicate(
+          unfolding,
+          unfolding.predicate,
+          unfolding.arguments,
+          scope,
+          context
+        )
+        val expr = resolveExpression(unfolding.expr, scope, context)
+        return ResolvedUnfolding(unfolding, predicate, expr)
 
       case invoke: InvokeExpression if context != MethodContext => {
         // Invokes in a specification must refer to a predicate

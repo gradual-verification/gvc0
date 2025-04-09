@@ -1,0 +1,27 @@
+// no origin tracking for unfolding necessary or happening in this program
+
+struct Node {
+    int first;
+};
+
+/*@
+predicate pair(struct Node *this1) = ? && true;
+@*/
+
+int test(struct Node *this, struct Node *num)
+//@ requires ?;
+//@ ensures ? && pair(this) && unfolding pair(this) in this->first > 0;
+{
+    return 0;
+}
+
+int main()
+//@requires true;
+//@ensures true;
+{
+    struct Node* a = alloc(struct Node);
+    struct Node* b = alloc(struct Node);
+    a->first = 2; // run time check for this->first > 0 might fail without this
+    test(a, b);
+    return 0;
+}
