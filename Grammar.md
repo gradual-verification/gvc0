@@ -78,7 +78,7 @@ typeModifier ::= * | [ ]
 ## Expressions
 
 **Divergence from reference**
- * `\result` and `\length` are allowed as regular expressions. These are only allowed inside annotations for well-formed programs.
+ * `\result`, `\length` and `unfolding` are allowed as regular expressions. These are only allowed inside annotations for well-formed programs.
  * Increment operations (`++` and `--`) are defined as expressions. A separate pass must check that they are only used in `expressionStatement` constructs, not as a part of another expression.
  * Imprecision specifiers (`?`) have been added to support gradual verification. These may only be used in specifications, not in general expressions, but this requirement is not encoded in the grammar.
  * Accessibility predicates (`acc()`)  have been added to support verification using IDF. The value passed to `acc()` must be a field, dereference, or combination of both, but this requirement is not encoded in the grammar.
@@ -106,6 +106,7 @@ atomExpression ::=
   | allocArrayExpression
   | invokeExpression
   | variableExpression
+  | unfoldingExpression
 
 parenExpression ::= ( expression )
 
@@ -132,6 +133,8 @@ allocArrayExpression ::= alloc_array ( type , expression )
 invokeExpression ::= identifier ( expression (, expression)* )
 
 variableExpression ::= identifier
+
+unfoldingExpression ::= "unfolding" <identifier> "(" [expression ("," expression)*] ")" "in" expression
 
 member ::= dottedMember | pointerMember | indexMember
 dottedMember ::= . identifier

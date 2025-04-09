@@ -336,7 +336,7 @@ object CheckExpression {
           case IR.UnaryOp.Negate => Neg(x)
           case IR.UnaryOp.Not    => Not(x)
         }
-      case n: IR.Unfolding => throw new WeaverException("this shouldn't happen, unexpected unfolding")
+      case n: IR.Unfolding => throw new WeaverException("An unfolding expression can never be a part of a check. There must be a bug in unfolding extension for gvc0 (probably in weaver)")
     }
   }
 
