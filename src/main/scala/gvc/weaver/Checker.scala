@@ -618,6 +618,7 @@ object Checker {
     checks.sortBy(c =>
       c.check match {
         case acc: FieldAccessibilityCheck => nesting(acc.field)
+        case pred: PredicateAccessibilityCheck => Int.MaxValue - 1
         case _                            => Int.MaxValue
     })(Ordering.Int)
 
