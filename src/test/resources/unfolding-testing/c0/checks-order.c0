@@ -1,0 +1,28 @@
+// Should fail at run time with assertion failure
+// foo(x) and x->val == 0 checked at run-time are inserted in correct order
+
+struct Node {
+    int val;
+    int other;
+    struct Node* next;
+};
+
+typedef struct Node Node;
+
+/*@
+    predicate foo(Node* x) = acc(x->val);
+@*/
+
+void bad(Node * x) 
+//@ requires ?;
+//@ ensures ? && unfolding foo(x) in x->val == 0;
+{
+}
+
+int main() 
+//@ requires true;
+//@ ensures true;
+{   
+    bad(NULL);
+    return 0;
+}
