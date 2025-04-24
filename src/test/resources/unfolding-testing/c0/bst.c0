@@ -1,0 +1,30 @@
+// very slow without joining unfolding evaluation 
+// ~ 3 min 30 sec without join
+// ~ 6 sec with join
+
+// binary search tree node
+struct Node {
+  int val;
+  struct Node *left;
+  struct Node *right;
+};
+
+/*@
+predicate bst(struct Node *root) =
+  (root == NULL) ?
+    ( true )
+    :
+    (
+      acc(root->left) && acc(root->right) && acc(root->val) &&
+      bst(root->right) && bst(root->left) &&
+      (unfolding bst(root->right) in root->right == NULL || root->val <= root->right->val) && 
+      (unfolding bst(root->left) in root->left == NULL || root->val >= root->left->val)
+    ) ;
+@*/
+
+int main()
+  //@ requires true;
+  //@ ensures true;
+{
+  return 0;
+}

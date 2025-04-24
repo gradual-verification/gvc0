@@ -1,0 +1,12 @@
+field Node$left: Ref
+
+field Node$right: Ref
+
+field Node$val: Int
+
+predicate bst(root: Ref) {
+  (root == null ? true : acc(root.Node$left, write) && acc(root.Node$right, write) && acc(root.Node$val, write) && acc(bst(root.Node$right), write) && acc(bst(root.Node$left), write) && unfolding acc(bst(root.Node$right), write) in (root.Node$right == null || root.Node$val <= root.Node$right.Node$val) && unfolding acc(bst(root.Node$left), write) in (root.Node$left == null || root.Node$val >= root.Node$left.Node$val))
+}
+
+// causes join error -> Unexpected join data entries
+// Source -> currently we are using join for short circuit eval (and/or), but not for unfolding expressions which results in inconsistency
