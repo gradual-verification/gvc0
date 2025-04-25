@@ -10,3 +10,10 @@ predicate bst(root: Ref) {
 
 // causes join error -> Unexpected join data entries
 // Source -> currently we are using join for short circuit eval (and/or), but not for unfolding expressions which results in inconsistency
+
+// UPDATE: WORKING (when joining unfolding evaluations)
+/*
+[info] Total Conjuncts: 384
+[info] Eliminated Conjuncts: 384
+[info] Final runtime checks: TrieMap()
+*/

@@ -14,3 +14,11 @@ method main() returns ($result: Int)
 {
   $result := 0
 }
+
+// WORKING (fast when joining unfolding evaluations)
+
+/*
+[info] Total Conjuncts: 197
+[info] Eliminated Conjuncts: 197
+[info] Final runtime checks: TrieMap()
+*/
