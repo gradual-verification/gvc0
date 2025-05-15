@@ -1,0 +1,41 @@
+// binary search tree node
+struct Node {
+  int val;
+  struct Node *left;
+  struct Node *right;
+};
+
+/*@
+predicate bst(struct Node *root) =
+  (root == NULL) ?
+    ( true )
+    :
+    (
+      acc(root->left) && acc(root->right) && acc(root->val) &&
+      bst(root->right) && bst(root->left) &&
+      (unfolding bst(root->right) in root->right == NULL || root->val <= root->right->val) && 
+      (unfolding bst(root->left) in root->left == NULL || root->val >= root->left->val)
+    ) ;
+@*/
+
+struct Node *create_tree_helper(int val, int min, int max)
+  //@ requires min <= val && val <= max;
+  //@ ensures bst(\result);
+{
+  struct Node *root = alloc(struct Node);
+  root->val = val;
+  root->left = NULL;
+  root->right = NULL;
+
+  //@ fold bst(root->left);
+  //@ fold bst(root->right);
+  //@ fold bst(root);
+  return root;
+}
+
+int main()
+  //@ requires true;
+  //@ ensures true;
+{
+  return 0;
+}

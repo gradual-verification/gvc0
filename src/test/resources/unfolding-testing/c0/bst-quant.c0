@@ -1,0 +1,484 @@
+#use <stress>
+// binary search tree node
+struct Node {
+  int val;
+  struct Node *left;
+  struct Node *right;
+};
+
+/*@
+predicate bstRemove(struct Node *root, int x) =
+  (root == NULL) ?
+    ( true )
+    :
+    (
+      acc(root->left) && acc(root->right) && acc(root->val) &&
+      bstRemove(root->right, x) && bstRemove(root->left, x) && root->val != x &&
+      (unfolding bstRemove(root->right, x) in root->right == NULL || root->val <= root->right->val) &&
+      (unfolding bstRemove(root->left, x) in root->left == NULL || root->val >= root->left->val)
+    ) ;
+@*/
+
+/*@
+predicate bst(struct Node *root) =
+  (root == NULL) ?
+    ( true )
+    :
+    (
+      acc(root->left) && acc(root->right) && acc(root->val) &&
+      bst(root->right) && bst(root->left) &&
+      (unfolding bst(root->right) in root->right == NULL || root->val <= root->right->val) && 
+      (unfolding bst(root->left) in root->left == NULL || root->val >= root->left->val)
+    ) ;
+@*/
+
+/*@
+predicate treeRemove(struct Node *root, int x) =
+  bstRemove(root, x) ;
+@*/
+
+/*@
+predicate tree(struct Node *root) =
+  bst(root) ;
+@*/
+
+// lemmas -------------------------------------------------------------------------------
+
+void tree_max_lemma(struct Node *root, int newMax)
+  //@ requires bst(root);
+  //@ ensures bst(root);
+{
+  if (root == NULL) {
+  } else {
+    //@ unfold bst(root);
+    tree_max_lemma(root->right, newMax);
+  }
+  //@ fold bst(root);
+}
+
+void tree_min_lemma(struct Node *root, int newMin)
+  //@ requires bst(root);
+  //@ ensures bst(root);
+{
+  if (root == NULL) {
+  } else {
+    //@ unfold bst(root);
+    tree_min_lemma(root->left, newMin);
+  }
+  //@ fold bst(root);
+}
+
+void tree_remove_lemma(struct Node *root, int min, int max)
+  //@ requires bstRemove(root, max);
+  //@ ensures bstRemove(root, max);
+{
+  if (root == NULL) {
+  } else {
+    //@ unfold bstRemove(root, max);
+    tree_remove_lemma(root->right, root->val+1, max);
+  }
+  //@ fold bstRemove(root, max);
+}
+
+void tree_remove_lemma_right(struct Node *r, int x, int min, int max)
+  //@ requires bst(r) && x < min;
+  //@ ensures bstRemove(r, x);
+{
+  if (r == NULL) {
+  } else {
+    //@ unfold bst(r);
+    if (r->left == NULL) {
+      tree_remove_lemma_right(r->right, x, r->val+1, max);
+      //@ fold bstRemove(r->left, x);
+    } else if (r->right == NULL) {
+      tree_remove_lemma_right(r->left, x, min, r->val-1);
+      //@ fold bstRemove(r->right, x);
+    } else {
+      tree_remove_lemma_right(r->right, x, r->val+1, max);
+      tree_remove_lemma_right(r->left, x, min, r->val-1);
+    }
+  }
+  //@ fold bstRemove(r, x);
+}
+
+void tree_remove_lemma_left(struct Node *l, int x, int min, int max)
+  //@ requires bst(l) && max < x;
+  //@ ensures bstRemove(l, x);
+{
+  if (l == NULL) {
+  } else {
+    //@ unfold bst(l);
+    if (l->left == NULL) {
+      tree_remove_lemma_left(l->right, x, l->val+1, max);
+      //@ fold bstRemove(l->left, x);
+    } else if (l->right == NULL) {
+      tree_remove_lemma_left(l->left, x, min, l->val-1);
+      //@ fold bstRemove(l->right, x);
+    } else {
+      tree_remove_lemma_left(l->right, x, l->val+1, max);
+      tree_remove_lemma_left(l->left, x, min, l->val-1);
+    }
+  }
+  //@ fold bstRemove(l, x);
+}
+
+void tree_remove_lemma_left2(struct Node *l, int newX, int x, int min, int max)
+  //@ requires bstRemove(l, x) && max < newX;
+  //@ ensures bstRemove(l, newX);
+{
+  if (l == NULL) {
+  } else {
+    //@ unfold bstRemove(l, x);
+    if (l->left == NULL) {
+      tree_remove_lemma_left2(l->right, newX, x, l->val+1, max);
+      //@ fold bstRemove(l->left, newX);
+    } else if (l->right == NULL) {
+      tree_remove_lemma_left2(l->left, newX, x, min, l->val-1);
+      //@ fold bstRemove(l->right, newX);
+    } else {
+      tree_remove_lemma_left2(l->right, newX, x, l->val+1, max);
+      tree_remove_lemma_left2(l->left, newX, x, min, l->val-1);
+    }
+  }
+  //@ fold bstRemove(l, newX);
+}
+
+void tree_remove_lemma_min(struct Node *root, int x, int newMin, int min, int max)
+  //@ requires bstRemove(root, x) && newMin <= min;
+  //@ ensures bstRemove(root, x);
+{
+  if (root == NULL) {
+  } else {
+    //@ unfold bstRemove(root, x);
+    tree_remove_lemma_min(root->left, x, newMin, min, root->val-1);
+  }
+  //@ fold bstRemove(root, x);
+}
+
+void tree_remove_lemma_max(struct Node *root, int x, int newMax, int min, int max)
+  //@ requires bstRemove(root, x) && max <= newMax;
+  //@ ensures bstRemove(root, x);
+{
+  if (root == NULL) {
+  } else {
+    //@ unfold bstRemove(root, x);
+    tree_remove_lemma_max(root->right, x, newMax, root->val+1, max);
+  }
+  //@ fold bstRemove(root, x);
+}
+
+void tree_main_lemma_bst(struct Node *root, int x, int min, int max)
+  //@ requires bstRemove(root, x);
+  //@ ensures bst(root);
+{
+  if (root == NULL) {
+  } else {
+    //@ unfold bstRemove(root, x);
+    tree_main_lemma_bst(root->left, x, min, root->val-1);
+    tree_main_lemma_bst(root->right, x, root->val+1, max);
+  }
+  //@ fold bst(root);
+}
+
+void tree_main_lemma(struct Node *root, int x)
+  //@ requires treeRemove(root, x);
+  //@ ensures tree(root);
+{
+  //@ unfold treeRemove(root, x);
+  tree_main_lemma_bst(root, x, -2147483647, 2147483647);
+  //@ fold tree(root);
+}
+
+//------------------------------------------------------------------------ verified code starts below
+
+struct Node *create_tree_helper(int val, int min, int max)
+  //@ requires min <= val && val <= max;
+  //@ ensures bst(\result);
+{
+  struct Node *root = alloc(struct Node);
+  root->val = val;
+  root->left = NULL;
+  root->right = NULL;
+
+  //@ fold bst(root->left);
+  //@ fold bst(root->right);
+  //@ fold bst(root);
+  return root;
+}
+
+struct Node *create_tree(int val)
+  //@ requires -2147483647 <= val && val <= 2147483647;
+  //@ ensures tree(\result);
+{
+  struct Node *res = create_tree_helper(val, -2147483647, 2147483647);
+  //@ fold tree(res);
+  return res;
+}
+
+int tree_max_helper(struct Node *root, int min, int max)
+  //@ requires bst(root) && root != NULL;
+  //@ ensures bst(root) && \result <= max;
+{
+  //@ unfold bst(root);
+  int v = root->val;
+  struct Node *r = root->right;
+  if (r == NULL) {
+    //@ fold bst(r);
+    //@ fold bst(root);
+    return v;
+  } else {
+    int m = tree_max_helper(r, v+1, max);
+    //@ unfold bst(r);
+    //@ assert v <= m;
+    //@ fold bst(r);
+    //@ fold bst(root);
+    return m;
+  }
+}
+
+int tree_max(struct Node *root)
+  //@ requires tree(root) && root != NULL;
+  //@ ensures tree(root);
+{
+  //@ unfold tree(root);
+  int res = tree_max_helper(root, -2147483647, 2147483647);
+  tree_max_lemma(root, 2147483647);
+  //@ fold tree(root);
+  return res;
+}
+
+int tree_min_helper(struct Node *root, int min, int max)
+  //@ requires bst(root) && root != NULL;
+  //@ ensures bst(root) && min <= \result;
+{
+  //@ unfold bst(root);
+  int v = root->val;
+  struct Node *l = root->left;
+  if (l == NULL) {
+    //@ fold bst(l);
+    //@ fold bst(root);
+    return v;
+  } else {
+    int m = tree_min_helper(l, min, v-1);
+    //@ unfold bst(l);
+    //@ assert m <= v;
+    //@ fold bst(l);
+    //@ fold bst(root);
+    return m;
+  }
+}
+
+int tree_min(struct Node *root)
+  //@ requires tree(root) && root != NULL;
+  //@ ensures tree(root);
+{
+  //@ unfold tree(root);
+  int res = tree_min_helper(root, -2147483647, 2147483647);
+  tree_min_lemma(root, -2147483647);
+  //@ fold tree(root);
+  return res;
+}
+
+bool tree_contains_helper(struct Node *root, int x, int min, int max)
+  //@ requires bst(root);
+  //@ ensures bst(root);
+{
+  if (root == NULL) {
+    return false;
+  } else {
+    //@ unfold bst(root);
+    int v = root->val;
+    struct Node *l = root->left;
+    struct Node *r = root->right;
+    if (v == x) {
+      //@ fold bst(root);
+      return true;
+    } else if (x < v) {
+      bool temp1 = tree_contains_helper(l, x, min, v-1);
+      //@ fold bst(root);
+      return temp1;
+    } else {
+      bool temp2 = tree_contains_helper(r, x, v+1, max);
+      //@ fold bst(root);
+      return temp2;
+    }
+  }
+}
+
+bool tree_contains(struct Node *root, int x)
+  //@ requires tree(root);
+  //@ ensures tree(root);
+{
+  //@ unfold tree(root);
+  bool res = tree_contains_helper(root, x, -2147483647, 2147483647);
+  //@ fold tree(root);
+  return res;
+}
+
+struct Node *tree_add_helper(struct Node *root, int x, int min, int max)
+  //@ requires bst(root) && min <= x && x <= max;
+  //@ ensures bst(\result);
+ {
+
+  //@ unfold bst(root);
+  if (root == NULL) {
+    return create_tree_helper(x, min, max);
+  } else {
+    int v = root->val;
+    struct Node *l = root->left;
+    struct Node *r = root->right;
+
+    if (x < v) {
+      if (l != NULL) {
+        root->left = tree_add_helper(l, x, min, v-1);
+      } else {
+        root->left = create_tree_helper(x, min, v-1);
+      }
+    } else {
+      if (v < x) {
+        if (r != NULL) {
+          root->right = tree_add_helper(r, x, v+1, max);
+        } else {
+          root->right = create_tree_helper(x, v+1, max);
+        }
+      }
+   }
+   //@ fold bst(root);
+   return root;
+  }
+}
+
+struct Node *tree_add(struct Node *root, int x)
+  //@ requires tree(root) && -2147483647 <= x && x <= 2147483647;
+  //@ ensures tree(\result);
+{
+  //@ unfold tree(root);
+  struct Node *res = tree_add_helper(root, x, -2147483647, 2147483647);
+  //@ fold tree(res);
+  return res;
+}
+
+struct Node *tree_remove_helper(struct Node *root, int x, int min, int max)
+  //@ requires bst(root);
+  //@ ensures bstRemove(\result, x);
+{
+  if (root == NULL) {
+    //@ fold bstRemove(root, x);
+    return root;
+  } else {
+    //@ unfold bst(root);
+    int v = root->val;
+    struct Node *l = root->left;
+    struct Node *r = root->right;
+
+    if (x < v) {
+      root->left = tree_remove_helper(l, x, min, v-1);
+      tree_remove_lemma_right(r, x, v+1, max);
+      //@ fold bstRemove(root, x);
+      return root;
+    } else if (v < x) {
+      root->right = tree_remove_helper(r, x, v+1, max);
+      tree_remove_lemma_left(l, x, min, v-1);
+      //@ fold bstRemove(root, x);
+      return root;
+    } else {
+      if (l == NULL) {
+        if (r == NULL) {
+          //@ fold bstRemove(NULL, x);
+          return NULL;
+        } else {
+          tree_remove_lemma_right(r, x, v+1, max);
+          tree_remove_lemma_min(r, x, min, v+1, max);
+          return r;
+        }
+      } else {
+        if (r == NULL) {
+          tree_remove_lemma_left(l, x, min, v-1);
+          tree_remove_lemma_max(l, x, max, min, v-1);
+          return l;
+        } else {
+          int m = tree_max_helper(l, min, v-1);
+          //@ unfold bst(l);
+          //@ assert min <= m;
+          //@ fold bst(l);
+
+          root->val = m;
+          root->left = tree_remove_helper(l, m, min, m);
+          tree_remove_lemma(root->left, min, m);
+          tree_remove_lemma_left2(root->left, x, m, min, m-1);
+
+          tree_remove_lemma_right(r, x, v+1, max);
+          tree_remove_lemma_min(r, x, m+1, v+1, max);
+          //@ fold bstRemove(root, x);
+          return root;
+        }
+      }
+    }
+  }
+}
+
+struct Node *tree_remove(struct Node *root, int x)
+  //@ requires tree(root);
+  //@ ensures treeRemove(\result, x);
+{
+  //@ unfold tree(root);
+  struct Node *res = tree_remove_helper(root, x, -2147483647, 2147483647);
+  //@ fold treeRemove(res, x);
+  return res;
+}
+
+int mod2(int a, int b) 
+//@ requires b != 0;
+//@ ensures  0 <= \result && (b < 0 ? \result <= (-1) * b : \result <= b);
+{
+  int t = b;
+  if (a < 0)
+    a = (-1) * a;
+  if (b < 0)
+    t = (-1) * b;
+
+  return a - (a / t) * t;
+}
+
+int main()
+  //@ requires true;
+  //@ ensures true;
+{
+    int stress = 2;
+    int seed = 1;
+
+    int stressCaptured = stress;
+    if((stressCaptured / 2) * 2 != stressCaptured){
+        stressCaptured += 1;
+    }
+
+    struct Node* t1 = create_tree(stressCaptured);
+
+    int i = 0;
+    while(0 <= i && i < stressCaptured)
+    //@loop_invariant 0 <= i && i <= stressCaptured && tree(t1);
+    {
+        int r = rand(seed);
+        seed = r;
+        int toAdd = mod2(r, 2 * stressCaptured);
+        t1 = tree_add(t1, toAdd);
+        bool test = tree_contains(t1, toAdd);
+        assert(test);
+        i += 1;
+    }
+
+    int j = 0;
+    while(j < stressCaptured)
+    //@loop_invariant 0 <= j && j <= stressCaptured && tree(t1);
+    {
+        int r = rand(seed);
+        seed = r;
+        int toRemove = mod2(r, 2 * stressCaptured);
+        t1 = tree_remove(t1, toRemove);
+        tree_main_lemma(t1, toRemove);
+        bool test = tree_contains(t1, toRemove);
+        assert(!test);
+        j += 1;
+    }
+  return 0;
+}
