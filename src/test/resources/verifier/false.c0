@@ -1,0 +1,104 @@
+struct Wrap {
+    int f;
+    struct Wrap* ref;
+    bool b;
+};
+
+typedef struct Wrap Wrap;
+
+/*@
+    predicate cons(Wrap *x) = 
+        ? && false && true && acc(x->f);
+@*/
+
+void dummy()
+//@ requires ? && true;
+//@ ensures true;
+{}
+
+void carriedAcross(int n, Wrap* x) 
+//@ requires 1 == 2;
+//@ ensures false;
+{ 
+    for(int i = 0; i < n; i++) 
+        //@ loop_invariant true;
+    {
+        dummy(); 
+    }
+    dummy();
+
+    //@ fold cons(x);
+    //@ fold cons(x);
+    //@ fold cons(x);
+    //@ unfold cons(x);
+    //@ unfold cons(x);
+    //@ unfold cons(x);
+    //@ unfold cons(x);
+    //@ fold cons(x);
+    //@ fold cons(x);
+
+    int temp = x->f;
+}
+
+
+void dummy2(Wrap* x) 
+//@ requires ? && acc(x->f);
+{}
+
+int canCall() // should have no run-time checks
+//@ requires ? && false;
+//@ ensures true && \result == 2;
+{
+    dummy2(NULL);
+    return 3;
+}
+
+void justify(Wrap *x, Wrap* y)
+//@ requires acc(x->f) && x == NULL && y->f == 20 && y->f/x->f == 3492;
+//@ ensures acc(y->f) && y == x;
+{
+    for(int i = 0; i < x->f; i++) 
+        //@ loop_invariant 1/0 == 1/0;
+    {
+    }
+
+    //@ assert 2/x->f == 39; 
+}
+
+void p1(bool b, Wrap *x)
+//@ requires ? && (b ? false : false);
+//@ ensures acc(x->f) && x == NULL;
+{}
+
+void p2(Wrap *x) 
+//@ requires ? && (x->b || false) && (!x->b || false);
+//@ ensures false;
+{}
+
+void p3(bool b)
+//@ requires ? && b;
+{   
+    if (b) {
+    }
+    else {
+        Wrap* x = NULL;
+        int j = x->f;
+    }
+}
+
+void p4(Wrap* x)
+//@ requires false && acc(x->f) && acc(x->f) ;
+//@ ensures false;
+{}
+
+void p5(Wrap* x)
+//@ requires 1 == 2;
+//@ ensures acc(x->f) && acc(x->f);
+{
+}
+
+int main() 
+//@ requires true;
+{
+    return 0;
+}

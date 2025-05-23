@@ -1,0 +1,79 @@
+struct Node { 
+    int val; 
+    struct Node* next;
+};
+
+typedef struct Node Node;
+
+/*@ predicate acyclic(Node* s) = 
+    s == NULL ? true : acc(s->val) && acc(s->next) && acyclic(s->next); @*/
+
+/*@ predicate maxSeg(Node* s, Node* e, int m) =
+    s == e ? true : acc(s->val) && acc(s->next) && s->val <= m && maxSeg(s->next, e, m); @*/
+
+//@ predicate maximum(Node* s, int m) = maxSeg(s, NULL, m); @//
+
+void maxLemma(Node* a, Node* b, int oldMax, int newMax) 
+//@ requires maxSeg(a, b, oldMax) && newMax >= oldMax;
+//@ ensures maxSeg(a, b, newMax);
+{  
+    //@ unfold maxSeg(a, b, oldMax);
+    if (a == b) {
+        //@ fold maxSeg(a, b, newMax);
+    } else {
+        maxLemma(a->next, b, oldMax, newMax);
+        //@ fold maxSeg(a, b, newMax);
+    }
+}
+
+void mergeLemma(Node* a, Node* b, Node* c, int m) 
+//@ requires maxSeg(a, b, m) && maxSeg(b, c, m);
+//@ ensures maxSeg(a, c, m);
+{
+    if (a == b) {
+    } else {
+        //@ unfold maxSeg(a, b, m);
+        mergeLemma(a->next, b, c, m);
+        //@ fold maxSeg(a, c, m);
+    }
+}
+
+int findMax(Node* list) 
+//@ requires list != NULL && acyclic(list);
+//@ ensures maximum(list, \result);
+{
+    //@ unfold acyclic(list);
+    Node* y = list;
+    int max = y->val;
+    y = y->next;
+
+    //@ fold maxSeg(y, y, max);
+    //@ fold maxSeg(list, y, max);
+    
+    while (y != NULL)
+    //@ loop_invariant maxSeg(list, y, max);
+    //@ loop_invariant acyclic(y);
+    {
+        //@ unfold acyclic(y);
+        Node* tmp = y;
+        int prev_max = max;
+
+        if (y->val > max) {
+            max = y->val;
+        }
+        y = y->next;
+        maxLemma(list, tmp, prev_max, max);
+        //@ fold maxSeg(y, y, max);
+        //@ fold maxSeg(tmp, y, max);
+        mergeLemma(list, tmp, y, max);
+    }
+    //@ fold maximum(list, max);
+    return max;
+}
+
+int main() 
+//@ requires true;
+//@ ensures true;
+{
+    return 0;
+}
