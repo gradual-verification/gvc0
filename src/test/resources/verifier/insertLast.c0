@@ -1,0 +1,72 @@
+struct Node {
+    int val;
+    struct Node *next;
+};
+
+/*@
+predicate acyclicSeg(struct Node *from, struct Node *to) =
+    (from == to) ?
+        (true)
+        :
+        (acc(from->val) && acc(from->next) && acyclicSeg(from->next, to));
+@*/
+
+/*@
+predicate acyclic(struct Node *list) = acyclicSeg(list, NULL);
+@*/
+
+void appendLemma(struct Node *a, struct Node *b, struct Node *c)
+    //@ requires acyclicSeg(a, b) && acyclicSeg(b, c);
+    //@ ensures acyclicSeg(a, c);
+{
+    if (a == b) {
+    } else {
+        //@ unfold acyclicSeg(a, b);
+        appendLemma(a->next, b, c);
+        //@ fold acyclicSeg(a, c);
+    }
+}
+
+struct Node * insertLast(struct Node *list, int val)
+    //@ requires acyclic(list) && list != NULL;
+    //@ ensures acyclic(\result) && \result != NULL;
+{
+    //@ unfold acyclic(list);
+    struct Node *curr = list;
+
+    //@ fold acyclicSeg(list, curr);
+    //@ unfold acyclicSeg(curr, NULL);
+
+    while (curr->next != NULL)
+    //@ loop_invariant curr != NULL && acyclicSeg(list, curr) && acc(curr->val) && acc(curr->next) && acyclicSeg(curr->next, NULL);
+    {
+      struct Node *tmp = curr;
+      curr = curr->next;
+
+      //@ unfold acyclicSeg(curr, NULL);
+      //@ fold acyclicSeg(tmp->next, curr);
+      //@ fold acyclicSeg(tmp, curr);
+      appendLemma(list, tmp, curr);
+    }
+
+    struct Node *newNode = alloc(struct Node);
+    newNode->val = val;
+    newNode->next = NULL;
+    curr->next = newNode;
+
+    //@ fold acyclicSeg(curr->next->next, NULL);
+    //@ fold acyclicSeg(curr->next, NULL);
+    //@ fold acyclicSeg(curr, NULL);
+
+    appendLemma(list, curr, NULL);
+
+    //@ fold acyclic(list);
+    return list;
+}
+
+int main()
+  //@ requires true;
+  //@ ensures true;
+{
+  return 0;
+}
