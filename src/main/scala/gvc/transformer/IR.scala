@@ -1,4 +1,6 @@
 package gvc.transformer
+import gvc.analyzer.ResolvedNode
+import gvc.analyzer.Zilch
 import scala.collection.mutable
 
 class IRException(message: String) extends Exception(message)
@@ -166,15 +168,16 @@ object IR {
       val name: String,
       var returnType: Option[Type],
       var precondition: Option[Expression] = None,
-      var postcondition: Option[Expression] = None,
+      var postcondition: Option[Expression] = None
   ) extends MethodDefinition {
     // Variables/parameters are added to both a list and a map to preserve order and speedup lookup
     // Scope is a map of both parameters and variables
-    private var _parameters = mutable.ListBuffer[Parameter]()
-    private var _variables = mutable.ListBuffer[Var]()
-    private var scope = mutable.Map[String, Var]()
+    private val _parameters = mutable.ListBuffer[Parameter]()
+    private val _variables = mutable.ListBuffer[Var]()
+    private val scope = mutable.Map[String, Var]()
 
     var body = new MethodBlock(this)
+    var resolved: ResolvedNode = Zilch
 
     def parameters: Seq[Parameter] = _parameters
     def variables: Seq[Var] = _variables
@@ -185,16 +188,16 @@ object IR {
         throw new IRException(s"Variable '$name' not found")
       )
 
-    def addParameter(valueType: Type, name: String): Parameter = {
+    def addParameter(valueType: Type, parameterName: String): Parameter = {
       val newParam =
-        new Parameter(valueType, Helpers.findAvailableName(scope, name))
+        new Parameter(valueType, Helpers.findAvailableName(scope, parameterName), name)
       scope += newParam.name -> newParam
       _parameters += newParam
       newParam
     }
 
-    def addVar(valueType: Type, name: String = "_"): Var = {
-      val newVar = new Var(valueType, Helpers.findAvailableName(scope, name))
+    def addVar(valueType: Type, varName: String = "_"): Var = {
+      val newVar = new Var(valueType, Helpers.findAvailableName(scope, varName), name)
       scope += newVar.name -> newVar
       _variables += newVar
       newVar
@@ -214,7 +217,8 @@ object IR {
         if (!copyOf.scope.contains(entry._1)) {
           copyOf.scope += entry._1 -> new IR.Var(
             entry._2.varType,
-            entry._2.name
+            entry._2.name,
+            copyOf.name
           )
         }
       })
@@ -231,11 +235,12 @@ object IR {
 
     def parameters: Seq[Parameter] = _parameters
 
-    def addParameter(valueType: Type, name: String): Parameter = {
-      val newParam = new Parameter(valueType, name)
+    def addParameter(valueType: Type, parameterName: String): Parameter = {
+      val newParam = new Parameter(valueType, parameterName, name)
       _parameters += newParam
       newParam
     }
+
     def copy(expr: Expression) = {
       val newPred = new Predicate(name, expr)
       newPred._parameters = _parameters
@@ -405,11 +410,42 @@ object IR {
     override def toString() = IRPrinter.print(this)
   }
 
-  class Parameter(varType: Type, name: String)
-      extends Var(varType, name)
-  class Var(var varType: Type, val name: String)
-      extends Expression {
+  class Parameter(varType: Type, name: String, nameOfMOrP: String)
+    extends Var(varType, name, nameOfMOrP) {
+    override def copy: Parameter = {
+      val newParameter = new Parameter(varType, name, nameOfMOrP)
+      copies += newParameter
+      newParameter
+    }
+  }
+
+  class Var(var varType: Type, val name: String, val nameOfMOrP: String)
+    extends Expression {
+    // Var and Parameter tracks all of its copies so that their varType can be
+    // updated when varType is updated
+    protected val copies: mutable.ListBuffer[Var] = mutable.ListBuffer[Var]()
+    // resolved is not compared for equals or used for hashCode
+    var resolved: ResolvedNode = Zilch
+
     def valueType: Option[Type] = Some(varType)
+
+    def copy: Var = {
+      val newVar = new Var(varType, name, nameOfMOrP)
+      copies += newVar
+      newVar
+    }
+
+    def updateChildren(): Unit = {
+      copies.foreach(_.varType = varType)
+    }
+
+    override def equals(obj: Any): Boolean = obj match {
+      // QUESTION: is this the right way to implement the equals method?
+      case v: Var => name == v.name && nameOfMOrP == v.nameOfMOrP
+      case _ => false
+    }
+
+    override def hashCode: Int = (name + "$" + nameOfMOrP).hashCode
   }
 
   sealed trait Member extends Expression {
@@ -418,18 +454,29 @@ object IR {
       super.contains(exp) || root.contains(exp)
   }
 
-  class FieldMember(var root: Expression, var field: StructField)
-      extends Member {
+  class FieldMember(
+                     var root: Expression,
+                     var field: StructField,
+                     val resolved: ResolvedNode = Zilch
+                   ) extends Member {
     def valueType: Option[Type] = Some(field.valueType)
   }
-  class DereferenceMember(var root: Expression) extends Member {
+
+  class DereferenceMember(
+                           var root: Expression,
+                           val resolved: ResolvedNode = Zilch
+                         ) extends Member {
     def valueType: Option[Type] = root.valueType match {
       case Some(ptr: PointerType) => Some(ptr.valueType)
       case _                      => None
     }
   }
-  class ArrayMember(var root: Expression, var index: Expression)
-      extends Member {
+
+  class ArrayMember(
+                     var root: Expression,
+                     var index: Expression,
+                     val resolved: ResolvedNode = Zilch
+                   ) extends Member {
     def valueType: Option[Type] = root.valueType match {
       case Some(arr: ArrayType) => Some(arr.valueType)
       case _                    => None
@@ -441,16 +488,20 @@ object IR {
     def valueType: Option[Type] = None
   }
 
-  class Accessibility(var member: Member) extends SpecificationExpression {
+  class Accessibility(
+                       var member: Member,
+                       val resolved: ResolvedNode = Zilch
+                     ) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || member.contains(exp)
 
   }
 
   class PredicateInstance(
-      var predicate: Predicate,
-      var arguments: List[IR.Expression]
-  ) extends SpecificationExpression {
+                           var predicate: Predicate,
+                           var arguments: List[IR.Expression],
+                           val resolved: ResolvedNode = Zilch
+                         ) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || arguments.exists(_.contains(exp))
     override def toString() =
@@ -459,48 +510,71 @@ object IR {
 
   // "unfolding" expressions in a specification
   class Unfolding(
-    var instance: PredicateInstance,
-    var expr: IR.Expression
-  ) extends SpecificationExpression {
+                   var instance: PredicateInstance,
+                   var expr: IR.Expression,
+                   val resolved: ResolvedNode = Zilch
+                 ) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || instance.contains(exp) || expr.contains(exp)
     override def valueType: Option[Type] = expr.valueType
   }
 
   // Represents a \result expression in a specification
-  class Result(var method: Method) extends SpecificationExpression {
+  class Result(
+                var method: Method,
+                val resolved: ResolvedNode = Zilch
+              ) extends SpecificationExpression {
     override def valueType = method.returnType
   }
 
   // Wraps another expression and adds imprecision (i.e. `? && precise`)
-  class Imprecise(var precise: Option[IR.Expression])
-      extends SpecificationExpression {
+  class Imprecise(
+                   var precise: Option[IR.Expression],
+                   val resolved: ResolvedNode = Zilch
+                 ) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || precise.exists(_.contains(exp))
   }
 
   sealed trait Literal extends Expression
-  class IntLit(val value: Int) extends Literal {
+
+  class IntLit(
+                val value: Int,
+                val resolved: ResolvedNode = Zilch
+              ) extends Literal {
     def valueType: Option[Type] = Some(IntType)
   }
-  class CharLit(val value: scala.Char) extends Literal {
+
+  class CharLit(
+                 val value: scala.Char,
+                 val resolved: ResolvedNode = Zilch
+               ) extends Literal {
     def valueType: Option[Type] = Some(CharType)
   }
-  class BoolLit(val value: scala.Boolean) extends Literal {
+
+  class BoolLit(
+                 val value: scala.Boolean,
+                 val resolved: ResolvedNode = Zilch
+               ) extends Literal {
     def valueType: Option[Type] = Some(BoolType)
   }
-  class StringLit(val value: String) extends Literal {
+
+  class StringLit(
+                   val value: String,
+                   val resolved: ResolvedNode = Zilch
+                 ) extends Literal {
     def valueType: Option[Type] = Some(StringType)
   }
-  class NullLit extends Literal {
+  class NullLit(val resolved: ResolvedNode = Zilch) extends Literal {
     def valueType: Option[Type] = None
   }
 
   class Conditional(
-      var condition: Expression,
-      var ifTrue: Expression,
-      var ifFalse: Expression
-  ) extends Expression {
+                     var condition: Expression,
+                     var ifTrue: Expression,
+                     var ifFalse: Expression,
+                     val resolved: ResolvedNode = Zilch
+                   ) extends Expression {
     def valueType: Option[Type] = ifTrue.valueType.orElse(ifFalse.valueType)
     override def contains(exp: Expression): Boolean =
       super.contains(exp) || condition.contains(exp) || ifTrue.contains(
@@ -509,10 +583,11 @@ object IR {
   }
 
   class Binary(
-      var operator: BinaryOp,
-      var left: Expression,
-      var right: Expression
-  ) extends Expression {
+                var operator: BinaryOp,
+                var left: Expression,
+                var right: Expression,
+                val resolved: ResolvedNode = Zilch
+              ) extends Expression {
     def valueType: Option[Type] = operator match {
       case BinaryOp.Add | BinaryOp.Subtract | BinaryOp.Divide |
           BinaryOp.Multiply =>
@@ -543,9 +618,10 @@ object IR {
   }
 
   class Unary(
-      var operator: UnaryOp,
-      var operand: Expression
-  ) extends Expression {
+               var operator: UnaryOp,
+               var operand: Expression,
+               val resolved: ResolvedNode = Zilch
+             ) extends Expression {
     def valueType: Option[Type] = operator match {
       case UnaryOp.Negate => Some(IntType)
       case UnaryOp.Not    => Some(BoolType)
@@ -644,11 +720,12 @@ object IR {
   }
 
   class Invoke(
-      var callee: MethodDefinition,
-      var arguments: List[Expression],
-      var target: Option[Expression]
-  ) extends Op {
-    def copy = new Invoke(callee, arguments, target)
+                var callee: MethodDefinition,
+                var arguments: List[Expression],
+                var target: Option[Expression],
+                val resolved: ResolvedNode = Zilch
+              ) extends Op {
+    def copy = new Invoke(callee, arguments, target, resolved)
     def summary = (
       target.map(e => IRPrinter.print(e) + " = ").getOrElse("")
         + callee.name + "(" + arguments.map(IRPrinter.print) + ")"
@@ -656,29 +733,32 @@ object IR {
   }
 
   class AllocValue(
-      var valueType: Type,
-      var target: Var
-  ) extends Op {
-    def copy = new AllocValue(valueType, target)
+                    var valueType: Type,
+                    var target: Var,
+                    val resolved: ResolvedNode = Zilch
+                  ) extends Op {
+    def copy = new AllocValue(valueType, target, resolved)
     def summary = target.name + " = alloc(" + valueType.name + ")"
   }
 
   class AllocStruct(
-      var struct: StructDefinition,
-      var target: Expression
-  ) extends Op {
-    def copy = new AllocStruct(struct, target)
+                     var struct: StructDefinition,
+                     var target: Expression,
+                     val resolved: ResolvedNode = Zilch
+                   ) extends Op {
+    def copy = new AllocStruct(struct, target, resolved)
     def summary =
       IRPrinter.print(target) + " = alloc(struct " + struct.name + ")"
   }
 
   // TODO: Length should be an expression
   class AllocArray(
-      var valueType: Type,
-      var length: IntLit,
-      var target: Var
-  ) extends Op {
-    def copy = new AllocArray(valueType, length, target)
+                    var valueType: Type,
+                    var length: IntLit,
+                    var target: Var,
+                    val resolved: ResolvedNode = Zilch
+                  ) extends Op {
+    def copy = new AllocArray(valueType, length, target, resolved)
     def summary = (
       IRPrinter.print(target)
       + "= alloc_array(" + valueType.name
@@ -687,26 +767,29 @@ object IR {
   }
 
   class Assign(
-      var target: Var,
-      var value: Expression
-  ) extends Op {
-    def copy = new Assign(target, value)
+                var target: Var,
+                var value: Expression,
+                val resolved: ResolvedNode = Zilch
+              ) extends Op {
+    def copy = new Assign(target, value, resolved)
     def summary = target.name + " = " + IRPrinter.print(value)
   }
 
   class AssignMember(
-      var member: Member,
-      var value: Expression
-  ) extends Op {
-    def copy = new AssignMember(member, value)
+                      var member: Member,
+                      var value: Expression,
+                      val resolved: ResolvedNode = Zilch
+                    ) extends Op {
+    def copy = new AssignMember(member, value, resolved)
     def summary = IRPrinter.print(member) + " = " + IRPrinter.print(value)
   }
 
   class Assert(
-      var value: Expression,
-      var kind: AssertKind
-  ) extends Op {
-    def copy = new Assert(value, kind)
+                var value: Expression,
+                var kind: AssertKind,
+                val resolved: ResolvedNode = Zilch
+              ) extends Op {
+    def copy = new Assert(value, kind, resolved)
     def summary = (kind match {
       case IR.AssertKind.Imperative => "assert "
       case IR.AssertKind.Specification => "//@assert "
@@ -720,28 +803,34 @@ object IR {
   }
 
   class Fold(
-      var instance: PredicateInstance
-  ) extends Op {
-    def copy = new Fold(instance)
+              var instance: PredicateInstance,
+              val resolved: ResolvedNode = Zilch
+            ) extends Op {
+    def copy = new Fold(instance, resolved)
     def summary = "//@fold " + instance.toString()
   }
 
   class Unfold(
-      var instance: PredicateInstance
-  ) extends Op {
-    def copy = new Unfold(instance)
+                var instance: PredicateInstance,
+                val resolved: ResolvedNode = Zilch
+              ) extends Op {
+    def copy = new Unfold(instance, resolved)
     def summary = "//@unfold " + instance.toString()
   }
 
   class Error(
-      var value: Expression
-  ) extends Op {
-    def copy = new Error(value)
+               var value: Expression,
+               val resolved: ResolvedNode = Zilch
+             ) extends Op {
+    def copy = new Error(value, resolved)
     def summary = "error(" + IRPrinter.print(value) + ")"
   }
 
-  class Return(var value: Option[Expression]) extends Op {
-    def copy = new Return(value)
+  class Return(
+                var value: Option[Expression],
+                val resolved: ResolvedNode = Zilch
+              ) extends Op {
+    def copy = new Return(value, resolved)
     def summary = value match {
       case None => "return"
       case Some(e) => "return " + IRPrinter.print(e)
@@ -749,19 +838,20 @@ object IR {
   }
 
   class If(
-      var condition: Expression
-  ) extends Op {
+            var condition: Expression,
+            val resolved: ResolvedNode = Zilch
+          ) extends Op {
     val ifTrue = new ChildBlock(this)
     val ifFalse = new ChildBlock(this)
 
     def copy = {
-      val newIf = new If(condition)
+      val newIf = new If(condition, resolved)
       ifTrue.foreach(newIf.ifTrue += _.copy)
       ifFalse.foreach(newIf.ifFalse += _.copy)
       newIf
     }
     def copy(trueBranch: List[Op], falseBranch: List[Op]) = {
-      val newIf = new If(condition)
+      val newIf = new If(condition, resolved)
       trueBranch.foreach(newIf.ifTrue += _.copy)
       falseBranch.foreach(newIf.ifFalse += _.copy)
       newIf
@@ -771,13 +861,14 @@ object IR {
   }
 
   class While(
-      var condition: Expression,
-      var invariant: Expression
-  ) extends Op {
+               var condition: Expression,
+               var invariant: Expression,
+               val resolved: ResolvedNode = Zilch
+             ) extends Op {
     var body = new ChildBlock(this)
 
     def copy = {
-      val newWhile = new While(condition, invariant)
+      val newWhile = new While(condition, invariant, resolved)
       body.foreach(newWhile.body += _.copy)
       newWhile
     }
@@ -785,7 +876,7 @@ object IR {
         newInvariant: IR.Expression,
         newBody: List[IR.Op]
     ) = {
-      val newWhile = new While(condition, newInvariant)
+      val newWhile = new While(condition, newInvariant, resolved)
       newBody.foreach(newWhile.body += _.copy)
       newWhile
     }
@@ -863,10 +954,10 @@ object IR {
 
     def parameters: Seq[Parameter] = _parameters
 
-    def addParameter(name: String, valueType: Type): Parameter = {
-      val param = new Parameter(valueType, name)
-      if (_parameters.exists(_.name == name))
-        throw new TransformerException(s"Parameter '$name' already exists")
+    def addParameter(parameterName: String, valueType: Type): Parameter = {
+      val param = new Parameter(valueType, parameterName, name)
+      if (_parameters.exists(_.name == parameterName))
+        throw new TransformerException(s"Parameter '$parameterName' already exists")
       _parameters += param
       param
     }

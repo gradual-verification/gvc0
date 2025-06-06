@@ -1,5 +1,8 @@
 package gvc.transformer
+import gvc.analyzer.ResolvedNode
+import gvc.analyzer.Zilch
 import viper.silver.{ast => vpr}
+
 import scala.collection.mutable
 
 case class SilverVarId(methodName: String, varName: String)
@@ -82,7 +85,7 @@ object IRSilver {
         pre,
         post,
         Some(vpr.Seqn(body, decls)())
-      )()
+      )(getPosition(method.resolved))
     }
 
     def convertDecl(decl: IR.Var): vpr.LocalVarDecl = {
@@ -119,7 +122,7 @@ object IRSilver {
             convertExpr(iff.condition),
             vpr.Seqn(ifTrue, Seq.empty)(),
             vpr.Seqn(ifFalse, Seq.empty)()
-          )()
+          )(getPosition(iff.resolved))
         )
       }
 
@@ -129,7 +132,7 @@ object IRSilver {
             convertExpr(loop.condition),
             List(convertExpr(loop.invariant)),
             vpr.Seqn(loop.body.flatMap(convertOp).toList, Seq.empty)()
-          )()
+          )(getPosition(loop.resolved))
         )
       }
 
@@ -152,7 +155,7 @@ object IRSilver {
         val args = invoke.arguments.map(convertExpr).toList
         Seq(
           vpr.MethodCall(invoke.callee.name, args, target.toSeq)(
-            vpr.NoPosition,
+            getPosition(invoke.resolved),
             vpr.NoInfo,
             vpr.NoTrafos
           )
@@ -172,7 +175,7 @@ object IRSilver {
             )
         }
         val fields = alloc.struct.fields.map(convertField).toList
-        Seq(vpr.NewStmt(target, fields)())
+        Seq(vpr.NewStmt(target, fields)(getPosition(alloc.resolved)))
       }
 
       case _: IR.AllocArray =>
@@ -183,7 +186,7 @@ object IRSilver {
           vpr.LocalVarAssign(
             convertVar(assign.target),
             convertExpr(assign.value)
-          )()
+          )(getPosition(assign.resolved))
         )
 
       case assign: IR.AssignMember =>
@@ -191,28 +194,28 @@ object IRSilver {
           vpr.FieldAssign(
             convertMember(assign.member),
             convertExpr(assign.value)
-          )()
+          )(getPosition(assign.resolved))
         )
 
       case assert: IR.Assert =>
         assert.kind match {
           case IR.AssertKind.Imperative => Seq.empty
           case IR.AssertKind.Specification =>
-            Seq(vpr.Assert(convertExpr(assert.value))())
+            Seq(vpr.Assert(convertExpr(assert.value))(getPosition(assert.resolved)))
         }
 
       case fold: IR.Fold =>
-        Seq(vpr.Fold(convertPredicateInstance(fold.instance))())
+        Seq(vpr.Fold(convertPredicateInstance(fold.instance))(getPosition(fold.resolved)))
       case unfold: IR.Unfold =>
-        Seq(vpr.Unfold(convertPredicateInstance(unfold.instance))())
-      case error: IR.Error => Seq(vpr.Assert(vpr.FalseLit()())())
+        Seq(vpr.Unfold(convertPredicateInstance(unfold.instance))(getPosition(unfold.resolved)))
+      case error: IR.Error => Seq(vpr.Assert(vpr.FalseLit()())(getPosition(error.resolved)))
 
       case ret: IR.Return =>
         ret.value match {
           case None => Seq.empty
           case Some(value) =>
             Seq(
-              vpr.LocalVarAssign(getReturnVar(ret.method), convertExpr(value))()
+              vpr.LocalVarAssign(getReturnVar(ret.method), convertExpr(value))(getPosition(ret.resolved))
             )
         }
     }
@@ -223,12 +226,12 @@ object IRSilver {
     }
 
     def convertVar(v: IR.Var): vpr.LocalVar = {
-      vpr.LocalVar(varName(v.name), convertType(v.varType))()
+      vpr.LocalVar(varName(v.name), convertType(v.varType))(getPosition(v.resolved))
     }
 
     def convertMember(member: IR.Member): vpr.FieldAccess = member match {
       case member: IR.FieldMember =>
-        vpr.FieldAccess(convertExpr(member.root), convertField(member.field))()
+        vpr.FieldAccess(convertExpr(member.root), convertField(member.field))(getPosition(member.resolved))
       case member: IR.DereferenceMember =>
         throw new IRException("Bare pointers cannot be converted")
       case _: IR.ArrayMember =>
@@ -242,57 +245,58 @@ object IRSilver {
         vpr.PredicateAccess(
           pred.arguments.map(convertExpr),
           pred.predicate.name
-        )(),
+        )(getPosition(pred.resolved)),
         vpr.FullPerm()()
-      )()
+      )(getPosition(pred.resolved))
 
     def convertExpr(expr: IR.Expression): vpr.Exp = expr match {
       case v: IR.Var    => convertVar(v)
       case m: IR.Member => convertMember(m)
       case acc: IR.Accessibility =>
-        vpr.FieldAccessPredicate(convertMember(acc.member), vpr.FullPerm()())()
+        vpr.FieldAccessPredicate(convertMember(acc.member), vpr.FullPerm()())(getPosition(acc.resolved))
       case pred: IR.PredicateInstance => convertPredicateInstance(pred)
-      case unfolding: IR.Unfolding => vpr.Unfolding(convertPredicateInstance(unfolding.instance), convertExpr(unfolding.expr))()
+      case unfolding: IR.Unfolding =>
+        vpr.Unfolding(convertPredicateInstance(unfolding.instance), convertExpr(unfolding.expr))(getPosition(unfolding.resolved))
       case result: IR.Result          => getReturnVar(result.method)
       case imp: IR.Imprecise =>
         vpr.ImpreciseExp(
           imp.precise.map(convertExpr).getOrElse(vpr.TrueLit()())
-        )()
-      case int: IR.IntLit    => vpr.IntLit(BigInt(int.value))()
-      case char: IR.CharLit  => vpr.IntLit(BigInt(char.value))()
-      case bool: IR.BoolLit  => vpr.BoolLit(bool.value)()
+        )(getPosition(imp.resolved))
+      case int: IR.IntLit    => vpr.IntLit(BigInt(int.value))(getPosition(int.resolved))
+      case char: IR.CharLit  => vpr.IntLit(BigInt(char.value))(getPosition(char.resolved))
+      case bool: IR.BoolLit  => vpr.BoolLit(bool.value)(getPosition(bool.resolved))
       case str: IR.StringLit => throw new IRException("Strings are not supported.")
-      case n: IR.NullLit     => vpr.NullLit()()
+      case n: IR.NullLit     => vpr.NullLit()(getPosition(n.resolved))
       case cond: IR.Conditional =>
         vpr.CondExp(
           convertExpr(cond.condition),
           convertExpr(cond.ifTrue),
           convertExpr(cond.ifFalse)
-        )()
+        )(getPosition(cond.resolved))
       case bin: IR.Binary => {
         val left = convertExpr(bin.left)
         val right = convertExpr(bin.right)
         bin.operator match {
-          case IR.BinaryOp.Add            => vpr.Add(left, right)()
-          case IR.BinaryOp.Subtract       => vpr.Sub(left, right)()
-          case IR.BinaryOp.Divide         => vpr.Div(left, right)()
-          case IR.BinaryOp.Multiply       => vpr.Mul(left, right)()
-          case IR.BinaryOp.And            => vpr.And(left, right)()
-          case IR.BinaryOp.Or             => vpr.Or(left, right)()
-          case IR.BinaryOp.Equal          => vpr.EqCmp(left, right)()
-          case IR.BinaryOp.NotEqual       => vpr.NeCmp(left, right)()
-          case IR.BinaryOp.Less           => vpr.LtCmp(left, right)()
-          case IR.BinaryOp.LessOrEqual    => vpr.LeCmp(left, right)()
-          case IR.BinaryOp.Greater        => vpr.GtCmp(left, right)()
-          case IR.BinaryOp.GreaterOrEqual => vpr.GeCmp(left, right)()
+          case IR.BinaryOp.Add            => vpr.Add(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.Subtract       => vpr.Sub(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.Divide         => vpr.Div(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.Multiply       => vpr.Mul(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.And            => vpr.And(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.Or             => vpr.Or(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.Equal          => vpr.EqCmp(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.NotEqual       => vpr.NeCmp(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.Less           => vpr.LtCmp(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.LessOrEqual    => vpr.LeCmp(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.Greater        => vpr.GtCmp(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.GreaterOrEqual => vpr.GeCmp(left, right)(getPosition(bin.resolved))
         }
       }
 
       case unary: IR.Unary => {
         val value = convertExpr(unary.operand)
         unary.operator match {
-          case IR.UnaryOp.Negate => vpr.Minus(value)()
-          case IR.UnaryOp.Not    => vpr.Not(value)()
+          case IR.UnaryOp.Negate => vpr.Minus(value)(getPosition(unary.resolved))
+          case IR.UnaryOp.Not    => vpr.Not(value)(getPosition(unary.resolved))
         }
       }
     }
@@ -304,5 +308,19 @@ object IRSilver {
         Some(convertExpr(pred.expression))
       )()
     }
+
+    def getPosition(resolved: ResolvedNode): vpr.Position =
+      if (resolved == Zilch) {
+        vpr.NoPosition
+      } else {
+        val span = resolved.parsed.span
+        vpr.TranslatedPosition(
+          vpr.SourcePosition(
+            null,
+            vpr.LineColumnPosition(span.start.line, span.start.column),
+            vpr.LineColumnPosition(span.end.line, span.end.column)
+          )
+        )
+      }
   }
 }

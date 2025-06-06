@@ -20,6 +20,7 @@ import gvc.benchmarking.{
 import gvc.weaver.{Weaver, WeaverException}
 import gvc.benchmarking.Timeout
 import viper.silicon.Silicon
+import viper.silicon.logger.SymbExLogger
 import viper.silicon.state.{profilingInfo, runtimeChecks}
 import viper.silver.ast.Program
 import viper.silver.verifier
@@ -344,11 +345,34 @@ object Main extends App {
 
   class VerifierException(message: String) extends Exception(message)
 
-  def resolveSilicon(config: Config): Silicon = {
+  def verifyFromPlugin(inputSource: String): Unit = {
+    SymbExLogger.reset()
+    SymbExLogger.resetMaps()
+    val silicon = resolveSilicon(true)
+    val lib = System.getenv("GVC0_PATH") + "/src/main/resources"
+    val ir = generateIR(inputSource, List(lib))
+    val silver = IRSilver.toSilver(ir)
+    silicon.start()
+    silicon.verify(silver) match {
+      case verifier.Success =>
+        silicon.stop()
+        SymbExLogger.errors = Seq.empty
+      case verifier.Failure(errors) =>
+        silicon.stop()
+        SymbExLogger.errors = errors
+    }
+  }
+
+  def resolveSilicon(ideModeAdvanced: Boolean = false): Silicon = {
     val reporter = viper.silver.reporter.StdIOReporter()
     val z3Exe = Config.resolveToolPath("z3", "Z3_EXE")
+    val args = if (ideModeAdvanced) {
+      Seq("--z3Exe", z3Exe, "--checkTimeout", "0", "--ideModeAdvanced")
+    } else {
+      Seq("--z3Exe", z3Exe, "--checkTimeout", "0")
+    }
     Silicon.fromPartialCommandLineArguments(
-      Seq("--z3Exe", z3Exe, "--checkTimeout", "0"),
+      args,
       reporter,
       Seq()
     )
@@ -359,7 +383,8 @@ object Main extends App {
       fileNames: OutputFileCollection,
       config: Config
   ): VerifiedOutput = {
-    def silicon = resolveSilicon(config)
+    SymbExLogger.resetMaps()
+    def silicon = resolveSilicon()
     val output = verifySiliconProvided(silicon, inputSource, fileNames, config)
     output
   }

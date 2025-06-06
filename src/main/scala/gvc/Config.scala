@@ -162,9 +162,11 @@ object Config {
   private val recreatePermString = raw"--recreate=(.+)".r
   private val profilingDirectory = raw"--profiling-dir=(.+)".r
 
+  class GVC0Exception(message: String) extends Exception(message)
+
   def error(message: String): Nothing = {
     Output.error(message)
-    sys.exit(1)
+    throw new GVC0Exception(message)
   }
 
   def prettyPrintException(message: String, throwable: Throwable): Nothing = {
@@ -371,6 +373,7 @@ object Config {
     }
 
   def resolveToolPath(name: String, envVar: String): String = {
+    val isWindows = System.getProperty("os.name").toLowerCase.startsWith("windows")
     // Check if a path is explicitly specified in the environment
     val specified = sys.env.get(envVar)
 
@@ -383,9 +386,9 @@ object Config {
     specified
       .orElse(
         sys
-          .env("PATH")
+          .env(if (isWindows) "Path" else "PATH")
           .split(File.pathSeparatorChar)
-          .map(dir => Paths.get(dir).resolve(name))
+          .map(dir => Paths.get(dir).resolve(name + (if (isWindows) ".exe" else "")))
           .find(p => Files.exists(p))
           .map(_.toString())
       )

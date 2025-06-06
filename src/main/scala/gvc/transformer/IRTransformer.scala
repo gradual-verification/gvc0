@@ -199,6 +199,7 @@ object IRTransformer {
         input.name,
         transformReturnType(input.declaration.returnType)
       )
+      method.resolved = input
       for (param <- input.declaration.arguments) {
         method.addParameter(transformType(param.valueType), param.name)
       }
@@ -211,7 +212,11 @@ object IRTransformer {
         input.variable match {
           case None =>
             throw new TransformerException("Invalid variable reference")
-          case Some(v) => variable(v.name)
+          case Some(v) => {
+            val irVar = variable(v.name)
+            irVar.resolved = input
+            irVar
+          }
         }
       }
 
@@ -229,7 +234,7 @@ object IRTransformer {
         vars.getOrElse(
           name,
           throw new TransformerException(s"Variable '$name' not found")
-        )
+        ).copy
       }
     }
 
@@ -317,7 +322,7 @@ object IRTransformer {
         }
 
         case iff: ResolvedIf => {
-          val ir = new IR.If(transformExpr(iff.condition, scope))
+          val ir = new IR.If(transformExpr(iff.condition, scope), iff)
           scope += ir
 
           transformStatement(
@@ -341,7 +346,7 @@ object IRTransformer {
             new IR.While(cond,
                          loop.invariant
                            .map(transformSpec(_, scope))
-                           .getOrElse(new IR.Imprecise(None)))
+                           .getOrElse(new IR.Imprecise(None)), loop)
           scope += ir
 
           val bodyScope = new BlockScope(scope.method, ir.body, scope.vars)
@@ -369,7 +374,7 @@ object IRTransformer {
                   invokeToVar(invoke, scope.variable(ref), scope)
                 case complex =>
                   scope += transformAssign(
-                    complex,
+                    assign,
                     transformExpr(invoke, scope),
                     assign.operation,
                     scope
@@ -382,10 +387,10 @@ object IRTransformer {
                 // Avoid introducing a temp var for the case when the result
                 // is immediately assigned to a var
                 case ref: ResolvedVariableRef if assign.operation == None =>
-                  scope += transformAlloc(alloc, scope.variable(ref), scope)
+                  scope += transformAlloc(alloc, scope.variable(ref))
                 case complex =>
                   scope += transformAssign(
-                    complex,
+                    assign,
                     transformExpr(alloc, scope),
                     assign.operation,
                     scope
@@ -394,7 +399,7 @@ object IRTransformer {
             }
             case expr =>
               scope += transformAssign(
-                assign.left,
+                assign,
                 transformExpr(expr, scope),
                 assign.operation,
                 scope
@@ -412,34 +417,40 @@ object IRTransformer {
           }
 
           val computed = new IR.Binary(op, current, new IR.IntLit(1))
-          scope += transformAssign(inc.value, computed, None, scope)
+          scope += transformAssign(inc, computed, None, scope)
         }
 
         case ret: ResolvedReturn =>
-          scope += new IR.Return(ret.value.map(transformExpr(_, scope)))
+          scope += new IR.Return(ret.value.map(transformExpr(_, scope)), ret)
 
         case assert: ResolvedAssert =>
           scope += new IR.Assert(
             transformExpr(assert.value, scope),
-            IR.AssertKind.Imperative
+            IR.AssertKind.Imperative,
+            assert
           )
 
         case spec: ResolvedAssertSpecification =>
           scope += new IR.Assert(
             transformSpec(spec.specification, scope),
-            IR.AssertKind.Specification
+            IR.AssertKind.Specification,
+            spec
           )
 
         case unfold: ResolvedUnfoldPredicate =>
           scope += new IR.Unfold(
-            transformPredicate(unfold.predicate, scope)
+            transformPredicate(unfold.predicate, scope),
+            unfold
           )
 
         case fold: ResolvedFoldPredicate =>
-          scope += new IR.Fold(transformPredicate(fold.predicate, scope))
+          scope += new IR.Fold(
+            transformPredicate(fold.predicate, scope),
+            fold
+          )
 
         case err: ResolvedError =>
-          scope += new IR.Error(transformExpr(err.value, scope))
+          scope += new IR.Error(transformExpr(err.value, scope), err)
       }
     }
 
@@ -459,7 +470,7 @@ object IRTransformer {
             throw new TransformerException(
               s"Predicate parameter '$name' not found"
             )
-          )
+          ).copy
 
       // Cannot add operations, so conditional scope is a no-op
       def conditional(cond: IR.Expression) = this
@@ -490,19 +501,20 @@ object IRTransformer {
       case pred: ResolvedPredicate  => transformPredicate(pred, scope)
       case invoke: ResolvedInvoke   => invokeToValue(invoke, scope)
       case alloc: ResolvedAlloc     => allocToValue(alloc, scope)
-      case unfolding: ResolvedUnfolding => new IR.Unfolding(transformPredicate(unfolding.predicate, scope), transformExpr(unfolding.expr, scope))
+      case unfolding: ResolvedUnfolding =>
+        new IR.Unfolding(transformPredicate(unfolding.predicate, scope), transformExpr(unfolding.expr, scope), unfolding)
 
       case m: ResolvedMember => {
         val (parent, field) = transformField(m)
-        new IR.FieldMember(transformExpr(parent, scope), field)
+        new IR.FieldMember(transformExpr(parent, scope), field, m)
       }
 
       case _: ResolvedArrayIndex | _: ResolvedLength | _: ResolvedAllocArray =>
         throw new TransformerException("Arrays are not supported")
 
-      case _: ResolvedResult =>
+      case r: ResolvedResult =>
         scope match {
-          case scope: MethodScope => new IR.Result(scope.method)
+          case scope: MethodScope => new IR.Result(scope.method, r)
           case _ =>
             throw new TransformerException("Result used in invalid context")
         }
@@ -511,10 +523,10 @@ object IRTransformer {
         new IR.Accessibility(transformExpr(acc.field, scope) match {
           case member: IR.Member => member
           case _                 => throw new TransformerException("Invalid acc() argument")
-        })
+        }, acc)
 
       case imp: ResolvedImprecision =>
-        new IR.Imprecise(None)
+        new IR.Imprecise(None, imp)
 
       case cond: ResolvedTernary => {
         val condition = transformExpr(cond.condition, scope)
@@ -522,7 +534,7 @@ object IRTransformer {
           transformExpr(cond.ifTrue, conditionalScope(scope, condition))
         val ifFalse =
           transformExpr(cond.ifFalse, conditionalScope(scope, not(condition)))
-        new IR.Conditional(condition, ifTrue, ifFalse)
+        new IR.Conditional(condition, ifTrue, ifFalse, cond)
       }
 
       case arith: ResolvedArithmetic => {
@@ -536,7 +548,8 @@ object IRTransformer {
         new IR.Binary(
           op,
           transformExpr(arith.left, scope),
-          transformExpr(arith.right, scope)
+          transformExpr(arith.right, scope),
+          arith
         )
       }
 
@@ -555,7 +568,8 @@ object IRTransformer {
         new IR.Binary(
           op,
           transformExpr(comp.left, scope),
-          transformExpr(comp.right, scope)
+          transformExpr(comp.right, scope),
+          comp
         )
       }
 
@@ -567,26 +581,27 @@ object IRTransformer {
         }
         val right =
           transformExpr(logic.right, conditionalScope(scope, rightCond))
-        new IR.Binary(op, left, right)
+        new IR.Binary(op, left, right, logic)
       }
 
       case deref: ResolvedDereference => {
-        new IR.DereferenceMember(transformExpr(deref.value, scope))
+        new IR.DereferenceMember(transformExpr(deref.value, scope), deref)
       }
 
       case not: ResolvedNot =>
-        new IR.Unary(IR.UnaryOp.Not, transformExpr(not.value, scope))
+        new IR.Unary(IR.UnaryOp.Not, transformExpr(not.value, scope), not)
       case negate: ResolvedNegation =>
         new IR.Unary(
           IR.UnaryOp.Negate,
-          transformExpr(negate.value, scope)
+          transformExpr(negate.value, scope),
+          negate
         )
       case _: ResolvedString =>
         throw new TransformerException("Strings are not supported")
-      case char: ResolvedChar => new IR.CharLit(char.value)
-      case int: ResolvedInt   => new IR.IntLit(int.value)
-      case b: ResolvedBool    => new IR.BoolLit(b.value)
-      case _: ResolvedNull    => new IR.NullLit()
+      case char: ResolvedChar => new IR.CharLit(char.value, char)
+      case int: ResolvedInt   => new IR.IntLit(int.value, int)
+      case b: ResolvedBool    => new IR.BoolLit(b.value, b)
+      case n: ResolvedNull    => new IR.NullLit(n)
     }
 
     // Catches a ? specifier and wraps it in an Imprecise object
@@ -594,7 +609,7 @@ object IRTransformer {
         input: ResolvedExpression,
         scope: Scope
     ): IR.Expression = input match {
-      case _: ResolvedImprecision => new IR.Imprecise(None)
+      case _: ResolvedImprecision => new IR.Imprecise(None, input)
 
       case logical: ResolvedLogical => {
         val (left, leftImp) = transformSpec(logical.left, scope) match {
@@ -611,16 +626,16 @@ object IRTransformer {
           throw new TransformerException("Invalid ? expression")
 
         (left, right) match {
-          case (None, None)      => new IR.Imprecise(None)
-          case (None, Some(exp)) => new IR.Imprecise(Some(exp))
-          case (Some(exp), None) => new IR.Imprecise(Some(exp))
+          case (None, None)      => new IR.Imprecise(None, input)
+          case (None, Some(exp)) => new IR.Imprecise(Some(exp), input)
+          case (Some(exp), None) => new IR.Imprecise(Some(exp), input)
           case (Some(l), Some(r)) => {
             val op = logical.operation match {
               case LogicalOperation.And => IR.BinaryOp.And
               case LogicalOperation.Or  => IR.BinaryOp.Or
             }
-            val exp = new IR.Binary(op, l, r)
-            if (leftImp || rightImp) new IR.Imprecise(Some(exp))
+            val exp = new IR.Binary(op, l, r, input)
+            if (leftImp || rightImp) new IR.Imprecise(Some(exp), input)
             else exp
           }
         }
@@ -634,7 +649,8 @@ object IRTransformer {
         case scope: MethodScope => {
           val valueType = transformType(input.valueType)
           val temp = scope.method.addVar(valueType)
-          scope += transformAlloc(input, temp, scope)
+          temp.resolved = input // required to propagate position information
+          scope += transformAlloc(input, temp)
           temp
         }
 
@@ -650,7 +666,8 @@ object IRTransformer {
           )
           val args = input.arguments.map(arg => transformExpr(arg, scope))
           val temp = scope.method.addVar(retType)
-          scope += new IR.Invoke(callee, args, Some(temp))
+          temp.resolved = input // required to propagate position information
+          scope += new IR.Invoke(callee, args, Some(temp), input)
           temp
         case _ =>
           throw new TransformerException(
@@ -666,7 +683,7 @@ object IRTransformer {
     ): Unit = {
       val method = resolveMethod(input)
       val args = input.arguments.map(arg => transformExpr(arg, scope))
-      scope += new IR.Invoke(method, args, Some(target))
+      scope += new IR.Invoke(method, args, Some(target), input)
     }
 
     def invokeVoid(input: ResolvedInvoke, scope: MethodScope): Unit = {
@@ -675,7 +692,7 @@ object IRTransformer {
       // Add a variable to capture the result, even when it is not used. (The
       // [conditions of] Viper run-time checks may reference it.)
       val target = method.returnType.map(t => scope.method.addVar(t))
-      scope += new IR.Invoke(method, args, target)
+      scope += new IR.Invoke(method, args, target, input)
     }
 
     def resolveMethod(invoke: ResolvedInvoke): IR.MethodDefinition =
@@ -696,19 +713,29 @@ object IRTransformer {
     ): IR.PredicateInstance =
       new IR.PredicateInstance(
         resolvePredicate(pred),
-        pred.arguments.map(transformExpr(_, scope))
+        pred.arguments.map(transformExpr(_, scope)),
+        pred
       )
 
     def transformAssign(
-        target: ResolvedExpression,
+        statement: ResolvedStatement,
         value: IR.Expression,
         op: Option[ArithmeticOperation],
         scope: Scope
     ): IR.Op = {
+      val target = statement match {
+        case assign: ResolvedAssignment => assign.left
+        case inc: ResolvedIncrement => inc.value
+        case _ => throw new TransformerException("Beep beep")
+      }
       target match {
         case ref: ResolvedVariableRef => {
           val target = scope.variable(ref)
-          new IR.Assign(target, transformAssignValue(value, target, op))
+          new IR.Assign(
+            target,
+            transformAssignValue(statement, value, target, op),
+            statement
+          )
         }
 
         case member: ResolvedMember => {
@@ -717,7 +744,8 @@ object IRTransformer {
             new IR.FieldMember(transformExpr(parent, scope), field)
           new IR.AssignMember(
             target,
-            transformAssignValue(value, target, op)
+            transformAssignValue(statement, value, target, op),
+            statement
           )
         }
 
@@ -726,7 +754,8 @@ object IRTransformer {
             new IR.DereferenceMember(transformExpr(deref.value, scope))
           new IR.AssignMember(
             target,
-            transformAssignValue(value, target, op)
+            transformAssignValue(statement, value, target, op),
+            statement
           )
 
         case _: ResolvedArrayIndex =>
@@ -736,6 +765,7 @@ object IRTransformer {
     }
 
     def transformAssignValue(
+        statement: ResolvedStatement,
         value: IR.Expression,
         target: IR.Expression,
         op: Option[ArithmeticOperation]
@@ -749,21 +779,17 @@ object IRTransformer {
             case ArithmeticOperation.Divide   => IR.BinaryOp.Divide
             case ArithmeticOperation.Multiply => IR.BinaryOp.Multiply
           }
-          new IR.Binary(binOp, target, value)
+          new IR.Binary(binOp, target, value, statement)
         }
       }
     }
 
-    def transformAlloc(
-        input: ResolvedAlloc,
-        target: IR.Var,
-        scope: Scope
-    ): IR.Op =
+    def transformAlloc(input: ResolvedAlloc, target: IR.Var): IR.Op =
       input.memberType match {
         case ResolvedStructType(structName) =>
-          new IR.AllocStruct(ir.struct(structName), target)
+          new IR.AllocStruct(ir.struct(structName), target, input)
         case valueType =>
-          new IR.AllocValue(transformType(valueType), target)
+          new IR.AllocValue(transformType(valueType), target, input)
       }
   }
 }
