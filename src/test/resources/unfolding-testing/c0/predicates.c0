@@ -17,7 +17,7 @@ int fullyImprecise(struct Node* a)
 
 int imprecisePrecondition(struct Node* a)
 //@requires ?;
-//@ensures ? && unfolding wrappedAcc(a) in a->value > 0;
+//@ensures ? && unfolding wrappedAcc(a) in (a->value > 0);
 {
     return a->value;
 }

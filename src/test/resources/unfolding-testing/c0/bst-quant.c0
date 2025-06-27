@@ -14,8 +14,8 @@ predicate bstRemove(struct Node *root, int x) =
     (
       acc(root->left) && acc(root->right) && acc(root->val) &&
       bstRemove(root->right, x) && bstRemove(root->left, x) && root->val != x &&
-      (unfolding bstRemove(root->right, x) in root->right == NULL || root->val <= root->right->val) &&
-      (unfolding bstRemove(root->left, x) in root->left == NULL || root->val >= root->left->val)
+      unfolding bstRemove(root->right, x) in (root->right == NULL || root->val <= root->right->val) &&
+      unfolding bstRemove(root->left, x) in (root->left == NULL || root->val >= root->left->val)
     ) ;
 @*/
 
@@ -27,8 +27,8 @@ predicate bst(struct Node *root) =
     (
       acc(root->left) && acc(root->right) && acc(root->val) &&
       bst(root->right) && bst(root->left) &&
-      (unfolding bst(root->right) in root->right == NULL || root->val <= root->right->val) && 
-      (unfolding bst(root->left) in root->left == NULL || root->val >= root->left->val)
+      unfolding bst(root->right) in (root->right == NULL || root->val <= root->right->val) &&
+      unfolding bst(root->left) in (root->left == NULL || root->val >= root->left->val)
     ) ;
 @*/
 

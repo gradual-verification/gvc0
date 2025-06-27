@@ -10,7 +10,7 @@ predicate pair(struct Node *this1) = ? && true;
 
 int test(struct Node *this, struct Node *num)
 //@ requires ?;
-//@ ensures ? && pair(this) && unfolding pair(this) in this->first > 0;
+//@ ensures ? && pair(this) && unfolding pair(this) in (this->first > 0);
 {
     return 0;
 }

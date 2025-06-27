@@ -17,7 +17,7 @@ predicate acyclic(struct List *l) = acc(l->head) && listSeg(l->head, NULL);
 
 
 void insertLastHelper(int val, struct List* this)
-//@requires acyclic(this) && unfolding acyclic(this) in this->head != NULL;
+//@requires acyclic(this) && unfolding acyclic(this) in (this->head != NULL);
 //@ensures ?;
 {
     //@unfold acyclic(this);

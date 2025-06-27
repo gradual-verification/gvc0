@@ -11,7 +11,7 @@ predicate pair(struct Node *this1, struct Node *num1) = acc(num1->val) && ((num1
 
 int test(struct Node *this, struct Node *num)
 //@ requires ?;
-//@ ensures ? && pair(this, num) && unfolding pair(this, num) in this->second > 0;
+//@ ensures ? && pair(this, num) && unfolding pair(this, num) in (this->second > 0);
 {
     return 0;
 }

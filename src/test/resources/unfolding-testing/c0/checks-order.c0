@@ -15,7 +15,7 @@ typedef struct Node Node;
 
 void bad(Node * x) 
 //@ requires ?;
-//@ ensures ? && unfolding foo(x) in x->val == 0;
+//@ ensures ? && unfolding foo(x) in (x->val == 0);
 {
 }
 

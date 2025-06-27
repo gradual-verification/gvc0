@@ -7,7 +7,7 @@ struct Node {
 
 /*@
 predicate lseg(struct Node *this, struct Node *end) = acc(this->data) && acc(this->next) && lseg(this->next, end) &&
-        unfolding lseg(this->next, end) in this->data <= this->next->data;
+        unfolding lseg(this->next, end) in (this->data <= this->next->data);
 @*/
 
 int contentNodes(struct Node *this, struct Node *end) 

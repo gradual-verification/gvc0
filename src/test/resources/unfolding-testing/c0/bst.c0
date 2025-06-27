@@ -17,8 +17,8 @@ predicate bst(struct Node *root) =
     (
       acc(root->left) && acc(root->right) && acc(root->val) &&
       bst(root->right) && bst(root->left) &&
-      (unfolding bst(root->right) in root->right == NULL || root->val <= root->right->val) && 
-      (unfolding bst(root->left) in root->left == NULL || root->val >= root->left->val)
+      unfolding bst(root->right) in (root->right == NULL || root->val <= root->right->val) &&
+      unfolding bst(root->left) in (root->left == NULL || root->val >= root->left->val)
     ) ;
 @*/
 
