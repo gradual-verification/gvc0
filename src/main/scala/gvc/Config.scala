@@ -1,6 +1,8 @@
 package gvc
 
-import gvc.Config.{DefaultMode, Describe, CaseStudyMode}
+import fastparse.Parsed.Failure
+import gvc.Config.{CaseStudyMode, DefaultMode, Describe}
+import gvc.analyzer.Error
 import gvc.benchmarking.Output
 
 import java.nio.file.{Files, InvalidPathException, Path, Paths}
@@ -163,6 +165,8 @@ object Config {
   private val profilingDirectory = raw"--profiling-dir=(.+)".r
 
   class GVC0Exception(message: String) extends Exception(message)
+  class GVC0ParserException(val failure: Failure) extends GVC0Exception(failure.trace().longAggregateMsg)
+  class GVC0ValidatorException(val errors: List[Error]) extends GVC0Exception(errors.map(_.toString()).mkString(", "))
 
   def error(message: String): Nothing = {
     Output.error(message)

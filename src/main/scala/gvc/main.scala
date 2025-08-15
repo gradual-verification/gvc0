@@ -2,6 +2,7 @@ package gvc
 
 import gvc.parser.Parser
 import fastparse.Parsed.{Failure, Success}
+import gvc.Config.{GVC0ParserException, GVC0ValidatorException}
 import gvc.analyzer._
 import gvc.benchmarking.BenchmarkExecutor.injectAndWrite
 import gvc.transformer._
@@ -25,7 +26,7 @@ import viper.silicon.state.{profilingInfo, runtimeChecks}
 import viper.silver.ast.Program
 import viper.silver.verifier
 
-import java.nio.file.{Files, Paths, FileAlreadyExistsException}
+import java.nio.file.{FileAlreadyExistsException, Files, Paths}
 import java.nio.charset.StandardCharsets
 import java.io.IOException
 import java.util.Calendar
@@ -312,18 +313,15 @@ object Main extends App {
       librarySearchPaths: List[String]
   ): IR.Program = {
     val parsed = Parser.parseProgram(inputSource) match {
-      case fail: Failure =>
-        Config.error(s"Parse error:\n${fail.trace().longAggregateMsg}")
+      case failure: Failure =>
+        throw new GVC0ParserException(failure)
       case Success(value, _) => value
     }
-    val errors = new ErrorSink()
+    val errorSink = new ErrorSink()
     val resolved = Validator
-      .validateParsed(parsed, librarySearchPaths, errors)
+      .validateParsed(parsed, librarySearchPaths, errorSink)
       .getOrElse(
-        Config.error(
-          s"Errors:\n" +
-            errors.errors.map(_.toString()).mkString("\n")
-        )
+        throw new GVC0ValidatorException(errorSink.errors)
       )
     IRTransformer.transform(resolved)
   }
@@ -345,12 +343,22 @@ object Main extends App {
 
   class VerifierException(message: String) extends Exception(message)
 
-  def verifyFromPlugin(inputSource: String): Unit = {
+  sealed trait GVC0Result
+  case object GVC0None extends GVC0Result
+  case class GVC0ParserError(failure: Failure) extends GVC0Result
+  case class GVC0ValidatorError(errors: List[Error]) extends GVC0Result
+
+  def verifyFromPlugin(inputSource: String): GVC0Result = {
     SymbExLogger.reset()
     SymbExLogger.resetMaps()
     val silicon = resolveSilicon(true)
     val lib = System.getenv("GVC0_PATH") + "/src/main/resources"
-    val ir = generateIR(inputSource, List(lib))
+    val ir = try {
+      generateIR(inputSource, List(lib))
+    } catch {
+      case parserException: GVC0ParserException => return GVC0ParserError(parserException.failure)
+      case validatorException: GVC0ValidatorException => return GVC0ValidatorError(validatorException.errors)
+    }
     val silver = IRSilver.toSilver(ir)
     silicon.start()
     silicon.verify(silver) match {
@@ -361,6 +369,7 @@ object Main extends App {
         silicon.stop()
         SymbExLogger.errors = errors
     }
+    GVC0None
   }
 
   def resolveSilicon(ideModeAdvanced: Boolean = false): Silicon = {
