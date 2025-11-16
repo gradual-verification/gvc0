@@ -741,7 +741,7 @@ object IRTransformer {
         case member: ResolvedMember => {
           val (parent, field) = transformField(member)
           val target =
-            new IR.FieldMember(transformExpr(parent, scope), field)
+            new IR.FieldMember(transformExpr(parent, scope), field, member)
           new IR.AssignMember(
             target,
             transformAssignValue(statement, value, target, op),
@@ -751,7 +751,7 @@ object IRTransformer {
 
         case deref: ResolvedDereference =>
           val target =
-            new IR.DereferenceMember(transformExpr(deref.value, scope))
+            new IR.DereferenceMember(transformExpr(deref.value, scope), deref)
           new IR.AssignMember(
             target,
             transformAssignValue(statement, value, target, op),
