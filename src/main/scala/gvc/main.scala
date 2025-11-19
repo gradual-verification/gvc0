@@ -351,6 +351,9 @@ object Main extends App {
   def verifyFromPlugin(inputSource: String): GVC0Result = {
     SymbExLogger.reset()
     SymbExLogger.resetMaps()
+    profilingInfo.reset
+    runtimeChecks.reset
+
     val silicon = resolveSilicon(true)
     val lib = System.getenv("GVC0_PATH") + "/src/main/resources"
     val ir = try {
