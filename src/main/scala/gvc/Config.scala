@@ -30,7 +30,7 @@ case class Config(
     onlyCompile: Boolean = false,
     onlyBenchmark: Boolean = false,
     onlyErrors: Boolean = false,
-    sourceFile: Option[String] = None,
+    sourceFiles: List[String] = List.empty,
     linkedLibraries: List[String] = List.empty,
     includeDirectories: List[String] = List.empty,
     versionString: Option[String] = None,
@@ -54,14 +54,24 @@ case class Config(
         Some("Cannot combine --output and --only-verify")
       else if (exec && onlyVerify)
         Some("Cannot combine --exec and --only-verify")
-      else if (sourceFile.isEmpty && (mode == DefaultMode || mode == Describe || mode == CaseStudyMode))
+      else if (sourceFiles.isEmpty && (mode == DefaultMode || mode == Describe || mode == CaseStudyMode))
         Some("No source file specified")
-      else if (sourceFile.nonEmpty && !Files.exists(Paths.get(sourceFile.get)))
-        Some(s"Source file '${sourceFile.get}' does not exist")
+      else if (sourceFiles.nonEmpty)
+        sourceFiles.collectFirst {
+          case sourceFile if !Files.exists(Paths.get(sourceFile)) =>
+            s"Source file '${sourceFile}' does not exist"
+        }
       else if (versionString.nonEmpty && versionString.get.trim.isEmpty) {
         Some(s"Invalid version string.")
       } else None
     ).foreach(Config.error)
+  }
+
+  def getSingleSourceFile(): String = {
+    if (sourceFiles.size > 1) {
+      Config.error("Cannot specify multiple input files")
+    }
+    sourceFiles.head
   }
 }
 
@@ -365,14 +375,10 @@ object Config {
       case other :: _ if other.startsWith("-") =>
         error(s"Unrecognized command line argument: $other")
       case sourceFile :: tail =>
-        current.sourceFile match {
-          case Some(_) => error("Cannot specify multiple input files")
-          case None =>
-            fromCommandLineArgs(
-              tail,
-              current.copy(sourceFile = Some(sourceFile))
-            )
-        }
+        fromCommandLineArgs(
+          tail,
+          current.copy(sourceFiles = sourceFile :: current.sourceFiles)
+        )
       case Nil => current
     }
 
