@@ -81,6 +81,7 @@ case class LoopInvariantSpecification(value: Expression, span: SourceSpan) exten
 case class AssertSpecification(value: Expression, span: SourceSpan) extends Specification
 case class FoldSpecification(predicate: Identifier, arguments: List[Expression], span: SourceSpan) extends Specification
 case class UnfoldSpecification(predicate: Identifier, arguments: List[Expression], span: SourceSpan) extends Specification
+case class PureSpecification(span: SourceSpan) extends Specification
 
 // Statements
 sealed trait Statement extends Node {
@@ -190,6 +191,15 @@ case class MethodDefinition(
   specifications: List[Specification],
   span: SourceSpan
 ) extends Definition
+case class FunctionDefinition(
+  id: Identifier,
+  returnType: Type,
+  arguments: List[MemberDefinition],
+  body: Option[Expression],
+  specifications: List[Specification],
+  span: SourceSpan
+) extends Definition
+
 
 object BinaryOperator extends Enumeration {
   type BinaryOperator = Value

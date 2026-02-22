@@ -147,6 +147,24 @@ object TypeChecker {
     expression match {
       case _: ResolvedVariableRef => ()
 
+      case funcCall: ResolvedFunction => {
+        for (arg <- funcCall.arguments)
+          checkExpression(errors, arg)
+
+        funcCall.function match {
+          case None => ()
+          case Some(function) => {
+            if (function.arguments.length != funcCall.arguments.length) {
+              errors.error(funcCall, s"Invalid number of arguments passed to '${funcCall.functionName}'")
+            } else {
+              for ((defn, arg) <- function.arguments zip funcCall.arguments) {
+                assertType(errors, arg, defn.valueType)
+              }
+            }
+          }
+        }
+      }
+
       case invoke: ResolvedInvoke => {
         for (arg <- invoke.arguments)
           checkExpression(errors, arg)

@@ -24,6 +24,10 @@ object IRTransformer {
         definePredicate(predicate)
       for (predicate <- program.predicateDefinitions)
         implementPredicate(predicate)
+      for (function <- program.functionDefinitions)
+        defineFunction(function)
+      for (function <- program.functionDefinitions)
+        implementFunction(function)
       for (method <- program.methodDefinitions)
         defineMethod(method)
       for (method <- program.methodDefinitions)
@@ -301,6 +305,46 @@ object IRTransformer {
       ReassignmentElimination.transform(method)
       ParameterAssignmentElimination.transform(method)
     }
+    def defineFunction(input: ResolvedFunctionDefinition): Unit = {
+      val function = ir.addFunction(
+        input.name,
+        transformReturnType(input.declaration.returnType)
+      )
+      function.resolved = input
+      for (param <- input.declaration.arguments) {
+        function.addParameter(transformType(param.valueType), param.name)
+      }
+    }
+
+    class FunctionScope(val function: IR.Function) extends Scope {
+      private val params = function.parameters.map(f => f.name -> f).toMap
+
+      def variable(name: String): IR.Var =
+        params.getOrElse(name, throw new TransformerException(
+          s"Predicate parameter '$name' not found"
+        )).copy
+
+      // Cannot add operations, so conditional scope is a no-op
+      def conditional(cond: IR.Expression) = this
+    }
+
+    def implementFunction(input: ResolvedFunctionDefinition): Unit = {
+      val function = ir.function(input.name) match {
+        case func: IR.Function => func
+        case func =>
+          throw new TransformerException(s"Invalid function '${func.name}'")
+      }
+
+      val scope = new FunctionScope(function)
+      function.precondition =
+        input.declaration.precondition.map(transformSpec(_, scope))
+          .orElse(Some(new IR.Imprecise(None)))
+      function.expression =  transformExpr(input.body, scope)
+      function.postcondition =
+        input.declaration.postcondition.map(transformSpec(_, scope))
+          .orElse(Some(new IR.Imprecise(None)))
+
+    }
 
     def transformStatement(
         input: ResolvedStatement,
@@ -376,6 +420,20 @@ object IRTransformer {
                   scope += transformAssign(
                     assign,
                     transformExpr(invoke, scope),
+                    assign.operation,
+                    scope
+                  )
+              }
+            case funcCall: ResolvedFunction =>
+              assign.left match {
+                case ref: ResolvedVariableRef if assign.operation == None =>
+                  // Avoid introducing a temp var for the case when the result
+                  // is immediately assigned to a var
+                  functionCallToVar(funcCall, scope.variable(ref), scope)
+                case complex =>
+                  scope += transformAssign(
+                    assign,
+                    transformExpr(funcCall, scope),
                     assign.operation,
                     scope
                   )
@@ -487,6 +545,7 @@ object IRTransformer {
 
     def conditionalScope(scope: Scope, condition: IR.Expression) =
       scope match {
+        case scope: FunctionScope => scope
         case scope: PredicateScope => scope
         case scope: ConditionalScope =>
           new ConditionalScope(scope.parent, scope.conditions :+ condition)
@@ -500,6 +559,7 @@ object IRTransformer {
       case ref: ResolvedVariableRef => scope.variable(ref)
       case pred: ResolvedPredicate  => transformPredicate(pred, scope)
       case invoke: ResolvedInvoke   => invokeToValue(invoke, scope)
+      case functionCall: ResolvedFunction   => functionCallToValue(functionCall, scope)
       case alloc: ResolvedAlloc     => allocToValue(alloc, scope)
       case unfolding: ResolvedUnfolding =>
         new IR.Unfolding(transformPredicate(unfolding.predicate, scope), transformExpr(unfolding.expr, scope), unfolding)
@@ -695,10 +755,53 @@ object IRTransformer {
       scope += new IR.Invoke(method, args, target, input)
     }
 
+    def functionCallToValue(input: ResolvedFunction, scope: Scope): IR.FunctionCall = {
+      scope match {
+        case scope: MethodScope =>
+          val callee = resolveFunction(input)
+          val retType = callee.returnType.getOrElse(
+            throw new TransformerException("Cannot use result of void method")
+          )
+          val args = input.arguments.map(arg => transformExpr(arg, scope))
+          val temp = scope.method.addVar(retType)
+          temp.resolved = input // required to propagate position information
+          new IR.FunctionCall(callee, args, Some(temp), input)
+        case scope: FunctionScope =>
+          val callee = resolveFunction(input)
+          val retType = callee.returnType.getOrElse(
+            throw new TransformerException("Cannot use result of void method")
+          )
+          val args = input.arguments.map(arg => transformExpr(arg, scope))
+          val temp = scope.function.addVar(retType)
+          temp.resolved = input // required to propagate position information
+          new IR.FunctionCall(callee, args, Some(temp), input)
+        case _ =>
+          throw new TransformerException(
+            s"Invalid invoke: '${input.functionName}'"
+          )
+      }
+    }
+
+    def functionCallToVar(
+                           input: ResolvedFunction,
+                           target: IR.Var,
+                           scope: MethodScope
+                         ): Unit = {
+      val function = resolveFunction(input)
+      val args = input.arguments.map(arg => transformExpr(arg, scope))
+      new IR.FunctionCall(function, args, Some(target), input)
+    }
+
+
     def resolveMethod(invoke: ResolvedInvoke): IR.MethodDefinition =
       invoke.method
         .map(m => ir.method(m.name))
         .getOrElse(throw new TransformerException("Invalid invoke"))
+
+    def resolveFunction(functionCall: ResolvedFunction): IR.FunctionDefinition =
+      functionCall.function
+        .map(f => ir.function(f.name))
+        .getOrElse(throw new TransformerException("Invalid function call"))
 
     def resolvePredicate(pred: ResolvedPredicate): IR.Predicate =
       pred.predicate

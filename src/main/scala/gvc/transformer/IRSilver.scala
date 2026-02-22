@@ -32,12 +32,15 @@ object IRSilver {
         ir.methods.map(convertMethod) ++
         ir.dependencies.flatMap(_.methods.map(convertLibraryMethod))
       ).toList
+      val functions = (
+        ir.functions.map(convertFunction)
+        )
       val fields = this.fields.toSeq.sortBy(_.name).toList
 
       val program = vpr.Program(
         Seq.empty,
         fields,
-        Seq.empty,
+        functions,
         predicates,
         methods,
         Seq.empty
@@ -87,6 +90,23 @@ object IRSilver {
         Some(vpr.Seqn(body, decls)())
       )(getPosition(method.resolved))
     }
+
+    private def convertFunction(function: IR.Function): vpr.Function = {
+      val params = function.parameters.map(convertDecl).toList
+      val pre = function.precondition.map(convertExpr).toSeq
+      val post = function.postcondition.map(convertExpr).toSeq
+      val body = function.expression
+
+      vpr.Function(
+        function.name,
+        params,
+        convertType(function.returnType.get),
+        pre,
+        post,
+        Some(convertExpr(body))
+      )(getPosition(function.resolved))
+    }
+
 
     def convertDecl(decl: IR.Var): vpr.LocalVarDecl = {
       vpr.LocalVarDecl(varName(decl.name), convertType(decl.varType))()
@@ -255,6 +275,9 @@ object IRSilver {
       case acc: IR.Accessibility =>
         vpr.FieldAccessPredicate(convertMember(acc.member), vpr.FullPerm()())(getPosition(acc.resolved))
       case pred: IR.PredicateInstance => convertPredicateInstance(pred)
+      case call: IR.FunctionCall =>
+        val args = call.arguments.map(convertExpr)
+        vpr.FuncApp(call.callee.name, args)(getPosition(call.resolved), vpr.NoInfo, convertType(call.valueType.get), vpr.NoTrafos)
       case unfolding: IR.Unfolding =>
         vpr.Unfolding(convertPredicateInstance(unfolding.instance), convertExpr(unfolding.expr))(getPosition(unfolding.resolved))
       case result: IR.Result          => getReturnVar(result.method)

@@ -11,6 +11,7 @@ object ImplementationValidator {
     val definedMethods = program.methodDefinitions.toSeq.map(_.name).toSet
     val libraryMethods = collectLibraryMethods(program.dependencies, errors)
     val definedPredicates = program.predicateDefinitions.toSeq.map(_.name).toSet
+    val definedFunctions = program.functionDefinitions.map(_.name).toSet
     if (!definedMethods.contains("main")) {
       errors.programError("'main' method not defined")
     }
@@ -22,6 +23,12 @@ object ImplementationValidator {
           case invoke: ResolvedInvoke => invoke.method.foreach { m =>
             if (!libraryMethods.contains(m.name) && !definedMethods.contains(m.name))
               errors.error(invoke, s"'${invoke.methodName}' is never implemented")
+          }
+
+          case func: ResolvedFunction
+            if func.function.isDefined && !definedPredicates
+              .contains(func.function.get.name) => {
+            errors.error(func, s"'${func.functionName}' is never implemented")
           }
 
           case pred: ResolvedPredicate

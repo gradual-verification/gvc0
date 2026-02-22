@@ -28,6 +28,7 @@ abstract class SpecificationContext {
   def convert(u: IR.Unfolding): IR.Expression = 
     convert(u.expr)
 
+  // need to add the case for function calls but not there yet
   def convert(expr: IR.Expression): IR.Expression = {
     expr match {
       case v: IR.Var => convert(v)

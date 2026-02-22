@@ -46,6 +46,19 @@ case class ResolvedInvoke(
   }
 }
 
+case class ResolvedFunction(
+  parsed: Node,
+  function: Option[ResolvedFunctionDeclaration],
+  functionName: String,
+  arguments: List[ResolvedExpression]
+ ) extends ResolvedExpression {
+  def valueType: ResolvedType = function match {
+    case Some(declaration) => declaration.returnType
+    case None => UnknownType
+  }
+}
+
+
 case class ResolvedMember(
   parsed: Node,
   parent: ResolvedExpression,

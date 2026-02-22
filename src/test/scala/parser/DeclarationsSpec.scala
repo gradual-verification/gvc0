@@ -132,6 +132,35 @@ class DeclarationsSpec extends AnyFunSuite {
     assert(second.id.name === "second")
   }
 
+  test("function definition in annotation format") {
+    val Success(Seq(func1: FunctionDefinition, func2: FunctionDefinition), _) = Parser.parseDef("""
+      /*@
+      int test1(int n)
+        //@ pure;
+        //@ requires(n > 0);
+        //@ ensures(n > 0);
+        {
+          n;
+        }
+
+      int test2(int n)
+        //@ pure;
+        {
+          n;
+        }
+        @*/
+    """)
+
+    assert(func1.id.name == "test1")
+    assert(func1.specifications.length == 2)
+    assert(func1.body.get.isInstanceOf[VariableExpression])
+
+    assert(func2.id.name == "test2")
+    assert(func2.specifications.isEmpty)
+    assert(func2.body.get.isInstanceOf[VariableExpression])
+  }
+
+
   test("empty annotation") {
     assert(Parser.parseDef("//@ ").get.value.isEmpty)
     assert(Parser.parseDef("/*@  @*/").get.value.isEmpty)

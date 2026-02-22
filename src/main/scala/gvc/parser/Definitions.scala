@@ -8,7 +8,7 @@ trait Definitions extends Statements with Types {
       typeDefinition.map(Seq(_)) |
       methodDefinition.map(Seq(_)) |
       useDeclaration.map(Seq(_)) |
-      predicateAnnotation
+      annotationSpec
     )
 
   def structDefinition[_: P]: P[StructDefinition] =
@@ -62,23 +62,44 @@ trait Definitions extends Statements with Types {
   def useLocalPath[_: P]: P[LocalPath] =
     P(stringExpression).map(LocalPath(_))
 
-  def predicateAnnotation[_: P]: P[Seq[PredicateDefinition]] =
-    P(singleLinePredicateAnnotation | multiLinePredicateAnnotation)
+  def annotationSpec[_: P]: P[Seq[Definition]] =
+    P(singleLinePredicateAnnotation | multiLineSpecAnnotation)
+
+  def multiLineSpecAnnotation[_: P]: P[Seq[Definition]] =
+    P("/*@" ~/ (
+      // Use a positive lookahead to check for the 'predicate' keyword
+      // to decide which parser to use, without consuming input.
+      (&("@predicate") ~ "@" ~ predicateDefinitions) |
+        (&("predicate") ~ predicateDefinitions) |
+        (functionDefinitions)
+      ) ~/ "@*/")
 
   def singleLinePredicateAnnotation[_: P]: P[Seq[PredicateDefinition]] =
     P("//@"./.flatMapX(_ => new Parser(state.inSingleLineAnnotation()).predicateDefinitions) ~~/ ("\n" | End))
-  def multiLinePredicateAnnotation[_: P]: P[Seq[PredicateDefinition]] =
-    P("/*@"./.flatMapX(_ => new Parser(state.inAnnotation()).predicateDefinitions) ~/ "@*/")
 
   def predicateDefinitions[_: P]: P[Seq[PredicateDefinition]] =
     P(space ~~ predicateDefinition.rep ~~ space)
 
   def predicateDefinition[_: P]: P[PredicateDefinition] =
     P(span("predicate" ~ identifier ~ "(" ~ methodParameter.rep(sep = ",") ~ ")" ~/ (predicateBody | emptyPredicateBody)))
-    .map { case ((ident, args, body), span) => PredicateDefinition(ident, args.toList, body, span) }
-  
+      .map { case ((ident, args, body), span) => PredicateDefinition(ident, args.toList, body, span) }
+
   def emptyPredicateBody[_: P]: P[Option[Expression]] = P(";").map(_ => None)
 
   def predicateBody[_: P]: P[Option[Expression]] =
     P("=" ~/ expression ~/ ";").map(Some(_))
+
+  def functionDefinitions[_: P]: P[Seq[FunctionDefinition]] =
+    P(space ~~ functionDefinition.rep ~~ space)
+
+  def functionDefinition[_: P]: P[FunctionDefinition] =
+    P(
+      typeReference ~ identifier ~ "(" ~ methodParameter.rep(0, ",") ~ ")" ~
+        annotationsPure ~
+        (P(";").map(_ => None) |P("{" ~/ expression ~/ ";" ~/  "}").map(expr => Some(expr))) ~~
+        pos
+    ).map({
+      case (ret, id, args, (annot, _), body, end) =>
+        FunctionDefinition(id, ret, args.toList, body, annot, SourceSpan(ret.span.start, end))
+    })
 }

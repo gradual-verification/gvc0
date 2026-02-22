@@ -13,7 +13,21 @@ object AssignmentValidator {
     for (method <- program.methodDefinitions) {
       validateMethod(errors, method)
     }
+    for (function <- program.functionDefinitions) {
+      validateFunction(errors, function)
+    }
   }
+
+  def validateFunction(errors: ErrorSink, function: ResolvedFunctionDefinition): Unit = {
+    val scope = Scope(
+      errors,
+      function.declaration.arguments.map(_.name).toSet,
+      function.declaration.postcondition.map(ExpressionVisitor.collectVariables(_)).getOrElse(Set.empty)
+    )
+
+    validateExpression(scope, function.body)
+  }
+
 
   def validateMethod(errors: ErrorSink, method: ResolvedMethodDefinition): Unit = {
     val scope = Scope(

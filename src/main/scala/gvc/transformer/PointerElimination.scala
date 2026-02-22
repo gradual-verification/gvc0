@@ -23,6 +23,7 @@ object PointerElimination {
       case i: IR.Imprecise => new IR.Imprecise(i.precise.map(convert), i.resolved)
       case m: IR.Member => convertMember(m)
       case p: IR.PredicateInstance => new IR.PredicateInstance(p.predicate, p.arguments.map(convert), p.resolved)
+      case f: IR.FunctionCall => new IR.FunctionCall(f.callee, f.arguments.map(convert), f.target, f.resolved)
       case r: IR.Result => new IR.Result(r.method, r.resolved)
       case u: IR.Unary => new IR.Unary(u.operator, convert(u.operand), u.resolved)
       case v: IR.Var => v

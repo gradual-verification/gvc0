@@ -40,6 +40,22 @@ object IRPrinter {
       printList(p, pred.arguments) { arg => printExpr(p, arg) }
       p.print(")")
     }
+    case functionCall: IR.FunctionCall => {
+      functionCall.target.foreach { target =>
+        printExpr(p, target)
+        p.print(" = ")
+      }
+
+      p.print(functionCall.callee.name)
+      p.print("(")
+
+      printList(p, functionCall.arguments) { arg =>
+        printExpr(p, arg)
+      }
+
+      p.println(");")
+    }
+
 
     case unfolding: IR.Unfolding => {
       p.print("unfolding ")
@@ -249,6 +265,57 @@ object IRPrinter {
       p.println("}")
     }
 
+    def printFunctionHeader(function: IR.Function): Unit = {
+      function.returnType match {
+        case None      => p.print("void")
+        case Some(ret) => printType(ret)
+      }
+
+      p.print(" ")
+      p.print(function.name)
+      p.print("(")
+
+      // var first = true
+      printList(p, function.parameters) { param =>
+        printType(param.varType)
+        p.print(" ")
+        p.print(param.name)
+      }
+
+      p.print(")")
+    }
+
+
+    def printFunction(function: IR.Function): Unit = {
+      printFunctionHeader(function)
+      p.println()
+
+      if (includeSpecs) {
+        p.println("//@pure;")
+        function.precondition.foreach { pre =>
+          p.withIndent {
+            p.print("//@requires ")
+            printExpr(p, pre)
+            p.println(";")
+          }
+        }
+
+        function.postcondition.foreach { post =>
+          p.withIndent {
+            p.print("//@ensures ")
+            printExpr(p, post)
+            p.println(";")
+          }
+        }
+      }
+      p.println("{")
+      p.withIndent {
+        function.variables.foreach(printVar)
+        print(function.expression)
+      }
+      p.println("}")
+    }
+
     def printVar(v: IR.Var): Unit = {
       p.print(v.varType.name)
       p.print(" ")
@@ -454,6 +521,24 @@ object IRPrinter {
 
     printSeparator()
 
+    for (function <- program.functions) {
+      printFunctionHeader(function)
+      p.println(";")
+      empty = false
+    }
+
+    printSeparator()
+
+    var first = true
+    for (function <- program.functions) {
+      if (first) first = false
+      else p.println()
+      printFunction(function)
+    }
+
+
+    printSeparator()
+
     for (method <- program.methods) {
       printMethodHeader(method)
       p.println(";")
@@ -462,7 +547,7 @@ object IRPrinter {
 
     printSeparator()
 
-    var first = true
+    first = true
     for (method <- program.methods) {
       if (first) first = false
       else p.println()

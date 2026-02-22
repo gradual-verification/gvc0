@@ -6,12 +6,18 @@ package gvc.analyzer
 object SpecificationValidator {
   def validate(program: ResolvedProgram, errors: ErrorSink): Unit = {
     program.methodDeclarations.foreach(validateDeclaration(_, errors))
+    program.functionDeclarations.foreach(validateFunctionDeclaration(_, errors))
     program.predicateDefinitions.foreach(validatePredicate(_, errors))
   }
 
   def validateDeclaration(decl: ResolvedMethodDeclaration, errors: ErrorSink): Unit = {
     decl.precondition.map(validateSpecification(_, errors, imprecisionAllowed = true))
     decl.postcondition.map(validateSpecification(_, errors, imprecisionAllowed = true))
+  }
+
+  def validateFunctionDeclaration(decl: ResolvedFunctionDeclaration, errors: ErrorSink): Unit = {
+    decl.precondition.foreach(validateSpecification(_, errors, imprecisionAllowed = true))
+    decl.postcondition.foreach(validateSpecification(_, errors, imprecisionAllowed = true))
   }
 
   def validatePredicate(decl: ResolvedPredicateDefinition, errors: ErrorSink): Unit = {
@@ -23,6 +29,7 @@ object SpecificationValidator {
       case _: ResolvedVariableRef => ()
       case _: ResolvedResult => ()
       case _: ResolvedBool => ()
+      case _: ResolvedFunction => ()
 
       case predicate: ResolvedPredicate => {
         predicate.arguments.foreach(validateValue(_, errors))
@@ -101,7 +108,8 @@ object SpecificationValidator {
            | _: ResolvedChar
            | _: ResolvedInt
            | _: ResolvedBool
-           | _: ResolvedNull => ()
+           | _: ResolvedNull
+           | _: ResolvedFunction => ()
 
       case invoke: ResolvedInvoke => {
         errors.error(value, "Invalid method call in specification value")

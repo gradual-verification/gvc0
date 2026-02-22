@@ -19,6 +19,8 @@ case object Zilch extends ResolvedNode {
 }
 
 case class ResolvedProgram(
+    functionDeclarations: List[ResolvedFunctionDeclaration],
+    functionDefinitions: List[ResolvedFunctionDefinition],
     methodDeclarations: List[ResolvedMethodDeclaration],
     methodDefinitions: List[ResolvedMethodDefinition],
     predicateDeclarations: List[ResolvedPredicateDeclaration],
@@ -30,6 +32,8 @@ case class ResolvedProgram(
 
 case class Scope(
     variables: Map[String, ResolvedVariable],
+    functionDeclarations: Map[String, ResolvedFunctionDeclaration],
+    functionDefinitions: Map[String, ResolvedFunctionDefinition],
     methodDeclarations: Map[String, ResolvedMethodDeclaration],
     methodDefinitions: Map[String, ResolvedMethodDefinition],
     predicateDeclarations: Map[String, ResolvedPredicateDeclaration],
@@ -89,6 +93,30 @@ case class Scope(
         )
       }
       copy(methodDefinitions = methodDefinitions + (method.name -> method))
+    }
+  }
+
+  def declareFunction(function: ResolvedFunctionDeclaration): Scope = {
+    if (functionDeclarations.contains(function.name)) {
+      this
+    } else {
+      copy(functionDeclarations = functionDeclarations + (function.name -> function))
+    }
+  }
+
+  def defineFunction(function: ResolvedFunctionDefinition): Scope = {
+    if (functionDefinitions.contains(function.name)) {
+      errors.error(function.parsed, "'" + function.name + "' is already defined")
+      this
+    } else {
+      if (typeDefs.contains(function.name)) {
+        // Log error but add to scope
+        errors.error(
+          function.parsed,
+          "Function '" + function.name + "' already used as a type name"
+        )
+      }
+      copy(functionDefinitions = functionDefinitions + (function.name -> function))
     }
   }
 
@@ -153,6 +181,7 @@ object Resolver {
   )
 
   sealed trait Context
+  case object FunctionContext extends Context
   case object MethodContext extends Context
   case object SpecificationContext extends Context
   case class PostConditionContext(returnType: ResolvedType) extends Context
@@ -566,42 +595,80 @@ object Resolver {
 
       case invoke: InvokeExpression if context != MethodContext => {
         // Invokes in a specification must refer to a predicate
-        resolvePredicate(
-          invoke,
-          invoke.method,
-          invoke.arguments,
-          scope,
-          context
-        )
-      }
-
-      case invoke: InvokeExpression => {
         val name = invoke.method.name
-
-        val method =
-          if (scope.variables.contains(name)) {
-            scope.errors.error(invoke, s"'$name' is a variable, not a function")
-            None
-          } else if (scope.predicateDeclarations.contains(name)) {
-            scope.errors.error(
-              invoke,
-              s"'$name' is a predicate, not a function"
-            )
-            None
-          } else {
-            val decl = scope.methodDeclarations.get(name)
-            if (!decl.isDefined) {
+        if (scope.functionDeclarations.contains(name)) {
+          val function = {
+            val decl = scope.functionDeclarations.get(name)
+            if (decl.isEmpty) {
               scope.errors.error(invoke, s"'$name' is not declared")
             }
             decl
           }
 
-        ResolvedInvoke(
-          parsed = invoke,
-          method = method,
-          methodName = name,
-          arguments = invoke.arguments.map(resolveExpression(_, scope, context))
-        )
+          ResolvedFunction(
+            parsed = invoke,
+            function = function,
+            functionName = name,
+            arguments = invoke.arguments.map(resolveExpression(_, scope, context))
+          )
+        } else {
+          resolvePredicate(
+            invoke,
+            invoke.method,
+            invoke.arguments,
+            scope,
+            context
+          )
+        }
+      }
+
+      // an invoke can be a function call as well
+      // need to handle that case
+      case invoke: InvokeExpression => {
+        val name = invoke.method.name
+
+        // error checking first
+        if (scope.variables.contains(name)) {
+          scope.errors.error(invoke, s"'$name' is a variable, not a method/function")
+        } else if (scope.predicateDeclarations.contains(name)) {
+          scope.errors.error(
+            invoke,
+            s"'$name' is a predicate, not a method/function"
+          )
+        }
+
+        // differ between function and method calls
+        if (scope.functionDeclarations.contains(name)) {
+          val function = {
+            val decl = scope.functionDeclarations.get(name)
+            if (decl.isEmpty) {
+              scope.errors.error(invoke, s"'$name' is not declared")
+            }
+            decl
+          }
+
+          ResolvedFunction(
+            parsed = invoke,
+            function = function,
+            functionName = name,
+            arguments = invoke.arguments.map(resolveExpression(_, scope, context))
+          )
+        } else {
+          val method = {
+            val decl = scope.methodDeclarations.get(name)
+            if (decl.isEmpty) {
+              scope.errors.error(invoke, s"'$name' is not declared")
+            }
+            decl
+          }
+
+          ResolvedInvoke(
+            parsed = invoke,
+            method = method,
+            methodName = name,
+            arguments = invoke.arguments.map(resolveExpression(_, scope, context))
+          )
+        }
       }
 
       case alloc: AllocExpression => {
@@ -802,6 +869,95 @@ object Resolver {
     }
   }
 
+  def resolveFunctionArguments(args: List[MemberDefinition], scope: Scope) =
+    args.map(arg =>
+      ResolvedVariable(arg, arg.id.name, resolveType(arg.valueType, scope)))
+
+  def resolveFunctionDeclaration(
+      input: FunctionDefinition,
+      scope: Scope
+    ): ResolvedFunctionDeclaration = {
+    val retType = resolveType(input.returnType, scope)
+    val parameters = resolveFunctionArguments(input.arguments, scope)
+
+    // Parameters may be referenced in method specifications
+    val specScope = scope.declareVariables(parameters)
+
+    // Check the function body for size
+    if (input.body.size > 1) {
+      scope.errors.error(input, "Functions should not have more than one statement")
+    }
+
+    val preconditions = ListBuffer[ResolvedExpression]()
+    val postconditions = ListBuffer[ResolvedExpression]()
+    for (spec <- input.specifications) {
+      spec match {
+        case requires: RequiresSpecification =>
+          preconditions += resolveExpression(
+            requires.value,
+            specScope,
+            SpecificationContext
+          )
+        case ensures: EnsuresSpecification => {
+          ensures.value match {
+            case acc: AccessibilityExpression =>
+              scope.errors.error(ensures, "Accessibility expressions are not allowed in postconditions of functions")
+            case _ =>
+          }
+          postconditions += resolveExpression(
+            ensures.value,
+            specScope,
+            PostConditionContext(retType)
+          )
+        }
+
+        case pure: PureSpecification => {
+          scope.errors.error(pure, "Functions should not have pure specifications at this point")
+        }
+        case invariant: LoopInvariantSpecification => {
+          scope.errors.error(invariant, "Functions should not have loop invariants")
+        }
+        case assert: AssertSpecification => {
+          scope.errors.error(assert, "Functions should not have assertions")
+        }
+        case fold: FoldSpecification => {
+          scope.errors.error(fold, "Functions should not have folds")
+        }
+        case unfold: UnfoldSpecification => {
+          scope.errors.error(unfold, "Functions should not have unfolds")
+        }
+      }
+    }
+
+    ResolvedFunctionDeclaration(
+      parsed = input,
+      name = input.id.name,
+      returnType = retType,
+      arguments = parameters,
+      precondition = combineBooleans(preconditions),
+      postcondition = combineBooleans(postconditions)
+    )
+  }
+
+  def resolveFunctionDefinition(
+     input: FunctionDefinition,
+     localDecl: ResolvedFunctionDeclaration,
+     scope: Scope
+   ): ResolvedFunctionDefinition = {
+    // Add function parameters to variable scope
+    val functionScope = scope.declareVariables(localDecl.arguments)
+
+    val funcBody = input.body.get
+    val resolvedExpression =  resolveExpression(
+      input = funcBody,
+      scope = functionScope,
+      context = FunctionContext
+    )
+
+    ResolvedFunctionDefinition(input, localDecl, resolvedExpression)
+  }
+
+
   def resolvePredicate(
       parsed: Node,
       id: Identifier,
@@ -889,6 +1045,8 @@ object Resolver {
     val postconditions = ListBuffer[ResolvedExpression]()
     for (spec <- input.specifications) {
       spec match {
+        case pure: PureSpecification =>
+          scope.errors.error(pure, "Methods should not have the pure specification")
         case requires: RequiresSpecification =>
           preconditions += resolveExpression(
             requires.value,
@@ -995,6 +1153,8 @@ object Resolver {
   ): ResolvedProgram = {
     val scope = Scope(
       variables = Map.empty,
+      functionDeclarations = Map.empty,
+      functionDefinitions = Map.empty,
       methodDeclarations = Map.empty,
       methodDefinitions = Map.empty,
       predicateDeclarations = Map.empty,
@@ -1014,6 +1174,8 @@ object Resolver {
       librarySearchPaths: List[String],
       initialScope: Scope
   ): (Scope, ResolvedProgram) = {
+    val functionDeclarations = ListBuffer[ResolvedFunctionDeclaration]()
+    val functionDefinitions = ListBuffer[ResolvedFunctionDefinition]()
     val methodDeclarations = ListBuffer[ResolvedMethodDeclaration]()
     val methodDefinitions = ListBuffer[ResolvedMethodDefinition]()
     val predicateDeclarations = ListBuffer[ResolvedPredicateDeclaration]()
@@ -1090,6 +1252,18 @@ object Resolver {
           }
         }
 
+        case f: FunctionDefinition => {
+          val decl = resolveFunctionDeclaration(f, scope)
+          functionDeclarations += decl
+          scope = scope.declareFunction(decl)
+
+          if (f.body.isDefined) {
+            val definition = resolveFunctionDefinition(f, decl, scope)
+            functionDefinitions += definition
+            scope = scope.defineFunction(definition)
+          }
+        }
+
         case m: MethodDefinition => {
           val decl = resolveMethodDeclaration(m, scope)
           methodDeclarations += decl
@@ -1118,6 +1292,8 @@ object Resolver {
 
     (scope,
      ResolvedProgram(
+       functionDeclarations = functionDeclarations.toList,
+       functionDefinitions = functionDefinitions.toList,
        methodDeclarations = methodDeclarations.toList,
        methodDefinitions = methodDefinitions.toList,
        predicateDeclarations = predicateDeclarations.toList,

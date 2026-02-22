@@ -7,6 +7,7 @@ object ExpressionVisitor {
     visitor(expr)
     expr match {
       case invoke: ResolvedInvoke => invoke.arguments.foreach(visit(_, visitor))
+      case funcCall: ResolvedFunction => funcCall.arguments.foreach(visit(_, visitor))
       case member: ResolvedMember => visit(member.parent, visitor)
       case index: ResolvedArrayIndex => {
         visit(index.array, visitor)

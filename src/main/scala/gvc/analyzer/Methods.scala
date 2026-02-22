@@ -1,6 +1,24 @@
 package gvc.analyzer
 import gvc.parser._
 
+case class ResolvedFunctionDeclaration(
+    parsed: FunctionDefinition,
+    returnType: ResolvedType,
+    name: String,
+    arguments: List[ResolvedVariable],
+    precondition: Option[ResolvedExpression],
+    postcondition: Option[ResolvedExpression],
+    library: Boolean = false,
+) extends ResolvedNode
+
+case class ResolvedFunctionDefinition(
+    parsed: FunctionDefinition,
+    declaration: ResolvedFunctionDeclaration,
+    body: ResolvedExpression
+) extends ResolvedNode {
+  def name = declaration.name
+}
+
 case class ResolvedMethodDeclaration(
     parsed: MethodDefinition,
     returnType: ResolvedType,

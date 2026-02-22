@@ -12,6 +12,8 @@ object IR {
       mutable.Map[String, StructDefinition]()
     private[IR] var _methods =
       mutable.Map[String, MethodDefinition]()
+    private[IR] var _functions =
+      mutable.Map[String, FunctionDefinition]()
     private var _predicates = mutable.Map[String, Predicate]()
     private var _dependencies = mutable.ListBuffer[Dependency]()
 
@@ -41,6 +43,17 @@ object IR {
       method
     }
 
+    def addFunction(
+        name: String,
+        returnType: Option[Type]
+     ): Function = {
+      val function = new Function(name, returnType)
+      if (_functions.getOrElseUpdate(function.name, function) != function)
+        throw new IRException(s"Function '${function.name}' already exists")
+      function
+    }
+
+
     def addPredicate(name: String): Predicate = {
       val predicate = new Predicate(name, new IR.BoolLit(true))
       if (_predicates.getOrElseUpdate(predicate.name, predicate) != predicate)
@@ -57,6 +70,12 @@ object IR {
       .collect { case (m: Method) => m }
       .toSeq
       .sortBy(_.name)
+
+    def functions: Seq[Function] = _functions.values
+      .collect { case (f: Function) => f }
+      .toSeq
+      .sortBy(_.name)
+
 
     def predicates: Seq[Predicate] = _predicates.values.toSeq.sortBy(_.name)
 
@@ -95,6 +114,13 @@ object IR {
         case None        => None
       }
 
+    def function(name: String): FunctionDefinition =
+      _functions.getOrElse(
+        name,
+        throw new IRException(s"Function '$name' not found")
+      )
+
+
     def predicate(name: String): Predicate = _predicates.getOrElse(
       name,
       throw new IRException(s"Predicate '$name' not found")
@@ -107,6 +133,13 @@ object IR {
         m + (defn.name -> defn)
       })
 
+    def replaceFunctions(functionList: Seq[FunctionDefinition]): Unit =
+      _functions = functionList.foldLeft(
+        mutable.Map[String, FunctionDefinition]()
+      )((f, defn) => {
+        f + (defn.name -> defn)
+      })
+
     def replacePredicates(predicateList: Seq[Predicate]): Unit =
       _predicates = predicateList.foldLeft(
         mutable.Map[String, Predicate]()
@@ -116,6 +149,7 @@ object IR {
       val newProgram = new IR.Program()
 
       newProgram.replacePredicates(predicates)
+      newProgram.replaceFunctions(functions)
       newProgram.replaceMethods(methods)
 
       newProgram._structs = _structs.map(str => {
@@ -227,6 +261,78 @@ object IR {
       copyOf
     }
   }
+
+  sealed trait FunctionDefinition {
+    def name: String
+    def returnType: Option[Type]
+    def parameters: Seq[Parameter]
+  }
+
+  class Function(
+                  val name: String,
+                  var returnType: Option[Type],
+                  var precondition: Option[Expression] = None,
+                  var postcondition: Option[Expression] = None
+                ) extends FunctionDefinition {
+    // Variables/parameters are added to both a list and a map to preserve order and speedup lookup
+    // Scope is a map of both parameters and variables
+    private val _parameters = mutable.ListBuffer[Parameter]()
+    private val _variables = mutable.ListBuffer[Var]()
+    private val scope = mutable.Map[String, Var]()
+
+    var resolved: ResolvedNode = Zilch
+    var expression: Expression = returnType.map(_.default).getOrElse(new NullLit())
+
+    def parameters: Seq[Parameter] = _parameters
+
+    def variables: Seq[Var] = _variables
+
+    def variable(name: String): Var =
+      scope.getOrElse(
+        name,
+        throw new IRException(s"Variable '$name' not found")
+      )
+
+    def addParameter(valueType: Type, parameterName: String): Parameter = {
+      val newParam =
+        new Parameter(valueType, Helpers.findAvailableName(scope, parameterName), name)
+      scope += newParam.name -> newParam
+      _parameters += newParam
+      newParam
+    }
+
+    def addVar(valueType: Type, varName: String = "_"): Var = {
+      val newVar = new Var(valueType, Helpers.findAvailableName(scope, varName), name)
+      scope += newVar.name -> newVar
+      _variables += newVar
+      newVar
+    }
+
+    def getVar(name: String): Option[Var] = scope.get(name)
+
+    def copy(
+              replacementPre: Option[Expression] = precondition,
+              replacementPost: Option[Expression] = postcondition,
+              replacementExpr: Expression = expression
+            ): Function = {
+      val copyOf = new Function(name, returnType, replacementPre, replacementPost)
+      _variables.foreach(v => copyOf.addVar(v.varType, v.name))
+      _parameters.foreach(p => copyOf.addParameter(p.varType, p.name))
+      scope.foreach(entry => {
+        if (!copyOf.scope.contains(entry._1)) {
+          copyOf.scope += entry._1 -> new IR.Var(
+            entry._2.varType,
+            entry._2.name,
+            copyOf.name
+          )
+        }
+      })
+      copyOf.expression = replacementExpr
+      copyOf
+    }
+  }
+
+
   class Predicate(
       val name: String,
       var expression: IR.Expression
@@ -507,6 +613,22 @@ object IR {
     override def toString() =
       predicate.name + "(" + arguments.map(IRPrinter.print).mkString(", ") + ")"
   }
+
+  class FunctionCall(
+                      var callee: FunctionDefinition,
+                      var arguments: List[Expression],
+                      var target: Option[Expression],
+                      val resolved: ResolvedNode = Zilch
+                    ) extends Expression {
+    def copy = new FunctionCall(callee, arguments, target, resolved)
+    def summary: String = (
+      target.map(e => IRPrinter.print(e) + " = ").getOrElse("")
+        + callee.name + "(" + arguments.map(IRPrinter.print) + ")"
+      )
+
+    override def valueType: Option[Type] = callee.returnType
+  }
+
 
   // "unfolding" expressions in a specification
   class Unfolding(
