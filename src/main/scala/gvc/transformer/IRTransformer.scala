@@ -643,6 +643,15 @@ object IRTransformer {
         }
       }
 
+      case cond: ResolvedTernary => {
+        new IR.Conditional(
+          transformExpr(cond.condition, scope), 
+          transformSpec(cond.ifTrue, scope), 
+          transformSpec(cond.ifFalse, scope), 
+          cond
+        )
+      }
+
       case other => transformExpr(input, scope)
     }
 
