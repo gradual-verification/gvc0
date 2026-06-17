@@ -1,0 +1,16 @@
+#use <runtime>
+int main();
+int test(int x, int y, int* _instanceCounter);
+
+int main()
+{
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  return 0;
+}
+
+int test(int x, int y, int* _instanceCounter)
+{
+  assert(x + y > x);
+  return x + y;
+}

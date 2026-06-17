@@ -1,0 +1,36 @@
+// NOTE: Adapted from the second code snippet at https://viper.ethz.ch/tutorial/permissions-exclusive.html
+
+struct Test {
+    int value;
+};
+
+int inc(struct Test *x, int i)
+//@requires acc(x->value);
+//@ensures ? && acc(x->value) && \result == x->value + i;
+{
+    int res = x->value + i;
+    return res;
+}
+
+int client(struct Test *a, struct Test *b)
+//@requires acc(a->value) && acc(b->value);
+//@ ensures acc(a->value) && acc(b->value);
+{
+    a->value = 2;
+    b->value = 4;
+
+    int c = inc(a, 2);
+
+    //@assert c == 4;
+    //@assert b->value == 4;
+
+    return 0;
+}
+
+int main()
+//@requires true;
+//@ensures true;
+{
+    return 0;
+}
+
