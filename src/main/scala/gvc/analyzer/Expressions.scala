@@ -152,6 +152,7 @@ sealed trait LogicalOperation
 object LogicalOperation {
   case object Or extends LogicalOperation
   case object And extends LogicalOperation
+  case object Implies extends LogicalOperation
 }
 
 case class ResolvedLogical(

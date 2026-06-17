@@ -50,7 +50,7 @@ trait Lexer extends Whitespace {
   def binaryOperator[_: P] =
     P(StringIn("*", "/", "%", "+", "-", "<<", ">>",
                "<", "<=", ">=", ">", "==", "!=",
-               "&", "^", "|", "&&", "||"));
+               "&", "^", "|", "&&", "||", "==>"));
 
   def assignmentOperator[_: P] =
     P(StringIn("=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=",

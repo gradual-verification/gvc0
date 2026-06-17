@@ -592,7 +592,7 @@ object IR {
       case BinaryOp.Add | BinaryOp.Subtract | BinaryOp.Divide |
           BinaryOp.Multiply =>
         Some(IntType)
-      case BinaryOp.And | BinaryOp.Or | BinaryOp.Equal | BinaryOp.NotEqual |
+      case BinaryOp.And | BinaryOp.Or | BinaryOp.Implies | BinaryOp.Equal | BinaryOp.NotEqual |
           BinaryOp.Less | BinaryOp.LessOrEqual | BinaryOp.Greater |
           BinaryOp.GreaterOrEqual =>
         Some(BoolType)
@@ -609,6 +609,7 @@ object IR {
     object Multiply extends BinaryOp { override def toString() = "*" }
     object And extends BinaryOp { override def toString() = "&&" }
     object Or extends BinaryOp { override def toString() = "||" }
+    object Implies extends BinaryOp { override def toString() = "==>" }
     object Equal extends BinaryOp { override def toString() = "==" }
     object NotEqual extends BinaryOp { override def toString() = "!=" }
     object Less extends BinaryOp { override def toString() = "<" }

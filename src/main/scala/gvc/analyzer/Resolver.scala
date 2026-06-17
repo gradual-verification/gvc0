@@ -497,6 +497,8 @@ object Resolver {
             ResolvedLogical(binary, left, right, LogicalOperation.And)
           case BinaryOperator.LogicalOr =>
             ResolvedLogical(binary, left, right, LogicalOperation.Or)
+          case BinaryOperator.LogicalImplies =>
+            ResolvedLogical(binary, left, right, LogicalOperation.Implies)
           case _ => {
             // Log the error and return a mock that assumes add
             scope.errors.error(

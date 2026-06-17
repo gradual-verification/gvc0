@@ -9,8 +9,9 @@ object IRPrinter {
     val Equality = 5
     val And = 6
     val Or = 7
-    val Conditional = 8
-    val Top = 9
+    val Implies = 8
+    val Conditional = 9
+    val Top = 10
   }
 
   private def printExpr(
@@ -101,6 +102,7 @@ object IRPrinter {
         case IR.BinaryOp.Multiply       => (" * ", Precedence.Multiply)
         case IR.BinaryOp.And            => (" && ", Precedence.And)
         case IR.BinaryOp.Or             => (" || ", Precedence.Or)
+        case IR.BinaryOp.Implies        => (" ==> ", Precedence.Implies)
         case IR.BinaryOp.Equal          => (" == ", Precedence.Equality)
         case IR.BinaryOp.NotEqual       => (" != ", Precedence.Equality)
         case IR.BinaryOp.Less           => (" < ", Precedence.Inequality)

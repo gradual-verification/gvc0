@@ -194,6 +194,7 @@ case class MethodDefinition(
 object BinaryOperator extends Enumeration {
   type BinaryOperator = Value
   
+  val LogicalImplies = Value("==>")
   val LogicalOr = Value("||")
   val LogicalAnd = Value("&&")
   val BitwiseOr = Value("|")

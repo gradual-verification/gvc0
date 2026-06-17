@@ -139,6 +139,13 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(b.right.asInstanceOf[BooleanExpression] == false)
   }
 
+  test("==>") {
+    val Success(b: BinaryExpression, _) = Parser.parseExpr("true ==> false")
+    assert(b.left.asInstanceOf[BooleanExpression] == true)
+    assert(b.operator == BinaryOperator.LogicalImplies)
+    assert(b.right.asInstanceOf[BooleanExpression] == false)
+  }
+
   test ("&& / || precedence") {
     val Success(or: BinaryExpression, _) = Parser.parseExpr("1 && 2 || 3")
     assert(or.operator == BinaryOperator.LogicalOr)
@@ -171,6 +178,22 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(right.operator == BinaryOperator.Equal)
     assert(right.left.asInstanceOf[IntegerExpression] == 3)
     assert(right.right.asInstanceOf[IntegerExpression] == 4)
+  }
+
+  test("==> / && precedence") {
+    val Success(impl: BinaryExpression, _) = Parser.parseExpr("1 && 2 ==> 3")
+    assert(impl.operator == BinaryOperator.LogicalImplies)
+    assert(impl.right.asInstanceOf[IntegerExpression] == 3)
+    val and = impl.left.asInstanceOf[BinaryExpression]
+    assert(and.operator == BinaryOperator.LogicalAnd)
+  }
+
+  test("==> / || precedence") {
+    val Success(impl: BinaryExpression, _) = Parser.parseExpr("1 || 2 ==> 3")
+    assert(impl.operator == BinaryOperator.LogicalImplies)
+    assert(impl.right.asInstanceOf[IntegerExpression] == 3)
+    val or = impl.left.asInstanceOf[BinaryExpression]
+    assert(or.operator == BinaryOperator.LogicalOr)
   }
 
   test("+ operator is left-associative") {

@@ -1,0 +1,18 @@
+int main();
+int test(int x, int y);
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  int _ = 0;
+  _ = test(1, 2);
+  return _;
+}
+
+int test(int x, int y)
+  //@requires x > 0 ==> y > 0;
+  //@ensures true;
+{
+  return 0;
+}

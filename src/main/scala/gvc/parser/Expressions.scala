@@ -5,6 +5,7 @@ trait Expressions extends Types {
   import BinaryOperator._
 
   val operators: Map[String, (Int, BinaryOperator)] = Map(
+    "==>" -> (0, LogicalImplies),
     "||" -> (1,  LogicalOr),
     "&&" -> (2,  LogicalAnd),
     "|"  -> (3,  BitwiseOr),

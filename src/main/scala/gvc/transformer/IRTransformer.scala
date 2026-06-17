@@ -578,6 +578,7 @@ object IRTransformer {
         val (op, rightCond) = logic.operation match {
           case LogicalOperation.And => (IR.BinaryOp.And, left)
           case LogicalOperation.Or  => (IR.BinaryOp.Or, not(left))
+          case LogicalOperation.Implies => (IR.BinaryOp.Implies, left)
         }
         val right =
           transformExpr(logic.right, conditionalScope(scope, rightCond))
@@ -633,6 +634,7 @@ object IRTransformer {
             val op = logical.operation match {
               case LogicalOperation.And => IR.BinaryOp.And
               case LogicalOperation.Or  => IR.BinaryOp.Or
+              case LogicalOperation.Implies  => IR.BinaryOp.Implies
             }
             val exp = new IR.Binary(op, l, r, input)
             if (leftImp || rightImp) new IR.Imprecise(Some(exp), input)

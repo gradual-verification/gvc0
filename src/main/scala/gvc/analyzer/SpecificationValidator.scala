@@ -67,6 +67,11 @@ object SpecificationValidator {
             validateSpecification(logical.left, errors, imprecisionAllowed)
             validateSpecification(logical.right, errors)
           }
+
+          case LogicalOperation.Implies => {
+            validateSpecification(logical.left, errors, imprecisionAllowed)
+            validateSpecification(logical.right, errors)
+          }
         }
       }
 
