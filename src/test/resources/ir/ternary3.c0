@@ -1,0 +1,15 @@
+int condition(bool a, bool b)
+  //@requires true;
+  //@ensures true;
+{
+  return a ? (b ? 1 : 2) : 3;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  int x = 0;
+  x = condition(true, false);
+  return 0;
+}

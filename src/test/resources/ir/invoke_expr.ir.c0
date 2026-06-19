@@ -27,6 +27,10 @@ int main()
   bool _11 = false;
   bool _12 = false;
   bool _13 = false;
+  bool _14 = false;
+  bool _15 = false;
+  bool _16 = false;
+  bool _17 = false;
   if (true)
   {
     _ = test();
@@ -58,27 +62,50 @@ int main()
   _7 = test();
   input(_7 == true);
   _8 = test();
-  input(_8 ? true : false);
-  _9 = test();
-  if (_9)
+  if (_8)
   {
-    _10 = test();
+    _9 = true;
   }
-  input(_9 ? _10 : false);
-  if (false)
+  else
   {
-    _11 = test();
+    _9 = false;
   }
-  if (!false)
+  input(_9);
+  _10 = test();
+  if (_10)
   {
     _12 = test();
+    _11 = _12;
   }
-  input(false ? _11 : _12);
-  if (!true && !true && false)
+  else
   {
-    _13 = test();
+    _11 = false;
   }
-  input(true ? true : true || false && _13);
+  input(_11);
+  if (false)
+  {
+    _14 = test();
+    _13 = _14;
+  }
+  else
+  {
+    _15 = test();
+    _13 = _15;
+  }
+  input(_13);
+  if (true)
+  {
+    _16 = true;
+  }
+  else
+  {
+    if (!true && false)
+    {
+      _17 = test();
+    }
+    _16 = true || false && _17;
+  }
+  input(_16);
   return 0;
 }
 

@@ -1,0 +1,15 @@
+int* condition(bool cond, int* p)
+  //@requires true;
+  //@ensures true;
+{
+  return cond ? p : NULL;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  int* q = NULL;
+  q = condition(true, NULL);
+  return 0;
+}

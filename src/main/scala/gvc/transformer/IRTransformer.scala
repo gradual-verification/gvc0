@@ -528,14 +528,7 @@ object IRTransformer {
       case imp: ResolvedImprecision =>
         new IR.Imprecise(None, imp)
 
-      case cond: ResolvedTernary => {
-        val condition = transformExpr(cond.condition, scope)
-        val ifTrue =
-          transformExpr(cond.ifTrue, conditionalScope(scope, condition))
-        val ifFalse =
-          transformExpr(cond.ifFalse, conditionalScope(scope, not(condition)))
-        new IR.Conditional(condition, ifTrue, ifFalse, cond)
-      }
+      case cond: ResolvedTernary => ternaryToValue(cond, scope)
 
       case arith: ResolvedArithmetic => {
         val op = arith.operation match {
@@ -654,6 +647,32 @@ object IRTransformer {
 
       case other => transformExpr(input, scope)
     }
+
+    def ternaryResultType(input: ResolvedTernary): ResolvedType = {
+      val trueType = input.ifTrue.valueType
+      val falseType = input.ifFalse.valueType
+      val merged = if (trueType == NullType) falseType else trueType
+      if (merged != NullType) merged
+      else ResolvedPointer(IntType)
+    }
+
+    def ternaryToValue(input: ResolvedTernary, scope: Scope): IR.Var =
+      scope match {
+        case scope: MethodScope =>
+          val condition = transformExpr(input.condition, scope)
+          val temp = scope.method.addVar(transformType(ternaryResultType(input)))
+          temp.resolved = input
+          val ifOp = new IR.If(condition, input)
+          scope += ifOp
+          val trueScope = new BlockScope(scope.method, ifOp.ifTrue, scope.vars)
+          trueScope += new IR.Assign(temp, transformExpr(input.ifTrue, trueScope), input)
+          val falseScope = new BlockScope(scope.method, ifOp.ifFalse, scope.vars)
+          falseScope += new IR.Assign(temp, transformExpr(input.ifFalse, falseScope), input)
+          temp
+
+        case _ =>
+          throw new TransformerException("Invalid ternary expression")
+      }
 
     def allocToValue(input: ResolvedAlloc, scope: Scope): IR.Var =
       scope match {

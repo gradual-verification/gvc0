@@ -11,5 +11,11 @@ method max(a: Int, b: Int) returns ($result: Int)
   requires a > 0 && b > 0
   ensures $result >= a && $result >= b
 {
-  $result := (a > b ? a : b)
+  var _: Int
+  if (a > b) {
+    _ := a
+  } else {
+    _ := b
+  }
+  $result := _
 }

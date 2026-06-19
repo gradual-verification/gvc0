@@ -13,6 +13,15 @@ int main()
   //@ensures true;
 {
   bool c = false;
+  int _ = 0;
   c = condition();
-  return c ? 0 : 1;
+  if (c)
+  {
+    _ = 0;
+  }
+  else
+  {
+    _ = 1;
+  }
+  return _;
 }
