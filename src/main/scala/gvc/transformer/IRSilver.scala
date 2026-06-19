@@ -283,7 +283,7 @@ object IRSilver {
           case IR.BinaryOp.Multiply       => vpr.Mul(left, right)(getPosition(bin.resolved))
           case IR.BinaryOp.And            => vpr.And(left, right)(getPosition(bin.resolved))
           case IR.BinaryOp.Or             => vpr.Or(left, right)(getPosition(bin.resolved))
-          case IR.BinaryOp.Implies        => vpr.Implies(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.Implies        => vpr.Or(vpr.Not(left)(getPosition(bin.resolved)), right)(getPosition(bin.resolved))
           case IR.BinaryOp.Equal          => vpr.EqCmp(left, right)(getPosition(bin.resolved))
           case IR.BinaryOp.NotEqual       => vpr.NeCmp(left, right)(getPosition(bin.resolved))
           case IR.BinaryOp.Less           => vpr.LtCmp(left, right)(getPosition(bin.resolved))

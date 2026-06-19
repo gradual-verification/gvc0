@@ -8,7 +8,7 @@ method main() returns ($result: Int)
 }
 
 method test(x: Int, y: Int) returns ($result: Int)
-  requires x > 0 ==> y > 0
+  requires !(x > 0) || y > 0
   ensures true
 {
   $result := 0
