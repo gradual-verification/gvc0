@@ -1,0 +1,11 @@
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var x: Int
+  var y: Int
+  x := 1
+  y := 1
+  assert (x > 0 ? y == 1 : y == 2)
+  $result := 0
+}
