@@ -98,6 +98,15 @@ object Replacer {
     case imprecise: IR.Imprecise =>
       new IR.Imprecise(imprecise.precise.map(replace(_, m)), imprecise.resolved)
     case literal: IR.Literal => literal
+    case quant: IR.Quantified =>
+      new IR.Quantified(quant.operation,
+                        quant.varType,
+                        quant.varName,
+                        replace(quant.lowerBound, m),
+                        replace(quant.upperBound, m),
+                        replace(quant.body, m),
+                        quant.resolved
+                      )
     case cond: IR.Conditional =>
       new IR.Conditional(replace(cond.condition, m),
                          replace(cond.ifTrue, m),

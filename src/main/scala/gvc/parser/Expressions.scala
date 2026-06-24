@@ -89,6 +89,19 @@ trait Expressions extends Types {
     })
   })
 
+  def quantifierBoundExpression[_: P]: P[Expression] = P(
+    prefixWithPosition.rep ~ pos ~~ atomExpression ~~ postfixWithPosition.?
+  ).map({ case (pre, baseStart, expr, post) =>
+    val exp = post.foldLeft(expr) { (exp, posOp) =>
+      posOp match {
+        case (end, op) => IncrementExpression(exp, op, SourceSpan(exp.span.start, end))
+      }
+    }
+    pre.foldRight(exp)((opPos, e) => opPos match {
+      case (pos, op) => UnaryExpression(e, parsePrefixOp(op), SourceSpan(pos, e.span.end))
+    })
+  })
+
   def prefixWithPosition[_: P]: P[(SourcePosition, String)] = P(pos ~~ prefixOperator.!)
 
   def parsePrefixOp(op: String): UnaryOperator.Value = {
@@ -109,6 +122,7 @@ trait Expressions extends Types {
 
   def atomExpression[_: P]: P[Expression] = P(
     parenExpression |
+    boundedQuantifiedExpression |
     stringExpression |
     characterExpression |
     hexNumberExpression |
@@ -168,6 +182,25 @@ trait Expressions extends Types {
   def unfoldingExpression[_: P]: P[UnfoldingExpression] = 
     P(span(kw("unfolding") ~/ identifier ~ "(" ~ expression.rep(sep = ",") ~ ")" ~/ kw("in") ~/ "(" ~ expression ~ ")")).map({
       case ((ident, args, expr), span) => UnfoldingExpression(ident, args.toList, expr, span)
+    })
+  
+  def basicQuantifierType[_: P]: P[Type] =
+    P(span(StringIn("int", "bool", "char").!)).map({
+      case (name, span) => NamedType(Identifier(name, span), span)
+    })
+
+  def boundedQuantifiedExpression[_: P]: P[BoundedQuantifiedExpression] = P(span(
+      (kw("forall").map(_ => QuantifierKind.Forall: QuantifierKind) |
+        kw("exists").map(_ => QuantifierKind.Exists: QuantifierKind)) ~/
+        basicQuantifierType ~/
+        identifier ~/
+        kw("from") ~/ quantifierBoundExpression ~/
+        kw("to") ~/ quantifierBoundExpression ~/
+        "." ~/
+        expression
+    )).map({
+      case ((kind, valueType, variable, lo, hi, body), span) =>
+        BoundedQuantifiedExpression(kind, valueType, variable, lo, hi, body, span)
     })
     
   def parseString(raw: String): String = {

@@ -39,6 +39,23 @@ case class ImprecisionExpression(span: SourceSpan) extends Expression
 case class AccessibilityExpression(field: Expression, span: SourceSpan) extends Expression
 case class UnfoldingExpression(predicate: Identifier, arguments: List[Expression], expr: Expression, span: SourceSpan) extends Expression
 
+// Quantified expressions
+sealed trait QuantifierKind
+object QuantifierKind {
+  case object Forall extends QuantifierKind
+  case object Exists extends QuantifierKind
+}
+
+case class BoundedQuantifiedExpression(
+  kind: QuantifierKind,
+  valueType: Type,
+  variable: Identifier,
+  lowerBound: Expression,
+  upperBound: Expression,
+  body: Expression,
+  span: SourceSpan
+) extends Expression
+
 // Literal expressions
 sealed trait LiteralExpression extends Expression {
   val raw: String

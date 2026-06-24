@@ -10,6 +10,7 @@ object IRPrinter {
     val And = 6
     val Or = 7
     val Implies = 8
+    val Quantifier = 8
     val Conditional = 9
     val Top = 10
   }
@@ -126,6 +127,23 @@ object IRPrinter {
         })
         printExpr(p, unary.operand, Precedence.Unary)
       }
+
+    case quant: IR.Quantified =>
+      wrapExpr(p, precedence, Precedence.Quantifier) {
+        p.print(quant.operation match {
+          case IR.QuantifierOp.Forall => "forall "
+          case IR.QuantifierOp.Exists  => "exists "
+        })
+        printType(p, quant.varType)
+        p.print(" ")
+        p.print(quant.varName)
+        p.print(" from ")
+        printExpr(p, quant.lowerBound, Precedence.Quantifier)
+        p.print(" to ")
+        printExpr(p, quant.upperBound, Precedence.Quantifier)
+        p.print(". ")
+        printExpr(p, quant.body, Precedence.Quantifier)
+      }
   }
 
   def printList[T](p: Printer, values: Seq[T])(action: T => Unit): Unit = {
@@ -172,7 +190,7 @@ object IRPrinter {
       p.println("{")
       p.withIndent {
         for (field <- struct.fields) {
-          printType(field.valueType)
+          printType(p, field.valueType)
           p.print(" ")
           p.print(field.name)
           p.println(";")
@@ -181,14 +199,12 @@ object IRPrinter {
       p.println("};")
     }
 
-    def printType(t: IR.Type): Unit = p.print(t.name)
-
     def printPredicateHeader(predicate: IR.Predicate): Unit = {
       p.print("//@predicate ")
       p.print(predicate.name)
       p.print("(")
       printList(p, predicate.parameters) { param =>
-        printType(param.varType)
+        printType(p, param.varType)
         p.print(" ")
         p.print(param.name)
       }
@@ -205,7 +221,7 @@ object IRPrinter {
     def printMethodHeader(method: IR.Method): Unit = {
       method.returnType match {
         case None      => p.print("void")
-        case Some(ret) => printType(ret)
+        case Some(ret) => printType(p, ret)
       }
 
       p.print(" ")
@@ -214,7 +230,7 @@ object IRPrinter {
 
       var first = true
       printList(p, method.parameters) { param =>
-        printType(param.varType)
+        printType(p, param.varType)
         p.print(" ")
         p.print(param.name)
       }
@@ -290,14 +306,14 @@ object IRPrinter {
       case alloc: IR.AllocValue => {
         printExpr(p, alloc.target)
         p.print(" = alloc(")
-        printType(alloc.valueType)
+        printType(p, alloc.valueType)
         p.println(");")
       }
 
       case alloc: IR.AllocArray => {
         printExpr(p, alloc.target)
         p.print(" = alloc_array(")
-        printType(alloc.valueType)
+        printType(p, alloc.valueType)
         p.print(", ")
         printExpr(p, alloc.length)
         p.println(");")
@@ -473,6 +489,8 @@ object IRPrinter {
 
     p.toString()
   }
+
+  private def printType(p: Printer, t: IR.Type): Unit = p.print(t.name)
 
   def print(expr: IR.Expression) = {
     val p = new Printer()

@@ -25,6 +25,11 @@ object ExpressionVisitor {
         visit(ternary.ifTrue, visitor)
         visit(ternary.ifFalse, visitor)
       }
+      case quant: ResolvedBoundedQuantified => {
+        visit(quant.lowerBound, visitor)
+        visit(quant.upperBound, visitor)
+        visit(quant.body, visitor)
+      }
       case logical: ResolvedLogical => {
         visit(logical.left, visitor)
         visit(logical.right, visitor)

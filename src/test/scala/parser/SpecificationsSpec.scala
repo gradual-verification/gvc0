@@ -95,4 +95,10 @@ class SpecificationsSpec extends AnyFunSuite {
     assert(specs.length == 2)
     assert(specs.forall(_.isInstanceOf[AssertSpecification]))
   }
+
+  test("ensures with bounded quantifier") {
+    val Success(List(spec: EnsuresSpecification), _) =
+      Parser.parseSpec("//@ensures forall int i from 0 to n. i >= 0;")
+    assert(spec.value.isInstanceOf[BoundedQuantifiedExpression])
+  }
 }

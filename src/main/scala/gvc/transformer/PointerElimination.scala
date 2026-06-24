@@ -21,6 +21,7 @@ object PointerElimination {
       case b: IR.Binary => new IR.Binary(b.operator, convert(b.left), convert(b.right), b.resolved)
       case c: IR.Conditional => new IR.Conditional(convert(c.condition), convert(c.ifTrue), convert(c.ifFalse), c.resolved)
       case i: IR.Imprecise => new IR.Imprecise(i.precise.map(convert), i.resolved)
+      case q: IR.Quantified => new IR.Quantified(q.operation, q.varType, q.varName, convert(q.lowerBound), convert(q.upperBound), convert(q.body), q.resolved)
       case m: IR.Member => convertMember(m)
       case p: IR.PredicateInstance => new IR.PredicateInstance(p.predicate, p.arguments.map(convert), p.resolved)
       case r: IR.Result => new IR.Result(r.method, r.resolved)

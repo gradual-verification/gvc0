@@ -536,6 +536,28 @@ object IR {
       super.contains(exp) || precise.exists(_.contains(exp))
   }
 
+  object QuantifierOp {
+    sealed trait Op
+    case object Forall extends Op
+    case object Exists extends Op
+  }
+
+  class Quantified(
+                    val operation: QuantifierOp.Op,
+                    val varType: Type,
+                    val varName: String,
+                    var lowerBound: Expression,
+                    var upperBound: Expression,
+                    var body: Expression,
+                    val resolved: ResolvedNode = Zilch
+                  ) extends SpecificationExpression {
+    override def contains(exp: Expression) =
+      super.contains(exp) ||
+        lowerBound.contains(exp) ||
+        upperBound.contains(exp) ||
+        body.contains(exp)
+  }
+
   sealed trait Literal extends Expression
 
   class IntLit(

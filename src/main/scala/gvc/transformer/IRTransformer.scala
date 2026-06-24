@@ -230,6 +230,15 @@ object IRTransformer {
       def method: IR.Method
       def vars: Map[String, IR.Var]
 
+      def withVariable(name: String, variable: IR.Var): MethodScope = this match {
+        case scope: BlockScope =>
+          new BlockScope(scope.method, scope.output, scope.vars + (name -> variable))
+        case scope: ConditionalScope =>
+          new ConditionalScope(scope.parent.withVariable(name, variable), scope.conditions)
+        case scope: CollectorScope =>
+          new CollectorScope(scope.parent.withVariable(name, variable))
+      }
+
       def variable(name: String): IR.Var = {
         vars.getOrElse(
           name,
@@ -267,7 +276,7 @@ object IRTransformer {
     }
 
     class CollectorScope(
-        parent: MethodScope
+        val parent: MethodScope
     ) extends MethodScope {
       def method = parent.method
       def vars = parent.vars
@@ -528,6 +537,11 @@ object IRTransformer {
       case imp: ResolvedImprecision =>
         new IR.Imprecise(None, imp)
 
+      case _: ResolvedBoundedQuantified =>
+        throw new TransformerException(
+          "Quantifiers can only be used in specifications"
+        )
+
       case cond: ResolvedTernary => ternaryToValue(cond, scope)
 
       case arith: ResolvedArithmetic => {
@@ -644,6 +658,31 @@ object IRTransformer {
           cond
         )
       }
+
+      case quant: ResolvedBoundedQuantified =>
+        val methodScope = scope match {
+          case ms: MethodScope => ms
+          case _ => throw new TransformerException("Invalid quantifier in specification")
+        }
+        val qVar = new IR.Var(
+          transformType(quant.variable.valueType),
+          quant.variable.name,
+          methodScope.method.name
+        )
+        qVar.resolved = quant
+        val bodyScope = methodScope.withVariable(quant.variable.name, qVar)
+        new IR.Quantified(
+          quant.operation match {
+            case QuantifierOperation.Forall => IR.QuantifierOp.Forall
+            case QuantifierOperation.Exists  => IR.QuantifierOp.Exists
+          },
+          qVar.varType,
+          qVar.name,
+          transformExpr(quant.lowerBound, scope),
+          transformExpr(quant.upperBound, scope),
+          transformSpec(quant.body, bodyScope),
+          quant
+        )
 
       case other => transformExpr(input, scope)
     }

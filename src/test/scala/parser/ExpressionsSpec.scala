@@ -292,4 +292,14 @@ class ExpressionsSpec extends AnyFunSuite {
     val varRef = length.value.asInstanceOf[VariableExpression]
     assert(varRef.variable.name === "a")
   }
+
+  test("bounded quantified expression") {
+    val Success(expr: BoundedQuantifiedExpression, _) =
+      Parser.parseExpr("forall int i from 0 to n. i >= 0")
+    assert(expr.kind == QuantifierKind.Forall)
+    assert(expr.variable.name == "i")
+    assert(expr.lowerBound.isInstanceOf[IntegerExpression])
+    assert(expr.upperBound.isInstanceOf[VariableExpression])
+    assert(expr.body.isInstanceOf[BinaryExpression])
+  }
 }

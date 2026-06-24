@@ -1,0 +1,15 @@
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var _: Int
+  _ := test(0)
+  $result := _
+}
+
+method test(n: Int) returns ($result: Int)
+  requires n >= 0
+  ensures (forall i: Int :: !(0 <= i && i < n && i >= 0) || i >= 0) && (exists i: Int :: 0 <= i && i < n && i == 0)
+{
+  $result := n
+}

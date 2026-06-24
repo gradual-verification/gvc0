@@ -231,6 +231,20 @@ object TypeChecker {
         assertEquivalent(errors, ternary.ifTrue, ternary.ifFalse)
       }
 
+      case quant: ResolvedBoundedQuantified => {
+        checkExpression(errors, quant.lowerBound)
+        checkExpression(errors, quant.upperBound)
+        checkExpression(errors, quant.body)
+        assertType(errors, quant.lowerBound, IntType)
+        assertType(errors, quant.upperBound, IntType)
+        assertType(errors, quant.body, BoolType)
+        val qName = quant.variable.name
+        if (ExpressionVisitor.collectVariables(quant.lowerBound).contains(qName))
+          errors.error(quant.lowerBound, s"Lower bound must not reference '$qName'")
+        if (ExpressionVisitor.collectVariables(quant.upperBound).contains(qName))
+          errors.error(quant.upperBound, s"Upper bound must not reference '$qName'")
+      }
+
       case logical: ResolvedLogical => {
         checkExpression(errors, logical.left)
         checkExpression(errors, logical.right)

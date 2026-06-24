@@ -54,6 +54,20 @@ object SpecificationValidator {
         validateSpecification(ternary.ifFalse, errors)
       }
 
+      case quant: ResolvedBoundedQuantified => {
+        quant.variable.valueType match {
+          case IntType | BoolType | CharType => ()
+          case t =>
+            errors.error(
+              quant,
+              s"Quantified variable must have basic type int, bool, or char, not '${t.name}'"
+            )
+        }
+        validateValue(quant.lowerBound, errors)
+        validateValue(quant.upperBound, errors)
+        validateSpecification(quant.body, errors)
+      }
+
       case logical: ResolvedLogical => {
         // OR expressions can only contain values
         // AND expressions can contain anything in an expression
@@ -152,6 +166,9 @@ object SpecificationValidator {
         validateValue(ternary.ifTrue, errors)
         validateValue(ternary.ifFalse, errors)
       }
+
+      case _: ResolvedBoundedQuantified =>
+        errors.error(value, "Quantifiers cannot be used as specification values")
 
       case logical: ResolvedLogical => {
         validateValue(logical.left, errors)

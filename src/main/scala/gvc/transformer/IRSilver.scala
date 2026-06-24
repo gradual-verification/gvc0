@@ -229,6 +229,33 @@ object IRSilver {
       vpr.LocalVar(varName(v.name), convertType(v.varType))(getPosition(v.resolved))
     }
 
+    private def convertQuantifiedBody(quant: IR.Quantified): vpr.Exp =
+      convertBooleanQuantifiedBody(quant)
+
+    private def halfOpenRange(
+        quant: IR.Quantified,
+        qVar: vpr.LocalVar
+    ): vpr.Exp = {
+      val pos = getPosition(quant.resolved)
+      val lo = convertExpr(quant.lowerBound)
+      val hi = convertExpr(quant.upperBound)
+      vpr.And(vpr.LeCmp(lo, qVar)(pos), vpr.LtCmp(qVar, hi)(pos))(pos)
+    }
+
+    private def convertBooleanQuantifiedBody(quant: IR.Quantified): vpr.Exp = {
+      val pos = getPosition(quant.resolved)
+      val qVar = vpr.LocalVar(quant.varName, convertType(quant.varType))(pos)
+      val body = convertExpr(quant.body)
+      val inRangeWithBody =
+        vpr.And(halfOpenRange(quant, qVar), body)(pos)
+      quant.operation match {
+        case IR.QuantifierOp.Forall =>
+          vpr.Or(vpr.Not(inRangeWithBody)(pos), body)(pos)
+        case IR.QuantifierOp.Exists =>
+          vpr.And(halfOpenRange(quant, qVar), body)(pos)
+      }
+    }
+
     def convertMember(member: IR.Member): vpr.FieldAccess = member match {
       case member: IR.FieldMember =>
         vpr.FieldAccess(convertExpr(member.root), convertField(member.field))(getPosition(member.resolved))
@@ -273,6 +300,18 @@ object IRSilver {
           convertExpr(cond.ifTrue),
           convertExpr(cond.ifFalse)
         )(getPosition(cond.resolved))
+      case quant: IR.Quantified =>
+        val decl = vpr.LocalVarDecl(quant.varName, convertType(quant.varType))()
+        quant.operation match {
+          case IR.QuantifierOp.Forall =>
+            vpr.Forall(Seq(decl), Seq.empty, convertQuantifiedBody(quant))(
+              getPosition(quant.resolved)
+            )
+          case IR.QuantifierOp.Exists =>
+            vpr.Exists(Seq(decl), Seq.empty, convertQuantifiedBody(quant))(
+              getPosition(quant.resolved)
+            )
+        }
       case bin: IR.Binary => {
         val left = convertExpr(bin.left)
         val right = convertExpr(bin.right)

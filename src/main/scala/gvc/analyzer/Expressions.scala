@@ -148,6 +148,22 @@ case class ResolvedTernary(
   }
 }
 
+sealed trait QuantifierOperation
+  object QuantifierOperation {
+    case object Forall extends QuantifierOperation
+    case object Exists extends QuantifierOperation
+  }
+  case class ResolvedBoundedQuantified(
+    parsed: BoundedQuantifiedExpression,
+    operation: QuantifierOperation,
+    variable: ResolvedVariable,
+    lowerBound: ResolvedExpression,
+    upperBound: ResolvedExpression,
+    body: ResolvedExpression
+  ) extends ResolvedExpression {
+    def valueType = BoolType
+  }
+
 sealed trait LogicalOperation
 object LogicalOperation {
   case object Or extends LogicalOperation
