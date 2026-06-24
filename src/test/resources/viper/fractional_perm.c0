@@ -1,0 +1,23 @@
+struct Test {
+  int value;
+};
+
+void half(struct Test* input)
+  /*@ requires acc(input->value, 1/2); @*/
+  /*@ ensures acc(input->value, 1/2); @*/
+{
+}
+
+void full(struct Test* input)
+  /*@ requires acc(input->value, 1); @*/
+  /*@ ensures acc(input->value); @*/
+{
+}
+
+int main()
+  /*@ requires true; @*/
+  /*@ ensures true; @*/
+{
+  struct Test* test = alloc(struct Test);
+  return 0;
+}

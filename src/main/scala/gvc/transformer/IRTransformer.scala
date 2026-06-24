@@ -529,10 +529,14 @@ object IRTransformer {
         }
 
       case acc: ResolvedAccessibility =>
-        new IR.Accessibility(transformExpr(acc.field, scope) match {
-          case member: IR.Member => member
-          case _                 => throw new TransformerException("Invalid acc() argument")
-        }, acc)
+        new IR.Accessibility(
+          transformExpr(acc.field, scope) match {
+            case member: IR.Member => member
+            case _                 => throw new TransformerException("Invalid acc() argument")
+          },
+          acc.permission.map(transformExpr(_, scope)),
+          acc
+        )
 
       case imp: ResolvedImprecision =>
         new IR.Imprecise(None, imp)

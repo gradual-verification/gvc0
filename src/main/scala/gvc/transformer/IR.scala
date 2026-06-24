@@ -490,11 +490,11 @@ object IR {
 
   class Accessibility(
                        var member: Member,
+                       var permission: Option[Expression] = None,
                        val resolved: ResolvedNode = Zilch
                      ) extends SpecificationExpression {
     override def contains(exp: Expression) =
-      super.contains(exp) || member.contains(exp)
-
+      super.contains(exp) || member.contains(exp) || permission.exists(_.contains(exp))
   }
 
   class PredicateInstance(

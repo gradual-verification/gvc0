@@ -86,7 +86,8 @@ case class ResolvedLength(
 
 case class ResolvedAccessibility(
   parsed: Node,
-  field: ResolvedExpression
+  field: ResolvedExpression,
+  permission: Option[ResolvedExpression] = None
 ) extends ResolvedExpression {
   def valueType = BoolType
 }

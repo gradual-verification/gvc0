@@ -96,9 +96,21 @@ class SpecificationsSpec extends AnyFunSuite {
     assert(specs.forall(_.isInstanceOf[AssertSpecification]))
   }
 
-  test("ensures with bounded quantifier") {
+  test("forall") {
     val Success(List(spec: EnsuresSpecification), _) =
       Parser.parseSpec("//@ensures forall int i from 0 to n. i >= 0;")
     assert(spec.value.isInstanceOf[BoundedQuantifiedExpression])
+  }
+
+  test("exists") {
+    val Success(List(spec: EnsuresSpecification), _) =
+      Parser.parseSpec("//@ensures exists int i from 0 to n. i >= 0;")
+    assert(spec.value.isInstanceOf[BoundedQuantifiedExpression])
+  }
+
+  test("fractional permission") {
+    val Success(Seq(RequiresSpecification(acc: AccessibilityExpression, _)), _) =
+      Parser.parseSpec("//@requires acc(x->f, 1/2);")
+    assert(acc.permission.isDefined)
   }
 }

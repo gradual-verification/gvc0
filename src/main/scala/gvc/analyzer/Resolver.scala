@@ -683,7 +683,11 @@ object Resolver {
             "acc() expressions can only be used in specifications"
           )
         }
-        ResolvedAccessibility(acc, resolveExpression(acc.field, scope, context))
+        ResolvedAccessibility(
+          acc,
+          resolveExpression(acc.field, scope, context),
+          acc.permission.map(resolveExpression(_, scope, context))
+        )
       }
 
       case imprecision: ImprecisionExpression => {

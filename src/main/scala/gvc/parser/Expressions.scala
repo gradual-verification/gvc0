@@ -176,8 +176,10 @@ trait Expressions extends Types {
   def imprecisionExpression[_: P]: P[ImprecisionExpression] = P(span(kw("?")))
     .map { case (_, span) => ImprecisionExpression(span) }
 
-  def accessibilityExpression[_: P]: P[AccessibilityExpression] = P(span(kw("acc") ~ "(" ~ expression ~ ")"))
-    .map { case (expr, span) => AccessibilityExpression(expr, span) }
+  def accessibilityExpression[_: P]: P[AccessibilityExpression] = 
+    P(span(kw("acc") ~ "(" ~/ expression ~ ("," ~/ expression).? ~ ")")).map ({ 
+      case ((field, perm), span) => AccessibilityExpression(field, perm, span)
+    })
 
   def unfoldingExpression[_: P]: P[UnfoldingExpression] = 
     P(span(kw("unfolding") ~/ identifier ~ "(" ~ expression.rep(sep = ",") ~ ")" ~/ kw("in") ~/ "(" ~ expression ~ ")")).map({

@@ -293,7 +293,7 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(varRef.variable.name === "a")
   }
 
-  test("bounded quantified expression") {
+  test("forall") {
     val Success(expr: BoundedQuantifiedExpression, _) =
       Parser.parseExpr("forall int i from 0 to n. i >= 0")
     assert(expr.kind == QuantifierKind.Forall)
@@ -301,5 +301,20 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(expr.lowerBound.isInstanceOf[IntegerExpression])
     assert(expr.upperBound.isInstanceOf[VariableExpression])
     assert(expr.body.isInstanceOf[BinaryExpression])
+  }
+
+  test("exists") {
+    val Success(expr: BoundedQuantifiedExpression, _) =
+      Parser.parseExpr("exists int i from 0 to n. i >= 0")
+    assert(expr.kind == QuantifierKind.Exists)
+    assert(expr.variable.name == "i")
+    assert(expr.lowerBound.isInstanceOf[IntegerExpression])
+    assert(expr.upperBound.isInstanceOf[VariableExpression])
+    assert(expr.body.isInstanceOf[BinaryExpression])
+  }
+
+  test("fractional permission") {
+    val Success(acc: AccessibilityExpression, _) = Parser.parseExpr("acc(x->f, 1/2)")
+    assert(acc.permission.isDefined)
   }
 }

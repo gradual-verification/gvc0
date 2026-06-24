@@ -91,7 +91,7 @@ object Replacer {
   def replace(expr: IR.Expression, m: Mapping): IR.Expression = expr match {
     case v: IR.Var                  => replace(v, m)
     case member: IR.Member          => replace(member, m)
-    case acc: IR.Accessibility      => new IR.Accessibility(replace(acc.member, m), acc.resolved)
+    case acc: IR.Accessibility      => new IR.Accessibility(replace(acc.member, m), acc.permission.map(replace(_, m)), acc.resolved)
     case pred: IR.PredicateInstance => replace(pred, m)
     case unfolding: IR.Unfolding => new IR.Unfolding(replace(unfolding.instance, m), replace(unfolding.expr, m))
     case result: IR.Result          => result

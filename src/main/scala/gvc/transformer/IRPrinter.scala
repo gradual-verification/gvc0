@@ -34,6 +34,10 @@ object IRPrinter {
     case acc: IR.Accessibility => {
       p.print("acc(")
       printExpr(p, acc.member)
+      acc.permission.foreach { perm =>
+        p.print(", ")
+        printExpr(p, perm)
+      }
       p.print(")")
     }
     case pred: IR.PredicateInstance => {

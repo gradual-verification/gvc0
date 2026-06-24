@@ -275,12 +275,34 @@ object IRSilver {
         )(getPosition(pred.resolved)),
         vpr.FullPerm()()
       )(getPosition(pred.resolved))
+    
+    // TODO: Currently literal-only, will relax for general permission expressions in the future
+    def convertPermission(perm: IR.Expression): vpr.Exp = perm match {
+      case int: IR.IntLit if int.value == 1 =>
+        vpr.FullPerm()()
+      case bin: IR.Binary if bin.operator == IR.BinaryOp.Divide =>
+        (bin.left, bin.right) match {
+          case (l: IR.IntLit, r: IR.IntLit) =>
+            vpr.FractionalPerm(
+              vpr.IntLit(BigInt(l.value))(getPosition(l.resolved)),
+              vpr.IntLit(BigInt(r.value))(getPosition(r.resolved))
+            )(getPosition(bin.resolved))
+          case _ =>
+            throw new IRException("Permission fraction must use integer literals")
+        }
+      case _ =>
+        throw new IRException("Unsupported permission expression")
+    }
 
     def convertExpr(expr: IR.Expression): vpr.Exp = expr match {
       case v: IR.Var    => convertVar(v)
       case m: IR.Member => convertMember(m)
       case acc: IR.Accessibility =>
-        vpr.FieldAccessPredicate(convertMember(acc.member), vpr.FullPerm()())(getPosition(acc.resolved))
+        val perm = acc.permission match {
+          case None    => vpr.FullPerm()()
+          case Some(p) => convertPermission(p)
+        }
+        vpr.FieldAccessPredicate(convertMember(acc.member), perm)(getPosition(acc.resolved))
       case pred: IR.PredicateInstance => convertPredicateInstance(pred)
       case unfolding: IR.Unfolding =>
         vpr.Unfolding(convertPredicateInstance(unfolding.instance), convertExpr(unfolding.expr))(getPosition(unfolding.resolved))

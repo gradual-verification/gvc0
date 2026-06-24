@@ -13,7 +13,7 @@ object PointerElimination {
     }
 
     def convert(expr: IR.Expression): IR.Expression = expr match {
-      case a: IR.Accessibility => new IR.Accessibility(convertMember(a.member), a.resolved)
+      case a: IR.Accessibility => new IR.Accessibility(convertMember(a.member), a.permission.map(convert), a.resolved)
       case u: IR.Unfolding => {
         val inst = convert(u.instance)
         new IR.Unfolding(inst.asInstanceOf[IR.PredicateInstance], convert(u.expr), u.resolved)
