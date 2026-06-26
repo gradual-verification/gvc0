@@ -1,0 +1,8 @@
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  int[] a = alloc_array(int, 3);
+  a[0] = 1;
+  return \length(a);
+}

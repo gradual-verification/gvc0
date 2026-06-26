@@ -60,6 +60,11 @@ object IRPrinter {
       printExpr(p, arr.index)
       p.print("]")
     }
+    case len: IR.ArrayLength => {
+      p.print("\\length(")
+      printExpr(p, len.array)
+      p.print(")")
+    }
     case res: IR.Result => p.print("\\result")
     case imp: IR.Imprecise =>
       imp.precise match {

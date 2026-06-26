@@ -1,4 +1,4 @@
-ThisBuild / scalaVersion := "2.12.18"
+ThisBuild / scalaVersion := "2.13.18"
 
 lazy val silicon = (project in file("silicon"))
 

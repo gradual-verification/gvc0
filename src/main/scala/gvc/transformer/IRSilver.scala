@@ -104,6 +104,7 @@ object IRSilver {
     def convertType(t: IR.Type) = t match {
       case _: IR.ReferenceType => vpr.Ref
       case _: IR.PointerType   => vpr.Ref
+      case arr: IR.ArrayType   => vpr.ArrayType(convertType(arr.valueType))
       case IR.IntType          => vpr.Int
       case IR.BoolType         => vpr.Bool
       case IR.CharType         => vpr.Int
@@ -178,8 +179,16 @@ object IRSilver {
         Seq(vpr.NewStmt(target, fields)(getPosition(alloc.resolved)))
       }
 
-      case _: IR.AllocArray =>
-        throw new IRException("Array operations are not implemented in Silver")
+      case alloc: IR.AllocArray =>
+        Seq(
+          vpr.LocalVarAssign(
+            convertVar(alloc.target),
+            vpr.ArrayInstance(
+              convertType(alloc.valueType),
+              convertExpr(alloc.length)
+            )(getPosition(alloc.resolved))
+          )(getPosition(alloc.resolved))
+        )
 
       case assign: IR.Assign =>
         Seq(
@@ -188,14 +197,22 @@ object IRSilver {
             convertExpr(assign.value)
           )(getPosition(assign.resolved))
         )
-
-      case assign: IR.AssignMember =>
-        Seq(
-          vpr.FieldAssign(
-            convertMember(assign.member),
-            convertExpr(assign.value)
-          )(getPosition(assign.resolved))
-        )
+      assign.member match {
+          case arr: IR.ArrayMember =>
+            val pos = getPosition(assign.resolved)
+            val loc = vpr.ArrayIndex(
+              convertExpr(arr.root),
+              convertExpr(arr.index)
+            )(pos)
+            Seq(vpr.ArrayIndexAssign(loc, convertExpr(assign.value))(pos))
+          case member: IR.Member =>
+            Seq(
+              vpr.FieldAssign(
+                convertMember(member),
+                convertExpr(assign.value)
+              )(getPosition(assign.resolved))
+            )
+        }
 
       case assert: IR.Assert =>
         assert.kind match {
@@ -296,7 +313,18 @@ object IRSilver {
 
     def convertExpr(expr: IR.Expression): vpr.Exp = expr match {
       case v: IR.Var    => convertVar(v)
-      case m: IR.Member => convertMember(m)
+      case m: IR.Member =>
+        m match {
+          case arr: IR.ArrayMember =>
+            vpr.ArrayIndex(
+              convertExpr(arr.root),
+              convertExpr(arr.index)
+            )(getPosition(arr.resolved))
+          case _ =>
+            convertMember(m)
+        }
+      case len: IR.ArrayLength =>
+        vpr.ArrayLength(convertExpr(len.array))(getPosition(len.resolved))
       case acc: IR.Accessibility =>
         val perm = acc.permission match {
           case None    => vpr.FullPerm()()

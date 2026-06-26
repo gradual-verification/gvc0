@@ -184,7 +184,11 @@ object IRTransformer {
         case ResolvedPointer(valueType) =>
           new IR.PointerType(transformType(valueType))
         case ResolvedArray(valueType) =>
-          throw new TransformerException("Unsupported array type")
+          valueType match {
+            case _: ResolvedStructType =>
+              throw new TransformerException("Struct arrays are not supported")
+            case t => new IR.ArrayType(transformType(t))
+          }
         case BoolType => IR.BoolType
         case IntType  => IR.IntType
         case CharType => IR.CharType
@@ -366,6 +370,18 @@ object IRTransformer {
         case expr: ResolvedExpressionStatement =>
           expr.value match {
             case invoke: ResolvedInvoke => invokeVoid(invoke, scope)
+            case alloc: ResolvedAllocArray =>
+              assign.left match {
+                case ref: ResolvedVariableRef if assign.operation == None =>
+                  scope += transformAllocArray(alloc, scope.variable(ref), scope)
+                case complex =>
+                  scope += transformAssign(
+                    assign,
+                    transformExpr(alloc, scope),
+                    assign.operation,
+                    scope
+                  )
+              }
             case expr =>
               transformExpr(
                 expr,
@@ -518,9 +534,19 @@ object IRTransformer {
         new IR.FieldMember(transformExpr(parent, scope), field, m)
       }
 
-      case _: ResolvedArrayIndex | _: ResolvedLength | _: ResolvedAllocArray =>
-        throw new TransformerException("Arrays are not supported")
-
+      case index: ResolvedArrayIndex =>
+        new IR.ArrayMember(
+          transformExpr(index.array, scope),
+          transformExpr(index.index, scope),
+          index
+        )
+      
+      case length: ResolvedLength =>
+        new IR.ArrayLength(transformExpr(length.array, scope), length)
+      
+      case alloc: ResolvedAllocArray =>
+        allocArrayToValue(alloc, scope)
+      
       case r: ResolvedResult =>
         scope match {
           case scope: MethodScope => new IR.Result(scope.method, r)
@@ -729,6 +755,16 @@ object IRTransformer {
 
         case _ => throw new TransformerException("Invalid alloc")
       }
+    
+    def allocArrayToValue(input: ResolvedAllocArray, scope: Scope): IR.Var =
+      scope match {
+        case scope: MethodScope =>
+          val temp = scope.method.addVar(new IR.ArrayType(transformType(input.memberType)))
+          temp.resolved = input
+          scope += transformAllocArray(input, temp, scope)
+          temp
+        case _ => throw new TransformerException("Invalid alloc_array")
+      }
 
     def invokeToValue(input: ResolvedInvoke, scope: Scope): IR.Var = {
       scope match {
@@ -831,8 +867,19 @@ object IRTransformer {
             statement
           )
 
-        case _: ResolvedArrayIndex =>
-          throw new TransformerException("Arrays are not supported")
+        case index: ResolvedArrayIndex =>
+          val target =
+            new IR.ArrayMember(
+              transformExpr(index.array, scope), 
+              transformExpr(index.index, scope), 
+              index
+            )
+          new IR.AssignMember(
+            target,
+            transformAssignValue(statement, value, target, op),
+            statement
+          )
+        
         case _ => throw new TransformerException("Invalid L-value")
       }
     }
@@ -864,5 +911,17 @@ object IRTransformer {
         case valueType =>
           new IR.AllocValue(transformType(valueType), target, input)
       }
+
+    def transformAllocArray(
+        input: ResolvedAllocArray,
+        target: IR.Var,
+        scope: Scope
+    ): IR.Op =
+      new IR.AllocArray(
+        transformType(input.memberType),
+        transformExpr(input.length, scope),
+        target,
+        input
+      )
   }
 }

@@ -483,6 +483,15 @@ object IR {
     }
   }
 
+  class ArrayLength(
+                     var array: Expression,
+                     val resolved: ResolvedNode = Zilch
+                   ) extends Expression {
+    def valueType: Option[Type] = Some(IntType)
+    override def contains(exp: Expression) =
+      super.contains(exp) || array.contains(exp)
+  }
+
   // Expressions that can only be used within specifications
   sealed trait SpecificationExpression extends Expression {
     def valueType: Option[Type] = None
@@ -774,10 +783,9 @@ object IR {
       IRPrinter.print(target) + " = alloc(struct " + struct.name + ")"
   }
 
-  // TODO: Length should be an expression
   class AllocArray(
                     var valueType: Type,
-                    var length: IntLit,
+                    var length: Expression,
                     var target: Var,
                     val resolved: ResolvedNode = Zilch
                   ) extends Op {
