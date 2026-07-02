@@ -16,7 +16,7 @@ object IR {
     private var _dependencies = mutable.ListBuffer[Dependency]()
 
     lazy val ownedFieldsStruct = struct(
-      Helpers.findAvailableName(_structs, "OwnedFields")
+      Helpers.findAvailableName(_structs.keys, "OwnedFields")
     )
 
     def addDependency(
@@ -75,7 +75,7 @@ object IR {
 
     // Adds a new struct, renaming it if necessary to avoid collisions
     def newStruct(name: String): Struct = {
-      val actualName = Helpers.findAvailableName(_structs, name)
+      val actualName = Helpers.findAvailableName(_structs.keys, name)
       val struct = new Struct(actualName)
       _structs += actualName -> struct
       struct
@@ -149,7 +149,7 @@ object IR {
       _fields += field
       field
     }
-    def fields: Seq[StructField] = _fields
+    def fields: Seq[StructField] = _fields.toSeq
   }
 
   class StructField(
@@ -179,8 +179,8 @@ object IR {
     var body = new MethodBlock(this)
     var resolved: ResolvedNode = Zilch
 
-    def parameters: Seq[Parameter] = _parameters
-    def variables: Seq[Var] = _variables
+    def parameters: Seq[Parameter] = _parameters.toSeq
+    def variables: Seq[Var] = _variables.toSeq
 
     def variable(name: String): Var =
       scope.getOrElse(
@@ -190,14 +190,14 @@ object IR {
 
     def addParameter(valueType: Type, parameterName: String): Parameter = {
       val newParam =
-        new Parameter(valueType, Helpers.findAvailableName(scope, parameterName), name)
+        new Parameter(valueType, Helpers.findAvailableName(scope.keys, parameterName), name)
       scope += newParam.name -> newParam
       _parameters += newParam
       newParam
     }
 
     def addVar(valueType: Type, varName: String = "_"): Var = {
-      val newVar = new Var(valueType, Helpers.findAvailableName(scope, varName), name)
+      val newVar = new Var(valueType, Helpers.findAvailableName(scope.keys, varName), name)
       scope += newVar.name -> newVar
       _variables += newVar
       newVar
@@ -233,7 +233,7 @@ object IR {
   ) {
     private var _parameters = mutable.ListBuffer[Parameter]()
 
-    def parameters: Seq[Parameter] = _parameters
+    def parameters: Seq[Parameter] = _parameters.toSeq
 
     def addParameter(valueType: Type, parameterName: String): Parameter = {
       val newParam = new Parameter(valueType, parameterName, name)
@@ -923,8 +923,8 @@ object IR {
     private val _methods = mutable.ListBuffer[DependencyMethod]()
     private val _structs = mutable.ListBuffer[DependencyStruct]()
 
-    def methods: Seq[DependencyMethod] = _methods
-    def structs: Seq[DependencyStruct] = _structs
+    def methods: Seq[DependencyMethod] = _methods.toSeq
+    def structs: Seq[DependencyStruct] = _structs.toSeq
 
     def defineMethod(
         name: String,
@@ -961,7 +961,7 @@ object IR {
       extends StructDefinition {
     private val _fields = mutable.ListBuffer[StructField]()
 
-    def fields: Seq[StructField] = _fields
+    def fields: Seq[StructField] = _fields.toSeq
 
     def addField(
         fieldName: String,
@@ -983,7 +983,7 @@ object IR {
   ) extends MethodDefinition {
     val _parameters = mutable.ListBuffer[Parameter]()
 
-    def parameters: Seq[Parameter] = _parameters
+    def parameters: Seq[Parameter] = _parameters.toSeq
 
     def addParameter(parameterName: String, valueType: Type): Parameter = {
       val param = new Parameter(valueType, parameterName, name)

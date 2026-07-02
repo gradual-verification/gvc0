@@ -405,7 +405,7 @@ object CheckExpression {
 
       case e =>
         throw new WeaverException(
-          "Cannot convert Silver expression `" + e.toString() + "`"
+          "Cannot convert Silver expression `" + e.toString + "`"
         )
     }
   }

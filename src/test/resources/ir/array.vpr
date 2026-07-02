@@ -1,0 +1,42 @@
+method alloc_array_bool() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var b: Array[Bool]
+  b := Array[Bool](5)
+  b[1] := true
+  $result := 0
+}
+
+method alloc_array_char() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var c: Array[Int]
+  c := Array[Int](7)
+  c[2] := 120
+  $result := 0
+}
+
+method alloc_array_int() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var a: Array[Int]
+  a := Array[Int](3)
+  a[0] := 1
+  $result := 0
+}
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var _: Int
+  var _1: Int
+  var _2: Int
+  _ := alloc_array_int()
+  _1 := alloc_array_bool()
+  _2 := alloc_array_char()
+  $result := 0
+}

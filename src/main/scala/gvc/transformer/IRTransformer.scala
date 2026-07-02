@@ -185,9 +185,11 @@ object IRTransformer {
           new IR.PointerType(transformType(valueType))
         case ResolvedArray(valueType) =>
           valueType match {
-            case _: ResolvedStructType =>
-              throw new TransformerException("Struct arrays are not supported")
-            case t => new IR.ArrayType(transformType(t))
+            case IntType  => new IR.ArrayType(IR.IntType)
+            case BoolType => new IR.ArrayType(IR.BoolType)
+            case CharType => new IR.ArrayType(IR.CharType)
+            case _ =>
+              throw new TransformerException("Only primitive arrays are supported")
           }
         case BoolType => IR.BoolType
         case IntType  => IR.IntType
@@ -196,6 +198,12 @@ object IRTransformer {
           throw new TransformerException("Unsupported string type")
         case NullType => throw new TransformerException("Invalid NULL type")
         case VoidType => throw new TransformerException("Invalid void type")
+      }
+    
+    private def isArrayType(t: ResolvedType): Boolean =
+      t match {
+        case _: ResolvedArray => true
+        case _ => false
       }
 
     def defineMethod(input: ResolvedMethodDefinition): Unit = {
@@ -370,18 +378,6 @@ object IRTransformer {
         case expr: ResolvedExpressionStatement =>
           expr.value match {
             case invoke: ResolvedInvoke => invokeVoid(invoke, scope)
-            case alloc: ResolvedAllocArray =>
-              assign.left match {
-                case ref: ResolvedVariableRef if assign.operation == None =>
-                  scope += transformAllocArray(alloc, scope.variable(ref), scope)
-                case complex =>
-                  scope += transformAssign(
-                    assign,
-                    transformExpr(alloc, scope),
-                    assign.operation,
-                    scope
-                  )
-              }
             case expr =>
               transformExpr(
                 expr,
@@ -422,6 +418,20 @@ object IRTransformer {
                   )
               }
             }
+
+            case alloc: ResolvedAllocArray =>
+              assign.left match {
+                case ref: ResolvedVariableRef if assign.operation == None =>
+                  scope += transformAllocArray(alloc, scope.variable(ref), scope)
+                case complex =>
+                  scope += transformAssign(
+                    assign,
+                    transformExpr(alloc, scope),
+                    assign.operation,
+                    scope
+                  )
+              }
+
             case expr =>
               scope += transformAssign(
                 assign,
@@ -591,6 +601,10 @@ object IRTransformer {
       }
 
       case comp: ResolvedComparison => {
+        if (isArrayType(comp.left.valueType) || isArrayType(comp.right.valueType)) {
+          throw new TransformerException("Array comparison is not supported")
+        }
+
         val op = comp.operation match {
           case ComparisonOperation.EqualTo    => IR.BinaryOp.Equal
           case ComparisonOperation.NotEqualTo => IR.BinaryOp.NotEqual

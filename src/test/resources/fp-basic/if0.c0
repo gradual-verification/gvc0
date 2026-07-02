@@ -1,5 +1,3 @@
-//test unsupported
-
 int main () {
   int* x = alloc(int);
   int[] A = alloc_array(int, 37);

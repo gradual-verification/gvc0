@@ -36,8 +36,11 @@ object PointerElimination {
     }
 
     def convertOp(op: IR.Op): Unit = op match {
-      case _: IR.AllocArray => 
-        a.target = convert(a.target)
+      case a: IR.AllocArray => 
+        a.target = convert(a.target) match {
+          case v: IR.Var => v
+          case _ => throw new TransformerException("Invalid array allocation target")
+        }
         a.length = convert(a.length)
       case a: IR.AllocStruct => a.target = convert(a.target)
       case a: IR.AllocValue =>

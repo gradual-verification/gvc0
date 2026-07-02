@@ -64,10 +64,13 @@ sealed trait ProgramDependencies {
 
 object Dependencies {
   private sealed abstract class DependencyScope extends ScopeDependencies {
-    val calls = mutable.ListBuffer[IR.Invoke]()
-    val allocations = mutable.ListBuffer[IR.AllocStruct]()
+    private[weaver] val callsBuf = mutable.ListBuffer[IR.Invoke]()
+    private[weaver] val allocationsBuf = mutable.ListBuffer[IR.AllocStruct]()
     val permDependencies = mutable.HashSet[String]()
-    val children = mutable.ListBuffer[WhileDependenciesImpl]()
+    private[weaver] val childrenBuf = mutable.ListBuffer[WhileDependenciesImpl]()
+    def calls: Seq[IR.Invoke] = callsBuf.toSeq
+    def allocations: Seq[IR.AllocStruct] = allocationsBuf.toSeq
+    def children: Seq[WhileDependenciesImpl] = childrenBuf.toSeq
     var requiresPerms = false
     var modifiesPerms = false
   }
@@ -127,7 +130,7 @@ object Dependencies {
     )
 
     traverseBlock(method.body, dep)
-    dep.children ++= scope.children.map(initDependencies(_, precision))
+    dep.childrenBuf ++= scope.children.map(initDependencies(_, precision))
 
     dep.requiresPerms = requiresPerms(scope.checks)
     dep.modifiesPerms =
@@ -149,7 +152,7 @@ object Dependencies {
     )
 
     traverseBlock(op.body, dep)
-    dep.children ++= scope.children.map(initDependencies(_, precision))
+    dep.childrenBuf ++= scope.children.map(initDependencies(_, precision))
 
     dep.requiresPerms = requiresPerms(scope.checks)
     dep.modifiesPerms =
@@ -166,9 +169,9 @@ object Dependencies {
       case _: IR.AllocArray | _: IR.AllocValue =>
         throw new WeaverException("Unsupported allocation")
       case alloc: IR.AllocStruct =>
-        dep.allocations += alloc
+        dep.allocationsBuf += alloc
       case call: IR.Invoke =>
-        dep.calls += call
+        dep.callsBuf += call
       case cond: IR.If => {
         traverseBlock(cond.ifTrue, dep)
         traverseBlock(cond.ifFalse, dep)

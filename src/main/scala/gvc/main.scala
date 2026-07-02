@@ -299,8 +299,8 @@ object Main extends App {
             else
               b.branchInfo
                 .map { case BranchCond(branch, _, _) => branch }
-                .map(c => "(" + c.toString() + ")")
-                .mkString(" && ")}: ${b.checks.toString()}"
+                .map(c => "(" + c.toString + ")")
+                .mkString(" && ")}: ${b.checks.toString}"
           )
           .mkString("\n")
       )

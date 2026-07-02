@@ -101,7 +101,7 @@ object IRSilver {
         )
       )
 
-    def convertType(t: IR.Type) = t match {
+    def convertType(t: IR.Type): vpr.Type = t match {
       case _: IR.ReferenceType => vpr.Ref
       case _: IR.PointerType   => vpr.Ref
       case arr: IR.ArrayType   => vpr.ArrayType(convertType(arr.valueType))
@@ -197,7 +197,8 @@ object IRSilver {
             convertExpr(assign.value)
           )(getPosition(assign.resolved))
         )
-      assign.member match {
+      case assign: IR.AssignMember =>
+        assign.member match {
           case arr: IR.ArrayMember =>
             val pos = getPosition(assign.resolved)
             val loc = vpr.ArrayIndex(
@@ -290,7 +291,7 @@ object IRSilver {
           pred.arguments.map(convertExpr),
           pred.predicate.name
         )(getPosition(pred.resolved)),
-        vpr.FullPerm()()
+        Some(vpr.FullPerm()())
       )(getPosition(pred.resolved))
     
     // TODO: Currently literal-only, will relax for general permission expressions in the future
@@ -326,11 +327,11 @@ object IRSilver {
       case len: IR.ArrayLength =>
         vpr.ArrayLength(convertExpr(len.array))(getPosition(len.resolved))
       case acc: IR.Accessibility =>
-        val perm = acc.permission match {
-          case None    => vpr.FullPerm()()
-          case Some(p) => convertPermission(p)
+        val permExp = acc.permission match {
+          case None    => Some(vpr.FullPerm()())
+          case Some(p) => Some(convertPermission(p))
         }
-        vpr.FieldAccessPredicate(convertMember(acc.member), perm)(getPosition(acc.resolved))
+        vpr.FieldAccessPredicate(convertMember(acc.member), permExp)(getPosition(acc.resolved))
       case pred: IR.PredicateInstance => convertPredicateInstance(pred)
       case unfolding: IR.Unfolding =>
         vpr.Unfolding(convertPredicateInstance(unfolding.instance), convertExpr(unfolding.expr))(getPosition(unfolding.resolved))

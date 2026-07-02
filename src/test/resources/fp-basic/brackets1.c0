@@ -1,6 +1,4 @@
-//test unsupported
-
 int main() {
-  int[ ] A;
+  int[] A;
   return 0;
 }
