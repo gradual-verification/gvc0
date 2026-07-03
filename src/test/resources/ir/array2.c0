@@ -1,0 +1,17 @@
+int[][] nest(int[][] a)
+  //@requires true;
+  //@ensures true;
+{
+  return a;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  int[][] a = alloc_array(int[], 3);
+  a[0] = alloc_array(int, 5);
+  a[0][1] = 42;
+  nest(a);
+  return 0;
+}

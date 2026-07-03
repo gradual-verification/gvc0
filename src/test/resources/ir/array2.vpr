@@ -1,0 +1,21 @@
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var a: Array[Array[Int]]
+  var _: Array[Int]
+  var _1: Array[Array[Int]]
+  a := Array[Array[Int]](3)
+  _ := Array[Int](5)
+  a[0] := _
+  a[0][1] := 42
+  _1 := nest(a)
+  $result := 0
+}
+
+method nest(a: Array[Array[Int]]) returns ($result: Array[Array[Int]])
+  requires true
+  ensures true
+{
+  $result := a
+}

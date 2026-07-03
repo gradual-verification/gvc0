@@ -185,11 +185,10 @@ object IRTransformer {
           new IR.PointerType(transformType(valueType))
         case ResolvedArray(valueType) =>
           valueType match {
-            case IntType  => new IR.ArrayType(IR.IntType)
-            case BoolType => new IR.ArrayType(IR.BoolType)
-            case CharType => new IR.ArrayType(IR.CharType)
-            case _ =>
-              throw new TransformerException("Only primitive arrays are supported")
+            case _: ResolvedStructType =>
+              throw new TransformerException("Struct arrays are not supported")
+            case t =>
+              new IR.ArrayType(transformType(t))
           }
         case BoolType => IR.BoolType
         case IntType  => IR.IntType
