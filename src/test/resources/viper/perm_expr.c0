@@ -1,0 +1,19 @@
+struct test {
+  int value;
+};
+
+int test_perm(struct test* x, int n)
+  //@requires n > 0;
+  //@requires acc(x->value, 1/n);
+  //@ensures true;
+{
+  return 0;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  struct test* a = alloc(struct test);
+  return test_perm(a, 5);
+}

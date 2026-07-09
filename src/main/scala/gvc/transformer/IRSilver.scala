@@ -294,20 +294,21 @@ object IRSilver {
         Some(vpr.FullPerm()())
       )(getPosition(pred.resolved))
     
-    // TODO: Currently literal-only, will relax for general permission expressions in the future
+    private def convertIntPermOperand(expr: IR.Expression): vpr.Exp = expr match {
+      case int: IR.IntLit   => vpr.IntLit(BigInt(int.value))(getPosition(int.resolved))
+      case v: IR.Var        => convertVar(v)
+      case _ =>
+        throw new IRException("Permission fraction operands must be integer literals or variables")
+    }
+    
     def convertPermission(perm: IR.Expression): vpr.Exp = perm match {
       case int: IR.IntLit if int.value == 1 =>
         vpr.FullPerm()()
       case bin: IR.Binary if bin.operator == IR.BinaryOp.Divide =>
-        (bin.left, bin.right) match {
-          case (l: IR.IntLit, r: IR.IntLit) =>
-            vpr.FractionalPerm(
-              vpr.IntLit(BigInt(l.value))(getPosition(l.resolved)),
-              vpr.IntLit(BigInt(r.value))(getPosition(r.resolved))
-            )(getPosition(bin.resolved))
-          case _ =>
-            throw new IRException("Permission fraction must use integer literals")
-        }
+        vpr.FractionalPerm(
+          convertIntPermOperand(bin.left),
+          convertIntPermOperand(bin.right)
+        )(getPosition(bin.resolved))
       case _ =>
         throw new IRException("Unsupported permission expression")
     }

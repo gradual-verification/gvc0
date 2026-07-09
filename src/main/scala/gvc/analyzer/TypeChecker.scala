@@ -291,7 +291,7 @@ object TypeChecker {
       case acc: ResolvedAccessibility => {
         // Disregard the actual type of the field, just make sure it is a field/deref
         assertField(errors, acc.field)
-        acc.permission.foreach(assertPermissionLiteral(errors, _))
+        acc.permission.foreach(assertPermissionExpression(errors, _))
       }
 
       case _: ResolvedResult |
@@ -334,20 +334,20 @@ object TypeChecker {
     }
   }
 
-  // TODO: Currently literal-only, will relax for general permission expressions in the future
-  def assertPermissionLiteral(errors: ErrorSink, perm: ResolvedExpression): Unit = perm match {
+  def assertPermissionExpression(errors: ErrorSink, perm: ResolvedExpression): Unit = perm match {
     case int: ResolvedInt =>
       if (int.value != 1)
         errors.error(perm, "Permission amount must be 1")
     case arith: ResolvedArithmetic if arith.operation == ArithmeticOperation.Divide =>
+      assertType(errors, arith.left, IntType)
+      assertType(errors, arith.right, IntType)
       (arith.left, arith.right) match {
         case (l: ResolvedInt, r: ResolvedInt) =>
           if (l.value <= 0 || r.value <= 0)
             errors.error(perm, "Permission fraction must use positive integer literals")
           else if (l.value > r.value)
             errors.error(perm, "Permission fraction must not exceed 1")
-        case _ =>
-          errors.error(perm, "Permission fraction must use integer literals")
+        case _ => ()
       }
     case _ =>
       errors.error(perm, "Invalid permission amount")
