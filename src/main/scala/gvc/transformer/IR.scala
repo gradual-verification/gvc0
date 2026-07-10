@@ -472,6 +472,16 @@ object IR {
     }
   }
 
+  class PredicateMember(
+                          var instance: PredicateInstance,
+                          val resolved: ResolvedNode = Zilch
+                        ) extends Member {
+    var root: Expression = instance
+    def valueType: Option[Type] = instance.valueType
+    override def contains(exp: Expression): Boolean =
+      super.contains(exp) || instance.contains(exp)
+  }
+
   class ArrayMember(
                      var root: Expression,
                      var index: Expression,

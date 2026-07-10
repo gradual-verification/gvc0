@@ -1,0 +1,15 @@
+//@predicate testPred(int *value) = acc(*value);
+
+int test(int *value, int n)
+  //@requires n > 0;
+  //@requires forall int i from 0 to n. testPred(value);
+{
+  return 0;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  return 0;
+}

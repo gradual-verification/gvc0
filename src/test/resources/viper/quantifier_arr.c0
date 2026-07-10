@@ -1,0 +1,16 @@
+struct node {
+  int value;
+};
+
+void test(struct node* a, int n)
+  //@requires n > 0;
+  //@requires forall int i from 0 to n. acc(a->value, 1);
+{
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  return 0;
+}

@@ -1,0 +1,20 @@
+field _ptr_int$value: Int
+
+predicate testPred(value: Ref) {
+  acc(value._ptr_int$value, write)
+}
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  $result := 0
+}
+
+method test(value: Ref, n: Int) returns ($result: Int)
+  requires n > 0 &&
+    (forall i: Int ::0 <= i && i < n ==> acc(testPred(value), write))
+  ensures ? && true
+{
+  $result := 0
+}

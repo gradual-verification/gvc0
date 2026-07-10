@@ -60,6 +60,9 @@ object IRPrinter {
       printExpr(p, arr.index)
       p.print("]")
     }
+    case pm: IR.PredicateMember => {
+      printExpr(p, pm.instance)
+    }
     case len: IR.ArrayLength => {
       p.print("\\length(")
       printExpr(p, len.array)

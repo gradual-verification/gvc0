@@ -564,11 +564,13 @@ object IRTransformer {
         }
 
       case acc: ResolvedAccessibility =>
+        val member = transformExpr(acc.field, scope) match {
+          case m: IR.Member => m
+          case pred: IR.PredicateInstance => new IR.PredicateMember(pred, acc)
+          case _ => throw new TransformerException("Invalid acc() argument")
+        }
         new IR.Accessibility(
-          transformExpr(acc.field, scope) match {
-            case member: IR.Member => member
-            case _                 => throw new TransformerException("Invalid acc() argument")
-          },
+          member,
           acc.permission.map(transformExpr(_, scope)),
           acc
         )

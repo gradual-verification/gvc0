@@ -264,13 +264,10 @@ object IRSilver {
       val pos = getPosition(quant.resolved)
       val qVar = vpr.LocalVar(quant.varName, convertType(quant.varType))(pos)
       val body = convertExpr(quant.body)
-      val inRangeWithBody =
-        vpr.And(halfOpenRange(quant, qVar), body)(pos)
+      val range = halfOpenRange(quant, qVar)
       quant.operation match {
-        case IR.QuantifierOp.Forall =>
-          vpr.Or(vpr.Not(inRangeWithBody)(pos), body)(pos)
-        case IR.QuantifierOp.Exists =>
-          vpr.And(halfOpenRange(quant, qVar), body)(pos)
+        case IR.QuantifierOp.Forall => vpr.Implies(range, body)(pos)
+        case IR.QuantifierOp.Exists => vpr.And(range, body)(pos)
       }
     }
 
@@ -281,6 +278,32 @@ object IRSilver {
         throw new IRException("Bare pointers cannot be converted")
       case _: IR.ArrayMember =>
         throw new IRException("Array operations are not implemented in Silver")
+    }
+
+    def convertAccessibility(acc: IR.Accessibility): vpr.Exp = {
+      val permExp = acc.permission match {
+        case None    => Some(vpr.FullPerm()())
+        case Some(p) => Some(convertPermission(p))
+      }
+      acc.member match {
+        case member: IR.FieldMember =>
+          vpr.FieldAccessPredicate(convertMember(member), permExp)(getPosition(acc.resolved))
+        case member: IR.DereferenceMember =>
+          vpr.FieldAccessPredicate(convertMember(member), permExp)(getPosition(acc.resolved))
+        case _: IR.ArrayMember =>
+          // TODO: Remove once Silver supports accessibility predicates with array locations
+          throw new IRException(
+            "Accessibility predicates with array locations are not yet supported in Silver"
+          )
+        case member: IR.PredicateMember =>
+          vpr.PredicateAccessPredicate(
+            vpr.PredicateAccess(
+              member.instance.arguments.map(convertExpr),
+              member.instance.predicate.name
+            )(getPosition(member.instance.resolved)),
+            permExp
+          )(getPosition(acc.resolved))
+      }
     }
 
     def convertPredicateInstance(
@@ -325,14 +348,10 @@ object IRSilver {
           case _ =>
             convertMember(m)
         }
+        
       /*case len: IR.ArrayLength =>
         vpr.ArrayLength(convertExpr(len.array))(getPosition(len.resolved))*/
-      case acc: IR.Accessibility =>
-        val permExp = acc.permission match {
-          case None    => Some(vpr.FullPerm()())
-          case Some(p) => Some(convertPermission(p))
-        }
-        vpr.FieldAccessPredicate(convertMember(acc.member), permExp)(getPosition(acc.resolved))
+      case acc: IR.Accessibility => convertAccessibility(acc)
       case pred: IR.PredicateInstance => convertPredicateInstance(pred)
       case unfolding: IR.Unfolding =>
         vpr.Unfolding(convertPredicateInstance(unfolding.instance), convertExpr(unfolding.expr))(getPosition(unfolding.resolved))

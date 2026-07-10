@@ -83,6 +83,8 @@ object Replacer {
       new IR.DereferenceMember(replace(deref.root, m), deref.resolved)
     case array: IR.ArrayMember =>
       new IR.ArrayMember(replace(array.root, m), replace(array.index, m), array.resolved) // TODO: index
+    case pred: IR.PredicateMember =>
+      new IR.PredicateMember(replace(pred.instance, m), pred.resolved)
   }
 
   def replace(pred: IR.PredicateInstance, m: Mapping): IR.PredicateInstance =

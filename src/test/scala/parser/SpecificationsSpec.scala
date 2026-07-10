@@ -1,6 +1,7 @@
 import org.scalatest.funsuite._
 import gvc.parser._
 import fastparse.Parsed.{Success, Failure}
+import org.h2.index.Index
 
 class SpecificationsSpec extends AnyFunSuite {
   test("assert") {
@@ -109,8 +110,29 @@ class SpecificationsSpec extends AnyFunSuite {
   }
 
   test("fractional permission") {
-    val Success(Seq(RequiresSpecification(acc: AccessibilityExpression, _)), _) =
+    val Success(List(RequiresSpecification(acc: AccessibilityExpression, _)), _) =
       Parser.parseSpec("//@requires acc(x->f, 1/2);")
+    assert(acc.permission.isDefined)
+  }
+
+  test("accessibility predicate with predicate location") {
+    val Success(List(RequiresSpecification(acc: AccessibilityExpression, _)), _) =
+      Parser.parseSpec("//@requires acc(test(a, i), 1);")
+    assert(acc.field.isInstanceOf[InvokeExpression])
+    assert(acc.permission.isDefined)
+  }
+
+  test("accessibility predicate with field location") {
+    val Success(List(RequiresSpecification(acc: AccessibilityExpression, _)), _) =
+      Parser.parseSpec("//@requires acc(a.f, 1);")
+    assert(acc.field.isInstanceOf[MemberExpression])
+    assert(acc.permission.isDefined)
+  }
+
+  test("accessibility predicate with index location") {
+    val Success(List(RequiresSpecification(acc: AccessibilityExpression, _)), _) =
+      Parser.parseSpec("//@requires acc(a[i], 1);")
+    assert(acc.field.isInstanceOf[IndexExpression])
     assert(acc.permission.isDefined)
   }
 }

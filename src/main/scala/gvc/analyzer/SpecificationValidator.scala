@@ -40,7 +40,7 @@ object SpecificationValidator {
       }
 
       case member: ResolvedMember => validateField(member.parent, errors)
-      case acc: ResolvedAccessibility => validateField(acc.field, errors)
+      case acc: ResolvedAccessibility => validateAccLocation(acc.field, errors)
       case deref: ResolvedDereference => validateField(deref.value, errors)
 
       case comp: ResolvedComparison => {
@@ -195,6 +195,20 @@ object SpecificationValidator {
       case str: ResolvedString => {
         errors.error(str, "String values are not implemented in specifications")
       }
+    }
+  }
+
+  def validateAccLocation(value: ResolvedExpression, errors: ErrorSink): Unit = {
+    value match {
+      case index: ResolvedArrayIndex => {
+        validateValue(index.array, errors)
+        validateValue(index.index, errors)
+      }
+      case pred: ResolvedPredicate => pred.arguments.foreach(validateValue(_, errors))
+      case member: ResolvedMember => validateField(member.parent, errors)
+      case deref: ResolvedDereference => validateField(deref.value, errors)
+      case _ =>
+        errors.error(value, "Invalid location in acc() expression")
     }
   }
 

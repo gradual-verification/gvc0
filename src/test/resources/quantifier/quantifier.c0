@@ -1,5 +1,10 @@
+<<<<<<<< HEAD:src/test/resources/quantifier/quantifier.c0
 /*int test(int n)
   //@ requires n >= 0;
+========
+int test(int n)
+  //@ requires n > 0;
+>>>>>>>> 1ef9b7a (Add support for bounded quantified expressions with accessibility predicates):src/test/resources/viper/quantifier_bool.c0
   //@ ensures forall int i from 0 to n. i >= 0;
   //@ ensures exists int i from 0 to n. i == 0;
 {
@@ -10,5 +15,10 @@ int main()
   //@ requires true;
   //@ ensures true;
 {
+<<<<<<<< HEAD:src/test/resources/quantifier/quantifier.c0
   return test(0);
 }*/
+========
+  return test(1);
+}
+>>>>>>>> 1ef9b7a (Add support for bounded quantified expressions with accessibility predicates):src/test/resources/viper/quantifier_bool.c0

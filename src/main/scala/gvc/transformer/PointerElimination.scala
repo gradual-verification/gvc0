@@ -6,10 +6,15 @@ object PointerElimination {
   def transform(program: IR.Program): Unit = {
     val c = new Converter(program)
 
+    def convertPredicateInstance(p: IR.PredicateInstance): IR.PredicateInstance =
+      new IR.PredicateInstance(p.predicate, p.arguments.map(convert), p.resolved)
+
     def convertMember(m: IR.Member): IR.Member = m match {
       case arr: IR.ArrayMember => new IR.ArrayMember(convert(arr.root), convert(arr.index), arr.resolved)
       case d: IR.DereferenceMember => c.dereference(convert(d.root), d)
       case f: IR.FieldMember => new IR.FieldMember(convert(f.root), f.field, f.resolved)
+      case pm: IR.PredicateMember =>
+        new IR.PredicateMember(convertPredicateInstance(pm.instance), pm.resolved)
     }
 
     def convert(expr: IR.Expression): IR.Expression = expr match {
@@ -24,7 +29,7 @@ object PointerElimination {
       case q: IR.Quantified => new IR.Quantified(q.operation, q.varType, q.varName, convert(q.lowerBound), convert(q.upperBound), convert(q.body), q.resolved)
       case len: IR.ArrayLength => new IR.ArrayLength(convert(len.array), len.resolved)
       case m: IR.Member => convertMember(m)
-      case p: IR.PredicateInstance => new IR.PredicateInstance(p.predicate, p.arguments.map(convert), p.resolved)
+      case p: IR.PredicateInstance => convertPredicateInstance(p)
       case r: IR.Result => new IR.Result(r.method, r.resolved)
       case u: IR.Unary => new IR.Unary(u.operator, convert(u.operand), u.resolved)
       case v: IR.Var => v

@@ -290,7 +290,7 @@ object TypeChecker {
 
       case acc: ResolvedAccessibility => {
         // Disregard the actual type of the field, just make sure it is a field/deref
-        assertField(errors, acc.field)
+        assertAccLocation(errors, acc.field)
         acc.permission.foreach(assertPermissionExpression(errors, _))
       }
 
@@ -322,6 +322,22 @@ object TypeChecker {
     expr match {
       case _: ResolvedVariableRef | _: ResolvedResult => errors.error(expr, FIELD_ERROR)
       case _ => assertFieldInner(errors, expr)
+    }
+  }
+
+  def assertAccLocation(errors: ErrorSink, expr: ResolvedExpression): Unit = {
+    expr match {
+      case index: ResolvedArrayIndex => {
+        checkExpression(errors, index.array)
+        checkExpression(errors, index.index)
+        index.array.valueType match {
+          case _: ResolvedArray => ()
+          case t => errors.error(index.array, "Expected array type, encountered '" + t.name + "'")
+        }
+        assertType(errors, index.index, IntType)
+      }
+      case pred: ResolvedPredicate => pred.arguments.foreach(checkExpression(errors, _))
+      case _ => assertField(errors, expr)
     }
   }
 

@@ -317,4 +317,22 @@ class ExpressionsSpec extends AnyFunSuite {
     val Success(acc: AccessibilityExpression, _) = Parser.parseExpr("acc(x->f, 1/2)")
     assert(acc.permission.isDefined)
   }
+
+  test("accessibility predicate with predicate location") {
+    val Success(acc: AccessibilityExpression, _) = Parser.parseExpr("acc(test(a, i), 1)")
+    assert(acc.field.isInstanceOf[InvokeExpression])
+    assert(acc.permission.isDefined)
+  }
+
+  test("accessibility predicate with array index location") {
+    val Success(acc: AccessibilityExpression, _) = Parser.parseExpr("acc(a[i], 1)")
+    assert(acc.field.isInstanceOf[IndexExpression])
+    assert(acc.permission.isDefined)
+  }
+
+  test("accessibility predicate with field location") {
+    val Success(acc: AccessibilityExpression, _) = Parser.parseExpr("acc(a.f, 1)")
+    assert(acc.field.isInstanceOf[MemberExpression])
+    assert(acc.permission.isDefined)
+  }
 }
