@@ -82,6 +82,8 @@ class IntegrationSpecs extends AnyFunSuite with BaseFileSpec {
         assertThrows[ValidatorException](TestUtils.program(src))
       } else if (src.startsWith("//test unsupported")) {
         assertThrows[TransformerException](TestUtils.program(src))
+      } else if (src.startsWith("//test ir_error")) {
+        assertThrows[IRException](TestUtils.program(src))
       } else {
         val program = TestUtils.program(src)
         assertFile(input.get(".ir.c0"), program.irSource)

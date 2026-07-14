@@ -107,6 +107,7 @@ object Replacer {
                         quant.varName,
                         replace(quant.lowerBound, m),
                         replace(quant.upperBound, m),
+                        quant.extraCondition.map(replace(_, m)),
                         replace(quant.body, m),
                         quant.resolved
                       )

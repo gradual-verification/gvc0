@@ -4,7 +4,7 @@ struct node {
 
 void test(struct node* a, int n)
   //@requires n > 0;
-  //@requires forall int i from 0 to n. acc(a->value, 1);
+  //@requires (\forall int i; 0 <= i && i < n; acc(a->value, 1));
 {
 }
 

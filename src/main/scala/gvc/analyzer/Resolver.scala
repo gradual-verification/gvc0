@@ -835,30 +835,48 @@ object Resolver {
       quant: BoundedQuantifiedExpression,
       scope: Scope,
       context: Context
-  ): ResolvedBoundedQuantified = {
+  ): ResolvedExpression = {
     val valueType = resolveType(quant.valueType, scope)
     valueType match {
-      case IntType | BoolType | CharType => ()
+      case IntType => ()
       case _ =>
         scope.errors.error(
           quant,
-          "Quantified variable must have basic type int, bool, or char"
+          "Quantified variable must have basic type int"
         )
     }
-    val lowerBound = resolveExpression(quant.lowerBound, scope, context)
-    val upperBound = resolveExpression(quant.upperBound, scope, context)
     val qVar = ResolvedVariable(quant, quant.variable.name, valueType)
     val bodyScope = scope.bindQuantifiedVariable(qVar)
     val bodyContext = context match {
       case QuantifierBodyContext(_) => context
       case other => QuantifierBodyContext(other)
     }
+    val resolvedCondition =
+      resolveExpression(quant.condition, bodyScope, bodyContext)
     val body = resolveExpression(quant.body, bodyScope, bodyContext)
     val operation = quant.kind match {
       case QuantifierKind.Forall => QuantifierOperation.Forall
       case QuantifierKind.Exists  => QuantifierOperation.Exists
     }
-    ResolvedBoundedQuantified(quant, operation, qVar, lowerBound, upperBound, body)
+    QuantifierConditionAnalyzer.analyze(
+      scope.errors,
+      quant,
+      qVar,
+      resolvedCondition
+    ) match {
+      case Some(split) =>
+        ResolvedBoundedQuantified(
+          quant,
+          operation,
+          qVar,
+          split.lowerBound,
+          split.upperBound,
+          split.extraCondition,
+          body
+        )
+      case None =>
+        ResolvedLogical(quant, resolvedCondition, body, LogicalOperation.And)
+    }
   }
 
   def resolvePredicate(

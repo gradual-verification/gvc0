@@ -725,6 +725,7 @@ object IRTransformer {
           qVar.name,
           transformExpr(quant.lowerBound, scope),
           transformExpr(quant.upperBound, scope),
+          quant.extraCondition.map(transformExpr(_, bodyScope)),
           transformSpec(quant.body, bodyScope),
           quant
         )

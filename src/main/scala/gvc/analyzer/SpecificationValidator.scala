@@ -56,15 +56,16 @@ object SpecificationValidator {
 
       case quant: ResolvedBoundedQuantified => {
         quant.variable.valueType match {
-          case IntType | BoolType | CharType => ()
+          case IntType => ()
           case t =>
             errors.error(
               quant,
-              s"Quantified variable must have basic type int, bool, or char, not '${t.name}'"
+              s"Quantified variable must have basic type int, not '${t.name}'"
             )
         }
         validateValue(quant.lowerBound, errors)
         validateValue(quant.upperBound, errors)
+        quant.extraCondition.foreach(validateValue(_, errors))
         validateSpecification(quant.body, errors)
       }
 

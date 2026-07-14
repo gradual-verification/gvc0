@@ -99,13 +99,13 @@ class SpecificationsSpec extends AnyFunSuite {
 
   test("forall") {
     val Success(List(spec: EnsuresSpecification), _) =
-      Parser.parseSpec("//@ensures forall int i from 0 to n. i >= 0;")
+      Parser.parseSpec("//@ensures (\\forall int i; 0 <= i && i < n; i >= 0);")
     assert(spec.value.isInstanceOf[BoundedQuantifiedExpression])
   }
 
   test("exists") {
     val Success(List(spec: EnsuresSpecification), _) =
-      Parser.parseSpec("//@ensures exists int i from 0 to n. i >= 0;")
+      Parser.parseSpec("//@ensures (\\exists int i; 0 <= i && i < n; i >= 0);")
     assert(spec.value.isInstanceOf[BoundedQuantifiedExpression])
   }
 

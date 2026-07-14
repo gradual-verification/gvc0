@@ -295,21 +295,19 @@ class ExpressionsSpec extends AnyFunSuite {
 
   test("forall") {
     val Success(expr: BoundedQuantifiedExpression, _) =
-      Parser.parseExpr("forall int i from 0 to n. i >= 0")
+      Parser.parseExpr("(\\forall int i; 0 <= i && i < n; i >= 0)")
     assert(expr.kind == QuantifierKind.Forall)
     assert(expr.variable.name == "i")
-    assert(expr.lowerBound.isInstanceOf[IntegerExpression])
-    assert(expr.upperBound.isInstanceOf[VariableExpression])
+    assert(expr.condition.isInstanceOf[BinaryExpression])
     assert(expr.body.isInstanceOf[BinaryExpression])
   }
 
   test("exists") {
     val Success(expr: BoundedQuantifiedExpression, _) =
-      Parser.parseExpr("exists int i from 0 to n. i >= 0")
+      Parser.parseExpr("(\\exists int i; 0 <= i && i < n; i >= 0)")
     assert(expr.kind == QuantifierKind.Exists)
     assert(expr.variable.name == "i")
-    assert(expr.lowerBound.isInstanceOf[IntegerExpression])
-    assert(expr.upperBound.isInstanceOf[VariableExpression])
+    assert(expr.condition.isInstanceOf[BinaryExpression])
     assert(expr.body.isInstanceOf[BinaryExpression])
   }
 

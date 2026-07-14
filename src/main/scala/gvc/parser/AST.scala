@@ -50,8 +50,7 @@ case class BoundedQuantifiedExpression(
   kind: QuantifierKind,
   valueType: Type,
   variable: Identifier,
-  lowerBound: Expression,
-  upperBound: Expression,
+  condition: Expression,
   body: Expression,
   span: SourceSpan
 ) extends Expression

@@ -149,12 +149,21 @@ object IRPrinter {
         printType(p, quant.varType)
         p.print(" ")
         p.print(quant.varName)
-        p.print(" from ")
+        p.print("; ")
         printExpr(p, quant.lowerBound, Precedence.Quantifier)
-        p.print(" to ")
+        p.print(" <= ")
+        p.print(quant.varName)
+        p.print(" && ")
+        p.print(quant.varName)
+        p.print(" < ")
         printExpr(p, quant.upperBound, Precedence.Quantifier)
-        p.print(". ")
+        quant.extraCondition.foreach { extra =>
+          p.print(" && ")
+          printExpr(p, extra, Precedence.And)
+        }
+        p.print("; ")
         printExpr(p, quant.body, Precedence.Quantifier)
+        p.print(")")
       }
   }
 

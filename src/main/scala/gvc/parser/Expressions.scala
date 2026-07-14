@@ -121,8 +121,8 @@ trait Expressions extends Types {
     }) }
 
   def atomExpression[_: P]: P[Expression] = P(
-    parenExpression |
     boundedQuantifiedExpression |
+    parenExpression |
     stringExpression |
     characterExpression |
     hexNumberExpression |
@@ -185,24 +185,23 @@ trait Expressions extends Types {
     P(span(kw("unfolding") ~/ identifier ~ "(" ~ expression.rep(sep = ",") ~ ")" ~/ kw("in") ~/ "(" ~ expression ~ ")")).map({
       case ((ident, args, expr), span) => UnfoldingExpression(ident, args.toList, expr, span)
     })
-  
-  def basicQuantifierType[_: P]: P[Type] =
-    P(span(StringIn("int", "bool", "char").!)).map({
-      case (name, span) => NamedType(Identifier(name, span), span)
-    })
 
   def boundedQuantifiedExpression[_: P]: P[BoundedQuantifiedExpression] = P(span(
-      (kw("forall").map(_ => QuantifierKind.Forall: QuantifierKind) |
-        kw("exists").map(_ => QuantifierKind.Exists: QuantifierKind)) ~/
-        basicQuantifierType ~/
-        identifier ~/
-        kw("from") ~/ quantifierBoundExpression ~/
-        kw("to") ~/ quantifierBoundExpression ~/
-        "." ~/
-        expression
+    "(" ~
+      (kw("\\forall").map(_ => QuantifierKind.Forall: QuantifierKind) |
+        kw("\\exists").map(_ => QuantifierKind.Exists: QuantifierKind)) ~/
+      span(kw("int")).map({
+        case (_, span) => NamedType(Identifier("int", span), span)
+      }) ~/
+      identifier ~/
+      ";" ~/
+      expression ~/
+      ";" ~/
+      expression ~/
+      ")"
     )).map({
-      case ((kind, valueType, variable, lo, hi, body), span) =>
-        BoundedQuantifiedExpression(kind, valueType, variable, lo, hi, body, span)
+      case ((kind, valueType, variable, condition, body), span) =>
+        BoundedQuantifiedExpression(kind, valueType, variable, condition, body, span)
     })
     
   def parseString(raw: String): String = {

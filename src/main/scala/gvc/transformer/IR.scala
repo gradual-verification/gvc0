@@ -567,6 +567,7 @@ object IR {
                     val varName: String,
                     var lowerBound: Expression,
                     var upperBound: Expression,
+                    var extraCondition: Option[Expression],
                     var body: Expression,
                     val resolved: ResolvedNode = Zilch
                   ) extends SpecificationExpression {
@@ -574,6 +575,7 @@ object IR {
       super.contains(exp) ||
         lowerBound.contains(exp) ||
         upperBound.contains(exp) ||
+        extraCondition.exists(_.contains(exp)) ||
         body.contains(exp)
   }
 

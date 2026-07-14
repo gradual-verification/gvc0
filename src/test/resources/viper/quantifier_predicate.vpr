@@ -12,8 +12,7 @@ method main() returns ($result: Int)
 }
 
 method test(value: Ref, n: Int) returns ($result: Int)
-  requires n > 0 &&
-    (forall i: Int ::0 <= i && i < n ==> acc(testPred(value), write))
+  requires n > 0 && (forall i: Int :: 0 <= i && i < n ==> acc(testPred(value), write))
   ensures ? && true
 {
   $result := 0

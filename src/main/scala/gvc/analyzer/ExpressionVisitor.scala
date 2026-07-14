@@ -62,4 +62,17 @@ object ExpressionVisitor {
 
     vars
   }
+
+  def referencesVariable(
+      expr: ResolvedExpression,
+      variable: ResolvedVariable
+  ): Boolean = {
+    var found = false
+    visit(expr, {
+      case ref: ResolvedVariableRef if ref.variable.contains(variable) =>
+        found = true
+      case _ => ()
+    })
+    found
+  }
 }

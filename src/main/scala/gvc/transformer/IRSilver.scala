@@ -260,14 +260,26 @@ object IRSilver {
       vpr.And(vpr.LeCmp(lo, qVar)(pos), vpr.LtCmp(qVar, hi)(pos))(pos)
     }
 
+    private def fullRestriction(
+        quant: IR.Quantified,
+        qVar: vpr.LocalVar
+    ): vpr.Exp = {
+      val pos = getPosition(quant.resolved)
+      val range = halfOpenRange(quant, qVar)
+      quant.extraCondition match {
+        case None => range
+        case Some(extra) => vpr.And(range, convertExpr(extra))(pos)
+      }
+    }
+
     private def convertBooleanQuantifiedBody(quant: IR.Quantified): vpr.Exp = {
       val pos = getPosition(quant.resolved)
       val qVar = vpr.LocalVar(quant.varName, convertType(quant.varType))(pos)
       val body = convertExpr(quant.body)
-      val range = halfOpenRange(quant, qVar)
+      val restriction = fullRestriction(quant, qVar)
       quant.operation match {
-        case IR.QuantifierOp.Forall => vpr.Implies(range, body)(pos)
-        case IR.QuantifierOp.Exists => vpr.And(range, body)(pos)
+        case IR.QuantifierOp.Forall => vpr.Implies(restriction, body)(pos)
+        case IR.QuantifierOp.Exists => vpr.And(restriction, body)(pos)
       }
     }
 

@@ -160,6 +160,7 @@ sealed trait QuantifierOperation
     variable: ResolvedVariable,
     lowerBound: ResolvedExpression,
     upperBound: ResolvedExpression,
+    extraCondition: Option[ResolvedExpression],
     body: ResolvedExpression
   ) extends ResolvedExpression {
     def valueType = BoolType
