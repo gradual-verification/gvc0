@@ -1,0 +1,24 @@
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var x: Int
+  var y: Int
+  x := test1(1)
+  y := test2(1)
+  $result := 0
+}
+
+method test1(n: Int) returns ($result: Int)
+  requires n > 0 ==> (forall i: Int :: 0 <= i && i < n ==> i >= 0)
+  ensures (exists i: Int :: 0 <= i && i < n && i == 0) ==> n > 0
+{
+  $result := 0
+}
+
+method test2(n: Int) returns ($result: Int)
+  requires n > 0
+  ensures (forall i: Int :: 0 <= i && i < n ==> i > 0 ==> i >= 0)
+{
+  $result := 0
+}

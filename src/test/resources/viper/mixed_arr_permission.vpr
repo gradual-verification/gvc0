@@ -1,0 +1,18 @@
+field node$value: Int
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  $result := 0
+}
+
+method test(x: Ref) returns ($result: Int)
+  requires acc(x.node$value, 1 / 2)
+  ensures acc(x.node$value, 1 / 2)
+{
+  var a: Array[Int]
+  a := Array[Int](1)
+  a[0] := 0
+  $result := a[0]
+}

@@ -1,0 +1,16 @@
+int test(int n)
+  //@requires n > 0;
+  //@ensures (\forall int i; 0 <= i && i < n; i >= 0);
+  //@ensures (\exists int i; 0 <= i && i < n; i == 0);
+{
+  int[] a = alloc_array(int, 1);
+  a[0] = n;
+  return a[0];
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  return test(1);
+}

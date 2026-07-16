@@ -1,0 +1,13 @@
+int test(int x, int y, int z)
+  //@requires x > 0 ==> (y > 0 ? z > 0 : z == 0);
+  //@ensures (x > 0 ? y > 0 : true) ==> z >= 0;
+{
+  return 0;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  return test(1, 1, 1);
+}

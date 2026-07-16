@@ -1,0 +1,18 @@
+struct node {
+  int value;
+};
+
+int test(struct node* x, int n)
+  //@requires n > 0;
+  //@requires (\forall int i; 0 <= i && i < n; acc(x->value, 1/n));
+  //@ensures true;
+{
+  return 0;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  return 0;
+}

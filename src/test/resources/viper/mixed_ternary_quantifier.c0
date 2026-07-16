@@ -1,0 +1,13 @@
+int test(int n)
+  //@requires n >= 0 ? (\forall int i; 0 <= i && i < n; i >= 0) : true;
+  //@ensures (\forall int i; 0 <= i && i < n; i > 0 ? true : i == 0);
+{
+  return 0;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  return test(3);
+}

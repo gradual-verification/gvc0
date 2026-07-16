@@ -1,0 +1,18 @@
+struct node {
+  int value;
+};
+
+int test(struct node* x, int n)
+  //@requires n > 1 ? acc(x->value, 1/2) : acc(x->value, 1);
+  //@ensures true;
+{
+ return 0;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  struct node* a = alloc(struct node);
+  return test(a, 3);
+}

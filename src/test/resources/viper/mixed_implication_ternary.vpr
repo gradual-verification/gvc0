@@ -1,0 +1,15 @@
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var _: Int
+  _ := test(1, 1, 1)
+  $result := _
+}
+
+method test(x: Int, y: Int, z: Int) returns ($result: Int)
+  requires x > 0 ==> (y > 0 ? z > 0 : z == 0)
+  ensures (x > 0 ? y > 0 : true) ==> z >= 0
+{
+  $result := 0
+}

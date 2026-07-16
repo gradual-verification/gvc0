@@ -1,0 +1,19 @@
+struct node {
+  int value;
+};
+
+int test(struct node* x)
+  //@requires acc(x->value, 1/2);
+  //@ensures acc(x->value, 1/2);
+{
+  int[] a = alloc_array(int, 1);
+  a[0] = 0;
+  return a[0];
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  return 0;
+}

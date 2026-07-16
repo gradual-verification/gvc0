@@ -1,0 +1,19 @@
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var _: Int
+  _ := test(1)
+  $result := _
+}
+
+method test(n: Int) returns ($result: Int)
+  requires (n > 0 ? n < 10 : n < 20)
+  ensures true
+{
+  var a: Array[Int]
+  a := Array[Int](2)
+  a[0] := n
+  a[1] := 0
+  $result := a[0]
+}

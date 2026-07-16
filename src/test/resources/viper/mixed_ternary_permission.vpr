@@ -1,0 +1,19 @@
+field node$value: Int
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var a: Ref
+  var _: Int
+  a := new(node$value)
+  _ := test(a, 3)
+  $result := _
+}
+
+method test(x: Ref, n: Int) returns ($result: Int)
+  requires (n > 1 ? acc(x.node$value, 1 / 2) : acc(x.node$value, write))
+  ensures true
+{
+  $result := 0
+}

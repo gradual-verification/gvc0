@@ -1,0 +1,16 @@
+int test(int n)
+  //@requires n > 0 ? n < 10 : n < 20;
+  //@ensures true;
+{
+  int[] a = alloc_array(int, 2);
+  a[0] = n;
+  a[1] = 0;
+  return a[0];
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  return test(1);
+}

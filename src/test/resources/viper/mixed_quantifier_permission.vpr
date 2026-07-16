@@ -1,0 +1,15 @@
+field node$value: Int
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  $result := 0
+}
+
+method test(x: Ref, n: Int) returns ($result: Int)
+  requires n > 0 && (forall i: Int :: 0 <= i && i < n ==> acc(x.node$value, 1 / n))
+  ensures true
+{
+  $result := 0
+}

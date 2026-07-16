@@ -1,0 +1,19 @@
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var _: Int
+  _ := test(1)
+  $result := _
+}
+
+method test(n: Int) returns ($result: Int)
+  requires n > 0
+  ensures (forall i: Int :: 0 <= i && i < n ==> i >= 0) &&
+    (exists i: Int :: 0 <= i && i < n && i == 0)
+{
+  var a: Array[Int]
+  a := Array[Int](1)
+  a[0] := n
+  $result := a[0]
+}
