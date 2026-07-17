@@ -48,6 +48,33 @@ object Checker {
     case _ => block ++= ops(None)
   }
 
+  private def insertBeforeTarget(loc: Location, method: IR.Method): Option[IR.Op] =
+    loc match {
+      case Pre(op) => Some(op)
+      case MethodPost =>
+        method.body.lastOption.collect { case ret: IR.Return => ret }
+      case _ => None
+    }
+  private def sameInsertBeforeTarget(
+      a: Location,
+      b: Location,
+      method: IR.Method
+  ): Boolean =
+    (insertBeforeTarget(a, method), insertBeforeTarget(b, method)) match {
+      case (Some(x), Some(y)) => x eq y
+      case _                  => false
+    }
+  private def collectTrackedConditions(cond: Option[Condition]): Seq[TrackedCondition] = {
+    def go(c: Condition): Seq[TrackedCondition] = c match {
+      case t: TrackedCondition     => Seq(t)
+      case NotCondition(inner)     => go(inner)
+      case AndCondition(values)    => values.flatMap(go)
+      case OrCondition(values)     => values.flatMap(go)
+      case _: ImmediateCondition   => Seq.empty
+    }
+    cond.toSeq.flatMap(go)
+  }
+
   private def insertAt(
     at: Location,
     method: IR.Method,
@@ -184,12 +211,14 @@ object Checker {
       implementation = impl,
       runtime = runtime)
 
-    insert(programData, methodData, context)
+    val emittedConditions = mutable.Set[TrackedCondition]()
+    insert(programData, methodData, context, emittedConditions)
 
     // Add all conditions that need tracked
     // Group all conditions for a single location and insert in sequence
     // to preserve the correct ordering of conditions.
     methodData.conditions
+      .filterNot(emittedConditions.contains)
       .groupBy(_.location)
       .foreach {
         case (loc, conds) =>
@@ -329,7 +358,8 @@ object Checker {
   private def insert(
       programData: ProgramDependencies,
       scope: ScopeDependencies,
-      context: CheckContext
+      context: CheckContext,
+      emittedConditions: mutable.Set[TrackedCondition]
   ): Unit = {
     val program = programData.program
 
@@ -354,6 +384,16 @@ object Checker {
           }
 
         for ((cond, checks) <- checkData) {
+          for (tracked <- collectTrackedConditions(cond)) {
+            if (!emittedConditions.contains(tracked) &&
+                sameInsertBeforeTarget(tracked.location, loc, context.method)) {
+              ops += new IR.Assign(
+                context.conditions(tracked),
+                tracked.value.toIR(program, context.method, retVal)
+              )
+              emittedConditions += tracked
+            }
+          }
           val condition = cond.map(context.getCondition(_))
           ops ++= implementChecks(
             condition,
@@ -401,7 +441,7 @@ object Checker {
         child,
         context.implementation,
         Some(context.permissions))
-      insert(programData, child, context.copy(permissions = perms))
+      insert(programData, child, context.copy(permissions = perms), emittedConditions)
       
       if (!child.returnsPerms && child.modifiesPerms) {
         // While loop that maintains its perms internally but may modify the

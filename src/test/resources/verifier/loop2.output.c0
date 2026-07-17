@@ -32,6 +32,7 @@ void fact(struct Box* box, struct OwnedFields* _ownedFields, int* _instanceCount
   struct OwnedFields* _ownedFields1 = NULL;
   total = 1;
   runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
+  _cond = !(box == NULL) && box->value > 1;
   if (_cond)
   {
     runtime_assert(_ownedFields, box == NULL ? -1 : box->_id, 0, "No permission to access 'box->value'");
@@ -39,7 +40,6 @@ void fact(struct Box* box, struct OwnedFields* _ownedFields, int* _instanceCount
   }
   assert(!(box == NULL));
   runtime_remove(_ownedFields, box->_id, 0, "No permission to access 'box->value'");
-  _cond = !(box == NULL) && box->value > 1;
   while (box->value > 1)
   {
     _ownedFields1 = runtime_init();
