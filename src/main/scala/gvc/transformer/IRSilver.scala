@@ -104,7 +104,7 @@ object IRSilver {
     def convertType(t: IR.Type): vpr.Type = t match {
       case _: IR.ReferenceType => vpr.Ref
       case _: IR.PointerType   => vpr.Ref
-      case arr: IR.ArrayType   => vpr.ArrayType(convertType(arr.valueType))
+      //case arr: IR.ArrayType   => vpr.ArrayType(convertType(arr.valueType))
       case IR.IntType          => vpr.Int
       case IR.BoolType         => vpr.Bool
       case IR.CharType         => vpr.Int
@@ -179,7 +179,7 @@ object IRSilver {
         Seq(vpr.NewStmt(target, fields)(getPosition(alloc.resolved)))
       }
 
-      case alloc: IR.AllocArray =>
+      /*case alloc: IR.AllocArray =>
         Seq(
           vpr.LocalVarAssign(
             convertVar(alloc.target),
@@ -188,7 +188,7 @@ object IRSilver {
               convertExpr(alloc.length)
             )(getPosition(alloc.resolved))
           )(getPosition(alloc.resolved))
-        )
+        )*/
 
       case assign: IR.Assign =>
         Seq(
@@ -199,13 +199,13 @@ object IRSilver {
         )
       case assign: IR.AssignMember =>
         assign.member match {
-          case arr: IR.ArrayMember =>
+          /*case arr: IR.ArrayMember =>
             val pos = getPosition(assign.resolved)
             val loc = vpr.ArrayIndex(
               convertExpr(arr.root),
               convertExpr(arr.index)
             )(pos)
-            Seq(vpr.ArrayIndexAssign(loc, convertExpr(assign.value))(pos))
+            Seq(vpr.ArrayIndexAssign(loc, convertExpr(assign.value))(pos))*/
           case member: IR.Member =>
             Seq(
               vpr.FieldAssign(
@@ -317,16 +317,16 @@ object IRSilver {
       case v: IR.Var    => convertVar(v)
       case m: IR.Member =>
         m match {
-          case arr: IR.ArrayMember =>
+          /*case arr: IR.ArrayMember =>
             vpr.ArrayIndex(
               convertExpr(arr.root),
               convertExpr(arr.index)
-            )(getPosition(arr.resolved))
+            )(getPosition(arr.resolved))*/
           case _ =>
             convertMember(m)
         }
-      case len: IR.ArrayLength =>
-        vpr.ArrayLength(convertExpr(len.array))(getPosition(len.resolved))
+      /*case len: IR.ArrayLength =>
+        vpr.ArrayLength(convertExpr(len.array))(getPosition(len.resolved))*/
       case acc: IR.Accessibility =>
         val permExp = acc.permission match {
           case None    => Some(vpr.FullPerm()())
