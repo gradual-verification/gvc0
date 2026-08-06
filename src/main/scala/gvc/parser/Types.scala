@@ -39,7 +39,8 @@ trait Types extends Lexer {
 
   def typeKeywords[_: P] = {
     StringIn("while", "if", "for", "assert", "NULL", "else", "true", 
-    "false", "struct", "alloc", "alloc_array", "typedef", "error", "return") ~~ 
+    "false", "struct", "alloc", "alloc_array", "typedef", "error", "return", 
+    "forall", "exists", "from", "to") ~~ 
     !CharIn("A-Za-z0-9_")
   }
   

@@ -208,7 +208,7 @@ object BenchmarkPopulator {
       case None        => baselineMaximum
     }
     val difference = configuredMaximum - DAO.getNumberOfPaths(programID, conn)
-    for (i <- 0 until difference.intValue()) {
+    for (i <- 0 until difference.toInt) {
       val ordering = sampler.sample(SamplingHeuristic.Random)
       val pathHash =
         LabelTools
@@ -242,7 +242,7 @@ object BenchmarkPopulator {
         }
         queryCollections += pathQuery
         Output.success(s"Assembled path query ${i + 1}/${difference
-          .intValue()} for program '${programRep.info.fileName}'")
+          .toInt} for program '${programRep.info.fileName}'")
       }
     }
     Output.success(

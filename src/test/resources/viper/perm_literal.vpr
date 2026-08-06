@@ -1,0 +1,22 @@
+field test$value: Int
+
+method full(input: Ref)
+  requires acc(input.test$value, write)
+  ensures acc(input.test$value, write)
+{
+}
+
+method half(input: Ref)
+  requires acc(input.test$value, 1 / 2)
+  ensures acc(input.test$value, 1 / 2)
+{
+}
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var a: Ref
+  a := new(test$value)
+  $result := 0
+}

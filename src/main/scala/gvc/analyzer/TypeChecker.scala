@@ -231,6 +231,20 @@ object TypeChecker {
         assertEquivalent(errors, ternary.ifTrue, ternary.ifFalse)
       }
 
+      case quant: ResolvedBoundedQuantified => {
+        checkExpression(errors, quant.lowerBound)
+        checkExpression(errors, quant.upperBound)
+        checkExpression(errors, quant.body)
+        assertType(errors, quant.lowerBound, IntType)
+        assertType(errors, quant.upperBound, IntType)
+        assertType(errors, quant.body, BoolType)
+        val qName = quant.variable.name
+        if (ExpressionVisitor.collectVariables(quant.lowerBound).contains(qName))
+          errors.error(quant.lowerBound, s"Lower bound must not reference '$qName'")
+        if (ExpressionVisitor.collectVariables(quant.upperBound).contains(qName))
+          errors.error(quant.upperBound, s"Upper bound must not reference '$qName'")
+      }
+
       case logical: ResolvedLogical => {
         checkExpression(errors, logical.left)
         checkExpression(errors, logical.right)
@@ -277,6 +291,7 @@ object TypeChecker {
       case acc: ResolvedAccessibility => {
         // Disregard the actual type of the field, just make sure it is a field/deref
         assertField(errors, acc.field)
+        acc.permission.foreach(assertPermissionExpression(errors, _))
       }
 
       case _: ResolvedResult |
@@ -317,6 +332,25 @@ object TypeChecker {
       case deref: ResolvedDereference => assertFieldInner(errors, deref.value)
       case _ => errors.error(expr, FIELD_ERROR)
     }
+  }
+
+  def assertPermissionExpression(errors: ErrorSink, perm: ResolvedExpression): Unit = perm match {
+    case int: ResolvedInt =>
+      if (int.value != 1)
+        errors.error(perm, "Permission amount must be 1")
+    case arith: ResolvedArithmetic if arith.operation == ArithmeticOperation.Divide =>
+      assertType(errors, arith.left, IntType)
+      assertType(errors, arith.right, IntType)
+      (arith.left, arith.right) match {
+        case (l: ResolvedInt, r: ResolvedInt) =>
+          if (l.value <= 0 || r.value <= 0)
+            errors.error(perm, "Permission fraction must use positive integer literals")
+          else if (l.value > r.value)
+            errors.error(perm, "Permission fraction must not exceed 1")
+        case _ => ()
+      }
+    case _ =>
+      errors.error(perm, "Invalid permission amount")
   }
 
   def assertEquivalent(errors: ErrorSink, left: ResolvedExpression, right: ResolvedExpression): Unit = {

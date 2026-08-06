@@ -172,12 +172,12 @@ object Timing {
     else if (proportion >= values.size)
       values.last
     else {
-      val fractional = proportion - proportion.toBigInt().toInt
+      val fractional = proportion - proportion.toBigInt.toInt
       val sorted_list = values.sortWith((a, b) => {
         a < b
       })
-      val base = sorted_list(proportion.toBigInt().toInt)
-      val max = sorted_list(proportion.toBigInt().toInt + 1)
+      val base = sorted_list(proportion.toBigInt.toInt)
+      val max = sorted_list(proportion.toBigInt.toInt + 1)
       val diff = (max - base) * fractional
       base + diff
     }

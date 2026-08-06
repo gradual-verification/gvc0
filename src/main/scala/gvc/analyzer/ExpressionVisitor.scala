@@ -25,6 +25,11 @@ object ExpressionVisitor {
         visit(ternary.ifTrue, visitor)
         visit(ternary.ifFalse, visitor)
       }
+      case quant: ResolvedBoundedQuantified => {
+        visit(quant.lowerBound, visitor)
+        visit(quant.upperBound, visitor)
+        visit(quant.body, visitor)
+      }
       case logical: ResolvedLogical => {
         visit(logical.left, visitor)
         visit(logical.right, visitor)
@@ -34,7 +39,10 @@ object ExpressionVisitor {
       case negate: ResolvedNegation => visit(negate.value, visitor)
       case alloc: ResolvedAllocArray => visit(alloc.length, visitor)
       case length: ResolvedLength => visit(length.array, visitor)
-      case acc: ResolvedAccessibility => visit(acc.field, visitor)
+      case acc: ResolvedAccessibility => {
+        visit(acc.field, visitor)
+        acc.permission.foreach(visit(_, visitor))
+      }
       case pred: ResolvedPredicate => pred.arguments.foreach(visit(_, visitor))
       case unfolding: ResolvedUnfolding => {
         visit(unfolding.predicate, visitor)

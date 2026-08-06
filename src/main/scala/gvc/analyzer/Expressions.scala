@@ -86,7 +86,8 @@ case class ResolvedLength(
 
 case class ResolvedAccessibility(
   parsed: Node,
-  field: ResolvedExpression
+  field: ResolvedExpression,
+  permission: Option[ResolvedExpression] = None
 ) extends ResolvedExpression {
   def valueType = BoolType
 }
@@ -148,10 +149,27 @@ case class ResolvedTernary(
   }
 }
 
+sealed trait QuantifierOperation
+  object QuantifierOperation {
+    case object Forall extends QuantifierOperation
+    case object Exists extends QuantifierOperation
+  }
+  case class ResolvedBoundedQuantified(
+    parsed: BoundedQuantifiedExpression,
+    operation: QuantifierOperation,
+    variable: ResolvedVariable,
+    lowerBound: ResolvedExpression,
+    upperBound: ResolvedExpression,
+    body: ResolvedExpression
+  ) extends ResolvedExpression {
+    def valueType = BoolType
+  }
+
 sealed trait LogicalOperation
 object LogicalOperation {
   case object Or extends LogicalOperation
   case object And extends LogicalOperation
+  case object Implies extends LogicalOperation
 }
 
 case class ResolvedLogical(

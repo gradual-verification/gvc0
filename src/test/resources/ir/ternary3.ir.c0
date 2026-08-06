@@ -1,0 +1,37 @@
+int condition(bool a, bool b);
+int main();
+
+int condition(bool a, bool b)
+  //@requires true;
+  //@ensures true;
+{
+  int _ = 0;
+  int _1 = 0;
+  if (a)
+  {
+    if (b)
+    {
+      _1 = 1;
+    }
+    else
+    {
+      _1 = 2;
+    }
+    _ = _1;
+  }
+  else
+  {
+    _ = 3;
+  }
+  return _;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  int x = 0;
+  x = 0;
+  x = condition(true, false);
+  return 0;
+}

@@ -152,7 +152,7 @@ object Logic {
       }
     }
 
-    if (changed) Some(reduced) else None
+    if (changed) Some(reduced.toSeq) else None
   }
 
   /**

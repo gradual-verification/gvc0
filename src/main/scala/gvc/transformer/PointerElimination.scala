@@ -7,13 +7,13 @@ object PointerElimination {
     val c = new Converter(program)
 
     def convertMember(m: IR.Member): IR.Member = m match {
-      case _: IR.ArrayMember => arraysUnsupported
+      case arr: IR.ArrayMember => new IR.ArrayMember(convert(arr.root), convert(arr.index), arr.resolved)
       case d: IR.DereferenceMember => c.dereference(convert(d.root), d)
       case f: IR.FieldMember => new IR.FieldMember(convert(f.root), f.field, f.resolved)
     }
 
     def convert(expr: IR.Expression): IR.Expression = expr match {
-      case a: IR.Accessibility => new IR.Accessibility(convertMember(a.member), a.resolved)
+      case a: IR.Accessibility => new IR.Accessibility(convertMember(a.member), a.permission.map(convert), a.resolved)
       case u: IR.Unfolding => {
         val inst = convert(u.instance)
         new IR.Unfolding(inst.asInstanceOf[IR.PredicateInstance], convert(u.expr), u.resolved)
@@ -21,6 +21,8 @@ object PointerElimination {
       case b: IR.Binary => new IR.Binary(b.operator, convert(b.left), convert(b.right), b.resolved)
       case c: IR.Conditional => new IR.Conditional(convert(c.condition), convert(c.ifTrue), convert(c.ifFalse), c.resolved)
       case i: IR.Imprecise => new IR.Imprecise(i.precise.map(convert), i.resolved)
+      case q: IR.Quantified => new IR.Quantified(q.operation, q.varType, q.varName, convert(q.lowerBound), convert(q.upperBound), convert(q.body), q.resolved)
+      case len: IR.ArrayLength => new IR.ArrayLength(convert(len.array), len.resolved)
       case m: IR.Member => convertMember(m)
       case p: IR.PredicateInstance => new IR.PredicateInstance(p.predicate, p.arguments.map(convert), p.resolved)
       case r: IR.Result => new IR.Result(r.method, r.resolved)
@@ -34,13 +36,18 @@ object PointerElimination {
     }
 
     def convertOp(op: IR.Op): Unit = op match {
-      case _: IR.AllocArray => arraysUnsupported
+      case a: IR.AllocArray => 
+        a.target = convert(a.target) match {
+          case v: IR.Var => v
+          case _ => throw new TransformerException("Invalid array allocation target")
+        }
+        a.length = convert(a.length)
       case a: IR.AllocStruct => a.target = convert(a.target)
       case a: IR.AllocValue =>
         a.insertBefore(new IR.AllocStruct(c.lookup(a.valueType), a.target))
         a.remove()
       case a: IR.Assert => a.value = convert(a.value)
-      case a: IR.Assign => a.value = convert(a.value);
+      case a: IR.Assign => a.value = convert(a.value)
       case a: IR.AssignMember =>
         a.value = convert(a.value)
         a.member = convertMember(a.member)
@@ -131,7 +138,8 @@ object PointerElimination {
     }
 
     def convert(t: IR.Type) = t match {
-      case _: IR.ArrayType | _: IR.ReferenceArrayType => arraysUnsupported
+      case _: IR.ArrayType => t
+      case _: IR.ReferenceArrayType => arraysUnsupported
       case ptr: IR.PointerType => pointerType(ptr)
       case value => value
     }

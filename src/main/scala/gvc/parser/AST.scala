@@ -36,8 +36,25 @@ case class MemberExpression(parent: Expression, field: Identifier, isArrow: Bool
 case class ResultExpression(span: SourceSpan) extends Expression
 case class LengthExpression(value: Expression, span: SourceSpan) extends Expression
 case class ImprecisionExpression(span: SourceSpan) extends Expression
-case class AccessibilityExpression(field: Expression, span: SourceSpan) extends Expression
+case class AccessibilityExpression(field: Expression, permission: Option[Expression], span: SourceSpan) extends Expression
 case class UnfoldingExpression(predicate: Identifier, arguments: List[Expression], expr: Expression, span: SourceSpan) extends Expression
+
+// Quantified expressions
+sealed trait QuantifierKind
+object QuantifierKind {
+  case object Forall extends QuantifierKind
+  case object Exists extends QuantifierKind
+}
+
+case class BoundedQuantifiedExpression(
+  kind: QuantifierKind,
+  valueType: Type,
+  variable: Identifier,
+  lowerBound: Expression,
+  upperBound: Expression,
+  body: Expression,
+  span: SourceSpan
+) extends Expression
 
 // Literal expressions
 sealed trait LiteralExpression extends Expression {
@@ -194,6 +211,7 @@ case class MethodDefinition(
 object BinaryOperator extends Enumeration {
   type BinaryOperator = Value
   
+  val LogicalImplies = Value("==>")
   val LogicalOr = Value("||")
   val LogicalAnd = Value("&&")
   val BitwiseOr = Value("|")

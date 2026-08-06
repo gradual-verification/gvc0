@@ -132,6 +132,9 @@ case class Scope(
     }
   }
 
+  def bindQuantifiedVariable(variable: ResolvedVariable): Scope =
+    copy(variables = variables + (variable.name -> variable))
+
   def declareVariables(variables: Seq[ResolvedVariable]) = {
     // Add one-by-one to check for already defined variables
     variables.foldLeft(this) { _.declareVariable(_) }
@@ -156,6 +159,17 @@ object Resolver {
   case object MethodContext extends Context
   case object SpecificationContext extends Context
   case class PostConditionContext(returnType: ResolvedType) extends Context
+  case class QuantifierBodyContext(underlying: Context) extends Context
+
+  private def specContext(context: Context): Boolean =
+    context != MethodContext
+
+  private def returnTypeFromContext(context: Context): Option[ResolvedType] =
+    context match {
+      case PostConditionContext(returnType) => Some(returnType)
+      case QuantifierBodyContext(underlying) => returnTypeFromContext(underlying)
+      case _ => None
+    }
 
   def resolveType(input: Type, scope: Scope): ResolvedType = {
     input match {
@@ -497,6 +511,8 @@ object Resolver {
             ResolvedLogical(binary, left, right, LogicalOperation.And)
           case BinaryOperator.LogicalOr =>
             ResolvedLogical(binary, left, right, LogicalOperation.Or)
+          case BinaryOperator.LogicalImplies =>
+            ResolvedLogical(binary, left, right, LogicalOperation.Implies)
           case _ => {
             // Log the error and return a mock that assumes add
             scope.errors.error(
@@ -527,6 +543,18 @@ object Resolver {
             scope.errors.error(unary, "Unsupported operator " + op.toString())
             resolveExpression(unary.operand, scope, context)
           }
+        }
+      
+      case quant: BoundedQuantifiedExpression =>
+        context match {
+          case QuantifierBodyContext(_) =>
+            scope.errors.error(quant, "Nested quantifiers are not allowed")
+            resolveBoundedQuantified(quant, scope, context)
+          case _ if specContext(context) =>
+            resolveBoundedQuantified(quant, scope, context)
+          case _ =>
+            scope.errors.error(quant, "Quantifiers cannot appear outside specifications")
+            resolveBoundedQuantified(quant, scope, context)
         }
 
       case ternary: TernaryExpression =>
@@ -628,15 +656,12 @@ object Resolver {
         )
 
       case result: ResultExpression => {
-        val retType = context match {
-          case PostConditionContext(returnType) => returnType
-          case _ => {
-            scope.errors.error(
-              result,
-              "\\result expressions can only be used in 'ensures'"
-            )
-            UnknownType
-          }
+        val retType = returnTypeFromContext(context).getOrElse {
+          scope.errors.error(
+            result,
+            "\\result expressions can only be used in 'ensures'"
+          )
+          UnknownType
         }
 
         ResolvedResult(result, retType)
@@ -658,7 +683,11 @@ object Resolver {
             "acc() expressions can only be used in specifications"
           )
         }
-        ResolvedAccessibility(acc, resolveExpression(acc.field, scope, context))
+        ResolvedAccessibility(
+          acc,
+          resolveExpression(acc.field, scope, context),
+          acc.permission.map(resolveExpression(_, scope, context))
+        )
       }
 
       case imprecision: ImprecisionExpression => {
@@ -800,6 +829,36 @@ object Resolver {
         None
       }
     }
+  }
+
+  def resolveBoundedQuantified(
+      quant: BoundedQuantifiedExpression,
+      scope: Scope,
+      context: Context
+  ): ResolvedBoundedQuantified = {
+    val valueType = resolveType(quant.valueType, scope)
+    valueType match {
+      case IntType | BoolType | CharType => ()
+      case _ =>
+        scope.errors.error(
+          quant,
+          "Quantified variable must have basic type int, bool, or char"
+        )
+    }
+    val lowerBound = resolveExpression(quant.lowerBound, scope, context)
+    val upperBound = resolveExpression(quant.upperBound, scope, context)
+    val qVar = ResolvedVariable(quant, quant.variable.name, valueType)
+    val bodyScope = scope.bindQuantifiedVariable(qVar)
+    val bodyContext = context match {
+      case QuantifierBodyContext(_) => context
+      case other => QuantifierBodyContext(other)
+    }
+    val body = resolveExpression(quant.body, bodyScope, bodyContext)
+    val operation = quant.kind match {
+      case QuantifierKind.Forall => QuantifierOperation.Forall
+      case QuantifierKind.Exists  => QuantifierOperation.Exists
+    }
+    ResolvedBoundedQuantified(quant, operation, qVar, lowerBound, upperBound, body)
   }
 
   def resolvePredicate(

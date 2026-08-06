@@ -1,5 +1,4 @@
 package gvc.transformer
-import scala.collection.MapLike
 
 object Helpers {
   private def nameOptions(baseName: String) =
@@ -9,9 +8,6 @@ object Helpers {
         case n => baseName + n
       })
 
-  def findAvailableName(map: MapLike[String, _, _], baseName: String): String =
-    nameOptions(baseName).find(!map.contains(_)).get
-
-  def findAvailableName(names: Seq[String], baseName: String): String =
-    nameOptions(baseName).find(!names.contains(_)).get
+  def findAvailableName(names: Iterable[String], baseName: String): String =
+    nameOptions(baseName).find(name => !names.exists(_ == name)).get
 }

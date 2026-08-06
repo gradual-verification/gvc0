@@ -139,6 +139,13 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(b.right.asInstanceOf[BooleanExpression] == false)
   }
 
+  test("==>") {
+    val Success(b: BinaryExpression, _) = Parser.parseExpr("true ==> false")
+    assert(b.left.asInstanceOf[BooleanExpression] == true)
+    assert(b.operator == BinaryOperator.LogicalImplies)
+    assert(b.right.asInstanceOf[BooleanExpression] == false)
+  }
+
   test ("&& / || precedence") {
     val Success(or: BinaryExpression, _) = Parser.parseExpr("1 && 2 || 3")
     assert(or.operator == BinaryOperator.LogicalOr)
@@ -171,6 +178,22 @@ class ExpressionsSpec extends AnyFunSuite {
     assert(right.operator == BinaryOperator.Equal)
     assert(right.left.asInstanceOf[IntegerExpression] == 3)
     assert(right.right.asInstanceOf[IntegerExpression] == 4)
+  }
+
+  test("==> / && precedence") {
+    val Success(impl: BinaryExpression, _) = Parser.parseExpr("1 && 2 ==> 3")
+    assert(impl.operator == BinaryOperator.LogicalImplies)
+    assert(impl.right.asInstanceOf[IntegerExpression] == 3)
+    val and = impl.left.asInstanceOf[BinaryExpression]
+    assert(and.operator == BinaryOperator.LogicalAnd)
+  }
+
+  test("==> / || precedence") {
+    val Success(impl: BinaryExpression, _) = Parser.parseExpr("1 || 2 ==> 3")
+    assert(impl.operator == BinaryOperator.LogicalImplies)
+    assert(impl.right.asInstanceOf[IntegerExpression] == 3)
+    val or = impl.left.asInstanceOf[BinaryExpression]
+    assert(or.operator == BinaryOperator.LogicalOr)
   }
 
   test("+ operator is left-associative") {
@@ -268,5 +291,30 @@ class ExpressionsSpec extends AnyFunSuite {
     val Success(length: LengthExpression, _) = Parser.parseExpr("\\length(a)")
     val varRef = length.value.asInstanceOf[VariableExpression]
     assert(varRef.variable.name === "a")
+  }
+
+  test("forall") {
+    val Success(expr: BoundedQuantifiedExpression, _) =
+      Parser.parseExpr("forall int i from 0 to n. i >= 0")
+    assert(expr.kind == QuantifierKind.Forall)
+    assert(expr.variable.name == "i")
+    assert(expr.lowerBound.isInstanceOf[IntegerExpression])
+    assert(expr.upperBound.isInstanceOf[VariableExpression])
+    assert(expr.body.isInstanceOf[BinaryExpression])
+  }
+
+  test("exists") {
+    val Success(expr: BoundedQuantifiedExpression, _) =
+      Parser.parseExpr("exists int i from 0 to n. i >= 0")
+    assert(expr.kind == QuantifierKind.Exists)
+    assert(expr.variable.name == "i")
+    assert(expr.lowerBound.isInstanceOf[IntegerExpression])
+    assert(expr.upperBound.isInstanceOf[VariableExpression])
+    assert(expr.body.isInstanceOf[BinaryExpression])
+  }
+
+  test("fractional permission") {
+    val Success(acc: AccessibilityExpression, _) = Parser.parseExpr("acc(x->f, 1/2)")
+    assert(acc.permission.isDefined)
   }
 }

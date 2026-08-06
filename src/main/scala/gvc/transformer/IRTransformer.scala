@@ -184,7 +184,12 @@ object IRTransformer {
         case ResolvedPointer(valueType) =>
           new IR.PointerType(transformType(valueType))
         case ResolvedArray(valueType) =>
-          throw new TransformerException("Unsupported array type")
+          valueType match {
+            case _: ResolvedStructType =>
+              throw new TransformerException("Struct arrays are not supported")
+            case t =>
+              new IR.ArrayType(transformType(t))
+          }
         case BoolType => IR.BoolType
         case IntType  => IR.IntType
         case CharType => IR.CharType
@@ -192,6 +197,12 @@ object IRTransformer {
           throw new TransformerException("Unsupported string type")
         case NullType => throw new TransformerException("Invalid NULL type")
         case VoidType => throw new TransformerException("Invalid void type")
+      }
+    
+    private def isArrayType(t: ResolvedType): Boolean =
+      t match {
+        case _: ResolvedArray => true
+        case _ => false
       }
 
     def defineMethod(input: ResolvedMethodDefinition): Unit = {
@@ -230,6 +241,15 @@ object IRTransformer {
       def method: IR.Method
       def vars: Map[String, IR.Var]
 
+      def withVariable(name: String, variable: IR.Var): MethodScope = this match {
+        case scope: BlockScope =>
+          new BlockScope(scope.method, scope.output, scope.vars + (name -> variable))
+        case scope: ConditionalScope =>
+          new ConditionalScope(scope.parent.withVariable(name, variable), scope.conditions)
+        case scope: CollectorScope =>
+          new CollectorScope(scope.parent.withVariable(name, variable))
+      }
+
       def variable(name: String): IR.Var = {
         vars.getOrElse(
           name,
@@ -267,7 +287,7 @@ object IRTransformer {
     }
 
     class CollectorScope(
-        parent: MethodScope
+        val parent: MethodScope
     ) extends MethodScope {
       def method = parent.method
       def vars = parent.vars
@@ -397,6 +417,20 @@ object IRTransformer {
                   )
               }
             }
+
+            case alloc: ResolvedAllocArray =>
+              assign.left match {
+                case ref: ResolvedVariableRef if assign.operation == None =>
+                  scope += transformAllocArray(alloc, scope.variable(ref), scope)
+                case complex =>
+                  scope += transformAssign(
+                    assign,
+                    transformExpr(alloc, scope),
+                    assign.operation,
+                    scope
+                  )
+              }
+
             case expr =>
               scope += transformAssign(
                 assign,
@@ -509,9 +543,19 @@ object IRTransformer {
         new IR.FieldMember(transformExpr(parent, scope), field, m)
       }
 
-      case _: ResolvedArrayIndex | _: ResolvedLength | _: ResolvedAllocArray =>
-        throw new TransformerException("Arrays are not supported")
-
+      case index: ResolvedArrayIndex =>
+        new IR.ArrayMember(
+          transformExpr(index.array, scope),
+          transformExpr(index.index, scope),
+          index
+        )
+      
+      case length: ResolvedLength =>
+        new IR.ArrayLength(transformExpr(length.array, scope), length)
+      
+      case alloc: ResolvedAllocArray =>
+        allocArrayToValue(alloc, scope)
+      
       case r: ResolvedResult =>
         scope match {
           case scope: MethodScope => new IR.Result(scope.method, r)
@@ -520,22 +564,24 @@ object IRTransformer {
         }
 
       case acc: ResolvedAccessibility =>
-        new IR.Accessibility(transformExpr(acc.field, scope) match {
-          case member: IR.Member => member
-          case _                 => throw new TransformerException("Invalid acc() argument")
-        }, acc)
+        new IR.Accessibility(
+          transformExpr(acc.field, scope) match {
+            case member: IR.Member => member
+            case _                 => throw new TransformerException("Invalid acc() argument")
+          },
+          acc.permission.map(transformExpr(_, scope)),
+          acc
+        )
 
       case imp: ResolvedImprecision =>
         new IR.Imprecise(None, imp)
 
-      case cond: ResolvedTernary => {
-        val condition = transformExpr(cond.condition, scope)
-        val ifTrue =
-          transformExpr(cond.ifTrue, conditionalScope(scope, condition))
-        val ifFalse =
-          transformExpr(cond.ifFalse, conditionalScope(scope, not(condition)))
-        new IR.Conditional(condition, ifTrue, ifFalse, cond)
-      }
+      case _: ResolvedBoundedQuantified =>
+        throw new TransformerException(
+          "Quantifiers can only be used in specifications"
+        )
+
+      case cond: ResolvedTernary => ternaryToValue(cond, scope)
 
       case arith: ResolvedArithmetic => {
         val op = arith.operation match {
@@ -554,6 +600,10 @@ object IRTransformer {
       }
 
       case comp: ResolvedComparison => {
+        if (isArrayType(comp.left.valueType) || isArrayType(comp.right.valueType)) {
+          throw new TransformerException("Array comparison is not supported")
+        }
+
         val op = comp.operation match {
           case ComparisonOperation.EqualTo    => IR.BinaryOp.Equal
           case ComparisonOperation.NotEqualTo => IR.BinaryOp.NotEqual
@@ -578,6 +628,7 @@ object IRTransformer {
         val (op, rightCond) = logic.operation match {
           case LogicalOperation.And => (IR.BinaryOp.And, left)
           case LogicalOperation.Or  => (IR.BinaryOp.Or, not(left))
+          case LogicalOperation.Implies => (IR.BinaryOp.Implies, left)
         }
         val right =
           transformExpr(logic.right, conditionalScope(scope, rightCond))
@@ -633,6 +684,7 @@ object IRTransformer {
             val op = logical.operation match {
               case LogicalOperation.And => IR.BinaryOp.And
               case LogicalOperation.Or  => IR.BinaryOp.Or
+              case LogicalOperation.Implies  => IR.BinaryOp.Implies
             }
             val exp = new IR.Binary(op, l, r, input)
             if (leftImp || rightImp) new IR.Imprecise(Some(exp), input)
@@ -641,8 +693,68 @@ object IRTransformer {
         }
       }
 
+      case cond: ResolvedTernary => {
+        new IR.Conditional(
+          transformExpr(cond.condition, scope), 
+          transformSpec(cond.ifTrue, scope), 
+          transformSpec(cond.ifFalse, scope), 
+          cond
+        )
+      }
+
+      case quant: ResolvedBoundedQuantified =>
+        val methodScope = scope match {
+          case ms: MethodScope => ms
+          case _ => throw new TransformerException("Invalid quantifier in specification")
+        }
+        val qVar = new IR.Var(
+          transformType(quant.variable.valueType),
+          quant.variable.name,
+          methodScope.method.name
+        )
+        qVar.resolved = quant
+        val bodyScope = methodScope.withVariable(quant.variable.name, qVar)
+        new IR.Quantified(
+          quant.operation match {
+            case QuantifierOperation.Forall => IR.QuantifierOp.Forall
+            case QuantifierOperation.Exists  => IR.QuantifierOp.Exists
+          },
+          qVar.varType,
+          qVar.name,
+          transformExpr(quant.lowerBound, scope),
+          transformExpr(quant.upperBound, scope),
+          transformSpec(quant.body, bodyScope),
+          quant
+        )
+
       case other => transformExpr(input, scope)
     }
+
+    def ternaryResultType(input: ResolvedTernary): ResolvedType = {
+      val trueType = input.ifTrue.valueType
+      val falseType = input.ifFalse.valueType
+      val merged = if (trueType == NullType) falseType else trueType
+      if (merged != NullType) merged
+      else ResolvedPointer(IntType)
+    }
+
+    def ternaryToValue(input: ResolvedTernary, scope: Scope): IR.Var =
+      scope match {
+        case scope: MethodScope =>
+          val condition = transformExpr(input.condition, scope)
+          val temp = scope.method.addVar(transformType(ternaryResultType(input)))
+          temp.resolved = input
+          val ifOp = new IR.If(condition, input)
+          scope += ifOp
+          val trueScope = new BlockScope(scope.method, ifOp.ifTrue, scope.vars)
+          trueScope += new IR.Assign(temp, transformExpr(input.ifTrue, trueScope), input)
+          val falseScope = new BlockScope(scope.method, ifOp.ifFalse, scope.vars)
+          falseScope += new IR.Assign(temp, transformExpr(input.ifFalse, falseScope), input)
+          temp
+
+        case _ =>
+          throw new TransformerException("Invalid ternary expression")
+      }
 
     def allocToValue(input: ResolvedAlloc, scope: Scope): IR.Var =
       scope match {
@@ -655,6 +767,16 @@ object IRTransformer {
         }
 
         case _ => throw new TransformerException("Invalid alloc")
+      }
+    
+    def allocArrayToValue(input: ResolvedAllocArray, scope: Scope): IR.Var =
+      scope match {
+        case scope: MethodScope =>
+          val temp = scope.method.addVar(new IR.ArrayType(transformType(input.memberType)))
+          temp.resolved = input
+          scope += transformAllocArray(input, temp, scope)
+          temp
+        case _ => throw new TransformerException("Invalid alloc_array")
       }
 
     def invokeToValue(input: ResolvedInvoke, scope: Scope): IR.Var = {
@@ -758,8 +880,19 @@ object IRTransformer {
             statement
           )
 
-        case _: ResolvedArrayIndex =>
-          throw new TransformerException("Arrays are not supported")
+        case index: ResolvedArrayIndex =>
+          val target =
+            new IR.ArrayMember(
+              transformExpr(index.array, scope), 
+              transformExpr(index.index, scope), 
+              index
+            )
+          new IR.AssignMember(
+            target,
+            transformAssignValue(statement, value, target, op),
+            statement
+          )
+        
         case _ => throw new TransformerException("Invalid L-value")
       }
     }
@@ -791,5 +924,17 @@ object IRTransformer {
         case valueType =>
           new IR.AllocValue(transformType(valueType), target, input)
       }
+
+    def transformAllocArray(
+        input: ResolvedAllocArray,
+        target: IR.Var,
+        scope: Scope
+    ): IR.Op =
+      new IR.AllocArray(
+        transformType(input.memberType),
+        transformExpr(input.length, scope),
+        target,
+        input
+      )
   }
 }

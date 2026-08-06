@@ -1,0 +1,27 @@
+int test(int x, int y, int z)
+  //@ensures x > 0 ? y > 0 : z == 0;
+  //@ensures true;
+{
+  return 0;
+}
+
+int testAndPrecedence(int a, int b, int c, int d)
+  //@ensures a > 0 && b > 0 ? c > 0 : d == 0;
+  //@ensures true;
+{
+  return 0;
+}
+
+int testOrPrecedence(int a, int b, int c, int d)
+  //@ensures a > 0 || b > 0 ? c > 0 : d == 0;
+  //@ensures true;
+{
+  return 0;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  return test(1, 2, 0);
+}

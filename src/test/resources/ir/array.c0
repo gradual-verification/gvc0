@@ -1,0 +1,36 @@
+int alloc_array_int()
+  //@requires true;
+  //@ensures true;
+{
+  int[] a = alloc_array(int, 3);
+  a[0] = 1;
+  return 0;
+}
+
+int alloc_array_bool()
+  //@requires true;
+  //@ensures true;
+{
+  bool[] b = alloc_array(bool, 5);
+  b[1] = true;
+  return 0;
+}
+
+int alloc_array_char()
+  //@requires true;
+  //@ensures true;
+{
+  char[] c = alloc_array(char, 7);
+  c[2] = 'x';
+  return 0;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  alloc_array_int();
+  alloc_array_bool();
+  alloc_array_char();
+  return 0;
+}

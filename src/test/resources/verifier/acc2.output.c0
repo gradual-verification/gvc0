@@ -1,0 +1,36 @@
+#use <runtime>
+struct Test;
+
+struct Test
+{
+  int value;
+  int _id;
+};
+
+int client(struct Test* a, struct Test* b, int* _instanceCounter);
+int inc(struct Test* x, int i, int* _instanceCounter);
+int main();
+
+int client(struct Test* a, struct Test* b, int* _instanceCounter)
+{
+  int c = 0;
+  a->value = 2;
+  b->value = 4;
+  c = inc(a, 2, _instanceCounter);
+  assert(c == 4);
+  return 0;
+}
+
+int inc(struct Test* x, int i, int* _instanceCounter)
+{
+  int res = 0;
+  res = x->value + i;
+  return res;
+}
+
+int main()
+{
+  int* _instanceCounter = NULL;
+  _instanceCounter = alloc(int);
+  return 0;
+}

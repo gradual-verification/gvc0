@@ -1,0 +1,19 @@
+field test$value: Int
+
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var a: Ref
+  var _: Int
+  a := new(test$value)
+  _ := test_perm(a, 5)
+  $result := _
+}
+
+method test_perm(x: Ref, n: Int) returns ($result: Int)
+  requires n > 0 && acc(x.test$value, 1 / n)
+  ensures true
+{
+  $result := 0
+}

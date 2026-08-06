@@ -1,0 +1,23 @@
+method main() returns ($result: Int)
+  requires true
+  ensures true
+{
+  var _: Int
+  var _1: Int
+  _ := test(5)
+  _1 := test(-1)
+  $result := 0
+}
+
+method test(x: Int) returns ($result: Int)
+  requires true
+  ensures (x > 0 ? $result > 0 : $result == 0)
+{
+  var _result$: Int
+  if (x > 0) {
+    _result$ := 1
+  } else {
+    _result$ := 0
+  }
+  $result := _result$
+}

@@ -27,8 +27,10 @@ class ProgramScope(
 
 object CheckScope {
   private sealed abstract class CheckScopeImplementation extends CheckScope {
-    val children = mutable.ListBuffer[WhileScope]()
-    val checks = mutable.ArrayBuffer[RuntimeCheck]()
+    private[weaver] val childrenBuf = mutable.ListBuffer[WhileScope]()
+    private[weaver] val checksBuf = mutable.ArrayBuffer[RuntimeCheck]()
+    def children: Seq[WhileScope] = childrenBuf.toSeq
+    def checks: Seq[RuntimeCheck] = checksBuf.toSeq
   }
 
   private sealed class MethodScopeImplementation(
@@ -42,7 +44,7 @@ object CheckScope {
     new ProgramScope(
       collected.program,
       collected.methods.map({ case(k, cm) =>
-        (k, scope(cm.checks, cm.conditions, cm.method)) })
+        (k, scope(cm.checks.toSeq, cm.conditions, cm.method)) })
     )
 
   def scope(
@@ -60,7 +62,7 @@ object CheckScope {
       op match {
         case w: IR.While => {
           val child = new WhileScopeImplementation(w)
-          scope.children += child
+          scope.childrenBuf += child
           inner += w -> child
 
           initBlock(w.body, child)
@@ -94,7 +96,7 @@ object CheckScope {
         case MethodPre | MethodPost => outer
       }
 
-      scope.checks += c
+      scope.checksBuf += c
     }
 
     outer

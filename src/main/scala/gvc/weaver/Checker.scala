@@ -199,7 +199,7 @@ object Checker {
               c =>
                 instrs += new IR.Assign(conditions(c),
                                         c.value.toIR(programData.program, method, retVal)))
-            instrs
+            instrs.toSeq
           })
       }
   }
@@ -373,7 +373,7 @@ object Checker {
           ) +=: ops
         }
 
-        ops
+        ops.toSeq
       })
     }
 

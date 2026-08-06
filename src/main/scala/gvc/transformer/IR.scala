@@ -16,7 +16,7 @@ object IR {
     private var _dependencies = mutable.ListBuffer[Dependency]()
 
     lazy val ownedFieldsStruct = struct(
-      Helpers.findAvailableName(_structs, "OwnedFields")
+      Helpers.findAvailableName(_structs.keys, "OwnedFields")
     )
 
     def addDependency(
@@ -75,7 +75,7 @@ object IR {
 
     // Adds a new struct, renaming it if necessary to avoid collisions
     def newStruct(name: String): Struct = {
-      val actualName = Helpers.findAvailableName(_structs, name)
+      val actualName = Helpers.findAvailableName(_structs.keys, name)
       val struct = new Struct(actualName)
       _structs += actualName -> struct
       struct
@@ -149,7 +149,7 @@ object IR {
       _fields += field
       field
     }
-    def fields: Seq[StructField] = _fields
+    def fields: Seq[StructField] = _fields.toSeq
   }
 
   class StructField(
@@ -179,8 +179,8 @@ object IR {
     var body = new MethodBlock(this)
     var resolved: ResolvedNode = Zilch
 
-    def parameters: Seq[Parameter] = _parameters
-    def variables: Seq[Var] = _variables
+    def parameters: Seq[Parameter] = _parameters.toSeq
+    def variables: Seq[Var] = _variables.toSeq
 
     def variable(name: String): Var =
       scope.getOrElse(
@@ -190,14 +190,14 @@ object IR {
 
     def addParameter(valueType: Type, parameterName: String): Parameter = {
       val newParam =
-        new Parameter(valueType, Helpers.findAvailableName(scope, parameterName), name)
+        new Parameter(valueType, Helpers.findAvailableName(scope.keys, parameterName), name)
       scope += newParam.name -> newParam
       _parameters += newParam
       newParam
     }
 
     def addVar(valueType: Type, varName: String = "_"): Var = {
-      val newVar = new Var(valueType, Helpers.findAvailableName(scope, varName), name)
+      val newVar = new Var(valueType, Helpers.findAvailableName(scope.keys, varName), name)
       scope += newVar.name -> newVar
       _variables += newVar
       newVar
@@ -233,7 +233,7 @@ object IR {
   ) {
     private var _parameters = mutable.ListBuffer[Parameter]()
 
-    def parameters: Seq[Parameter] = _parameters
+    def parameters: Seq[Parameter] = _parameters.toSeq
 
     def addParameter(valueType: Type, parameterName: String): Parameter = {
       val newParam = new Parameter(valueType, parameterName, name)
@@ -483,6 +483,15 @@ object IR {
     }
   }
 
+  class ArrayLength(
+                     var array: Expression,
+                     val resolved: ResolvedNode = Zilch
+                   ) extends Expression {
+    def valueType: Option[Type] = Some(IntType)
+    override def contains(exp: Expression) =
+      super.contains(exp) || array.contains(exp)
+  }
+
   // Expressions that can only be used within specifications
   sealed trait SpecificationExpression extends Expression {
     def valueType: Option[Type] = None
@@ -490,11 +499,11 @@ object IR {
 
   class Accessibility(
                        var member: Member,
+                       var permission: Option[Expression] = None,
                        val resolved: ResolvedNode = Zilch
                      ) extends SpecificationExpression {
     override def contains(exp: Expression) =
-      super.contains(exp) || member.contains(exp)
-
+      super.contains(exp) || member.contains(exp) || permission.exists(_.contains(exp))
   }
 
   class PredicateInstance(
@@ -534,6 +543,28 @@ object IR {
                  ) extends SpecificationExpression {
     override def contains(exp: Expression) =
       super.contains(exp) || precise.exists(_.contains(exp))
+  }
+
+  object QuantifierOp {
+    sealed trait Op
+    case object Forall extends Op
+    case object Exists extends Op
+  }
+
+  class Quantified(
+                    val operation: QuantifierOp.Op,
+                    val varType: Type,
+                    val varName: String,
+                    var lowerBound: Expression,
+                    var upperBound: Expression,
+                    var body: Expression,
+                    val resolved: ResolvedNode = Zilch
+                  ) extends SpecificationExpression {
+    override def contains(exp: Expression) =
+      super.contains(exp) ||
+        lowerBound.contains(exp) ||
+        upperBound.contains(exp) ||
+        body.contains(exp)
   }
 
   sealed trait Literal extends Expression
@@ -592,7 +623,7 @@ object IR {
       case BinaryOp.Add | BinaryOp.Subtract | BinaryOp.Divide |
           BinaryOp.Multiply =>
         Some(IntType)
-      case BinaryOp.And | BinaryOp.Or | BinaryOp.Equal | BinaryOp.NotEqual |
+      case BinaryOp.And | BinaryOp.Or | BinaryOp.Implies | BinaryOp.Equal | BinaryOp.NotEqual |
           BinaryOp.Less | BinaryOp.LessOrEqual | BinaryOp.Greater |
           BinaryOp.GreaterOrEqual =>
         Some(BoolType)
@@ -609,6 +640,7 @@ object IR {
     object Multiply extends BinaryOp { override def toString() = "*" }
     object And extends BinaryOp { override def toString() = "&&" }
     object Or extends BinaryOp { override def toString() = "||" }
+    object Implies extends BinaryOp { override def toString() = "==>" }
     object Equal extends BinaryOp { override def toString() = "==" }
     object NotEqual extends BinaryOp { override def toString() = "!=" }
     object Less extends BinaryOp { override def toString() = "<" }
@@ -751,10 +783,9 @@ object IR {
       IRPrinter.print(target) + " = alloc(struct " + struct.name + ")"
   }
 
-  // TODO: Length should be an expression
   class AllocArray(
                     var valueType: Type,
-                    var length: IntLit,
+                    var length: Expression,
                     var target: Var,
                     val resolved: ResolvedNode = Zilch
                   ) extends Op {
@@ -892,8 +923,8 @@ object IR {
     private val _methods = mutable.ListBuffer[DependencyMethod]()
     private val _structs = mutable.ListBuffer[DependencyStruct]()
 
-    def methods: Seq[DependencyMethod] = _methods
-    def structs: Seq[DependencyStruct] = _structs
+    def methods: Seq[DependencyMethod] = _methods.toSeq
+    def structs: Seq[DependencyStruct] = _structs.toSeq
 
     def defineMethod(
         name: String,
@@ -930,7 +961,7 @@ object IR {
       extends StructDefinition {
     private val _fields = mutable.ListBuffer[StructField]()
 
-    def fields: Seq[StructField] = _fields
+    def fields: Seq[StructField] = _fields.toSeq
 
     def addField(
         fieldName: String,
@@ -952,7 +983,7 @@ object IR {
   ) extends MethodDefinition {
     val _parameters = mutable.ListBuffer[Parameter]()
 
-    def parameters: Seq[Parameter] = _parameters
+    def parameters: Seq[Parameter] = _parameters.toSeq
 
     def addParameter(parameterName: String, valueType: Type): Parameter = {
       val param = new Parameter(valueType, parameterName, name)

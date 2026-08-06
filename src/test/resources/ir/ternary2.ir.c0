@@ -1,0 +1,35 @@
+struct _ptr_int;
+
+struct _ptr_int
+{
+  int value;
+};
+
+struct _ptr_int* condition(bool cond, struct _ptr_int* p);
+int main();
+
+struct _ptr_int* condition(bool cond, struct _ptr_int* p)
+  //@requires true;
+  //@ensures true;
+{
+  struct _ptr_int* _ = NULL;
+  if (cond)
+  {
+    _ = p;
+  }
+  else
+  {
+    _ = NULL;
+  }
+  return _;
+}
+
+int main()
+  //@requires true;
+  //@ensures true;
+{
+  struct _ptr_int* q = NULL;
+  q = NULL;
+  q = condition(true, NULL);
+  return 0;
+}

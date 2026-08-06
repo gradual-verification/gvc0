@@ -13,7 +13,8 @@ trait Lexer extends Whitespace {
   def keywords[_: P] = {
     StringIn("while", "if", "for", "assert", "NULL", "else", "true", 
     "false", "struct", "alloc", "alloc_array", "typedef", "error", "return",
-    "int", "char", "bool", "void", "unfolding", "in") ~~ !CharIn("A-Za-z0-9_")
+    "int", "char", "bool", "void", "unfolding", "in", "forall", "exists", 
+    "from", "to") ~~ !CharIn("A-Za-z0-9_")
   }
 
   def decimalNumber[_: P] =
@@ -50,7 +51,7 @@ trait Lexer extends Whitespace {
   def binaryOperator[_: P] =
     P(StringIn("*", "/", "%", "+", "-", "<<", ">>",
                "<", "<=", ">=", ">", "==", "!=",
-               "&", "^", "|", "&&", "||"));
+               "&", "^", "|", "&&", "||", "==>"));
 
   def assignmentOperator[_: P] =
     P(StringIn("=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=",

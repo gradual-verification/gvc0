@@ -101,9 +101,10 @@ object IRSilver {
         )
       )
 
-    def convertType(t: IR.Type) = t match {
+    def convertType(t: IR.Type): vpr.Type = t match {
       case _: IR.ReferenceType => vpr.Ref
       case _: IR.PointerType   => vpr.Ref
+      //case arr: IR.ArrayType   => vpr.ArrayType(convertType(arr.valueType))
       case IR.IntType          => vpr.Int
       case IR.BoolType         => vpr.Bool
       case IR.CharType         => vpr.Int
@@ -178,8 +179,16 @@ object IRSilver {
         Seq(vpr.NewStmt(target, fields)(getPosition(alloc.resolved)))
       }
 
-      case _: IR.AllocArray =>
-        throw new IRException("Array operations are not implemented in Silver")
+      /*case alloc: IR.AllocArray =>
+        Seq(
+          vpr.LocalVarAssign(
+            convertVar(alloc.target),
+            vpr.ArrayInstance(
+              convertType(alloc.valueType),
+              convertExpr(alloc.length)
+            )(getPosition(alloc.resolved))
+          )(getPosition(alloc.resolved))
+        )*/
 
       case assign: IR.Assign =>
         Seq(
@@ -188,14 +197,23 @@ object IRSilver {
             convertExpr(assign.value)
           )(getPosition(assign.resolved))
         )
-
       case assign: IR.AssignMember =>
-        Seq(
-          vpr.FieldAssign(
-            convertMember(assign.member),
-            convertExpr(assign.value)
-          )(getPosition(assign.resolved))
-        )
+        assign.member match {
+          /*case arr: IR.ArrayMember =>
+            val pos = getPosition(assign.resolved)
+            val loc = vpr.ArrayIndex(
+              convertExpr(arr.root),
+              convertExpr(arr.index)
+            )(pos)
+            Seq(vpr.ArrayIndexAssign(loc, convertExpr(assign.value))(pos))*/
+          case member: IR.Member =>
+            Seq(
+              vpr.FieldAssign(
+                convertMember(member),
+                convertExpr(assign.value)
+              )(getPosition(assign.resolved))
+            )
+        }
 
       case assert: IR.Assert =>
         assert.kind match {
@@ -229,6 +247,33 @@ object IRSilver {
       vpr.LocalVar(varName(v.name), convertType(v.varType))(getPosition(v.resolved))
     }
 
+    private def convertQuantifiedBody(quant: IR.Quantified): vpr.Exp =
+      convertBooleanQuantifiedBody(quant)
+
+    private def halfOpenRange(
+        quant: IR.Quantified,
+        qVar: vpr.LocalVar
+    ): vpr.Exp = {
+      val pos = getPosition(quant.resolved)
+      val lo = convertExpr(quant.lowerBound)
+      val hi = convertExpr(quant.upperBound)
+      vpr.And(vpr.LeCmp(lo, qVar)(pos), vpr.LtCmp(qVar, hi)(pos))(pos)
+    }
+
+    private def convertBooleanQuantifiedBody(quant: IR.Quantified): vpr.Exp = {
+      val pos = getPosition(quant.resolved)
+      val qVar = vpr.LocalVar(quant.varName, convertType(quant.varType))(pos)
+      val body = convertExpr(quant.body)
+      val inRangeWithBody =
+        vpr.And(halfOpenRange(quant, qVar), body)(pos)
+      quant.operation match {
+        case IR.QuantifierOp.Forall =>
+          vpr.Or(vpr.Not(inRangeWithBody)(pos), body)(pos)
+        case IR.QuantifierOp.Exists =>
+          vpr.And(halfOpenRange(quant, qVar), body)(pos)
+      }
+    }
+
     def convertMember(member: IR.Member): vpr.FieldAccess = member match {
       case member: IR.FieldMember =>
         vpr.FieldAccess(convertExpr(member.root), convertField(member.field))(getPosition(member.resolved))
@@ -246,14 +291,48 @@ object IRSilver {
           pred.arguments.map(convertExpr),
           pred.predicate.name
         )(getPosition(pred.resolved)),
-        vpr.FullPerm()()
+        Some(vpr.FullPerm()())
       )(getPosition(pred.resolved))
+    
+    private def convertIntPermOperand(expr: IR.Expression): vpr.Exp = expr match {
+      case int: IR.IntLit   => vpr.IntLit(BigInt(int.value))(getPosition(int.resolved))
+      case v: IR.Var        => convertVar(v)
+      case _ =>
+        throw new IRException("Permission fraction operands must be integer literals or variables")
+    }
+    
+    def convertPermission(perm: IR.Expression): vpr.Exp = perm match {
+      case int: IR.IntLit if int.value == 1 =>
+        vpr.FullPerm()()
+      case bin: IR.Binary if bin.operator == IR.BinaryOp.Divide =>
+        vpr.FractionalPerm(
+          convertIntPermOperand(bin.left),
+          convertIntPermOperand(bin.right)
+        )(getPosition(bin.resolved))
+      case _ =>
+        throw new IRException("Unsupported permission expression")
+    }
 
     def convertExpr(expr: IR.Expression): vpr.Exp = expr match {
       case v: IR.Var    => convertVar(v)
-      case m: IR.Member => convertMember(m)
+      case m: IR.Member =>
+        m match {
+          /*case arr: IR.ArrayMember =>
+            vpr.ArrayIndex(
+              convertExpr(arr.root),
+              convertExpr(arr.index)
+            )(getPosition(arr.resolved))*/
+          case _ =>
+            convertMember(m)
+        }
+      /*case len: IR.ArrayLength =>
+        vpr.ArrayLength(convertExpr(len.array))(getPosition(len.resolved))*/
       case acc: IR.Accessibility =>
-        vpr.FieldAccessPredicate(convertMember(acc.member), vpr.FullPerm()())(getPosition(acc.resolved))
+        val permExp = acc.permission match {
+          case None    => Some(vpr.FullPerm()())
+          case Some(p) => Some(convertPermission(p))
+        }
+        vpr.FieldAccessPredicate(convertMember(acc.member), permExp)(getPosition(acc.resolved))
       case pred: IR.PredicateInstance => convertPredicateInstance(pred)
       case unfolding: IR.Unfolding =>
         vpr.Unfolding(convertPredicateInstance(unfolding.instance), convertExpr(unfolding.expr))(getPosition(unfolding.resolved))
@@ -273,6 +352,18 @@ object IRSilver {
           convertExpr(cond.ifTrue),
           convertExpr(cond.ifFalse)
         )(getPosition(cond.resolved))
+      case quant: IR.Quantified =>
+        val decl = vpr.LocalVarDecl(quant.varName, convertType(quant.varType))()
+        quant.operation match {
+          case IR.QuantifierOp.Forall =>
+            vpr.Forall(Seq(decl), Seq.empty, convertQuantifiedBody(quant))(
+              getPosition(quant.resolved)
+            )
+          case IR.QuantifierOp.Exists =>
+            vpr.Exists(Seq(decl), Seq.empty, convertQuantifiedBody(quant))(
+              getPosition(quant.resolved)
+            )
+        }
       case bin: IR.Binary => {
         val left = convertExpr(bin.left)
         val right = convertExpr(bin.right)
@@ -283,6 +374,7 @@ object IRSilver {
           case IR.BinaryOp.Multiply       => vpr.Mul(left, right)(getPosition(bin.resolved))
           case IR.BinaryOp.And            => vpr.And(left, right)(getPosition(bin.resolved))
           case IR.BinaryOp.Or             => vpr.Or(left, right)(getPosition(bin.resolved))
+          case IR.BinaryOp.Implies        => vpr.Implies(left, right)(getPosition(bin.resolved))
           case IR.BinaryOp.Equal          => vpr.EqCmp(left, right)(getPosition(bin.resolved))
           case IR.BinaryOp.NotEqual       => vpr.NeCmp(left, right)(getPosition(bin.resolved))
           case IR.BinaryOp.Less           => vpr.LtCmp(left, right)(getPosition(bin.resolved))
