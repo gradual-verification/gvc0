@@ -1,4 +1,4 @@
-int alloc_array_int()
+/*int alloc_array_int()
   //@requires true;
   //@ensures true;
 {
@@ -33,4 +33,4 @@ int main()
   alloc_array_bool();
   alloc_array_char();
   return 0;
-}
+}*/

@@ -39,7 +39,7 @@ trait Definitions extends Statements with Types {
     })
 
   def methodParameter[_: P]: P[MemberDefinition] =
-    P(typeReference ~ identifier).map({
+    P(typeReference ~/ identifier).map({
       case (paramType, id) => MemberDefinition(id, paramType, SourceSpan(paramType.span.start, id.span.end))
     })
   
@@ -74,9 +74,9 @@ trait Definitions extends Statements with Types {
     P(space ~~ predicateDefinition.rep ~~ space)
 
   def predicateDefinition[_: P]: P[PredicateDefinition] =
-    P(span("predicate" ~ identifier ~ "(" ~ methodParameter.rep(sep = ",") ~ ")" ~/ (predicateBody | emptyPredicateBody)))
+    P(span("predicate" ~/ identifier ~ "(" ~ methodParameter.rep(sep = ",") ~ ")" ~/ (predicateBody | emptyPredicateBody)))
     .map { case ((ident, args, body), span) => PredicateDefinition(ident, args.toList, body, span) }
-  
+
   def emptyPredicateBody[_: P]: P[Option[Expression]] = P(";").map(_ => None)
 
   def predicateBody[_: P]: P[Option[Expression]] =

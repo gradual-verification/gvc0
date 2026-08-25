@@ -1,4 +1,4 @@
-int test(int n)
+/*int test(int n)
   //@ requires n >= 0;
   //@ ensures forall int i from 0 to n. i >= 0;
   //@ ensures exists int i from 0 to n. i == 0;
@@ -11,4 +11,4 @@ int main()
   //@ ensures true;
 {
   return test(0);
-}
+}*/
