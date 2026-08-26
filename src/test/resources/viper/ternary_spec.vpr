@@ -14,14 +14,16 @@ method test(x: Int, y: Int, z: Int) returns ($result: Int)
   $result := 0
 }
 
-method testAndPrecedence(a: Int, b: Int, c: Int, d: Int) returns ($result: Int)
+method testAndPrecedence(a: Int, b: Int, c: Int, d: Int)
+  returns ($result: Int)
   requires ? && true
   ensures (a > 0 && b > 0 ? c > 0 : d == 0) && true
 {
   $result := 0
 }
 
-method testOrPrecedence(a: Int, b: Int, c: Int, d: Int) returns ($result: Int)
+method testOrPrecedence(a: Int, b: Int, c: Int, d: Int)
+  returns ($result: Int)
   requires ? && true
   ensures (a > 0 || b > 0 ? c > 0 : d == 0) && true
 {
