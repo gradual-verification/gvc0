@@ -28,7 +28,7 @@ trait BaseFileSpec extends BeforeAndAfterAllConfigMap {
     if (BaseFileSpec.UPDATE.get) {
       if (actual != resource.read())
         resource.update(actual)
-    } else {
+    } else { 
       assert(actual == resource.read())
     }
   }

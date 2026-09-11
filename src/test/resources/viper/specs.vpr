@@ -15,7 +15,6 @@ method max(a: Int, b: Int) returns ($result: Int)
   if (a > b) {
     _ := a
   } else {
-    _ := b
-  }
+    _ := b}
   $result := _
 }

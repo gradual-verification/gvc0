@@ -15,7 +15,6 @@ method main() returns ($result: Int)
   if (alpha) {
     _result$ := 1
   } else {
-    _result$ := 0
-  }
+    _result$ := 0}
   $result := _result$
 }
