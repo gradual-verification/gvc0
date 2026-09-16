@@ -317,10 +317,19 @@ object Collector {
     ): Option[Condition] = {
       branches.foldRight[Option[Condition]](None)((b, when) => {
         val irLoc = locations.getOrElse(
-          b.at.uniqueIdentifier,
-          throw new WeaverException(
-            s"Could not find location for ${b.at}"
-          )
+          b.at.uniqueIdentifier, {
+            var location_list = List.empty[Option[Location]]
+            b.at.visit { n => {
+                location_list = location_list :+ locations.get(n.uniqueIdentifier)
+              }
+            }
+            location_list.collectFirst { case Some(x) => x } match {
+              case Some(loc) => loc
+              case None =>
+                throw new WeaverException(
+                  s"Could not find location for ${b.at}, ${b.at.uniqueIdentifier}")
+            }
+          }
         )
 
         val position = b.location match {

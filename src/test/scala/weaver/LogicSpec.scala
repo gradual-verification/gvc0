@@ -154,7 +154,7 @@ class LogicSpec extends AnyFunSuite {
 
     assertEquivalent(input, result)
 
-    assert(result == (!a & !b | b & !c | a & c))
+    assert(result == (a & b | !b & c | !a & !c))
     // Could also be !a & !c | !b & c | a & b
   }
 

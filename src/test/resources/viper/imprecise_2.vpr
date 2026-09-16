@@ -10,5 +10,4 @@ method test(value: Int)
   requires ? && value >= 0
   ensures true
 {
-  
 }

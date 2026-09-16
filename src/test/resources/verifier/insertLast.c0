@@ -3,17 +3,11 @@ struct Node {
     struct Node *next;
 };
 
-/*@
-predicate acyclicSeg(struct Node *from, struct Node *to) =
-    (from == to) ?
-        (true)
-        :
-        (acc(from->val) && acc(from->next) && acyclicSeg(from->next, to));
-@*/
 
-/*@
-predicate acyclic(struct Node *list) = acyclicSeg(list, NULL);
-@*/
+/*@ predicate acyclicSeg(struct Node *a, struct Node *b) =
+    (a == b) ? true : acc(a->val) && acc(a->next) && acyclicSeg(a->next, b); @*/
+
+/*@ predicate acyclic(struct Node *list) = acyclicSeg(list, NULL); @*/
 
 void appendLemma(struct Node *a, struct Node *b, struct Node *c)
     //@ requires acyclicSeg(a, b) && acyclicSeg(b, c);

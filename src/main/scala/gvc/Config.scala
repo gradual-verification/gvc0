@@ -361,7 +361,7 @@ object Config {
         fromCommandLineArgs(tail, current.copy(exec = true))
       case ("-v" | "--only-verify") :: tail =>
         fromCommandLineArgs(tail, current.copy(onlyVerify = true))
-      case ("-h" | "--help") :: _ => error(Config.help)
+      case ("-h" | "--help") :: _ => println(Config.help); sys.exit(0)
       case other :: _ if other.startsWith("-") =>
         error(s"Unrecognized command line argument: $other")
       case sourceFile :: tail =>

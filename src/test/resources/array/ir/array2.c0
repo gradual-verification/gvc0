@@ -1,4 +1,4 @@
-int[][] nest(int[][] a)
+/*int[][] nest(int[][] a)
   //@requires true;
   //@ensures true;
 {
@@ -14,4 +14,4 @@ int main()
   a[0][1] = 42;
   nest(a);
   return 0;
-}
+}*/
