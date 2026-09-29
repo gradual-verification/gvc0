@@ -8,8 +8,7 @@ method main() returns ($result: Int)
 }
 
 method test(a: Ref, n: Int)
-  requires n > 0 &&
-    (forall i: Int :: 0 <= i && i < n ==> acc(a.node$value, write))
+  requires n > 0 && (forall i: Int :: 0 <= i && i < n ==> acc(a.node$value, write))
   ensures ? && true
 {
 }
