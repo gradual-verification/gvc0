@@ -40,6 +40,7 @@ object CheckRuntime {
     val remove = "runtime_remove"
     val join = "runtime_join"
     val assert = "runtime_assert"
+    val assertAny = "runtime_assertAny"
     val add = "runtime_add"
     val instanceCounter = "_instanceCounter"
     val id = "_id"
@@ -60,4 +61,5 @@ class CheckRuntime private (program: IR.Program) {
   val remove: IR.MethodDefinition = program.method(Names.remove)
   val join: IR.MethodDefinition = program.method(Names.join)
   val assert: IR.MethodDefinition = program.method(Names.assert)
+  val assertAny: IR.MethodDefinition = program.method(Names.assertAny)
 }
