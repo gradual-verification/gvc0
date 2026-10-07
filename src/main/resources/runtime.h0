@@ -9,7 +9,8 @@ struct FieldArray {
   int id;
   int length;
   int accessible;
-  bool[] contents;
+  int[] permNum;
+  int[] permDenom;
 };
 
 typedef struct OwnedFields OwnedFields;
@@ -17,8 +18,9 @@ typedef struct FieldArray FieldArray;
 
 OwnedFields* runtime_init();
 void runtime_addAll(OwnedFields* fields, int id, int numFields);
-void runtime_add(OwnedFields* fields, int id, int numFields, int fieldIndex, string errorMessage);
-void runtime_remove(OwnedFields* fields, int id, int fieldIndex, string errorMessage);
-void runtime_join(OwnedFields* target, OwnedFields* source);
-void runtime_assert(OwnedFields* fields, int id, int fieldIndex, string errorMessage);
+void runtime_add(OwnedFields* fields, int id, int numFields, int fieldIndex, int permNum, int permDenom, string errorMessage);
+void runtime_remove(OwnedFields* fields, int id, int fieldIndex, int permNum, int permDenom, string errorMessage);
+void runtime_join(OwnedFields* target, OwnedFields* source, string errorMessage);
+void runtime_assert(OwnedFields* fields, int id, int fieldIndex, int permNum, int permDenom, string errorMessage);
+void runtime_assertAny(OwnedFields* fields, int id, int fieldIndex, string errorMessage);
 void runtime_print(OwnedFields* fields);
