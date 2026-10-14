@@ -1,5 +1,6 @@
 #use <conio>
 #use <string>
+#use <util>
 
 int runtime_hash(int index, int arrayLength)
     //@requires index >= 0;
@@ -9,6 +10,34 @@ int runtime_hash(int index, int arrayLength)
   index = ((index >> 16) ^ index) * 0x45d9f3b;
   index = (index >> 16) ^ index;
   return index % arrayLength;
+}
+
+int runtime_gcd(int a, int b)
+  //@ensures \result >= 1;
+{
+  if (a < 0) a = -a;
+  if (b < 0) b = -b;
+
+  while (b != 0) {
+    int t = b;
+    b = a % b;
+    a = t;
+  }
+
+  return a == 0 ? 1 : a;
+}
+
+bool runtime_mulOverflows(int a, int b)
+  //@requires a >= 0 && b >= 0;
+{
+  if (a == 0 || b == 0) return false;
+  return a > int_max() / b;
+}
+
+bool runtime_addOverflows(int a, int b)
+  //@requires a >= 0 && b >= 0;
+{
+  return a > int_max() - b;
 }
 
 OwnedFields* runtime_init(){
@@ -168,14 +197,12 @@ FieldArray* runtime_newFieldArray(OwnedFields* fields, int id, int numFields) {
       if (current == NULL) {
         entry->id = id;
         if (entry->length < numFields) {
-          entry->contents = alloc_array(bool, numFields);
+          entry->permNum = alloc_array(int, numFields);
+          entry->permDenom = alloc_array(int, numFields);
+          for (int k = 0; k < numFields; k++) {
+            entry->permDenom[k] = 1;
+          }
           entry->length = numFields;
-          // Because we do not shrink `length` when we re-use the `contents`
-          // array, we can end up with entries that have a larger `length` than
-          // the number of fields contained at the heap location. But, assuming
-          // sound type-checking, this is not problematic. For performance we
-          // prioritize memory reuse above memory usage (on the assumption that
-          // GC/allocation is slow).
         }
 
         current = entry;
@@ -207,7 +234,11 @@ FieldArray* runtime_newFieldArray(OwnedFields* fields, int id, int numFields) {
         newEntry = alloc(FieldArray);
         newEntry->id = id;
         newEntry->length = numFields;
-        newEntry->contents = alloc_array(bool, numFields);
+        newEntry->permNum = alloc_array(int, numFields);
+        newEntry->permDenom = alloc_array(int, numFields);
+        for (int k = 0; k < numFields; k++) {
+          newEntry->permDenom[k] = 1;
+        }
         current = newEntry;
       }
 
@@ -230,7 +261,11 @@ FieldArray* runtime_newFieldArray(OwnedFields* fields, int id, int numFields) {
     newEntry = alloc(FieldArray);
     newEntry->id = id;
     newEntry->length = numFields;
-    newEntry->contents = alloc_array(bool, numFields);
+    newEntry->permNum = alloc_array(int, numFields);
+    newEntry->permDenom = alloc_array(int, numFields);
+    for (int k = 0; k < numFields; k++) {
+      newEntry->permDenom[k] = 1;
+    }
     current = newEntry;
   }
 
@@ -240,7 +275,7 @@ FieldArray* runtime_newFieldArray(OwnedFields* fields, int id, int numFields) {
   return newEntry;
 }
 
-// Adds a new FieldArray and marks all fields as accessible
+// Adds a new FieldArray that fully owns its fields
 // NOTE: This assumes that no field with the same reference ID have been added
 void runtime_addAll(OwnedFields* fields, int id, int numFields) {
   if (fields == NULL) return;
@@ -250,77 +285,205 @@ void runtime_addAll(OwnedFields* fields, int id, int numFields) {
   FieldArray* entry = runtime_find(fields, id);
   if (entry == NULL)
     entry = runtime_newFieldArray(fields, id, numFields);
-  bool[] entryContents = entry->contents;
+  int[] permNum = entry->permNum;
+  int[] permDenom = entry->permDenom;
   for (int i = 0; i < numFields; i++){
-    entryContents[i] = true;
+    permNum[i] = 1;
+    permDenom[i] = 1;
   }
   entry->accessible = numFields;
 }
 
-// Adds the specified permission (id, fieldIndex) to the set of permissions.
-// Returns false if permission already exists, otherwise returns true.
-bool runtime_tryAdd(OwnedFields* fields, int id, int numFields, int fieldIndex) {
-  int capacity = fields->capacity;
-  FieldArray*[] contents = fields->contents;
-
+// Adds the specified permission (id, fieldIndex, permNum/permDenom) to the
+// set of permissions. Returns false (without modifying anything) if doing so
+// would cause the held permission to exceed full (1/1); otherwise commits the
+// addition and returns true.
+bool runtime_tryAdd(OwnedFields* fields, int id, int numFields, int fieldIndex, int permNum, int permDenom) {
   FieldArray* entry = runtime_find(fields, id);
   if (entry == NULL) {
     entry = runtime_newFieldArray(fields, id, numFields);
-  } else  if (entry->contents[fieldIndex]) {
+  }
+
+  int heldNum = entry->permNum[fieldIndex];
+  int heldDenom = entry->permDenom[fieldIndex];
+
+  if (runtime_mulOverflows(heldNum, permDenom) ||
+      runtime_mulOverflows(permNum, heldDenom) ||
+      runtime_mulOverflows(heldDenom, permDenom)) {
     return false;
   }
 
-  entry->contents[fieldIndex] = true;
-  entry->accessible++;
+  int left = heldNum * permDenom;
+  int right = permNum * heldDenom;
+  if (runtime_addOverflows(left, right)) {
+    return false;
+  }
+
+  int newNum = left + right;
+  int newDenom = heldDenom * permDenom;
+
+  // Cannot have num greater than the denom
+  if (newNum > newDenom) {
+    return false;
+  }
+
+  // Reduce fraction if possible
+  int g = runtime_gcd(newNum, newDenom);
+  entry->permNum[fieldIndex] = newNum / g;
+  entry->permDenom[fieldIndex] = newDenom / g;
+
+  // update count of the number of non-zero fields
+  if (heldNum == 0 && newNum != 0) {
+    entry->accessible++;
+  }
 
   return true;
 }
 
-// Adds the specified permission (id, fieldIndex) to the set of permissions.
-// Throws `errorMessage` if the permission already exists.
-void runtime_add(OwnedFields* fields, int id, int numFields, int fieldIndex, string errorMessage) {
-  if (!runtime_tryAdd(fields, id, numFields, fieldIndex))
+// Adds the specified permission (id, fieldIndex, permNum/permDenom) to the
+// set of permissions. Throws `errorMessage` if doing so would cause the held
+// permission to exceed full (1/1).
+void runtime_add(OwnedFields* fields, int id, int numFields, int fieldIndex, int permNum, int permDenom, string errorMessage) {
+  if (!runtime_tryAdd(fields, id, numFields, fieldIndex, permNum, permDenom))
     error(errorMessage);
 }
 
-// Assert that the permission (id, fieldIndex) is already contained, otherwise
-// throws `errorMessage`
-void runtime_assert(OwnedFields* fields, int id, int fieldIndex, string errorMessage) {
+// Assert that at least permNum/permDenom of the permission (id, fieldIndex)
+// is held, otherwise throws `errorMessage`
+void runtime_assert(OwnedFields* fields, int id, int fieldIndex, int permNum, int permDenom, string errorMessage) {
   FieldArray* entry = runtime_find(fields, id);
-  if (entry == NULL || !entry->contents[fieldIndex]){
-    println(errorMessage);
-    assert(false);
+  int heldNum = entry == NULL ? 0 : entry->permNum[fieldIndex];
+  int heldDenom = entry == NULL ? 1 : entry->permDenom[fieldIndex];
+
+  if (runtime_mulOverflows(heldNum, permDenom) || runtime_mulOverflows(permNum, heldDenom)) {
+    error(errorMessage);
+  }
+
+  // Rearranged check from heldNum / heldDenom < permNum / permDenom
+  if (heldNum * permDenom < permNum * heldDenom) {
+    error(errorMessage);
   }
 }
 
-bool runtime_tryRemove(OwnedFields* fields, int id, int fieldIndex) {
+// Assert that any nonzero permission exist
+void runtime_assertAny(OwnedFields* fields, int id, int fieldIndex, string errorMessage) {
   FieldArray* entry = runtime_find(fields, id);
-  if (entry == NULL || !entry->contents[fieldIndex]) {
+  int heldNum = entry == NULL ? 0 : entry->permNum[fieldIndex];
+  int heldDenom = entry == NULL ? 1 : entry->permDenom[fieldIndex];
+
+  if (heldNum <= 0) {
+    error(errorMessage);
+  }
+
+  // Defensive check, should already be valid
+  if (heldNum > heldDenom) {
+    error(errorMessage);
+  }
+}
+
+// Removes the specified permission from the 
+// set of permissions. Returns false (without 
+// modifying anything) if less than permNum/permDenom
+// is currently held; otherwise commits the removal and
+// returns true.
+bool runtime_tryRemove(OwnedFields* fields, int id, int fieldIndex, int permNum, int permDenom) {
+  FieldArray* entry = runtime_find(fields, id);
+  if (entry == NULL) {
     return false;
   }
 
-  entry->contents[fieldIndex] = false;
-  entry->accessible--;
+  int heldNum = entry->permNum[fieldIndex];
+  int heldDenom = entry->permDenom[fieldIndex];
+
+  if (runtime_mulOverflows(heldNum, permDenom) ||
+      runtime_mulOverflows(permNum, heldDenom) ||
+      runtime_mulOverflows(heldDenom, permDenom)) {
+    return false;
+  }
+
+  // heldNum / heldDenom < permNum / permDenom
+  int left = heldNum * permDenom;
+  int right = permNum * heldDenom;
+  int diffDenom = heldDenom * permDenom;
+
+  // Cannot go negative
+  if (left < right) {
+    return false;
+  }
+  
+  int diffNum = left - right;
+
+  int g = runtime_gcd(diffNum, diffDenom);
+  entry->permNum[fieldIndex] = diffNum / g;
+  entry->permDenom[fieldIndex] = diffDenom / g;
+
+  if (heldNum != 0 && diffNum == 0) {
+    entry->accessible--;
+  }
+
   return true;
 }
 
-// Removes the permission (id, fieldIndex) from the set of permissions. Throws
-// `errorMessage` if the permission does not exist.
-void runtime_remove(OwnedFields* fields, int id, int fieldIndex, string errorMessage) {
-  if (!runtime_tryRemove(fields, id, fieldIndex))
+// Removes the permission (id, fieldIndex, permNum/permDenom) from the set of
+// permissions. Throws `errorMessage` if less than permNum/permDenom is
+// currently held.
+void runtime_remove(OwnedFields* fields, int id, int fieldIndex, int permNum, int permDenom, string errorMessage) {
+  if (!runtime_tryRemove(fields, id, fieldIndex, permNum, permDenom))
     error(errorMessage);
 }
 
-void runtime_join(OwnedFields* target, OwnedFields* source) {
+void runtime_join(OwnedFields* target, OwnedFields* source, string errorMessage) {
   if (target == NULL || source == NULL)
     return;
 
   int sourceCapacity = source->capacity;
   FieldArray*[] sourceContents = source->contents;
+
+  // First pass: verify every field's combined permission <= (1/1) permission
   for (int i = 0; i < sourceCapacity; i++) {
     FieldArray* sourceEntry = sourceContents[i];
     if (sourceEntry != NULL && sourceEntry->accessible != 0) {
-      // Add all fields from `sourceEntry` to an existing or new entry in target
+      int id = sourceEntry->id;
+      FieldArray* targetEntry = runtime_find(target, id);
+      int length = sourceEntry->length;
+      int[] sn = sourceEntry->permNum;
+      int[] sd = sourceEntry->permDenom;
+
+      // each entry has a permissions array,
+      // with each slot representing a field's
+      // individual permission
+      for (int j = 0; j < length; j++) {
+        // targetEntry's jth fields += sourceEntry's jth field
+        if (sn[j] != 0) {
+          int heldNum = targetEntry == NULL ? 0 : targetEntry->permNum[j];
+          int heldDenom = targetEntry == NULL ? 1 : targetEntry->permDenom[j];
+
+          if (runtime_mulOverflows(heldNum, sd[j]) ||
+              runtime_mulOverflows(sn[j], heldDenom) ||
+              runtime_mulOverflows(heldDenom, sd[j])) {
+            error(errorMessage);
+          }
+
+          int left = heldNum * sd[j];
+          int right = sn[j] * heldDenom;
+          if (runtime_addOverflows(left, right)) {
+            error(errorMessage);
+          }
+
+          int newNum = left + right;
+          int newDenom = heldDenom * sd[j];
+          if (newNum > newDenom) {
+            error(errorMessage);
+          }
+        }
+      }
+    }
+  }
+
+  // Now commit 
+  for (int i = 0; i < sourceCapacity; i++) {
+    FieldArray* sourceEntry = sourceContents[i];
+    if (sourceEntry != NULL && sourceEntry->accessible != 0) {
       int id = sourceEntry->id;
       FieldArray* targetEntry = runtime_find(target, id);
       if (targetEntry == NULL)
@@ -328,16 +491,27 @@ void runtime_join(OwnedFields* target, OwnedFields* source) {
 
       // Assume that they both have the same length
       int length = sourceEntry->length;
-      bool[] sc = sourceEntry->contents;
-      bool[] tc = targetEntry->contents;
+      int[] sn = sourceEntry->permNum;
+      int[] sd = sourceEntry->permDenom;
+      int[] tn = targetEntry->permNum;
+      int[] td = targetEntry->permDenom;
+
       for (int j = 0; j < length; j++) {
-        if (sc[j]) {
-          assert(!tc[j]);
-          tc[j] = true;
+        if (sn[j] != 0) {
+          int heldNum = tn[j];
+          int heldDenom = td[j];
+          int newNum = heldNum * sd[j] + sn[j] * heldDenom;
+          int newDenom = heldDenom * sd[j];
+          int g = runtime_gcd(newNum, newDenom);
+
+          if (heldNum == 0) {
+            targetEntry->accessible++;
+          }
+
+          tn[j] = newNum / g;
+          td[j] = newDenom / g;
         }
       }
-
-      targetEntry->accessible += sourceEntry->accessible;
     }
   }
 }
@@ -355,7 +529,12 @@ void runtime_print(OwnedFields* fields) {
 
         printf("%d@%d#%d+%d:", entry->id, i, runtime_hash(entry->id, fields->capacity), entry->psl);
         for (int j = 0; j < entry->length; j++) {
-          print(entry->contents[j] ? "X" : "_");
+          if (j != 0) print(",");
+          if (entry->permNum[j] == 0) {
+            print("_");
+          } else {
+            printf("%d/%d", entry->permNum[j], entry->permDenom[j]);
+          }
         }
       }
     }
