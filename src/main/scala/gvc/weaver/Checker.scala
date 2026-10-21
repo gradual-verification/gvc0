@@ -446,9 +446,14 @@ object Checker {
       case _: FieldAccessibilityCheck =>
         AssertMode(fields.primaryOwnedFields())
     }
+    val permission = check.permission.map {
+      case (num, denom) =>
+        (num.toIR(context.program, context.method, returnValue),
+         denom.toIR(context.program, context.method, returnValue))
+    }
 
     val impl = context.implementation
-    impl.translateFieldPermission(field, List(mode), ValueContext)
+    impl.translateFieldPermission(field, List(mode), ValueContext, permission)
   }
 
   def implementPredicateCheck(

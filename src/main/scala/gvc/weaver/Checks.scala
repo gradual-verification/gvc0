@@ -9,7 +9,11 @@ object Check {
     check match {
       case fieldAccess: vpr.FieldAccessPredicate =>
         CheckExpression.fromViper(fieldAccess.loc) match {
-          case field: CheckExpression.Field => FieldAccessibilityCheck(field)
+          case field: CheckExpression.Field =>
+            FieldAccessibilityCheck(
+              field,
+              CheckExpression.fromViperPerm(fieldAccess.permExp)
+            )
           case _ =>
             throw new WeaverException(
               s"Invalid field accessibility: $fieldAccess"
@@ -39,6 +43,7 @@ sealed trait AccessibilityCheck
 
 sealed trait FieldPermissionCheck extends PermissionCheck {
   def field: CheckExpression.Field
+  def permission: Option[(CheckExpression, CheckExpression)]
 }
 
 sealed trait PredicatePermissionCheck extends PermissionCheck {
@@ -46,15 +51,19 @@ sealed trait PredicatePermissionCheck extends PermissionCheck {
   def arguments: List[CheckExpression]
 }
 
-case class FieldSeparationCheck(field: CheckExpression.Field)
-    extends FieldPermissionCheck
+case class FieldSeparationCheck(
+    field: CheckExpression.Field,
+    permission: Option[(CheckExpression, CheckExpression)] = None
+) extends FieldPermissionCheck
     with SeparationCheck
 {
   override def toString(): String = s"sep($field)"
 }
 
-case class FieldAccessibilityCheck(field: CheckExpression.Field)
-    extends FieldPermissionCheck
+case class FieldAccessibilityCheck(
+    field: CheckExpression.Field,
+    permission: Option[(CheckExpression, CheckExpression)] = None
+) extends FieldPermissionCheck
     with AccessibilityCheck
 {
   override def toString() = s"acc($field)"
@@ -295,6 +304,30 @@ object CheckExpression {
     def guard = None
     override def toString() = "\\result"
   }
+
+  // Converts a permission amount from the IR (as found on `IR.Accessibility.permission`,
+  // where `None` means full permission) into a numerator/denominator pair of
+  // check expressions. `None` continues to mean full permission (1/1).
+  def fromIRPermission(permission: Option[IR.Expression]): Option[(Expr, Expr)] =
+    permission.flatMap {
+      case int: IR.IntLit if int.value == 1 => None
+      case bin: IR.Binary if bin.operator == IR.BinaryOp.Divide =>
+        Some((irValue(bin.left), irValue(bin.right)))
+      case p =>
+        throw new WeaverException(s"Unsupported permission expression: $p")
+    }
+
+  // Converts a Viper permission amount (as found on `vpr.FieldAccessPredicate.permExp`)
+  // into a numerator/denominator pair of check expressions. `None` (or full
+  // permission) continues to mean full permission (1/1).
+  def fromViperPerm(permission: Option[vpr.Exp]): Option[(Expr, Expr)] =
+    permission match {
+      case None                 => None
+      case Some(_: vpr.FullPerm) => None
+      case Some(vpr.FractionalPerm(n, d)) => Some((fromViper(n), fromViper(d)))
+      case Some(p) =>
+        throw new WeaverException(s"Unsupported permission expression: $p")
+    }
 
   def irValue(value: IR.Expression): Expr = {
     value match {

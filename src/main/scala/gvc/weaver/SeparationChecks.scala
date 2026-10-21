@@ -84,9 +84,11 @@ object SeparationChecks {
       case acc: IR.Accessibility =>
         CheckExpression.irValue(context.convert(acc.member)) match {
           case f: CheckExpression.Field => {
+            val permission =
+              CheckExpression.fromIRPermission(acc.permission.map(context.convert))
             checks += RuntimeCheck(
               loc,
-              FieldSeparationCheck(f),
+              FieldSeparationCheck(f, permission),
               cond.map(ImmediateCondition)
             )
           }

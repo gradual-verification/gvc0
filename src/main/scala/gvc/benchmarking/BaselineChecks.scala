@@ -279,7 +279,7 @@ class BaselineChecks(
         case _: IR.Var | _: IR.Literal | _: IR.Result =>
           Seq.empty
         case field: IR.FieldMember =>
-          impl.translateFieldPermission(field, List(AssertMode(perms)), context)
+          impl.translateFieldAccessibility(field, perms, context)
         case expr =>
           throw new WeaverException(
             "Unexpected expression '" + IRPrinter.print(expr) + "'")
